@@ -1,6 +1,6 @@
 # 17 — Inventario de alcance (estado real del sistema)
 
-**Fecha del corte:** 2026-09-14
+**Fecha del corte:** 2026-09-15 (v1.1)
 **Método:** auditoría del código, no estimación. Se enumeraron funciones,
 vistas y tablas de `supabase/migrations/`, pantallas de `apps/web/src/app/`,
 trabajos de `apps/worker/` y módulos de `packages/core/`.
@@ -32,9 +32,9 @@ trabajos de `apps/worker/` y módulos de `packages/core/`.
 | Capa | Estado | Comentario |
 |---|---|---|
 | **Base de datos** | ~90 % | 26 tablas, 23 funciones, 11 vistas, RLS completo. Es la capa más madura |
-| **Lógica de negocio** (`packages/core`) | ~85 % | 9 módulos, 88 pruebas pasando |
+| **Lógica de negocio** (`packages/core`) | ~90 % | 10 módulos, 119 pruebas pasando |
 | **Worker / trabajos programados** | ~80 % | 7 trabajos operativos, falta generación de reportes pesados |
-| **Aplicación web** | **~25 %** | 5 pantallas de ~18 necesarias. **Es el cuello de botella** |
+| **Aplicación web** | **~35 %** | 8 pantallas de ~19 necesarias. **Sigue siendo el cuello de botella** |
 | **Despliegue y operación** | ~10 % | Nada aplicado en Supabase, nada desplegado |
 
 ### El número que importa
@@ -52,9 +52,10 @@ De los **101 requerimientos funcionales**:
 > requerimientos terminados: alta, edición, baja, categorías, códigos múltiples
 > y carga masiva. Se eliminó el bloqueo de R-02 del lado del software.
 
-> **Lectura de jefe de proyecto:** el sistema está al 31 % de entregable, pero
-> al 65 % de construido. Un tercio del trabajo restante es "ponerle pantalla a
-> algo que ya funciona", que rinde mucho más rápido que empezar de cero.
+> **Lectura de jefe de proyecto:** el sistema está al 37 % de entregable y al
+> 66 % de construido. Los 29 requerimientos marcados 🔵 son "ponerle pantalla a
+> algo que ya funciona", que rinde mucho más rápido que empezar de cero: el
+> módulo de productos pasó de 3 a 9 terminados en una sola tanda por eso mismo.
 
 ---
 
