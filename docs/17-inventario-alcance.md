@@ -271,7 +271,7 @@ base y solo se ven parcialmente en Inicio.
 | M9-07 | Bitácora inmutable | ✅ | Trigger que rechaza UPDATE/DELETE |
 | M9-08 | Configuración del local | 🔵 | `tenants.settings` existe; sin pantalla |
 | M9-09 | Versión y changelog visibles | ⬜ | — |
-| M9-10 | Actualizaciones sin intervención | ✅ | Por diseño de Vercel |
+| M9-10 | Actualizaciones sin intervención | ✅ | Por diseño de Railway: cada push a main despliega |
 
 **Estado del módulo: 4 ✅ · 1 🔵 · 2 🟡 · 3 ⬜**
 
@@ -340,7 +340,7 @@ Trabajo real que no aparece en ningún requerimiento y que **nadie ha hecho**:
 | OP-1 | Aplicar el esquema en Supabase | ⬜ | Felipe | Todo |
 | OP-2 | Crear el usuario administrador | ⬜ | Felipe | Todo |
 | OP-3 | Desplegar el worker en Railway | ⬜ | Felipe | Respaldos, alertas |
-| OP-4 | Desplegar la web en Vercel | ⬜ | Felipe | Uso real |
+| OP-4 | Desplegar la web en Railway | ⬜ | Felipe | Uso real |
 | OP-5 | Configurar proveedor de correo | ⬜ | Felipe | M8-02, M8-03 |
 | OP-6 | Configurar URLs de redirección | ⬜ | Felipe | Recuperar contraseña |
 | OP-7 | Probar restauración de respaldo | ⬜ | Felipe | Criterio de aceptación 5 |

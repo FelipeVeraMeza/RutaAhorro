@@ -1,7 +1,7 @@
 # ADR-003 · Separar frontend (Vercel) y trabajos programados (Railway)
 
-**Estado:** Aceptada
-**Fecha:** 2026-09-14
+**Estado:** Superada por [ADR-008](ADR-008-railway-servicio-unico.md)
+**Fecha:** 2026-09-14 · superada el 2026-09-15
 
 ## Contexto
 

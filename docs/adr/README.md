@@ -11,11 +11,12 @@ sin eso, seis meses después nadie recuerda qué se descartó ni por qué.
 |---|---|---|---|
 | [ADR-001](ADR-001-stack-tecnologico.md) | Next.js + TypeScript + Tailwind como stack de frontend | Aceptada | 2026-09-14 |
 | [ADR-002](ADR-002-supabase-backend.md) | Supabase como backend, con la seguridad en la base de datos | Aceptada | 2026-09-14 |
-| [ADR-003](ADR-003-vercel-railway.md) | Separar frontend (Vercel) y trabajos programados (Railway) | Aceptada | 2026-09-14 |
+| [ADR-003](ADR-003-vercel-railway.md) | Separar frontend (Vercel) y trabajos programados (Railway) | Superada por ADR-008 | 2026-09-14 |
 | [ADR-004](ADR-004-multi-tenant.md) | Multi-tenant desde el primer día | Aceptada | 2026-09-14 |
 | [ADR-005](ADR-005-offline-first.md) | POS con modo offline como requisito, no como mejora | Aceptada | 2026-09-14 |
 | [ADR-006](ADR-006-kardex-inmutable.md) | Kardex inmutable como fuente de verdad del inventario | Aceptada | 2026-09-14 |
 | [ADR-007](ADR-007-lotes-vencimiento.md) | Control de vencimientos por lote con consumo FEFO | Aceptada | 2026-09-14 |
+| [ADR-008](ADR-008-railway-servicio-unico.md) | Despliegue unificado en Railway con un solo servicio | Aceptada | 2026-09-15 |
 
 ## Plantilla
 

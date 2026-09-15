@@ -38,7 +38,7 @@ todo lo demás es tu contrato de implementación.
 ### Bloque 4 — Operación
 | Doc | Contenido |
 |---|---|
-| [09 — Plan de despliegue](09-despliegue.md) | Localhost, Vercel, Railway, Supabase, CI/CD, runbook |
+| [09 — Plan de despliegue](09-despliegue.md) | Localhost, Railway, Supabase, CI/CD, runbook |
 | [10 — Seguridad y cumplimiento](10-seguridad-cumplimiento.md) | Secretos, RLS, auditoría, Ley 21.719, SII |
 
 ### Bloque 5 — Gestión del proyecto

@@ -45,7 +45,7 @@ Lo que no se ve, pero sostiene todo lo demás.
 | Autenticación | Login, recuperación de clave, middleware de sesión |
 | Gestión de usuarios | CRUD + roles (E1 completa) |
 | Diseño base | Tema, componentes, navegación móvil |
-| CI/CD | GitHub Actions, despliegue a Vercel y Railway |
+| CI/CD | GitHub Actions (pendiente), despliegue automático a Railway |
 | Entornos | Local + preview + producción funcionando |
 
 **Historias:** US-01, US-02, US-03 — 10 pts

@@ -59,7 +59,7 @@ Comandos útiles:
 ## ARQUITECTURA
 
 ```
-apps/web        Next.js 15 (App Router) + Tailwind 4 → Vercel
+apps/web        Next.js 15 (App Router) + Tailwind 4 → Railway
 apps/worker     Node + node-cron (respaldos, alertas, correos) → Railway
 packages/core   Lógica pura y probada: dinero, RUT, EAN, carrito,
                 costo promedio, arqueo, FEFO, importación CSV
@@ -122,9 +122,11 @@ Están justificadas en `docs/adr/`. Son las reglas que sostienen el sistema:
    `supabase/bundle.sql` en el SQL Editor, después `supabase/seed.sql`.
    Las instrucciones para crear el primer admin están al final del seed.
    **Nada existe para el cliente hasta que esto pase.**
-2. **Desplegar** — Railway primero (worker), luego Vercel con
-   `NEXT_PUBLIC_WORKER_URL` apuntando al dominio de Railway. Ver
-   `docs/09-despliegue.md §4.4` para el orden exacto y las variables.
+2. **Desplegar en Railway** — un solo servicio, Root Directory `/`, build
+   `npm ci --include=dev && npm run build:web`, start
+   `npm run start -w @rutaahorro/web`. Ver `docs/09-despliegue.md §3` para las
+   variables y el orden exacto. El worker no se despliega todavía: ver
+   `docs/adr/ADR-008-railway-servicio-unico.md`.
 3. **Pantalla de reportes** (M7) — las 11 vistas ya existen en la base
    (`v_sales_daily`, `v_sales_by_product`, `v_inventory_valued`,
    `v_stale_products`, `v_adjustments`…). Solo falta la interfaz.

@@ -24,28 +24,28 @@ Todo lo que sigue se mide contra esos **$50.412**.
 
 | Servicio | Plan | USD/mes | CLP/mes |
 |---|---|---:|---:|
-| Vercel | Pro | 20 | 19.000 |
 | Supabase | Pro | 25 | 23.750 |
 | Railway | Hobby | 5 | 4.750 |
 | Resend | Free (3.000 correos/mes) | 0 | 0 |
 | Sentry | Developer | 0 | 0 |
 | Dominio `.cl` | ~$10.000/año | — | 833 |
-| **Total** | | **50** | **≈ $48.333** |
+| **Total** | | **30** | **≈ $29.333** |
 
 | | |
 |---|---:|
 | Ingreso neto | $50.412 |
-| Costo de infraestructura | −$48.333 |
-| **Margen bruto** | **$2.079 (4 %)** |
+| Costo de infraestructura | −$29.333 |
+| **Margen bruto** | **$21.079 (42 %)** |
 
-> **Con un solo cliente en planes pagados, el negocio no existe.** $2.079 al mes
-> no paga una hora de soporte, ni el tiempo de desarrollo, ni un solo incidente.
+> **Con un solo cliente en planes pagados, el margen se reduce a la mitad.**
+> $21.079 al mes cubre el soporte básico, pero no el tiempo de desarrollo ni un
+> incidente serio. Prescindir de Vercel ([ADR-008](adr/ADR-008-railway-servicio-unico.md))
+> es lo que saca este escenario de números imposibles.
 
 ### 2.2 Escenario B — Planes gratuitos / mínimos (viable con 1 cliente)
 
 | Servicio | Plan | USD/mes | CLP/mes |
 |---|---|---:|---:|
-| Vercel | Hobby ⚠️ | 0 | 0 |
 | Supabase | Free ⚠️ | 0 | 0 |
 | Railway | Hobby | 5 | 4.750 |
 | Resend | Free | 0 | 0 |
@@ -59,12 +59,12 @@ Todo lo que sigue se mide contra esos **$50.412**.
 | Costo de infraestructura | −$5.583 |
 | **Margen bruto** | **$44.829 (89 %)** |
 
-**⚠️ Las dos advertencias del escenario B:**
+**⚠️ Las advertencias del escenario B:**
 
 | Limitación | Consecuencia real | Cómo se compensa |
 |---|---|---|
-| **Vercel Hobby prohíbe el uso comercial** en sus términos de servicio | Riesgo de suspensión del despliegue sin aviso | Verificar los términos vigentes. Alternativa: desplegar también el frontend en Railway (~$5 USD adicionales) y prescindir de Vercel |
-| **Supabase Free no incluye respaldos automáticos** ni PITR, y pausa proyectos tras ~1 semana de inactividad | RF-M9-01 quedaría incumplido | **Esto ya está resuelto por diseño**: el worker de Railway ejecuta `pg_dump` diario a Storage (ver [08 §5](08-api-contratos.md)). La pausa por inactividad no aplica a un local que vende todos los días |
+| **Railway cobra por consumo, no por servicio** | El plan Hobby incluye $5 de crédito al mes; un contenedor 24/7 se los come casi enteros | Monitorear el consumo en el panel. La advertencia anterior — que el plan Hobby de Vercel prohíbe el uso comercial — quedó resuelta al prescindir de Vercel ([ADR-008](adr/ADR-008-railway-servicio-unico.md)) |
+| **Supabase Free no incluye respaldos automáticos** ni PITR, y pausa proyectos tras ~1 semana de inactividad | RF-M9-01 quedaría incumplido | **Resuelto por diseño, pendiente de activar**: el worker ejecuta un respaldo lógico diario a Storage (ver [08 §5](08-api-contratos.md)), pero todavía no está desplegado ([ADR-008](adr/ADR-008-railway-servicio-unico.md)). La pausa por inactividad no aplica a un local que vende todos los días |
 | Supabase Free: 500 MB de base y 1 GB de Storage | Suficiente para ~100.000 ventas y ~2.000 imágenes de producto | Monitorear consumo; migrar a Pro cuando se acerque al 80 % |
 
 > El respaldo propio en el worker no fue una decisión de ahorro: es lo que hace
@@ -92,7 +92,7 @@ instancia separada.
 > nunca despegaría.
 
 **Recomendación:** operar en escenario B mientras haya 1 o 2 clientes, y migrar a
-planes pagados al tercero. La migración de Free a Pro en Supabase y Vercel se
+planes pagados al tercero. La migración de Free a Pro en Supabase se
 hace en minutos y sin tiempo fuera de servicio.
 
 ---
@@ -129,8 +129,8 @@ Supuestos: 100 ventas/día, 3 productos por venta, 1.000 SKU.
 |---|---|---|---|
 | Base de datos | ~15 MB/año | 500 MB | 3 % anual |
 | Peticiones a la API | ~180.000 | Ilimitado | — |
-| Ancho de banda | ~2 GB | 5 GB (Vercel Hobby) | 40 % |
-| Storage de imágenes | ~200 MB (1.000 productos) | 1 GB | 20 % |
+| Ancho de banda | ~2 GB | Se factura por consumo en Railway | — |
+| Horas de contenedor | 730 | ~550 con $5 de crédito | ⚠️ Ajustado: un servicio 24/7 supera el crédito; con el worker serían dos |
 | Correos | ~35 | 3.000 | 1 % |
 | Horas del worker | 730 | ~550 con $5 de crédito | ⚠️ Ajustado |
 

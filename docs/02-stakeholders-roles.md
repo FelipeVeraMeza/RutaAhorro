@@ -9,7 +9,7 @@
 | **Felipe Vera Meza** | Desarrollador, analista, soporte | Entregar un sistema mantenible y rentable de operar | **Alto** — decide arquitectura |
 | **Contador externo del local** | Consumidor de reportes | Recibir información confiable y exportable | Bajo — pero define formatos de salida 🔶 |
 | **Proveedores del local** | Actores externos | Ninguno directo (solo son datos en el sistema) | Ninguno |
-| **Proveedores de infraestructura** (Supabase, Vercel, Railway) | Terceros críticos | — | Ninguno, pero son riesgo de dependencia |
+| **Proveedores de infraestructura** (Supabase, Railway) | Terceros críticos | — | Ninguno, pero son riesgo de dependencia |
 
 ## 2. Perfiles de usuario (personas)
 

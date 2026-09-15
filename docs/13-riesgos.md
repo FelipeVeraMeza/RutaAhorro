@@ -123,8 +123,8 @@ Si Felipe no está disponible, el proyecto se detiene y el cliente queda sin sop
 
 ### R-10 · Dependencia de proveedores externos
 **P: 2 · S: 4 · Exposición: 8**
-Cambio de precios, de términos o cierre de Supabase, Vercel o Railway.
-**Mitigación:** PostgreSQL estándar sin funcionalidades propietarias irremplazables; respaldos propios; Next.js puede desplegarse fuera de Vercel; el worker es un contenedor Node corriente.
+Cambio de precios, de términos o cierre de Supabase o Railway.
+**Mitigación:** PostgreSQL estándar sin funcionalidades propietarias irremplazables; respaldos propios; Next.js puede desplegarse en cualquier proveedor con Node; el worker es un contenedor Node corriente.
 
 ### R-11 · Pérdida o exposición de credenciales
 **P: 2 · S: 5 · Exposición: 10**

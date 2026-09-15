@@ -45,8 +45,8 @@ consciente y acotada al período previo a producción.
 | Control | Estado |
 |---|---|
 | `.env*` excluido de git (salvo `.env.example`) | ✅ Aplicado |
-| Llaves reales solo en `.env.local`, Vercel y Railway | ✅ Aplicado |
-| `service_role` ausente de Vercel y del bundle del cliente | ✅ Por diseño |
+| Llaves reales solo en `.env.local` y en las Variables de Railway | ✅ Aplicado |
+| `service_role` ausente del bundle del cliente; en Railway, solo variable de servidor | ✅ Por diseño |
 | Verificación automática del bundle en CI | Pendiente (F1) |
 | RLS en el 100 % de las tablas | Pendiente (F1) |
 | Repositorio GitHub **privado** | 🔶 Por confirmar — P-13 |

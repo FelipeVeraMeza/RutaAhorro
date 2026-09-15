@@ -144,9 +144,9 @@ entre 40 y 80 horas que hoy nadie está pagando ([12 §6](12-costos-modelo-servi
 
 > **Respuesta:** _______________________ · Fecha: ______
 
-### 🟢 P-18 · ¿Habrá dominio propio o se usa el de Vercel?
+### 🟢 P-18 · ¿Habrá dominio propio o se usa el que entrega Railway?
 Un dominio `.cl` cuesta ~$10.000 al año y transmite más seriedad que
-`rutaahorro.vercel.app`.
+`rutaahorro.up.railway.app`.
 
 > **Respuesta:** _______________________ · Fecha: ______
 
@@ -159,6 +159,21 @@ Requiere verificar el dominio del remitente.
 ### 🟢 P-20 · ¿El contador del cliente necesita acceso al sistema?
 **Por qué importa:** si sí, se agrega un quinto rol de solo lectura sobre
 reportes. Si no, basta con la exportación a Excel.
+
+> **Respuesta:** _______________________ · Fecha: ______
+
+---
+
+### 🟡 P-26 · ¿El cliente acepta que el sistema no se despliegue en Vercel?
+**Por qué importa:** [ADR-003](adr/ADR-003-vercel-railway.md) deja constancia de
+que el cliente pidió explícitamente Vercel + Railway. [ADR-008](adr/ADR-008-railway-servicio-unico.md)
+se aparta de ese pedido y despliega todo en un solo servicio de Railway.
+**Argumentos para la conversación:** el plan Hobby de Vercel prohíbe el uso
+comercial y el Pro son ~19.000 CLP/mes ([12 §4](12-costos-modelo-servicio.md));
+la razón técnica original (que un `pg_dump` no cabe en serverless) ya no aplica
+porque el respaldo hace export lógico.
+**Qué se pierde y hay que decirlo:** las vistas previa por Pull Request y la
+entrega al borde.
 
 > **Respuesta:** _______________________ · Fecha: ______
 
@@ -208,7 +223,7 @@ cajeros el riesgo es bajo; con 6 hay que medirlo en serio antes de producción.
 | Prioridad | Cantidad | Preguntas |
 |---|:--:|---|
 | 🔴 Bloqueantes | 7 | P-01, P-02, P-03, P-04, P-05, P-08, P-13 |
-| 🟡 Importantes | 11 | P-06, P-09, P-10, P-11, P-12, P-14, P-15, P-16, P-17, P-21, P-24 |
+| 🟡 Importantes | 12 | P-06, P-09, P-10, P-11, P-12, P-14, P-15, P-16, P-17, P-21, P-24, P-26 |
 | 🟢 Diferibles | 6 | P-18, P-19, P-20, P-22, P-23, P-25 |
 | ✅ Respondidas | 1 | P-07 (productos perecibles: sí) |
 

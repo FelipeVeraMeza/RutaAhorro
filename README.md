@@ -30,7 +30,7 @@ Toda la documentación vive en [`docs/`](docs/). Empieza por el
 | 06 | [Modelo de datos](docs/06-modelo-datos.md) | Esquema de base de datos, kardex, RLS |
 | 07 | [Arquitectura técnica](docs/07-arquitectura.md) | Stack, componentes, flujos, offline |
 | 08 | [Contratos de API](docs/08-api-contratos.md) | Endpoints y funciones transaccionales |
-| 09 | [Plan de despliegue](docs/09-despliegue.md) | Vercel + Railway + Supabase, entornos, CI/CD |
+| 09 | [Plan de despliegue](docs/09-despliegue.md) | Railway + Supabase, entornos, CI/CD |
 | 10 | [Seguridad y cumplimiento](docs/10-seguridad-cumplimiento.md) | Secretos, RLS, Ley 21.719, SII |
 | 11 | [Plan de trabajo](docs/11-plan-trabajo.md) | Fases, cronograma y entregables |
 | 12 | [Costos y modelo de servicio](docs/12-costos-modelo-servicio.md) | Costo de infraestructura vs. precio del plan |
@@ -47,7 +47,7 @@ Toda la documentación vive en [`docs/`](docs/). Empieza por el
 
 | Capa | Tecnología | Dónde vive |
 |------|------------|------------|
-| Frontend / PWA | Next.js 15 (App Router) + TypeScript + Tailwind + shadcn/ui | **Vercel** |
+| Frontend / PWA | Next.js 15 (App Router) + TypeScript + Tailwind + shadcn/ui | **Railway** |
 | Base de datos | PostgreSQL con Row Level Security | **Supabase** |
 | Autenticación | Supabase Auth (email + contraseña, sesiones por usuario) | **Supabase** |
 | Archivos | Supabase Storage (imágenes de productos, respaldos) | **Supabase** |
@@ -76,8 +76,8 @@ Controles que **sí** se aplican para que esa decisión sea sostenible:
 > El riesgo real no es el chat: es que una llave `secret` termine comiteada en un
 > repo público. Por eso el control que importa es `.gitignore` + repo privado.
 
-Las llaves reales viven solo en `.env.local` (local), en las *Environment
-Variables* de Vercel y en las *Variables* de Railway. En el repositorio solo hay
+Las llaves reales viven solo en `.env.local` (local) y en las *Variables* del
+servicio de Railway. En el repositorio solo hay
 placeholders ([`.env.example`](.env.example)).
 
 ---

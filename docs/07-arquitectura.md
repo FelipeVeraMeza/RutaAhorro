@@ -36,15 +36,15 @@ Tres plataformas, cada una haciendo lo que hace bien:
                             └──────────────────────────────────────┘
 ```
 
-### Por qué esta separación
+### Por qué estas plataformas
 
 | Plataforma | Qué resuelve | Por qué no otra |
 |---|---|---|
-| **Vercel** | Entrega de la interfaz al borde, despliegue por commit, HTTPS automático | Es el mejor lugar para Next.js; el HTTPS gratuito es requisito para la cámara |
+| **Railway** | Entrega de la interfaz y, cuando se active el worker, los procesos largos y programados | Una sola plataforma para un monorepo de dos paquetes; HTTPS automático, que es requisito para la cámara |
 | **Supabase** | Base de datos, autenticación, archivos, tiempo real — con RLS | Reemplaza un backend completo; la seguridad vive en la BD y no depende de que ningún endpoint la recuerde |
-| **Railway** | Procesos **largos y programados** | Vercel es serverless: mata la función a los segundos. Un `pg_dump` o un Excel de 12 meses no cabe ahí |
 
-Ver [ADR-003](adr/ADR-003-vercel-railway.md) para las alternativas descartadas.
+Ver [ADR-008](adr/ADR-008-railway-servicio-unico.md), que supera a ADR-003, para
+las alternativas descartadas.
 
 ---
 
@@ -86,7 +86,7 @@ RutaAhorro/
 │   ├── policies/                  # Políticas RLS
 │   └── seed.sql                   # Datos de desarrollo
 ├── apps/
-│   ├── web/                       # Next.js → Vercel
+│   ├── web/                       # Next.js → Railway
 │   │   ├── app/
 │   │   │   ├── (auth)/            # login, recuperar clave
 │   │   │   ├── (app)/
@@ -205,10 +205,9 @@ proyecto — es el punto donde se cruza "localhost" con el despliegue:
 | Entorno | URL |
 |---|---|
 | Local | `http://localhost:3000/**` |
-| Producción (Vercel) | `https://<dominio>.vercel.app/**` |
-| Vistas previa (Vercel) | `https://*-<proyecto>.vercel.app/**` |
+| Producción (Railway) | `https://<dominio>.up.railway.app/**` |
 
-Procedimiento exacto en [09 §5](09-despliegue.md).
+Procedimiento exacto en [09 §4.2](09-despliegue.md).
 
 ---
 
@@ -265,7 +264,7 @@ color de tema, atajo directo al POS.
 |---|---|
 | Errores de la aplicación | Sentry (web y worker) |
 | Disponibilidad | Monitor externo de uptime cada 5 min |
-| Rendimiento real de usuarios | Vercel Analytics |
+| Rendimiento real de usuarios | Pendiente — Vercel Analytics ya no aplica; evaluar Sentry Performance |
 | Salud de la base de datos | Panel de Supabase + alertas de consumo |
 | Trabajos programados | El worker registra cada ejecución en una tabla `job_runs`; el resumen diario avisa si alguno falló |
 

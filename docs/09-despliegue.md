@@ -1,14 +1,20 @@
 # 09 — Plan de despliegue y entornos
 
+> Plataforma definida en [ADR-008](adr/ADR-008-railway-servicio-unico.md), que
+> supera a ADR-003 (Vercel + Railway). Todo corre en **un solo servicio de
+> Railway**.
+
 ---
 
 ## 1. Entornos
 
-| Entorno | Frontend | Worker | Base de datos | Para qué |
-|---|---|---|---|---|
-| **Local** | `localhost:3000` | `localhost:8080` | Supabase local (Docker) o el proyecto `dev` | Desarrollo diario |
-| **Preview** | URL automática de Vercel por PR | — | Proyecto Supabase `dev` | Revisar cada cambio antes de fusionar |
-| **Producción** | Vercel (dominio definitivo) | Railway | Proyecto Supabase `amlvspbmnhtvzuqiteqe` | El local del cliente |
+| Entorno | Aplicación | Base de datos | Para qué |
+|---|---|---|---|
+| **Local** | `localhost:3000` | Supabase `dev`, o IndexedDB con `NEXT_PUBLIC_DEMO=true` | Desarrollo diario |
+| **Producción** | Railway (un servicio) | Proyecto Supabase `amlvspbmnhtvzuqiteqe` | El local del cliente |
+
+No hay entorno de preview. Se perdió al dejar Vercel: revisar un cambio antes de
+fusionarlo vuelve a ser local ([ADR-008](adr/ADR-008-railway-servicio-unico.md)).
 
 > **Recomendación fuerte:** crear un **segundo proyecto Supabase** para desarrollo
 > y dejar `amlvspbmnhtvzuqiteqe` exclusivamente para producción. Probar la carga
@@ -21,62 +27,58 @@
 ## 2. Entorno local (localhost)
 
 ### 2.1 Requisitos
-- Node.js 22 LTS · pnpm 9 · Git
-- Docker Desktop (solo si se usa Supabase local)
-- Supabase CLI: `npm i -g supabase`
+- Node.js 22 (fijado en `.node-version`) · npm 10+ · Git
+- El repositorio usa **npm workspaces**, no pnpm. `npm install` desde la raíz.
 
 ### 2.2 Puesta en marcha
 
 ```bash
 git clone https://github.com/FelipeVeraMeza/RutaAhorro.git
 cd RutaAhorro
-pnpm install
+npm install
 
-# Las variables ya están en .env.local (no se comitea).
+# Las variables van en .env.local en la RAÍZ del repo (no se comitea).
 # Si partes de cero: cp .env.example .env.local y completar.
 
-# Aplicar migraciones a la base
-supabase link --project-ref amlvspbmnhtvzuqiteqe   # o el proyecto dev
-supabase db push
-
-# Levantar web + worker en paralelo
-pnpm dev
+npm run dev        # web en :3000
 ```
+
+Con `NEXT_PUBLIC_DEMO=true` la aplicación abre sin login contra IndexedDB, con
+datos de ejemplo y un selector de rol. Sirve para recorrer la interfaz sin tocar
+Supabase. **Nunca se configura en Railway.**
 
 | Comando | Qué hace |
 |---|---|
-| `pnpm dev` | Web en `:3000` y worker en `:8080` |
-| `pnpm dev:web` | Solo el frontend |
-| `pnpm dev:worker` | Solo el worker |
-| `pnpm db:push` | Aplica migraciones |
-| `pnpm db:types` | Regenera los tipos TypeScript desde el esquema |
-| `pnpm test` | Pruebas unitarias |
-| `pnpm test:e2e` | Playwright |
-| `pnpm lint` | ESLint + verificación de tipos |
+| `npm run dev` | Frontend en `:3000` |
+| `npm run dev:worker` | Worker en `:8080` (no se levanta con `npm run dev`) |
+| `npm run build:web` | Compila core + frontend — lo mismo que corre Railway |
+| `npm run build` | Compila core + worker |
+| `npm test` | Pruebas unitarias de `@rutaahorro/core` |
+| `npm run typecheck` | Verificación de tipos en todos los paquetes |
+| `npm run db:check` | Valida la sintaxis SQL de las migraciones |
+| `npm run db:bundle` | Genera `supabase/bundle.sql` con las migraciones en orden |
+| `npm run job -w @rutaahorro/worker` | Lista y ejecuta los trabajos programados |
 
-### 2.3 Cómo apunta el localhost al worker
+### 2.3 Aplicar el esquema a Supabase
 
-El frontend decide a qué worker hablar mediante **una sola variable**:
+No existe `supabase/config.toml`, así que el proyecto **no** está enlazado al CLI
+de Supabase y `supabase db push` no aplica. El procedimiento es:
 
 ```bash
-# .env.local  (desarrollo)
-NEXT_PUBLIC_WORKER_URL=http://localhost:8080
-
-# Vercel  (producción)
-NEXT_PUBLIC_WORKER_URL=https://rutaahorro-worker.up.railway.app
+npm run db:bundle          # concatena supabase/migrations/*.sql en orden
 ```
 
-Así el mismo código corre en los dos lados sin condicionales. En local trabajas
-contra tu worker; en producción, contra Railway. **Nunca** se escribe una URL de
-worker directamente en el código.
+Pegar el contenido de `supabase/bundle.sql` en el **SQL Editor** de Supabase y
+ejecutarlo. Después, `supabase/seed.sql` de la misma forma.
+
+`bundle.sql` está en `.gitignore`: es un archivo generado, no una fuente. La
+fuente son las migraciones numeradas.
 
 ### 2.4 Probar el escáner desde el celular
 
 La cámara del navegador exige un contexto seguro. `http://localhost` está exento,
 pero `http://192.168.1.x:3000` **no lo está**: si abres la app desde el celular
 apuntando a la IP del PC, la cámara simplemente no aparece.
-
-Para probar el escaneo en un dispositivo real durante el desarrollo:
 
 ```bash
 # Túnel HTTPS temporal hacia el localhost
@@ -86,123 +88,157 @@ cloudflared tunnel --url http://localhost:3000
 ```
 
 La URL `https://…` que entrega el túnel debe agregarse temporalmente a las
-**Redirect URLs** de Supabase (ver §5) para que el inicio de sesión funcione.
+**Redirect URLs** de Supabase (§4.2) y **retirarse después**.
 
 ---
 
-## 3. Despliegue del frontend en Vercel
+## 3. Despliegue en Railway
 
-### 3.1 Configuración del proyecto
+### 3.1 El servicio
 
-| Ajuste | Valor |
-|---|---|
-| Framework | Next.js |
-| Root Directory | `apps/web` |
-| Build Command | `pnpm build` |
-| Install Command | `pnpm install` |
-| Node.js Version | 22.x |
-| Región | `iad1` (Washington) — la más cercana a `ca-central-1` |
-
-> La región importa: cada consulta viaja entre Vercel y Supabase. Elegir una
-> región lejana de Canadá agrega latencia a **cada** operación del POS.
-
-### 3.2 Variables de entorno en Vercel
-
-| Variable | Production | Preview | Ámbito |
-|---|:--:|:--:|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | ✅ | Cliente |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | ✅ | Cliente |
-| `NEXT_PUBLIC_APP_URL` | ✅ | auto | Cliente |
-| `NEXT_PUBLIC_WORKER_URL` | ✅ | ✅ | Cliente |
-| `NEXT_PUBLIC_APP_ENV` | `production` | `preview` | Cliente |
-| `WORKER_SHARED_SECRET` | ✅ | ✅ | **Servidor** |
-| `SENTRY_DSN` | ✅ | — | Servidor |
-
-> `SUPABASE_SERVICE_ROLE_KEY` **no se configura en Vercel.** No hay ninguna
-> operación del frontend que la necesite; ponerla ahí solo amplía la superficie
-> de exposición sin ganar nada.
-
-### 3.3 Flujo de despliegue
-
-```
-push a rama          → Preview automático con URL propia
-Pull Request         → Preview + CI (lint, tipos, pruebas, presupuesto de bundle)
-merge a main         → Producción
-producción con fallo → Instant Rollback desde el panel de Vercel
-```
-
----
-
-## 4. Despliegue del worker en Railway
-
-### 4.1 Configuración
+Un servicio, construido desde `main` del repositorio de GitHub.
 
 | Ajuste | Valor |
 |---|---|
-| Fuente | Repo GitHub `FelipeVeraMeza/RutaAhorro` |
-| Root Directory | `apps/worker` |
-| Build | `pnpm install && pnpm build` |
-| Start | `node dist/server.js` |
-| Healthcheck | `/health` |
-| Región | `us-east` |
+| Source Repo | `FelipeVeraMeza/RutaAhorro`, rama `main` |
+| **Root Directory** | `/` |
+| Builder | Railpack (el default actual de Railway) |
+| Custom Build Command | `npm ci --include=dev && npm run build:web` |
+| Custom Start Command | `npm run start -w @rutaahorro/web` |
+| Healthcheck Path | `/manifest.webmanifest` |
+| Watch Paths | `/apps/web/**`, `/packages/core/**`, `/package.json`, `/package-lock.json` |
+| Serverless | **OFF** |
 | Restart Policy | `ON_FAILURE`, máximo 10 reintentos |
 
-`apps/worker/railway.json`:
+Tres cosas que no son evidentes y rompen el despliegue si se cambian:
 
-```json
-{
-  "$schema": "https://railway.app/railway.schema.json",
-  "build":  { "builder": "NIXPACKS", "buildCommand": "pnpm install && pnpm build" },
-  "deploy": {
-    "startCommand": "node dist/server.js",
-    "healthcheckPath": "/health",
-    "healthcheckTimeout": 100,
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
-  }
-}
+**Root Directory tiene que ser `/`.** Apuntarlo a `apps/web` parece lo natural,
+pero desde ahí `npm ci` no puede resolver `"@rutaahorro/core": "*"`: ese paquete
+no está publicado en npm, vive en `packages/core` y solo existe para npm si el
+install corre desde la raíz del workspace.
+
+**El `--include=dev` del build no es decorativo.** Railway define
+`NODE_ENV=production`, y con eso `npm ci` omite las devDependencies — o sea,
+TypeScript, Tailwind y los `@types`. El `next build` muere ahí.
+
+**Serverless apagado.** Con escalado a cero, la primera venta después de un rato
+de inactividad espera a que el contenedor despierte. En una caja con un cliente
+al frente, eso no se acepta.
+
+El healthcheck apunta a `/manifest.webmanifest` y no a `/` a propósito: el
+middleware excluye ese archivo, así que la verificación no depende de que
+Supabase responda. Un healthcheck que falla porque se cayó un tercero reinicia
+un contenedor que estaba sano.
+
+> **Config as Code no está disponible.** Railway lo deprecó: los archivos
+> existentes siguen leyéndose hasta el 2026-12-01, pero los servicios creados
+> desde el 2026-08-28 no pueden activarlo. Por eso esta configuración vive en el
+> panel, y este documento es su única copia. Si se cambia en el panel, se cambia
+> acá.
+
+La versión de Node la fija `.node-version` (22) en la raíz. Es deliberado que no
+sea una variable del builder: `engines` dice `>=22` y deja la elección al
+proveedor, y el nombre de la variable depende de cuál sea
+(`NIXPACKS_NODE_VERSION` con Nixpacks, `RAILPACK_NODE_VERSION` con Railpack). El
+archivo funciona con cualquiera, y además con nvm/fnm en local.
+
+### 3.2 Variables de entorno
+
+| Variable | Valor | Notas |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://amlvspbmnhtvzuqiteqe.supabase.co` | Viaja al navegador |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon / publishable | Viaja al navegador. Su seguridad depende 100 % de RLS |
+| `SUPABASE_SECRET_KEY` | service_role / `sb_secret_` | **Secreta.** Solo servidor |
+| `NEXT_PUBLIC_DEMO` | `false` | Jamás `true` en Railway |
+| `NEXT_PUBLIC_APP_ENV` | `production` | |
+| `NEXT_PUBLIC_APP_URL` | `https://<dominio>` | Se carga después de generar el dominio (§3.3) |
+| `TZ` | `America/Santiago` | |
+
+**Sobre `SUPABASE_SECRET_KEY` donde corre el frontend.** ADR-003 y la versión
+anterior de este documento decían que la llave de servicio no debía estar ahí.
+Es incorrecto para este código:
+`apps/web/src/app/api/usuarios/invitar/route.ts` la necesita para
+`auth.admin.inviteUserByEmail` — crear un usuario en Supabase Auth exige omitir
+RLS. Es un route handler de servidor y la llave no entra al bundle del cliente.
+Sin ella, invitar usuarios responde 500 con `ERROR_INTERNO`.
+
+**No configurar `DATABASE_URL`.** No se usa en ninguna parte del código. Se pedía
+para el `pg_dump` del worker, pero el respaldo hace export lógico vía supabase-js
+(`apps/worker/src/jobs/backup.ts`). Es un secreto de más sin nada a cambio.
+
+### 3.3 Dominio y orden de despliegue
+
+Las variables `NEXT_PUBLIC_*` **se hornean en el bundle durante el build**.
+Cambiarlas sin reconstruir no tiene ningún efecto, y el síntoma es silencioso:
+el correo de invitación sale con un `redirectTo` vacío y el empleado aterriza en
+una página en blanco. De ahí el orden:
+
+```
+1. Aplicar el esquema en Supabase (§2.3)   ← sin esto la app carga y toda consulta falla
+2. Configurar el servicio y las variables, menos NEXT_PUBLIC_APP_URL
+3. Deploy
+4. Settings → Networking → Generate Domain
+5. Cargar NEXT_PUBLIC_APP_URL con ese dominio y REDESPLEGAR
+6. Registrar el dominio en Supabase (§4.2)
+7. Recorrer la lista de comprobación de §7
 ```
 
-### 4.2 Variables de entorno en Railway
+### 3.4 El worker: por qué no está desplegado
 
-| Variable | Notas |
+El worker (`apps/worker`) compila, tiene sus siete trabajos escritos y no está
+desplegado. La razón y el criterio para activarlo están en
+[ADR-008](adr/ADR-008-railway-servicio-unico.md): hoy no lo invoca ningún archivo
+del frontend, y un respaldo diario de una base sin datos productivos no vale
+nada.
+
+Mientras tanto, los trabajos se ejecutan a mano desde cualquier máquina con el
+`.env.local` completo:
+
+```bash
+npm run job -w @rutaahorro/worker                 # lista los trabajos disponibles
+npm run job -w @rutaahorro/worker backup-daily
+```
+
+| Trabajo | Horario previsto | Qué hace |
+|---|---|---|
+| `backup-daily` | 03:00 | Respaldo completo de la base |
+| `cleanup-old-backups` | 04:30 | Elimina respaldos fuera del período de retención |
+| `low-stock-check` | 08:00 | Alertas de productos bajo stock mínimo |
+| `expiry-check` | 08:15 | Alertas de lotes vencidos y por vencer |
+| `daily-summary` | 22:00 | Correo de resumen del día al administrador |
+| `open-cash-check` | 23:30 | Avisa cajas que quedaron sin cerrar |
+| `integrity-check` | domingos 04:00 | Reconstruye el stock desde el kardex y verifica lotes |
+
+**Cuándo deja de ser aceptable:** antes de la primera venta real del cliente.
+Desde ahí hay datos que perder. Para activarlo, un segundo servicio en el mismo
+proyecto de Railway:
+
+| Ajuste | Valor |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Solo aquí.** El worker necesita omitir RLS para respaldar y consolidar entre tenants |
-| `DATABASE_URL` | Conexión directa para `pg_dump` |
-| `WORKER_SHARED_SECRET` | El mismo valor configurado en Vercel |
-| `RESEND_API_KEY`, `ALERTS_EMAIL_TO` | Correos |
-| `BACKUP_BUCKET`, `BACKUP_RETENTION_DAYS` | Respaldos |
-| `TZ` | `America/Santiago` — **crítico**: sin esto los trabajos corren en UTC y el "resumen de las 22:00" llega a las 19:00 |
-| `SENTRY_DSN` | Errores |
+| Root Directory | `/` |
+| Build | `npm ci --include=dev && npm run build` |
+| Start | `node apps/worker/dist/server.js` |
+| Healthcheck | `/health` |
+| Serverless | **OFF** — el cron necesita el contenedor despierto |
 
-### 4.3 Dominio del worker
+Variables: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY`,
+`WORKER_SHARED_SECRET`, `ENABLE_CRON=true`, `TZ=America/Santiago`,
+`BACKUP_BUCKET`, `BACKUP_RETENTION_DAYS`, `PORT=8080`, y `RESEND_API_KEY` +
+`ALERTS_EMAIL_TO` si se quieren los correos.
 
-Railway entrega un dominio del tipo `rutaahorro-worker.up.railway.app`. Ese valor
-es el que se carga en `NEXT_PUBLIC_WORKER_URL` en Vercel (§2.3).
+`TZ` es crítico: sin ella el contenedor corre en UTC y el resumen de las 22:00
+llega a las 19:00. El arranque se hace con `node` directo y no con `npm run
+start` para que el `SIGTERM` de Railway llegue al handler de apagado; con un npm
+de por medio la señal no llega confiable y un trabajo puede quedar marcado como
+`running` para siempre.
 
-> El worker **no** debe quedar abierto a internet sin control. Todo endpoint
-> distinto de `/health` exige la cabecera `X-Worker-Secret`.
-
-### 4.4 Orden de despliegue
-
-Railway y Vercel se despliegan desde el mismo repositorio, pero el worker debe ir
-primero: Vercel necesita conocer la URL del worker para inyectarla en el bundle
-del cliente.
-
-```
-1. Desplegar worker en Railway  →  obtener su dominio público
-2. Cargar ese dominio en NEXT_PUBLIC_WORKER_URL en Vercel
-3. Desplegar el frontend en Vercel
-4. Registrar la URL de Vercel en las Redirect URLs de Supabase (§5)
-5. Verificar la lista de comprobación de §8
-```
+Todo endpoint distinto de `/health` exige la cabecera `X-Worker-Secret`.
 
 ---
 
-## 5. Configuración de Supabase (incluye las redirecciones)
+## 4. Configuración de Supabase
 
-### 5.1 Datos del proyecto
+### 4.1 Datos del proyecto
 
 | Dato | Valor |
 |---|---|
@@ -211,35 +247,33 @@ del cliente.
 | Región | `ca-central-1` (Canadá Central) |
 | URL | `https://amlvspbmnhtvzuqiteqe.supabase.co` |
 
-### 5.2 URLs de autenticación — *Authentication → URL Configuration*
+### 4.2 URLs de autenticación — *Authentication → URL Configuration*
 
-Este es el punto que hace que los enlaces de correo (recuperar contraseña,
-invitación a un usuario nuevo) lleguen al lugar correcto. **Si falta una URL, el
-enlace del correo devuelve al usuario a una página en blanco.**
+Esto es lo que hace que los enlaces de correo (recuperar contraseña, invitación a
+un usuario nuevo) lleguen al lugar correcto. **Si falta una URL, el enlace del
+correo devuelve al usuario a una página en blanco.**
 
-**Site URL** (destino por defecto):
+**Site URL:**
 ```
-https://<dominio-de-produccion>
+https://<dominio-de-railway>
 ```
 
-**Redirect URLs** (lista blanca; hay que declarar las tres):
+**Redirect URLs:**
 ```
 http://localhost:3000/**
-https://<dominio-de-produccion>/**
-https://*-felipeverameza.vercel.app/**
+https://<dominio-de-railway>/**
 ```
 
-> El comodín `*-felipeverameza.vercel.app` cubre las URLs de preview, que cambian
-> con cada rama. Sin él, no se puede probar el login en una preview.
-> Al usar un túnel HTTPS para probar la cámara (§2.4), su URL se agrega aquí de
-> forma temporal **y se retira después**.
+Ya no hay comodín de previews: no hay previews. Al usar un túnel HTTPS para
+probar la cámara (§2.4), su URL se agrega aquí de forma temporal **y se retira
+después**.
 
-### 5.3 Plantillas de correo
+### 4.3 Plantillas de correo
 Traducir al español las plantillas de confirmación, recuperación e invitación, y
 personalizarlas con el nombre del local. Un correo en inglés que dice "Confirm
 your signup" hace dudar al usuario de si es legítimo.
 
-### 5.4 Storage
+### 4.4 Storage
 
 | Bucket | Acceso | Contenido |
 |---|---|---|
@@ -247,54 +281,63 @@ your signup" hace dudar al usuario de si es legítimo.
 | `respaldos` | **Privado** | Respaldos del worker |
 | `reportes` | Privado, URLs firmadas con expiración | Excel/PDF generados |
 
-### 5.5 Base de datos
-- Aplicar migraciones con `supabase db push` — **nunca** editar el esquema desde
-  el panel en producción (RNF-38).
-- Verificar que los respaldos automáticos (PITR) estén activos según el plan.
+### 4.5 Base de datos
+- Aplicar cambios de esquema como migración numerada en `supabase/migrations/` y
+  volver a generar el bundle — **nunca** editar el esquema desde el panel en
+  producción (RNF-38).
+- Verificar que los respaldos automáticos que incluya el plan estén activos.
 - Confirmar que RLS está habilitado en el 100 % de las tablas antes de abrir el
   acceso al cliente.
 
 ---
 
-## 6. Integración y entrega continua
+## 5. Integración continua
 
-`.github/workflows/ci.yml` — se ejecuta en cada PR:
+**Estado: pendiente.** `.github/workflows/` existe y está vacío. Hasta que haya
+un workflow, cada una de estas verificaciones depende de que alguien la corra a
+mano antes de fusionar:
 
-| Paso | Falla el build si… |
-|---|---|
-| `pnpm lint` | Hay errores de ESLint |
-| `pnpm typecheck` | Hay errores de tipos |
-| `pnpm test` | Alguna prueba unitaria falla o la cobertura baja de 70 % |
-| `pnpm test:e2e` | Falla venta, cierre de caja o recepción |
-| Auditoría de secretos | Se detecta `sb_secret_` o `service_role` en el bundle del cliente |
-| Verificación de RLS | Existe alguna tabla en `public` sin RLS |
-| Presupuesto de bundle | La carga inicial supera 250 KB comprimidos |
-| `npm audit` | Hay vulnerabilidad crítica |
+| Verificación | Comando | Falla si… |
+|---|---|---|
+| Tipos | `npm run typecheck` | Hay errores de tipos |
+| Pruebas | `npm test` | Alguna prueba unitaria falla |
+| SQL | `npm run db:check` | Una migración tiene sintaxis inválida |
+| Build de producción | `NEXT_PUBLIC_DEMO=false npm run build:web` | El build falla fuera de modo demo |
 
-Despliegue: `main` → producción en Vercel y Railway automáticamente.
+El build de producción se verifica con el modo demo apagado a propósito: en
+desarrollo `NEXT_PUBLIC_DEMO=true` evita que se toque Supabase, así que un build
+en verde en local no dice nada sobre el build que corre Railway.
+
+Pendientes de automatizar, en orden de valor: auditoría de secretos (que
+`sb_secret_` o `service_role` no aparezcan en el bundle del cliente),
+verificación de que no exista tabla en `public` sin RLS, presupuesto de bundle
+(250 KB comprimidos en la carga inicial), `npm audit` y pruebas e2e.
+
+Despliegue: `main` → producción en Railway automáticamente.
 
 ---
 
-## 7. Respaldo y recuperación
+## 6. Respaldo y recuperación
 
 ### Respaldo
 | Qué | Cómo | Frecuencia | Retención |
 |---|---|---|---|
-| Base de datos completa | `pg_dump` desde el worker → bucket `respaldos` | Diaria 03:00 | 30 días |
-| Respaldo del proveedor | Supabase automático | Según plan | Según plan |
+| Base de datos completa | `backup-daily` → bucket `respaldos` | 03:00 **cuando el worker esté desplegado**; hoy, a mano | 30 días |
+| Respaldo del proveedor | Supabase, según plan | Según plan | Según plan |
 | Exportación del cliente | CSV descargable desde la app | A demanda | — |
+
+> Mientras el worker no sea un servicio, la frecuencia real del respaldo es
+> "cuando alguien se acuerde". Es aceptable con la base vacía y deja de serlo con
+> la primera venta real ([ADR-008](adr/ADR-008-railway-servicio-unico.md)).
 
 ### Restauración — probada, no supuesta
 
-```bash
-# 1. Descargar el respaldo del bucket
-supabase storage download respaldos/backup-2026-09-14.dump ./
+El respaldo es un export lógico generado por `apps/worker/src/jobs/backup.ts`,
+no un `pg_dump`. La restauración se hace sobre un proyecto Supabase **de
+prueba**, nunca directo a producción, y se verifica con totales de control:
 
-# 2. Restaurar en un proyecto de PRUEBA (jamás directo a producción)
-pg_restore --clean --if-exists -d "$DATABASE_URL_TEST" backup-2026-09-14.dump
-
-# 3. Verificar totales de control
-psql "$DATABASE_URL_TEST" -c "SELECT count(*), sum(total) FROM sales;"
+```sql
+SELECT count(*), sum(total) FROM sales;
 ```
 
 > El procedimiento de restauración debe ejecutarse **completo al menos una vez
@@ -303,30 +346,35 @@ psql "$DATABASE_URL_TEST" -c "SELECT count(*), sum(total) FROM sales;"
 
 ---
 
-## 8. Lista de comprobación antes de producción
+## 7. Lista de comprobación antes de producción
 
 **Seguridad**
 - [ ] RLS habilitado en el 100 % de las tablas — consulta de verificación ejecutada
-- [ ] Ninguna llave secreta en el bundle del cliente (verificado en CI)
-- [ ] `service_role` presente solo en Railway
+- [ ] Ninguna llave secreta en el bundle del cliente — hoy se verifica a mano (§5)
+- [ ] `service_role` solo como variable de servidor en Railway, nunca con prefijo `NEXT_PUBLIC_`
 - [ ] Redirect URLs de Supabase configuradas y sin URLs de túnel temporales
+- [ ] `NEXT_PUBLIC_DEMO` en `false` — verificado en el despliegue, no solo en el panel
 - [ ] Límites de tasa activos en autenticación
 
 **Funcional**
 - [ ] Todos los requerimientos `Must` implementados y probados
 - [ ] Prueba de corte de red: 30 min offline con ventas reales, sincronizadas sin duplicados
+- [ ] Casos de concurrencia CP-01 a CP-08 ejecutados ([16](16-plan-pruebas.md)) — hoy los
+      requerimientos de concurrencia descansan en diseño, no en pruebas
 - [ ] Escaneo probado en al menos 3 modelos de celular distintos
 - [ ] Carga masiva probada con el catálogo real del cliente
 - [ ] Ciclo completo de caja: abrir → vender → movimientos → cerrar con diferencia
 
 **Operación**
+- [ ] Worker desplegado como segundo servicio y `ENABLE_CRON=true` verificado
 - [ ] Respaldo ejecutado **y restaurado** exitosamente
 - [ ] Trabajos programados corriendo en horario de Chile (`TZ` verificado)
-- [ ] Sentry recibiendo errores de web y worker
+- [ ] Sentry recibiendo errores
 - [ ] Monitor de uptime activo con alerta configurada
 - [ ] Correo de resumen diario recibido correctamente
 
 **Cliente**
+- [ ] P-26 resuelta: el cliente sabe y acepta que no se usa Vercel
 - [ ] Catálogo cargado y valorizado
 - [ ] Usuarios creados con sus roles
 - [ ] Personal capacitado, acta firmada
@@ -336,16 +384,17 @@ psql "$DATABASE_URL_TEST" -c "SELECT count(*), sum(total) FROM sales;"
 
 ---
 
-## 9. Runbook de incidentes
+## 8. Runbook de incidentes
 
 | Síntoma | Primera verificación | Acción |
 |---|---|---|
-| La app no carga | Estado de Vercel | Rollback al despliegue anterior |
+| La app no carga | Estado del servicio en Railway y su último deploy | Redeploy de la versión anterior desde el historial de Deployments |
 | Carga pero sin datos | Estado de Supabase | Si es caída del proveedor: el POS sigue vendiendo offline. **Avisar al local por WhatsApp que sigan vendiendo** |
 | El escáner no abre la cámara | ¿HTTPS? ¿Permiso concedido? | Guiar a permitir la cámara; usar búsqueda manual mientras tanto |
 | Ventas que no sincronizan | Indicador en la app, Sentry | Revisar el error de la venta específica; nunca vaciar la cola sin exportarla antes |
-| Respaldo fallido | Alerta del worker | Ejecutar `POST /jobs/backup` manualmente e investigar |
-| Stock que no cuadra | Reporte de `rebuild-stock-check` | Comparar kardex vs. saldo; el kardex manda; reconstruir |
+| No llegan los correos de invitación | ¿Está `SUPABASE_SECRET_KEY` en el servicio? ¿`NEXT_PUBLIC_APP_URL` apunta al dominio real? | Cargar la variable y **redesplegar** — las `NEXT_PUBLIC_*` solo cambian con un build nuevo |
+| Respaldo fallido | Salida del trabajo | `npm run job -w @rutaahorro/worker backup-daily` y revisar el error |
+| Stock que no cuadra | Salida de `integrity-check` | Comparar kardex vs. saldo; el kardex manda; reconstruir |
 | Caja descuadrada | Bitácora de auditoría de esa sesión | Revisar anulaciones y ajustes del turno |
 
 **Regla ante cualquier incidente mayor:** lo primero es avisar al local que
