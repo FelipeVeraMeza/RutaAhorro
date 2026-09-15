@@ -1,0 +1,24 @@
+Lo que alcancé a terminar en esta última tanda
+Módulo	Qué quedó
+Usuarios	Invitación por correo, roles, estado conectado/desconectado
+Proveedores	CRUD con validación de RUT chileno
+Recepción	Con escáner, lotes, vencimiento obligatorio en perecibles, aviso de variación de costo
+Inventario	Ajustes con motivo, kardex consultable, toma de inventario parcial
+Todo pasando por la capa de repositorio, así que funciona igual en demo (IndexedDB) y en producción (Supabase).
+
+10 rutas activas. Prueba en http://localhost:3000 — cambia de rol en el banner amarillo para ver que bodega no ve Caja ni Vender, y que el vendedor no ve Inventario ni Usuarios.
+
+Dos cosas que arreglé al cerrar
+Dejé /reportes y /alertas en el menú pero esas páginas no existen — habrían sido enlaces muertos. Los saqué y dejé un comentario en navegacion.ts marcando dónde reponerlos.
+Verifiqué que el build, las 119 pruebas y la validación SQL pasaran antes de comitear, para no dejarte nada roto.
+Lo que el prompt lleva dentro
+Cómo levantarlo y los comandos útiles
+Las 8 decisiones de arquitectura que no se deben romper, con su porqué
+Estado real: qué está hecho y qué falta, en orden de prioridad
+Las decisiones que dependen de ti y llevan abiertas desde el inicio (P-03 "control contable", P-13 repo público/privado, el nombre SimplePyme vs. RutaAhorro)
+Las convenciones: español de Chile, errores en lenguaje del negocio, móvil primero, dinero en enteros
+Cómo me gustaría que trabaje la otra sesión: como jefe de proyecto y QA, verificando el estado real en vez de asumirlo
+Lo primero que debería hacer la próxima sesión
+Aplicar el esquema en Supabase (npm run db:bundle → pegar en el SQL Editor → luego seed.sql). Hasta que eso pase, el sistema no existe para el cliente: todo lo que has visto corre contra IndexedDB.
+
+Y una advertencia que dejé escrita en el prompt: los 7 requerimientos de concurrencia marcados como hechos descansan en diseño, no en pruebas. Los casos CP-01 a CP-08 siguen pendientes. Es el riesgo silencioso más grande que tiene el proyecto ahora mismo.
