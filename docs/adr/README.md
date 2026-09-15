@@ -17,6 +17,7 @@ sin eso, seis meses después nadie recuerda qué se descartó ni por qué.
 | [ADR-006](ADR-006-kardex-inmutable.md) | Kardex inmutable como fuente de verdad del inventario | Aceptada | 2026-09-14 |
 | [ADR-007](ADR-007-lotes-vencimiento.md) | Control de vencimientos por lote con consumo FEFO | Aceptada | 2026-09-14 |
 | [ADR-008](ADR-008-railway-servicio-unico.md) | Despliegue unificado en Railway con un solo servicio | Aceptada | 2026-09-15 |
+| [ADR-009](ADR-009-dte-simulador-primero.md) | Modelo y simulador de DTE antes que la integración real | Aceptada | 2026-09-15 |
 
 ## Plantilla
 

@@ -127,18 +127,22 @@ Están justificadas en `docs/adr/`. Son las reglas que sostienen el sistema:
    `npm run start -w @rutaahorro/web`. Ver `docs/09-despliegue.md §3` para las
    variables y el orden exacto. El worker no se despliega todavía: ver
    `docs/adr/ADR-008-railway-servicio-unico.md`.
-3. **Pantalla de reportes** (M7) — las 11 vistas ya existen en la base
-   (`v_sales_daily`, `v_sales_by_product`, `v_inventory_valued`,
-   `v_stale_products`, `v_adjustments`…). Solo falta la interfaz.
-4. **Pantalla de alertas** (M8) — la tabla `alerts` se llena sola por trigger y
-   por el worker; no hay dónde verlas.
-5. **Historial de ventas y anulación** (M5-15) — `fn_void_sale` existe y está
-   probada, sin pantalla.
-6. **Pruebas de concurrencia CP-01 a CP-08** de `docs/16-plan-pruebas.md`.
-   ⚠️ Los 7 requerimientos de concurrencia marcados como hechos descansan en
-   diseño, **no en pruebas**. Es el riesgo silencioso más grande del proyecto.
-7. **Bloqueo optimista al editar** (RF-M10-03) — hueco conocido: hoy si dos
-   personas editan el mismo producto, el segundo sobrescribe sin avisar.
+3. **El alcance creció: documentos tributarios.** P-03 se respondió el
+   2026-09-15 y el cliente sí requiere **boleta y factura electrónica con
+   vinculación al SII**. Ver `docs/18-documentos-tributarios-sii.md` y
+   `docs/adr/ADR-009-dte-simulador-primero.md`.
+
+**El orden de trabajo completo, por estado y con dependencias, está en
+`docs/19-cronograma.md`.** Resumido: F1 cerrar el POS (comprobante con IVA,
+anular venta, descuento, pago mixto) → F2 reportes → F3 alertas →
+F4 QA de concurrencia → F5 DTE simulado → F6 DTE real.
+
+Dos advertencias que no hay que perder de vista:
+
+- Los 7 requerimientos de concurrencia marcados como hechos **descansan en
+  diseño, no en pruebas**. CP-01 a CP-08 siguen pendientes.
+- Editar el mismo producto en simultáneo pierde datos (RF-M10-03): el segundo
+  que guarda sobrescribe al primero sin avisar.
 
 Cuando `/reportes` y `/alertas` existan, agregarlos a
 `apps/web/src/lib/navegacion.ts` (hay un comentario marcando el lugar).
@@ -150,13 +154,20 @@ Cuando `/reportes` y `/alertas` existan, agregarlos a
 Llevan abiertas desde el inicio y **no avanzan programando**. Están en
 `docs/15-preguntas-abiertas.md`.
 
-- **P-03 — ¿Qué significa "control contable"?** La propuesta comercial lo
-  ofrece; el sistema entrega control de caja y márgenes, **no** emisión de
-  boletas ante el SII. Es el mayor riesgo de expectativa (R-01).
+- **P-03 — RESPONDIDA el 2026-09-15: sí requiere emisión ante el SII.** Deja
+  de ser riesgo y pasa a ser alcance. Abre P-27 a P-31, y las dos que están en
+  la ruta crítica son:
+- **P-28 — ¿El cliente tiene certificado digital y enrolamiento como emisor
+  electrónico?** Sin esos dos trámites no se emite un solo documento válido, y
+  no dependen del desarrollo. **Empiezan hoy.**
+- **P-27 — ¿Qué proveedor de DTE?** Condiciona todo el diseño de F6.
 - **P-13 — ¿El repositorio será público o privado?** De esto depende si hay
   que rotar las llaves de Supabase.
 - **P-08 — ¿Cómo lleva hoy el inventario?** Si hay un Excel, se migra y se
   ahorra buena parte de la carga inicial.
+- **P-26 — El cliente había pedido Vercel + Railway** y se decidió solo
+  Railway ([ADR-008](docs/adr/ADR-008-railway-servicio-unico.md)). Hay que
+  decírselo.
 - **Nombre del producto.** Las maquetas dicen "SimplePyme" y el repo dice
   "RutaAhorro". Lo correcto sería: SimplePyme = producto, RutaAhorro = primer
   cliente. Afecta logo, correos y dominio.

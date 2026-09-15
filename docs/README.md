@@ -51,6 +51,9 @@ todo lo demás es tu contrato de implementación.
 | [15 — Preguntas abiertas](15-preguntas-abiertas.md) | **Bloqueantes para iniciar el desarrollo** |
 | [16 — Plan de pruebas (QA)](16-plan-pruebas.md) | Casos de concurrencia, seguridad, offline y negocio |
 | [17 — Inventario de alcance](17-inventario-alcance.md) | **Estado real del sistema**: qué está hecho, qué falta pantalla, qué no existe |
+| [18 — Documentos tributarios (SII)](18-documentos-tributarios-sii.md) | Boleta y factura electrónica: qué exige el SII, modelo, simulador |
+| [19 — Cronograma](19-cronograma.md) | **Orden de trabajo por estado**, dependencias y estimaciones |
+| [20 — Bitácora 2026-09-15](20-bitacora-2026-09-15.md) | Cierre del día: decisiones, hallazgos y bloqueos |
 
 ---
 

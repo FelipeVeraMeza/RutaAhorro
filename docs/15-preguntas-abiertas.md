@@ -27,14 +27,23 @@ obliga a cambiar la estrategia offline.
 
 > **Respuesta:** _______________________ · Fecha: ______
 
-### 🔴 P-03 · ¿Qué espera el cliente cuando la propuesta dice "control contable"?
+### ✅ P-03 · ¿Qué espera el cliente cuando la propuesta dice "control contable"? — RESPONDIDA
 **Por qué importa:** **es el riesgo más grave del proyecto (R-01).**
 Hay que preguntarlo de forma directa: *¿necesita emitir boletas desde este
 sistema, o solo llevar el control de su caja y sus márgenes?*
 **Impacto si es lo primero:** proyecto adicional de integración DTE, con
 certificado digital, folios y homologación.
 
-> **Respuesta:** _______________________ · Fecha: ______
+> **Respuesta (2026-09-15):** **es lo primero.** El cliente requiere emitir
+> **boleta electrónica y factura electrónica con vinculación al Servicio de
+> Impuestos Internos**. R-01 deja de ser un riesgo de expectativa y pasa a ser
+> alcance comprometido.
+>
+> Consecuencias, en [18](18-documentos-tributarios-sii.md) y
+> [ADR-009](adr/ADR-009-dte-simulador-primero.md): se construye el modelo y un
+> emisor simulado ahora, y la emisión real con un proveedor autorizado cuando
+> el cliente tenga certificado digital y enrolamiento. Abre P-27 a P-31.
+> **Ni la propuesta comercial ni el plan de trabajo contemplaban esto.**
 
 ### 🔴 P-04 · ¿Cuántas personas trabajan en el local y qué hace cada una?
 **Por qué importa:** valida los cuatro roles definidos en [02](02-stakeholders-roles.md).
@@ -179,6 +188,44 @@ entrega al borde.
 
 ---
 
+### 🔴 P-27 · ¿Integración directa con el SII o proveedor autorizado? ¿Cuál?
+**Recomendación:** proveedor autorizado. La certificación directa es un proyecto
+propio, iterativo y sin fecha garantizada, y para un cliente no se paga.
+**Por qué importa:** define costo por documento, esfuerzo y quién asume el
+riesgo de cada cambio normativo del SII. Ver [18 §3](18-documentos-tributarios-sii.md).
+
+> **Respuesta:** _______________________ · Fecha: ______
+
+### 🔴 P-28 · ¿El cliente ya tiene certificado digital y está enrolado como emisor electrónico?
+**Por qué importa:** es **la ruta crítica real** del módulo tributario. Sin
+estos dos trámites no se emite un solo documento válido, y no dependen de
+ninguna fase de desarrollo.
+**Qué hacer:** iniciarlos hoy, en paralelo. Si se dejan para cuando el código
+esté listo, el módulo espera igual.
+
+> **Respuesta:** _______________________ · Fecha: ______
+
+### 🟡 P-29 · ¿Emite solo boleta, o también factura a empresas?
+**Por qué importa:** la factura agrega datos del receptor, libro de compras y
+ventas, y acuse de recibo. Es bastante más que un tipo de documento distinto.
+
+> **Respuesta:** _______________________ · Fecha: ______
+
+### 🟡 P-30 · ¿Quién asume el costo recurrente del certificado y del proveedor de DTE?
+**Por qué importa:** es un costo mensual que no está en
+[12](12-costos-modelo-servicio.md) y que hoy nadie está pagando.
+
+> **Respuesta:** _______________________ · Fecha: ______
+
+### 🟢 P-31 · ¿Hay productos exentos de IVA en el catálogo?
+**Por qué importa:** cambia el tipo de documento a emitir y obliga a marcar la
+exención por producto. Hoy el sistema asume 19 % parejo
+(`tenants.settings.iva_pct`).
+
+> **Respuesta:** _______________________ · Fecha: ______
+
+---
+
 ## D · Diseño y experiencia
 
 ### 🟡 P-21 · ¿Hay identidad visual del local (logo, colores)?
@@ -222,12 +269,18 @@ cajeros el riesgo es bajo; con 6 hay que medirlo en serio antes de producción.
 
 | Prioridad | Cantidad | Preguntas |
 |---|:--:|---|
-| 🔴 Bloqueantes | 7 | P-01, P-02, P-03, P-04, P-05, P-08, P-13 |
-| 🟡 Importantes | 12 | P-06, P-09, P-10, P-11, P-12, P-14, P-15, P-16, P-17, P-21, P-24, P-26 |
-| 🟢 Diferibles | 6 | P-18, P-19, P-20, P-22, P-23, P-25 |
-| ✅ Respondidas | 1 | P-07 (productos perecibles: sí) |
+| 🔴 Bloqueantes | 8 | P-01, P-02, P-04, P-05, P-08, P-13, P-27, P-28 |
+| 🟡 Importantes | 14 | P-06, P-09, P-10, P-11, P-12, P-14, P-15, P-16, P-17, P-21, P-24, P-26, P-29, P-30 |
+| 🟢 Diferibles | 7 | P-18, P-19, P-20, P-22, P-23, P-25, P-31 |
+| ✅ Respondidas | 2 | P-07 (perecibles: sí) · P-03 (documentos tributarios: sí) |
 
 > **Las tres que hay que hacer primero, en este orden:**
-> **P-03** (¿qué entiende por control contable?) — puede cambiar el proyecto entero.
-> **P-08** (¿cómo lleva el inventario hoy?) — define el plazo real.
-> **P-02** (¿cuántos productos?) — define el esfuerzo de puesta en marcha.
+> **P-28** (¿tiene certificado digital y enrolamiento?) — es la ruta crítica real
+> del módulo tributario y no avanza programando. Los trámites empiezan hoy.
+> **P-27** (¿qué proveedor de DTE?) — condiciona todo el diseño de F6.
+> **P-08** (¿cómo lleva el inventario hoy?) — define el plazo real de la puesta
+> en marcha.
+>
+> P-03 se respondió el 2026-09-15 y cambió el alcance del proyecto. Lo que
+> antes era "el riesgo más grave" ahora es trabajo comprometido: ver
+> [19 — Cronograma](19-cronograma.md), fases F5 y F6.

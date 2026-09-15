@@ -5,6 +5,17 @@
 vistas y tablas de `supabase/migrations/`, pantallas de `apps/web/src/app/`,
 trabajos de `apps/worker/` y módulos de `packages/core/`.
 
+> ⚠️ **Re-verificación del 2026-09-15 (v1.2).** Las filas de M1, M3 y M4 se
+> contrastaron contra el código: varias marcadas 🔵 o ⬜ ya tienen pantalla y
+> se corrigieron. **Los contadores por módulo y el resumen ejecutivo NO se
+> recalcularon** — quedaron de la versión anterior y hoy subestiman lo hecho.
+> La fuente autorizada para planificar es [19 — Cronograma](19-cronograma.md).
+> Falta una auditoría completa de los 124 requerimientos.
+>
+> **Además, el alcance creció:** P-03 se respondió y el sistema debe emitir
+> documentos tributarios electrónicos. Ese módulo todavía no está inventariado
+> aquí — ver [18](18-documentos-tributarios-sii.md).
+
 > **Para qué sirve este documento.** Los documentos 03 y 04 dicen qué *debe*
 > hacer el sistema. Este dice qué *hace hoy*. La diferencia entre ambos es el
 > trabajo que queda, y es la única base honesta para comprometer una fecha.
@@ -67,7 +78,7 @@ De los **101 requerimientos funcionales**:
 |---|---|:--:|---|
 | M1-01 | Inicio de sesión con correo y contraseña | ✅ | — |
 | M1-02 | Sesión independiente por trabajador | ✅ | — |
-| M1-03 | Crear / editar / desactivar usuarios | ⬜ | Pantalla de usuarios |
+| M1-03 | Crear / editar / desactivar usuarios | ✅ | Desactivar y reactivar; nadie puede desactivarse a sí mismo |
 | M1-04 | Asignación de rol | 🔵 | Existe el trigger `handle_new_user`; hoy el rol se pone a mano en Supabase |
 | M1-05 | Recuperar contraseña por correo | ⬜ | Pantalla + plantilla de correo en español |
 | M1-06 | Sesión persistente entre turnos | ✅ | — |
@@ -76,9 +87,9 @@ De los **101 requerimientos funcionales**:
 | M1-09 | Cierre de sesión remoto | ⬜ | — |
 | M1-10 | Segundo factor para admin | ⬜ | Prioridad *Could* |
 | M1-11 | Bloqueo tras 5 intentos fallidos | 🟡 | Supabase lo hace por defecto; falta verificar el umbral |
-| M1-12 | Invitar empleado por correo | ⬜ | **Bloqueante para que el local opere con varias personas** |
+| M1-12 | Invitar empleado por correo | ✅ | Route handler + pantalla. Exige `SUPABASE_SECRET_KEY` en el servidor |
 | M1-13 | Mismo usuario en varios dispositivos | ✅ | Por diseño de Supabase Auth |
-| M1-14 | Ver quién está conectado | ⬜ | Requiere `last_seen_at`, la columna ya existe |
+| M1-14 | Ver quién está conectado | ✅ | Conectado = actividad en los últimos 5 minutos |
 | M1-15 | Registrar inicio/cierre de sesión en bitácora | ⬜ | — |
 
 **Estado del módulo: 5 ✅ · 1 🔵 · 2 🟡 · 7 ⬜**
@@ -116,15 +127,15 @@ De los **101 requerimientos funcionales**:
 
 | RF | Ítem | Estado | Falta |
 |---|---|:--:|---|
-| M3-01 | Registrar proveedores | 🔵 | Pantalla |
+| M3-01 | Registrar proveedores | ✅ | Pantalla con alta y edición |
 | M3-02 | Validar RUT chileno | ✅ | `isValidRut()` probado, incluido dígito K |
-| M3-03 | Asociar proveedores a productos | 🔵 | Tabla `product_suppliers` |
-| M3-04 | Registrar recepción de mercadería | 🔵 | `fn_confirm_receipt` |
-| M3-05 | La recepción sube el stock | 🔵 | — |
+| M3-03 | Asociar proveedores a productos | ✅ | Desde la recepción |
+| M3-04 | Registrar recepción de mercadería | ✅ | Pantalla invocando `fn_confirm_receipt` |
+| M3-05 | La recepción sube el stock | ✅ | — |
 | M3-06 | Recalcular costo promedio ponderado | ✅ | Probado, incluidos stock cero y negativo |
 | M3-07 | Cargar recepción escaneando | ⬜ | El lector existe, falta la pantalla |
-| M3-08 | Advertir variación de costo | 🔵 | `shouldWarnCostVariation()` probado |
-| M3-09 | Anular recepción | 🔵 | `fn_void_receipt` |
+| M3-08 | Advertir variación de costo | ✅ | Aviso en la pantalla de recepción |
+| M3-09 | Anular recepción | ✅ | `fn_void_receipt` invocada desde la app |
 | M3-10 | Historial de compras por proveedor | ⬜ | — |
 | M3-11 | Orden de compra sugerida | ⬜ | Prioridad *Could* |
 
@@ -139,18 +150,18 @@ De los **101 requerimientos funcionales**:
 | M4-01 | Stock en tiempo real | ✅ | — |
 | M4-02 | Todo cambio genera kardex | ✅ | `fn_post_movement` |
 | M4-03 | 9 tipos de movimiento | ✅ | — |
-| M4-04 | Ajustar stock con motivo | 🔵 | `fn_adjust_stock` sin pantalla |
-| M4-05 | Toma de inventario | 🔵 | `fn_apply_stock_count` sin pantalla |
-| M4-06 | Toma parcial por categoría | 🔵 | — |
+| M4-04 | Ajustar stock con motivo | ✅ | Pantalla Inventario |
+| M4-05 | Toma de inventario | ✅ | Pantalla Inventario, pestaña Toma |
+| M4-06 | Toma parcial por categoría | 🟡 | Se puede contar un subconjunto; **no hay filtro por categoría** |
 | M4-07 | Stock mínimo y marca visual | ✅ | Visible en Productos e Inicio |
 | M4-08 | Inventario valorizado | ✅ | Pantalla Stock |
 | M4-09 | Advertir venta sin stock | ✅ | Probado |
 | M4-10 | Merma como ajuste diferenciado | 🔵 | — |
 | M4-11 | Kardex inmutable | ✅ | Trigger que rechaza UPDATE/DELETE |
-| M4-12 | Consultar kardex con filtros | 🔵 | **Sin pantalla de kardex** |
+| M4-12 | Consultar kardex con filtros | ✅ | Pantalla Inventario, pestaña Movimientos |
 | M4-13 | Stock por ubicación | ⬜ | Prioridad *Could* |
-| M4-14 | Marcar producto como perecible | 🔵 | Columna `tracks_expiry` |
-| M4-15 | Exigir vencimiento al recepcionar | 🔵 | Validado en `fn_confirm_receipt` |
+| M4-14 | Marcar producto como perecible | ✅ | Desde el formulario de producto |
+| M4-15 | Exigir vencimiento al recepcionar | ✅ | Validado en base y pedido en la pantalla |
 | M4-16 | Stock por lote | ✅ | Visible en pantalla Stock |
 | M4-17 | Consumo FEFO automático | ✅ | Probado: no descuenta dos veces del mismo lote |
 | M4-18 | Alertas de vencimiento | ✅ | Vista + trabajo del worker + pantalla |
@@ -417,3 +428,4 @@ impedir que el local empiece a operar.
 |---|---|---|---|
 | 1.0 | 2026-09-14 | Felipe Vera | Inventario inicial por auditoría de código |
 | 1.1 | 2026-09-15 | Felipe Vera | Módulo de productos terminado: alta, edición, baja y carga masiva. M2 de 3 a 9 ✅ |
+| 1.2 | 2026-09-15 | QA | Re-verificación contra el código de M1, M3 y M4: 14 filas corregidas (usuarios, proveedores, recepción, ajustes, kardex y toma ya tienen pantalla). M4-06 baja a 🟡: no existe filtro por categoría. Contadores por módulo pendientes de recalcular |
