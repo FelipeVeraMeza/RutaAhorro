@@ -31,7 +31,12 @@ export const env = {
    */
   serviceRoleKey: process.env.SUPABASE_SECRET_KEY ?? required('SUPABASE_SERVICE_ROLE_KEY'),
 
-  port: Number(optional('WORKER_PORT', '8080')),
+  /**
+   * Railway inyecta PORT y enruta el dominio público a ese puerto. Si el worker
+   * escuchara en otro, el healthcheck fallaría y el despliegue quedaría caído.
+   * En local no existe PORT y manda WORKER_PORT.
+   */
+  port: Number(optional('PORT', optional('WORKER_PORT', '8080'))),
   sharedSecret: optional('WORKER_SHARED_SECRET'),
 
   backupBucket: optional('BACKUP_BUCKET', 'respaldos'),
