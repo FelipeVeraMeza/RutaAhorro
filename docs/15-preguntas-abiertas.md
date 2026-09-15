@@ -34,6 +34,30 @@ sistema, o solo llevar el control de su caja y sus márgenes?*
 **Impacto si es lo primero:** proyecto adicional de integración DTE, con
 certificado digital, folios y homologación.
 
+> **Planteado explícitamente el 2026-09-15:** se mencionó la necesidad de
+> **facturas y boletas**. Queda registrado, pero **sin responder**: no se aclaró
+> si el sistema debe *emitirlas* ante el SII o solo *registrarlas* para control
+> interno. Son dos proyectos de tamaño muy distinto y la respuesta define cuál.
+
+**Hay que separar tres cosas que no son lo mismo:**
+
+| | Qué implica | Estado hoy |
+|---|---|---|
+| **Registrar** la venta para control interno | Ya funciona: folio correlativo, `tax_amount`, arqueo | ✅ Hecho |
+| **Emitir boleta** electrónica al SII | Certificado digital, folios CAF, homologación (FA-1) | ⬜ Fuera de alcance |
+| **Emitir factura** electrónica | Todo lo de la boleta **más** identificar al comprador: RUT, razón social, giro y dirección | ⬜ Fuera de alcance **y sin modelo de datos** |
+
+⚠️ **La factura tiene un impacto extra que la boleta no tiene:** hoy **no existe
+tabla de clientes** en el esquema (`0001_schema.sql`) y los clientes registrados
+están fuera de alcance por FA-8. Una factura obliga a identificar al comprador,
+así que además del DTE hay que modelar cliente, asociarlo a la venta y validar su
+RUT. La boleta no necesita nada de eso.
+
+**Esto contradice el supuesto S-7** de [01 §Supuestos](01-vision-alcance.md), que
+declara que el cliente *no* requiere emitir boleta electrónica desde el sistema.
+Si la respuesta confirma que sí la requiere, **S-7 cae** y hay que reabrir FA-1 y
+replanificar.
+
 > **Respuesta:** _______________________ · Fecha: ______
 
 ### 🔴 P-04 · ¿Cuántas personas trabajan en el local y qué hace cada una?
@@ -201,13 +225,63 @@ cajeros el riesgo es bajo; con 6 hay que medirlo en serio antes de producción.
 
 > **Respuesta:** _______________________ · Fecha: ______
 
+### 🔴 P-26 · ¿Se necesitan tasas de impuesto distintas según el producto?
+*Planteado el 2026-09-15 junto con P-03.*
+
+**El caso concreto son los bebestibles.** En Chile las bebidas pagan **ILA
+(Impuesto Adicional a las Bebidas Analcohólicas) además del IVA**, y no es una
+sola tasa:
+
+| Producto | ILA |
+|---|:--:|
+| Bebida analcohólica azucarada (≥ 15 g/240 ml) | 18 % |
+| Bebida analcohólica sin azúcar o baja en azúcar | 10 % |
+| Cerveza y vino | 20,5 % |
+| Licores y destilados | 31,5 % |
+
+**Qué asume el sistema hoy:** una tasa única para todo el local.
+`tenants.settings.iva_pct = 19`, y `fn_register_sale` calcula el impuesto hacia
+atrás sobre el total de la venta:
+`tax_amount = total − (total / 1,19)` (`0002_functions.sql:249`).
+Con tasas mixtas en un mismo carrito **ese cálculo da mal**, y el margen de las
+bebidas sale inflado porque no descuenta el ILA.
+
+**Por qué importa que se decida pronto:** `sale_items` congela `product_name`,
+`unit_price` y `unit_cost` justamente para poder reconstruir la historia. El
+impuesto **no está congelado**. Si se calcula el neto al momento del reporte
+leyendo la configuración *actual* del producto, el día que cambie una tasa por ley
+—o que alguien reclasifique un producto— **todas las ventas históricas cambian de
+neto solas**, que es exactamente lo que el [ADR-006](adr/ADR-006-kardex-inmutable.md)
+busca evitar. Una vez que existan ventas reales sin la tasa congelada, **ese dato
+no se recupera.** Por eso está marcada 🔴: no bloquea el desarrollo, pero **debe
+decidirse antes de la primera venta real.**
+
+**Diseño propuesto si la respuesta es sí:**
+1. Tabla `tax_rates (id, tenant_id, nombre, ila_pct, is_active)` y
+   `products.tax_rate_id` → `tax_rates(id)`, con `null` = solo IVA.
+   Un booleano "es bebestible" **no sirve**: no puede expresar cuatro tasas.
+2. **No colgarlo de `categories`.** La categoría es un concepto comercial que el
+   usuario renombra y reorganiza cuando quiere; el impuesto es legal. Si alguien
+   reordena categorías se rompe el cálculo tributario.
+3. Congelar la tasa aplicada en `sale_items`, como las demás copias congeladas.
+4. `fn_register_sale` debe sumar el impuesto **línea por línea**, no sobre el
+   total.
+
+⚠️ **La mecánica exacta del cálculo debe confirmarla un contador** antes de
+implementar. El entendimiento de trabajo es que el ILA se aplica sobre la misma
+base neta que el IVA (total = neto × (1 + 0,19 + ILA)), **pero no está
+validado profesionalmente.** Equivocarse acá produce cifras incorrectas en algo
+que el cliente va a leer como "control contable" (R-01).
+
+> **Respuesta:** _______________________ · Fecha: ______
+
 ---
 
 ## Resumen
 
 | Prioridad | Cantidad | Preguntas |
 |---|:--:|---|
-| 🔴 Bloqueantes | 7 | P-01, P-02, P-03, P-04, P-05, P-08, P-13 |
+| 🔴 Bloqueantes | 8 | P-01, P-02, P-03, P-04, P-05, P-08, P-13, **P-26** |
 | 🟡 Importantes | 11 | P-06, P-09, P-10, P-11, P-12, P-14, P-15, P-16, P-17, P-21, P-24 |
 | 🟢 Diferibles | 6 | P-18, P-19, P-20, P-22, P-23, P-25 |
 | ✅ Respondidas | 1 | P-07 (productos perecibles: sí) |
@@ -216,3 +290,7 @@ cajeros el riesgo es bajo; con 6 hay que medirlo en serio antes de producción.
 > **P-03** (¿qué entiende por control contable?) — puede cambiar el proyecto entero.
 > **P-08** (¿cómo lleva el inventario hoy?) — define el plazo real.
 > **P-02** (¿cuántos productos?) — define el esfuerzo de puesta en marcha.
+>
+> **P-26** (tasas por producto) no cambia el plazo, pero tiene **fecha de
+> vencimiento distinta a las demás**: hay que decidirla **antes de la primera
+> venta real**, porque después el dato histórico ya no se puede reconstruir.

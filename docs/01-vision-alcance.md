@@ -123,9 +123,9 @@ el alcance, el plazo o el costo.**
 | S-4 | El local tiene internet con **cortes ocasionales**, no permanentes | El modo offline pasa de red de seguridad a requisito crítico |
 | S-5 | La mayoría de los productos **trae código de barras de fábrica** | Hay que imprimir y pegar etiquetas: +horas-hombre en la carga inicial |
 | S-6 | Los trabajadores tienen **smartphone con cámara** (Android 10+ / iOS 15+) | El local debe proveer un dispositivo |
-| S-7 | El cliente **no requiere emitir boleta electrónica** desde este sistema | Ver FA-1: proyecto adicional |
+| S-7 | El cliente **no requiere emitir boleta electrónica** desde este sistema ⚠️ **EN REVISIÓN (2026-09-15):** se planteó la necesidad de facturas y boletas. Ver [P-03](15-preguntas-abiertas.md) | Ver FA-1: proyecto adicional. La **factura** además exige modelar al cliente (RUT, razón social, giro), hoy inexistente y fuera de alcance por FA-8 |
 | S-8 | La carga inicial del inventario la hace **el cliente**, con plantilla y apoyo del equipo | +40 a 80 horas-hombre al proyecto |
-| S-9 | Los precios se manejan **con IVA incluido** (precio de lista al público) | Cambia el cálculo de totales y reportes |
+| S-9 | Los precios se manejan **con IVA incluido** (precio de lista al público), con **una sola tasa de 19 % para todo el catálogo** ⚠️ **EN REVISIÓN (2026-09-15):** los bebestibles pagan ILA además del IVA. Ver [P-26](15-preguntas-abiertas.md) | Cambia el cálculo de totales y reportes. Con tasas diferenciadas hay que calcular el impuesto por línea y congelarlo en `sale_items` |
 | S-10 | Solo **una parte** del catálogo es perecible; el resto no requiere lote | Si todo el catálogo lleva lote, cada recepción se encarece y la carga inicial crece |
 
 ## 7. Restricciones
