@@ -7,6 +7,8 @@ import {
   formatCLP, toUserMessage, type CartLine,
 } from '@rutaahorro/core';
 import { findByBarcode, searchProducts, localProductCount, syncCatalog } from '@/lib/offline/catalog';
+import { DEMO_ACTIVO } from '@/lib/demo';
+import { sembrarCatalogoDemo } from '@/lib/demo/seed';
 import { enqueueSale, newClientUuid, syncQueue } from '@/lib/offline/sync';
 import type { LocalProduct } from '@/lib/offline/db';
 import { Escaner } from './Escaner';
@@ -38,6 +40,13 @@ export function PosClient({ hasOpenSession }: { hasOpenSession: boolean }) {
   // El catálogo local es lo que permite escanear sin internet.
   useEffect(() => {
     void (async () => {
+      // En demo no hay Supabase: se siembra el catálogo de ejemplo.
+      if (DEMO_ACTIVO) {
+        if ((await localProductCount()) === 0) await sembrarCatalogoDemo();
+        setCatalogReady(true);
+        return;
+      }
+
       const count = await localProductCount();
       if (count === 0 && navigator.onLine) {
         notificar('info', 'Descargando catálogo…');

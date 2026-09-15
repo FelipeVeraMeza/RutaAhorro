@@ -16,6 +16,9 @@ loadEnv({ path: resolve(process.cwd(), '../../.env') });
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // Quita el botón flotante "N" de Next.js en desarrollo. Solo aparecía en
+  // modo dev (nunca en producción), pero tapaba la barra de navegación.
+  devIndicators: false,
   // core se publica como dist compilado, pero transpilarlo permite que Next
   // lo trate como código propio del proyecto (mejor tree-shaking y source maps).
   transpilePackages: ['@rutaahorro/core'],

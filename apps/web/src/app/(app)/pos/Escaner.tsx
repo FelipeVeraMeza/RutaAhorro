@@ -24,7 +24,11 @@ export function Escaner({
 
   return (
     <div>
-      <div className={`relative overflow-hidden rounded-xl bg-black ${activo ? 'aspect-[4/3]' : 'h-0'}`}>
+      <div
+        className={`relative overflow-hidden rounded-xl bg-black mx-auto w-full ${
+          activo ? 'h-48 sm:h-56 max-w-md' : 'h-0'
+        }`}
+      >
         <video
           ref={videoRef}
           playsInline
@@ -37,7 +41,7 @@ export function Escaner({
           <>
             {/* Guía de encuadre */}
             <div className="absolute inset-0 grid place-items-center pointer-events-none">
-              <div className="w-4/5 h-24 border-2 border-white/80 rounded-lg shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
+              <div className="w-4/5 h-20 border-2 border-white/80 rounded-lg shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
             </div>
             <p className="absolute bottom-2 inset-x-0 text-center text-[11px] text-white/80">
               Apunta al código · {engine === 'nativo' ? 'lector rápido' : 'lector compatible'}
@@ -60,7 +64,7 @@ export function Escaner({
 
       <button
         onClick={onToggle}
-        className={`tap w-full mt-2 py-3.5 rounded-xl font-semibold text-base ${
+        className={`tap w-full max-w-md mx-auto block mt-2 py-3.5 rounded-xl font-semibold text-base ${
           activo
             ? 'border border-[var(--borde)] bg-white'
             : 'bg-marca-500 text-white active:bg-marca-600'
