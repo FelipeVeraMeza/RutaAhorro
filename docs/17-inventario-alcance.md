@@ -404,6 +404,11 @@ impedir que el local empiece a operar.
 4. **La concurrencia está implementada pero no verificada.** Siete requerimientos
    marcados ✅ en M10 descansan en diseño, no en pruebas. Es el riesgo silencioso
    más grande del proyecto.
+   ⚠️ **Confirmado el 2026-09-15:** la advertencia dejó de ser teórica. La toma de
+   inventario borra en silencio las recepciones y ventas hechas durante el conteo
+   (`fn_apply_stock_count`). Ver **[R-17](13-riesgos.md)**, exposición 20 (crítico).
+   M4-05 y M4-06 siguen contando como construidos, pero **no son confiables con la
+   tienda operando** hasta que se corrija.
 
 5. **Tres ítems dependen del cliente y llevan abiertos desde el inicio**:
    responder las preguntas bloqueantes, aclarar "control contable" y cargar el

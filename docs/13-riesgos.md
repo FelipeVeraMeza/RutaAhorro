@@ -9,7 +9,7 @@ Un riesgo con exposición **≥ 12** exige plan de mitigación activo desde el d
 
 | Exposición | Riesgos |
 |---|---|
-| **20 – 25 · Crítico** | R-01, R-02 |
+| **20 – 25 · Crítico** | R-01, R-02, **R-17** |
 | **12 – 16 · Alto** | R-03, R-04, R-05, R-06 |
 | **6 – 10 · Medio** | R-07 a R-12 |
 | **1 – 5 · Bajo** | R-13 a R-16 |
@@ -50,6 +50,71 @@ deja de creerle en la primera semana.
 | **Plan de contingencia** | Arrancar con un subconjunto (top 200 productos) y completar durante la marcha blanca. Cotizar la carga como servicio adicional si el cliente no puede hacerla |
 | **Indicador de alerta** | Al final de la semana 1 de F5 hay menos del 50 % del catálogo cargado |
 | **Responsable** | Cliente, con apoyo de Felipe · **desde F2** |
+
+---
+
+### R-17 · La toma de inventario borra en silencio las recepciones y ventas hechas durante el conteo
+**P: 4 · S: 5 · Exposición: 20** · *Detectado el 2026-09-15 por auditoría de código*
+
+**Defecto confirmado en `fn_apply_stock_count` (`0002_functions.sql:682-698`).**
+La función lee el stock del sistema **en el momento de aplicar**, no en el momento
+de contar, y calcula `delta = contado − stock_actual`, dejando el saldo exactamente
+en lo contado. Todo movimiento ocurrido entre el conteo físico y la aplicación
+**se revierte sin aviso**.
+
+> Bodega cuenta 10 unidades a las 15:00.
+> A las 15:10 entra una recepción de 24 → el sistema queda en 34.
+> A las 15:20 bodega aplica la toma con 10 → `delta = 10 − 34 = −24`.
+> **La recepción completa desaparece.** El saldo queda en 10 cuando físicamente hay 34.
+
+Lo mismo ocurre con las ventas hechas durante el conteo: se revierten solas.
+
+**Por qué la severidad es 5:** el ajuste se escribe en `inventory_movements`, que es
+**inmutable** por [ADR-006](adr/ADR-006-kardex-inmutable.md). No se puede borrar:
+solo se corrige insertando el movimiento contrario, y únicamente si alguien nota el
+error. Un inventario que se corrompe solo es exactamente lo que destruye la
+confianza del personal en el sistema (ver R-03).
+
+**Por qué la probabilidad es 4:** por decisión de producto del 2026-09-15, **la
+recepción de mercadería con factura nunca se bloquea**, ni siquiera durante una toma
+de inventario en curso (ver más abajo). El local va a contar con la tienda abierta y
+recibiendo mercadería, así que el solapamiento no es excepcional: es lo normal.
+
+**Dos defectos que hay que arreglar juntos:**
+
+1. **El cálculo ignora los movimientos intermedios.** Siendo `C` lo contado en T1,
+   `M` los movimientos netos entre T1 y T2, y `S₂` el stock al aplicar:
+   - Hoy calcula: `delta = C − S₂`
+   - Correcto: `delta = (C + M) − S₂`
+2. **No se conoce T1.** `stock_count_items` se inserta recién al aplicar, así que
+   `counted_at` toma el valor de la aplicación, no del conteo. Además la pantalla
+   mantiene el conteo en estado local de React (`InventarioClient.tsx`) y no lo
+   persiste hasta el final: si se cierra el navegador, **se pierde el conteo
+   completo**. Sin resolver esto, `M` no es calculable.
+
+| | |
+|---|---|
+| **Mitigación** | Persistir cada ítem contado en el momento de contarlo (resuelve T1 y la pérdida por cierre del navegador). Al aplicar, sumar los movimientos intermedios al delta. Mostrar al usuario qué productos tuvieron movimiento durante el conteo antes de confirmar |
+| **Plan de contingencia** | Mientras no esté corregido: **no hacer tomas de inventario con la tienda operando.** Contar con la tienda cerrada y aplicar de inmediato |
+| **Indicador de alerta** | Un ajuste de toma de inventario cuyo `delta` coincide en magnitud con una recepción del mismo día |
+| **Responsable** | Felipe · **antes de la primera toma de inventario en producción** |
+
+> **Cubierto por los casos CP-01 a CP-08** de [16 — plan de pruebas](16-plan-pruebas.md),
+> que siguen sin ejecutarse. Este riesgo es la confirmación concreta de la advertencia
+> general que [17 §6.4](17-inventario-alcance.md) hace sobre la concurrencia: estaba
+> "correcta por diseño", y no lo estaba.
+
+#### Decisión de producto asociada (2026-09-15)
+
+**La recepción de mercadería con factura no se bloquea nunca**, haya o no una toma de
+inventario en curso, esté el inventario "listo" o no. La mercadería llega cuando el
+proveedor la trae y no se le puede pedir que espere a que termine un conteo.
+
+**Consecuencia de diseño:** queda descartado resolver R-17 bloqueando las recepciones
+durante la toma. La corrección tiene que vivir **del lado de la toma de inventario**,
+que debe reconciliarse contra los movimientos ocurridos durante el conteo. Esto
+convierte el punto 1 de la mitigación en obligatorio: avisar no basta, hay que
+calcular bien.
 
 ---
 
