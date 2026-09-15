@@ -1,0 +1,358 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { formatCLP, parseCLP, toUserMessage } from '@rutaahorro/core';
+import { supabase } from '@/lib/supabase/client';
+
+interface Session { id: string; opened_at: string; opening_amount: number }
+interface Movimiento { id: string; type: string; amount: number; reason: string; created_at: string }
+interface Cierre {
+  session_id: string; full_name: string | null; opened_at: string;
+  closed_at: string | null; difference: number | null; sales_total: number | null;
+}
+
+const hora = (iso: string) =>
+  new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' });
+const fecha = (iso: string) =>
+  new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'America/Santiago' });
+
+export function CajaClient({
+  session, resumen, movimientos, historial,
+}: {
+  session: Session | null;
+  resumen: Record<string, unknown> | null;
+  movimientos: Movimiento[];
+  historial: Cierre[];
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [cargando, setCargando] = useState(false);
+
+  const [montoInicial, setMontoInicial] = useState('');
+  const [vistaMovimiento, setVistaMovimiento] = useState<'ingreso' | 'egreso' | null>(null);
+  const [movMonto, setMovMonto] = useState('');
+  const [movMotivo, setMovMotivo] = useState('');
+  const [cerrando, setCerrando] = useState(false);
+  const [contado, setContado] = useState('');
+  const [nota, setNota] = useState('');
+
+  const esperado = Number(resumen?.expected_amount ?? 0);
+  const diferencia = (parseCLP(contado) ?? 0) - esperado;
+
+  /** El query builder de Supabase es un thenable, no una Promise: por eso PromiseLike. */
+  async function accion(fn: () => PromiseLike<{ error: { message: string } | null }>) {
+    setCargando(true);
+    setError(null);
+    const { error: e } = await fn();
+    setCargando(false);
+    if (e) { setError(toUserMessage(e)); return false; }
+    router.refresh();
+    return true;
+  }
+
+  // ---------------------------------------------------------------- abrir
+  if (!session) {
+    return (
+      <div className="px-4 py-6">
+        <h1 className="text-lg font-semibold mb-1">Abrir caja</h1>
+        <p className="text-sm text-[var(--texto-suave)] mb-5">
+          Cuenta el efectivo con el que partes y decláralo. Es lo que permite saber al cierre si la caja cuadra.
+        </p>
+
+        <div className="tarjeta p-4">
+          <label htmlFor="inicial" className="block text-sm font-medium mb-1.5">
+            Efectivo inicial
+          </label>
+          <input
+            id="inicial"
+            type="text"
+            inputMode="numeric"
+            value={montoInicial}
+            onChange={(e) => setMontoInicial(e.target.value)}
+            placeholder="0"
+            className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] text-xl num text-right"
+          />
+          {error && <p role="alert" className="text-sm text-[var(--color-alerta)] mt-2">{error}</p>}
+          <button
+            disabled={cargando}
+            onClick={() =>
+              accion(() =>
+                supabase().rpc('fn_open_cash_session', {
+                  p_opening_amount: parseCLP(montoInicial) ?? 0,
+                }),
+              )
+            }
+            className="tap w-full mt-4 py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50"
+          >
+            {cargando ? 'Abriendo…' : 'Abrir caja'}
+          </button>
+        </div>
+
+        {historial.length > 0 && <Historial cierres={historial} />}
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------- cerrar
+  if (cerrando) {
+    const necesitaNota = (parseCLP(contado) ?? 0) !== esperado;
+    return (
+      <div className="px-4 py-6">
+        <h1 className="text-lg font-semibold mb-1">Cerrar caja</h1>
+        <p className="text-sm text-[var(--texto-suave)] mb-5">
+          Cuenta el efectivo que hay ahora en la caja.
+        </p>
+
+        <div className="tarjeta p-4 space-y-4">
+          <div>
+            <label htmlFor="contado" className="block text-sm font-medium mb-1.5">
+              Efectivo contado
+            </label>
+            <input
+              id="contado"
+              type="text"
+              inputMode="numeric"
+              value={contado}
+              onChange={(e) => setContado(e.target.value)}
+              placeholder="0"
+              className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] text-xl num text-right"
+            />
+          </div>
+
+          {contado !== '' && (
+            <div className={`px-4 py-3 rounded-xl ${
+              diferencia === 0 ? 'bg-marca-50' : 'bg-amber-50'
+            }`}>
+              <div className="flex justify-between text-sm">
+                <span>Esperado</span>
+                <span className="num">{formatCLP(esperado)}</span>
+              </div>
+              <div className="flex justify-between text-sm mt-1">
+                <span>Contado</span>
+                <span className="num">{formatCLP(parseCLP(contado) ?? 0)}</span>
+              </div>
+              <div className="flex justify-between font-bold mt-2 pt-2 border-t border-black/10">
+                <span>{diferencia === 0 ? 'Cuadra' : diferencia < 0 ? 'Faltante' : 'Sobrante'}</span>
+                <span className="num">{formatCLP(Math.abs(diferencia))}</span>
+              </div>
+            </div>
+          )}
+
+          {necesitaNota && contado !== '' && (
+            <div>
+              <label htmlFor="nota" className="block text-sm font-medium mb-1.5">
+                ¿A qué se debe la diferencia? <span className="text-[var(--color-alerta)]">*</span>
+              </label>
+              <textarea
+                id="nota"
+                value={nota}
+                onChange={(e) => setNota(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 rounded-xl border border-[var(--borde)]"
+                placeholder="Ej: se dio un vuelto de más en la mañana"
+              />
+            </div>
+          )}
+
+          {error && <p role="alert" className="text-sm text-[var(--color-alerta)]">{error}</p>}
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setCerrando(false); setError(null); }}
+              className="tap px-4 py-3.5 rounded-xl border border-[var(--borde)] font-medium"
+            >
+              Volver
+            </button>
+            <button
+              disabled={cargando || contado === '' || (necesitaNota && nota.trim() === '')}
+              onClick={async () => {
+                const ok = await accion(() =>
+                  supabase().rpc('fn_close_cash_session', {
+                    p_session_id: session.id,
+                    p_counted_amount: parseCLP(contado) ?? 0,
+                    p_notes: nota.trim() || null,
+                  }),
+                );
+                if (ok) { setCerrando(false); setContado(''); setNota(''); }
+              }}
+              className="tap flex-1 py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-40"
+            >
+              {cargando ? 'Cerrando…' : 'Cerrar caja'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------- abierta
+  const r = resumen ?? {};
+  return (
+    <div className="px-4 py-5 space-y-4">
+      <div className="tarjeta p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h1 className="font-semibold">Caja abierta</h1>
+            <p className="text-xs text-[var(--texto-suave)]">desde las {hora(session.opened_at)}</p>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-marca-100 text-marca-900 text-xs font-medium">
+            Activa
+          </span>
+        </div>
+
+        <dl className="space-y-1.5 text-sm">
+          <Fila label="Efectivo inicial" value={Number(r.opening_amount ?? 0)} />
+          <Fila label="Ventas en efectivo" value={Number(r.cash_sales ?? 0)} />
+          {Number(r.cash_in ?? 0) > 0 && <Fila label="Ingresos" value={Number(r.cash_in)} />}
+          {Number(r.cash_out ?? 0) > 0 && <Fila label="Egresos" value={-Number(r.cash_out)} />}
+          <div className="flex justify-between pt-2 mt-2 border-t border-[var(--borde)] font-bold text-base">
+            <dt>Debería haber</dt>
+            <dd className="num">{formatCLP(esperado)}</dd>
+          </div>
+        </dl>
+
+        <div className="grid grid-cols-3 gap-2 mt-4 text-center">
+          <Metrica label="Ventas" value={String(r.sales_count ?? 0)} />
+          <Metrica label="Total" value={formatCLP(Number(r.sales_total ?? 0))} />
+          <Metrica label="Ticket prom." value={formatCLP(Number(r.average_ticket ?? 0))} />
+        </div>
+      </div>
+
+      {/* Movimientos */}
+      <div className="tarjeta p-4">
+        <h2 className="font-semibold text-sm mb-3">Movimientos de caja</h2>
+
+        {vistaMovimiento ? (
+          <div className="space-y-3">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={movMonto}
+              onChange={(e) => setMovMonto(e.target.value)}
+              placeholder="Monto"
+              className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] num text-right"
+            />
+            <input
+              type="text"
+              value={movMotivo}
+              onChange={(e) => setMovMotivo(e.target.value)}
+              placeholder="Motivo (obligatorio)"
+              className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)]"
+            />
+            {error && <p role="alert" className="text-sm text-[var(--color-alerta)]">{error}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setVistaMovimiento(null); setMovMonto(''); setMovMotivo(''); setError(null); }}
+                className="tap px-4 py-3 rounded-xl border border-[var(--borde)] text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={cargando || !movMotivo.trim() || !parseCLP(movMonto)}
+                onClick={async () => {
+                  const ok = await accion(() =>
+                    supabase().rpc('fn_add_cash_movement', {
+                      p_type: vistaMovimiento,
+                      p_amount: parseCLP(movMonto) ?? 0,
+                      p_reason: movMotivo.trim(),
+                    }),
+                  );
+                  if (ok) { setVistaMovimiento(null); setMovMonto(''); setMovMotivo(''); }
+                }}
+                className="tap flex-1 py-3 rounded-xl bg-marca-500 text-white font-semibold disabled:opacity-40"
+              >
+                Registrar {vistaMovimiento}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setVistaMovimiento('ingreso')}
+              className="tap flex-1 py-3 rounded-xl border border-[var(--borde)] text-sm font-medium"
+            >
+              + Ingreso
+            </button>
+            <button
+              onClick={() => setVistaMovimiento('egreso')}
+              className="tap flex-1 py-3 rounded-xl border border-[var(--borde)] text-sm font-medium"
+            >
+              − Egreso
+            </button>
+          </div>
+        )}
+
+        {movimientos.length > 0 && (
+          <ul className="mt-3 divide-y divide-[var(--borde)] text-sm">
+            {movimientos.map((m) => (
+              <li key={m.id} className="py-2 flex justify-between gap-2">
+                <span className="min-w-0">
+                  <span className="block truncate">{m.reason}</span>
+                  <span className="text-xs text-[var(--texto-suave)]">{hora(m.created_at)}</span>
+                </span>
+                <span className={`num whitespace-nowrap ${m.type === 'egreso' ? 'text-[var(--color-alerta)]' : 'text-marca-700'}`}>
+                  {m.type === 'egreso' ? '−' : '+'}{formatCLP(m.amount)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <button
+        onClick={() => setCerrando(true)}
+        className="tap w-full py-3.5 rounded-xl border-2 border-marca-500 text-marca-700 font-bold"
+      >
+        Cerrar caja
+      </button>
+
+      {historial.length > 0 && <Historial cierres={historial} />}
+    </div>
+  );
+}
+
+function Fila({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex justify-between">
+      <dt className="text-[var(--texto-suave)]">{label}</dt>
+      <dd className="num">{formatCLP(value)}</dd>
+    </div>
+  );
+}
+
+function Metrica({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="px-2 py-2 rounded-lg bg-[var(--fondo)]">
+      <p className="num text-sm font-bold truncate">{value}</p>
+      <p className="text-[10px] text-[var(--texto-suave)]">{label}</p>
+    </div>
+  );
+}
+
+function Historial({ cierres }: { cierres: Cierre[] }) {
+  return (
+    <div className="tarjeta p-4 mt-4">
+      <h2 className="font-semibold text-sm mb-3">Últimos cierres</h2>
+      <ul className="divide-y divide-[var(--borde)] text-sm">
+        {cierres.map((c) => (
+          <li key={c.session_id} className="py-2 flex justify-between gap-2">
+            <span className="min-w-0">
+              <span className="block truncate">{c.full_name ?? 'Sin nombre'}</span>
+              <span className="text-xs text-[var(--texto-suave)]">
+                {c.closed_at ? fecha(c.closed_at) : '—'} · {formatCLP(c.sales_total ?? 0)} vendidos
+              </span>
+            </span>
+            <span
+              className={`num whitespace-nowrap font-medium ${
+                (c.difference ?? 0) === 0 ? 'text-marca-700' : 'text-[var(--color-aviso)]'
+              }`}
+            >
+              {(c.difference ?? 0) === 0 ? 'cuadró' : formatCLP(c.difference ?? 0)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

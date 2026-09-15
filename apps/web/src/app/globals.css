@@ -1,0 +1,89 @@
+@import 'tailwindcss';
+
+/*
+ * Tema de RutaAhorro.
+ *
+ * Diseño MÓVIL PRIMERO: la app se opera con el pulgar, de pie, con clientes
+ * esperando. Todo objetivo táctil mide al menos 44 px (RNF-16) y las acciones
+ * principales viven en el tercio inferior de la pantalla (RNF-17).
+ */
+
+@theme {
+  --color-marca-50:  #eef7f2;
+  --color-marca-100: #d4ebe0;
+  --color-marca-300: #7fc6a4;
+  --color-marca-500: #1f9d63;
+  --color-marca-600: #17804f;
+  --color-marca-700: #12653e;
+  --color-marca-900: #0a3d26;
+
+  --color-alerta:  #b91c1c;
+  --color-aviso:   #b45309;
+  --color-exito:   #15803d;
+
+  --radius-app: 0.875rem;
+}
+
+:root {
+  --fondo: #f6f7f9;
+  --superficie: #ffffff;
+  --borde: #e3e6ea;
+  --texto: #0f172a;
+  --texto-suave: #64748b;
+  color-scheme: light;
+}
+
+html {
+  /* Evita el zoom automático de iOS al enfocar un input: en el POS, que la
+     pantalla salte mientras se cobra es inaceptable. Requiere que ningún input
+     baje de 16px de tamaño de fuente. */
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+body {
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Respeta la barra de gestos del celular y el notch */
+  padding-bottom: env(safe-area-inset-bottom);
+  overscroll-behavior-y: none;
+}
+
+input, select, textarea, button {
+  font-size: 16px; /* obligatorio: menos que esto hace zoom en iOS */
+}
+
+/* Utilidades propias -------------------------------------------------- */
+
+@utility tap {
+  /* Objetivo táctil mínimo (RNF-16) */
+  min-height: 44px;
+  min-width: 44px;
+}
+
+@utility tarjeta {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radius-app);
+}
+
+@utility num {
+  /* Cifras de ancho fijo: los montos no deben bailar al actualizarse */
+  font-variant-numeric: tabular-nums;
+}
+
+/* Oculta la barra de scroll sin perder el desplazamiento */
+@utility sin-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+@keyframes pulso-ok {
+  0%   { background-color: var(--color-marca-100); }
+  100% { background-color: transparent; }
+}
+
+@utility flash-ok {
+  animation: pulso-ok 600ms ease-out;
+}

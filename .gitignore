@@ -1,0 +1,54 @@
+# Dependencias
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# Entorno — NUNCA comitear credenciales
+.env
+.env.*
+!.env.example
+
+# Supabase local
+.branches
+.temp
+supabase/.temp/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing / cobertura
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Plataformas
+.vercel
+.railway
+
+# Respaldos locales
+*.dump
+*.sql.gz
+backups/
+
+# Bundle generado por tools/sql-check/bundle.js
+supabase/bundle.sql

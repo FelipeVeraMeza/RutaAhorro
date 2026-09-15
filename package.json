@@ -1,0 +1,30 @@
+{
+  "name": "rutaahorro",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sistema de gestión de inventario, ventas y caja para comercios pequeños y medianos",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace=@rutaahorro/web",
+    "dev:web": "npm run dev --workspace=@rutaahorro/web",
+    "dev:worker": "npm run dev --workspace=@rutaahorro/worker",
+    "build": "npm run build -w @rutaahorro/core && npm run build -w @rutaahorro/worker",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "db:check": "node tools/sql-check/parse.js && node tools/sql-check/plpgsql.js",
+    "db:bundle": "node tools/sql-check/bundle.js",
+    "build:web": "npm run build -w @rutaahorro/core && npm run build -w @rutaahorro/web"
+  },
+  "devDependencies": {
+    "pg-query-emscripten": "^5.1.0",
+    "typescript": "^5.7.2"
+  }
+}
