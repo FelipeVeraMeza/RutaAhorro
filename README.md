@@ -4,9 +4,10 @@ Plataforma web/móvil (PWA) para la gestión de inventario, ventas, caja y repor
 de comercios pequeños y medianos, diseñada para operar **desde el celular del
 propio trabajador**, sin requerir hardware especializado en el local.
 
-> **Estado del proyecto: FASE 0 — Levantamiento de requerimientos y documentación.**
-> Aún **no** existe código de aplicación. Todo lo que está en `docs/` es la base
-> contractual y técnica sobre la cual se construirá el sistema.
+> **Estado del proyecto: FASE 2-3 — Construcción.**
+> Base de datos ~90 %, lógica de negocio ~85 %, aplicación web ~25 %.
+> Nada desplegado todavía. El detalle ítem por ítem está en el
+> [inventario de alcance](docs/17-inventario-alcance.md).
 
 ---
 
@@ -33,6 +34,7 @@ Toda la documentación vive en [`docs/`](docs/). Empieza por el
 | 14 | [Glosario](docs/14-glosario.md) | Vocabulario común cliente ↔ equipo |
 | 15 | [Preguntas abiertas](docs/15-preguntas-abiertas.md) | **Lo que hay que confirmar con el cliente antes de programar** |
 | 16 | [Plan de pruebas (QA)](docs/16-plan-pruebas.md) | Casos críticos de concurrencia, permisos y modo offline |
+| 17 | [Inventario de alcance](docs/17-inventario-alcance.md) | **Estado real: qué está hecho y qué falta**, auditado sobre el código |
 | — | [ADRs](docs/adr/) | Decisiones de arquitectura y su justificación |
 
 ---

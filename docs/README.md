@@ -50,6 +50,7 @@ todo lo demás es tu contrato de implementación.
 | [14 — Glosario](14-glosario.md) | Vocabulario común |
 | [15 — Preguntas abiertas](15-preguntas-abiertas.md) | **Bloqueantes para iniciar el desarrollo** |
 | [16 — Plan de pruebas (QA)](16-plan-pruebas.md) | Casos de concurrencia, seguridad, offline y negocio |
+| [17 — Inventario de alcance](17-inventario-alcance.md) | **Estado real del sistema**: qué está hecho, qué falta pantalla, qué no existe |
 
 ---
 
@@ -71,3 +72,4 @@ todo lo demás es tu contrato de implementación.
 | 1.0 | 2026-09-14 | Felipe Vera | Versión inicial de levantamiento |
 | 1.1 | 2026-09-14 | Felipe Vera | P-07 respondida: se incorpora control de vencimiento por lote con FEFO (ADR-007, RF-M4-14 a RF-M4-20) |
 | 1.2 | 2026-09-14 | Felipe Vera | Trabajo simultáneo: +4 RF de gestión de empleados, +11 RF del módulo M10, +7 RNF de concurrencia, y nuevo [plan de pruebas QA](16-plan-pruebas.md) |
+| 1.3 | 2026-09-15 | Felipe Vera | [Inventario de alcance](17-inventario-alcance.md) por auditoría de código: 31 % entregable, 65 % construido |
