@@ -11,6 +11,10 @@ propio trabajador**, sin requerir hardware especializado en el local.
 
 ---
 
+> **¿Continuando el proyecto en otra sesión o herramienta?**
+> Parte por [`HANDOFF.md`](HANDOFF.md): es un prompt autocontenido con el
+> contexto, el estado real y lo que sigue.
+
 ## Documentación
 
 Toda la documentación vive en [`docs/`](docs/). Empieza por el
