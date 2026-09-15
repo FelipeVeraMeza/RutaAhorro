@@ -52,3 +52,6 @@ backups/
 
 # Bundle generado por tools/sql-check/bundle.js
 supabase/bundle.sql
+
+# PDF generado desde docs/cliente/resumen-sistema.html
+*.pdf

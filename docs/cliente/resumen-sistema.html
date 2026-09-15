@@ -1,0 +1,876 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  Resumen funcional del sistema, escrito para el cliente.
+  Fuente del PDF que se le entrega. Para regenerarlo:
+
+  chrome --headless=new --disable-gpu --no-pdf-header-footer \
+    --virtual-time-budget=20000 \
+    --print-to-pdf="docs/cliente/Sistema-RutaAhorro.pdf" \
+    "file:///RUTA/ABSOLUTA/docs/cliente/resumen-sistema.html"
+
+  El PDF no se comitea: es un archivo generado, como supabase/bundle.sql.
+-->
+<title>Sistema RutaAhorro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --papel:      #F6F8F5;
+    --superficie: #FFFFFF;
+    --tinta:      #17211C;
+    --tinta-2:    #566159;
+    --verde:      #14664A;
+    --verde-tenue:#E2EFE8;
+    --ambar:      #8A5A00;
+    --ambar-tenue:#F7EEDB;
+    --borde:      #DBE3DC;
+    --borde-duro: #B9C6BC;
+
+    --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+    --sans:  "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono:  "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --papel:      #10160F;
+      --superficie: #171F19;
+      --tinta:      #E8EFE9;
+      --tinta-2:    #9AA89D;
+      --verde:      #59BE92;
+      --verde-tenue:#173026;
+      --ambar:      #D6A550;
+      --ambar-tenue:#2C2416;
+      --borde:      #2A362D;
+      --borde-duro: #3D4D41;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --papel:      #10160F;
+    --superficie: #171F19;
+    --tinta:      #E8EFE9;
+    --tinta-2:    #9AA89D;
+    --verde:      #59BE92;
+    --verde-tenue:#173026;
+    --ambar:      #D6A550;
+    --ambar-tenue:#2C2416;
+    --borde:      #2A362D;
+    --borde-duro: #3D4D41;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--papel);
+    color: var(--tinta);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .hoja {
+    max-width: 56rem;
+    margin: 0 auto;
+    padding-inline: 20px;
+    padding-block: 3rem 4rem;
+  }
+
+  /* ---------- Encabezado ---------- */
+
+  .cabecera {
+    border-bottom: 2px solid var(--tinta);
+    padding-bottom: 1.5rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .marca {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--verde);
+    margin: 0 0 0.75rem;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(2rem, 6vw, 3rem);
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+    margin: 0 0 0.75rem;
+  }
+
+  .bajada {
+    font-size: 1.125rem;
+    color: var(--tinta-2);
+    max-width: 48ch;
+    margin: 0 0 1.5rem;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 2rem;
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    color: var(--tinta-2);
+  }
+
+  .meta span strong {
+    color: var(--tinta);
+    font-weight: 600;
+  }
+
+  /* ---------- Secciones ---------- */
+
+  section { margin-bottom: 3.5rem; }
+
+  h2 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 1.5rem;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 0 0 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--borde-duro);
+  }
+
+  .intro {
+    color: var(--tinta-2);
+    max-width: 62ch;
+    margin: 0 0 2rem;
+  }
+
+  p { max-width: 62ch; }
+
+  /* ---------- Grupos de pantallas ---------- */
+
+  .grupo { margin-bottom: 2.5rem; }
+
+  .grupo-titulo {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--verde);
+    margin: 0 0 1rem;
+  }
+
+  .pantallas {
+    display: grid;
+    gap: 1px;
+    background: var(--borde);
+    border: 1px solid var(--borde);
+  }
+
+  .pantalla {
+    background: var(--superficie);
+    padding: 1.25rem 1.375rem;
+    display: grid;
+    grid-template-columns: 13rem 1fr;
+    gap: 0.5rem 2rem;
+    align-items: start;
+  }
+
+  @media (max-width: 640px) {
+    .pantalla { grid-template-columns: 1fr; }
+  }
+
+  .pantalla h3 {
+    font-family: var(--sans);
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .quien {
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    color: var(--tinta-2);
+    margin-top: 0.25rem;
+  }
+
+  .pantalla ul {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: 0.9375rem;
+    color: var(--tinta-2);
+  }
+
+  .pantalla li { margin-bottom: 0.3rem; }
+  .pantalla li:last-child { margin-bottom: 0; }
+  .pantalla li strong { color: var(--tinta); font-weight: 500; }
+
+  /* ---------- Ticket ---------- */
+
+  .ticket-zona {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  @media (max-width: 720px) {
+    .ticket-zona { grid-template-columns: 1fr; gap: 1.5rem; }
+  }
+
+  .ticket {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    line-height: 1.6;
+    background: var(--superficie);
+    color: var(--tinta);
+    border: 1px solid var(--borde-duro);
+    padding: 1.25rem 1rem;
+    width: 17rem;
+    max-width: 100%;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  .ticket-pie {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    color: var(--tinta-2);
+    margin-top: 0.5rem;
+    text-align: center;
+    width: 17rem;
+    max-width: 100%;
+  }
+
+  /* ---------- Tabla de roles ---------- */
+
+  .tabla-envoltorio { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+    min-width: 34rem;
+  }
+
+  th, td {
+    text-align: left;
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--borde);
+  }
+
+  thead th {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tinta-2);
+    border-bottom: 1px solid var(--borde-duro);
+  }
+
+  tbody th {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  td { color: var(--tinta-2); }
+
+  /* ---------- Estado ---------- */
+
+  .estados {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1rem;
+  }
+
+  .estado {
+    background: var(--superficie);
+    border: 1px solid var(--borde);
+    border-left: 3px solid var(--verde);
+    padding: 1.1rem 1.25rem;
+  }
+
+  .estado.pendiente { border-left-color: var(--ambar); }
+
+  .estado h3 {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--verde);
+    margin: 0 0 0.6rem;
+  }
+
+  .estado.pendiente h3 { color: var(--ambar); }
+
+  .estado ul {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: 0.9375rem;
+    color: var(--tinta-2);
+  }
+
+  .estado li { margin-bottom: 0.3rem; }
+
+  .aviso {
+    background: var(--ambar-tenue);
+    border: 1px solid var(--ambar);
+    padding: 1.1rem 1.25rem;
+    margin-top: 1.5rem;
+    font-size: 0.9375rem;
+  }
+
+  .aviso p { margin: 0; max-width: 68ch; }
+  .aviso strong { color: var(--tinta); }
+
+  .destacado {
+    background: var(--verde-tenue);
+    border-left: 3px solid var(--verde);
+    padding: 1.1rem 1.25rem;
+    margin-top: 1.5rem;
+    font-size: 0.9375rem;
+  }
+
+  .destacado p { margin: 0; max-width: 68ch; }
+
+  /* ---------- Preguntas ---------- */
+
+  .bloque-preguntas { margin-bottom: 2rem; }
+
+  .bloque-preguntas > p {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--verde);
+    margin: 0 0 0.85rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--borde);
+  }
+
+  .bloque-preguntas ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .bloque-preguntas li {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr;
+    gap: 0.6rem;
+    font-size: 0.9375rem;
+    max-width: 68ch;
+  }
+
+  .bloque-preguntas li::before {
+    content: "?";
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--borde-duro);
+    line-height: 1.65;
+  }
+
+  .bloque-preguntas em {
+    display: block;
+    font-style: normal;
+    font-size: 0.8125rem;
+    color: var(--tinta-2);
+    margin-top: 0.1rem;
+  }
+
+  .pie {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--borde-duro);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--tinta-2);
+  }
+
+  /* ---------- Impresión ---------- */
+
+  @media print {
+    :root {
+      --papel: #FFFFFF;
+      --superficie: #FFFFFF;
+      --tinta: #000000;
+      --tinta-2: #333333;
+      --verde: #0C4A34;
+      --verde-tenue: #F0F5F2;
+      --ambar: #6B4500;
+      --ambar-tenue: #FAF5EA;
+      --borde: #CCCCCC;
+      --borde-duro: #888888;
+    }
+    body { font-size: 11pt; }
+    .hoja { padding-block: 0; max-width: none; }
+    section { break-inside: avoid; margin-bottom: 2rem; }
+    .pantalla, .estado, .aviso, .destacado, .ticket { break-inside: avoid; }
+    .bloque-preguntas { break-inside: avoid; }
+    @page { margin: 16mm; }
+  }
+</style>
+
+<div class="hoja">
+
+  <header class="cabecera">
+    <p class="marca">Resumen funcional · Para el cliente</p>
+    <h1>Sistema RutaAhorro</h1>
+    <p class="bajada">
+      Inventario, ventas y caja para el almacén. Funciona en el celular, en la
+      tablet y en el computador, con la misma cuenta.
+    </p>
+    <div class="meta">
+      <span><strong>Fecha</strong> 15 de septiembre de 2026</span>
+      <span><strong>Pantallas</strong> 10</span>
+      <span><strong>Moneda</strong> Peso chileno, sin decimales</span>
+      <span><strong>IVA</strong> 19% incluido en el precio</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Qué resuelve</h2>
+    <p class="intro">
+      Hoy el control del local se reparte entre un cuaderno, la memoria y la
+      calculadora. Este sistema junta las tres cosas: qué hay en la bodega,
+      qué se vendió, y cuánto efectivo debería haber en la caja al cerrar.
+    </p>
+    <p>
+      Cada movimiento queda registrado con quién lo hizo y cuándo. Nada se
+      borra: un producto que ya no se vende se desactiva y sus ventas antiguas
+      siguen a la vista. Eso es lo que permite, al final del día, saber si la
+      caja cuadra y por qué.
+    </p>
+  </section>
+
+  <section>
+    <h2>Las pantallas</h2>
+    <p class="intro">
+      Cada persona ve solo las pantallas de su trabajo. El vendedor entra y lo
+      primero que tiene al frente es la de vender.
+    </p>
+
+    <div class="grupo">
+      <p class="grupo-titulo">Vender y cobrar</p>
+      <div class="pantallas">
+
+        <article class="pantalla">
+          <h3>Vender
+            <span class="quien">Administrador · Supervisor · Vendedor</span>
+          </h3>
+          <ul>
+            <li><strong>Escanea con la cámara del celular.</strong> Uno tras otro, sin tocar la pantalla entre producto y producto. Suena y vibra cuando lee.</li>
+            <li>Si un producto no tiene código, se busca por nombre.</li>
+            <li>Se cambian cantidades y se quitan líneas antes de cobrar.</li>
+            <li>El total se actualiza a medida que se agrega.</li>
+            <li><strong>Cobra en efectivo, débito, crédito o transferencia.</strong> En efectivo sugiere los montos con que suele pagar la gente y calcula el vuelto.</li>
+            <li>Al terminar entrega el comprobante para el cliente.</li>
+            <li>No deja vender si la caja no está abierta.</li>
+          </ul>
+        </article>
+
+        <article class="pantalla">
+          <h3>Caja
+            <span class="quien">Administrador · Supervisor · Vendedor</span>
+          </h3>
+          <ul>
+            <li>Se abre declarando con cuánto efectivo se parte.</li>
+            <li>Se anotan los ingresos y egresos del turno con su motivo.</li>
+            <li><strong>Al cerrar se cuenta la plata y el sistema dice cuánto debería haber</strong> y cuál es la diferencia.</li>
+            <li>Si hay diferencia, pide explicarla antes de cerrar.</li>
+            <li>Una caja cerrada ya no se puede modificar.</li>
+            <li>Queda el historial de todos los cierres.</li>
+          </ul>
+        </article>
+
+      </div>
+    </div>
+
+    <div class="grupo">
+      <p class="grupo-titulo">Productos e inventario</p>
+      <div class="pantallas">
+
+        <article class="pantalla">
+          <h3>Productos
+            <span class="quien">Todos los roles</span>
+          </h3>
+          <ul>
+            <li>Nombre, precio, costo, categoría y stock mínimo.</li>
+            <li><strong>Varios códigos de barra por producto</strong>, para cuando el proveedor cambia el envase.</li>
+            <li>Un mismo código no puede quedar en dos productos.</li>
+            <li>Los productos se desactivan, no se borran: las ventas antiguas siguen siendo consultables.</li>
+            <li>La ganancia por producto la ve solo el administrador.</li>
+          </ul>
+        </article>
+
+        <article class="pantalla">
+          <h3>Carga masiva
+            <span class="quien">Administrador · Supervisor · Bodega</span>
+          </h3>
+          <ul>
+            <li>Sube el catálogo completo desde una planilla Excel o CSV.</li>
+            <li>Muestra una vista previa antes de aplicar nada.</li>
+            <li><strong>Es todo o nada:</strong> si una fila tiene un error, no entra ninguna. Así no queda medio catálogo cargado.</li>
+          </ul>
+        </article>
+
+        <article class="pantalla">
+          <h3>Inventario
+            <span class="quien">Administrador · Supervisor · Bodega</span>
+          </h3>
+          <ul>
+            <li>Stock actual de cada producto y <strong>cuánta plata hay en mercadería</strong>.</li>
+            <li><strong>Movimientos:</strong> todo cambio de stock queda anotado, con quién y por qué. No se puede editar ni borrar.</li>
+            <li><strong>Toma de inventario:</strong> se cuenta lo que hay en la bodega y el sistema aplica las diferencias.</li>
+            <li>Ajustes manuales exigiendo un motivo.</li>
+          </ul>
+        </article>
+
+      </div>
+    </div>
+
+    <div class="grupo">
+      <p class="grupo-titulo">Compras y proveedores</p>
+      <div class="pantallas">
+
+        <article class="pantalla">
+          <h3>Proveedores
+            <span class="quien">Administrador · Supervisor · Bodega</span>
+          </h3>
+          <ul>
+            <li>Datos de contacto, con <strong>validación del RUT</strong>.</li>
+            <li>Qué productos entrega cada uno.</li>
+          </ul>
+        </article>
+
+        <article class="pantalla">
+          <h3>Recepción de mercadería
+            <span class="quien">Administrador · Supervisor · Bodega</span>
+          </h3>
+          <ul>
+            <li>Se registra lo que llegó <strong>con su documento: guía, factura o boleta</strong>, y su número.</li>
+            <li>Lote y fecha de vencimiento. <strong>En perecibles el vencimiento es obligatorio.</strong></li>
+            <li>Sube el stock y recalcula el costo promedio solo.</li>
+            <li><strong>Avisa si el proveedor subió el precio</strong> respecto de la compra anterior.</li>
+            <li>Una recepción mal cargada se puede anular.</li>
+          </ul>
+        </article>
+
+      </div>
+    </div>
+
+    <div class="grupo">
+      <p class="grupo-titulo">Administración</p>
+      <div class="pantallas">
+
+        <article class="pantalla">
+          <h3>Inicio
+            <span class="quien">Administrador · Supervisor</span>
+          </h3>
+          <ul>
+            <li>Ventas del día, cuántas fueron y el promedio por venta.</li>
+            <li>Productos que bajaron del stock mínimo.</li>
+            <li><strong>Lotes vencidos o por vencer, con la plata que está en riesgo.</strong></li>
+          </ul>
+        </article>
+
+        <article class="pantalla">
+          <h3>Usuarios
+            <span class="quien">Solo administrador</span>
+          </h3>
+          <ul>
+            <li><strong>Se invita al empleado por correo</strong> y él elige su propia clave.</li>
+            <li>Cuatro roles, cada uno con sus permisos.</li>
+            <li>Muestra quién está conectado en este momento.</li>
+            <li>Se desactiva a quien deja de trabajar, sin borrar sus ventas.</li>
+          </ul>
+        </article>
+
+        <article class="pantalla">
+          <h3>Ingreso
+            <span class="quien">Todos</span>
+          </h3>
+          <ul>
+            <li>Correo y clave. <strong>Cada persona tiene su cuenta</strong>, así se sabe quién hizo cada venta.</li>
+            <li>La sesión se mantiene entre turnos sin volver a escribir la clave.</li>
+          </ul>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>El comprobante para el cliente</h2>
+    <p class="intro">
+      Al terminar la venta se entrega este papel. Se imprime en impresora
+      térmica o se manda por WhatsApp.
+    </p>
+
+    <div class="ticket-zona">
+      <div>
+        <p>
+          Muestra cada producto con su cantidad y su precio, y abajo el desglose:
+          el <strong>neto</strong>, el <strong>IVA</strong> y el
+          <strong>total</strong>. El IVA se calcula sobre el precio que ya lo
+          incluye, que es como se marcan los precios en góndola.
+        </p>
+        <p>
+          Si se pagó en efectivo, también sale el vuelto. El número de venta es
+          correlativo y no se salta ni se repite, aunque estén vendiendo dos
+          personas a la vez.
+        </p>
+      </div>
+      <div>
+        <pre class="ticket">    Almacén RutaAhorro
+    COMPROBANTE INTERNO
+  NO ES DOCUMENTO TRIBUTARIO
+
+15-09-2026 20:31
+N° 1042
+Atendió: María
+--------------------------------
+2 x Bebida 500 ml         $2.000
+1 x Pan amasado             $900
+3 x Yogurt natural        $2.970
+--------------------------------
+Neto                      $4.933
+IVA (19%)                   $937
+TOTAL                     $5.870
+--------------------------------
+Efectivo                 $10.000
+Vuelto                    $4.130
+
+    ¡Gracias por su compra!</pre>
+        <p class="ticket-pie">Ejemplo · datos de muestra</p>
+      </div>
+    </div>
+
+    <div class="aviso">
+      <p>
+        <strong>Este comprobante todavía no es una boleta electrónica.</strong>
+        Sirve para que el cliente sepa qué se llevó y cuánto pagó, y por eso lo
+        dice en el propio papel. La emisión de boleta y factura electrónica ante
+        el Servicio de Impuestos Internos está en desarrollo y requiere
+        trámites previos del contribuyente: certificado digital, inscripción
+        como emisor electrónico y autorización de folios.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Si se cae internet</h2>
+    <p class="intro">
+      El caso más importante del local: que se corte la señal en plena hora
+      punta.
+    </p>
+    <div class="destacado">
+      <p>
+        <strong>El local sigue vendiendo.</strong> El catálogo de productos está
+        guardado en el propio celular, así que el escáner y la búsqueda siguen
+        funcionando. Las ventas se guardan en el dispositivo y se suben solas
+        cuando vuelve la señal, sin duplicarse. En pantalla hay un indicador que
+        muestra cuántas ventas están esperando subir.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Quién ve qué</h2>
+    <div class="tabla-envoltorio">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Rol</th>
+            <th scope="col">Entra a</th>
+            <th scope="col">No ve</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Administrador</th>
+            <td>Todo, incluidos usuarios y ganancias</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <th scope="row">Supervisor</th>
+            <td>Vender, caja, productos, inventario, proveedores</td>
+            <td>Usuarios</td>
+          </tr>
+          <tr>
+            <th scope="row">Vendedor</th>
+            <td>Vender, caja, productos</td>
+            <td>Inventario, proveedores, usuarios, ganancias</td>
+          </tr>
+          <tr>
+            <th scope="row">Bodega</th>
+            <td>Productos, inventario, proveedores, recepción</td>
+            <td>Caja, vender, usuarios</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>En qué está hoy</h2>
+    <div class="estados">
+
+      <div class="estado">
+        <h3>Construido y probado</h3>
+        <ul>
+          <li>Las 10 pantallas de este documento</li>
+          <li>Venta con escáner y modo sin internet</li>
+          <li>Ciclo completo de caja con arqueo</li>
+          <li>Inventario con lotes y vencimientos</li>
+          <li>Recepción con costo promedio</li>
+          <li>Comprobante de venta con IVA</li>
+        </ul>
+      </div>
+
+      <div class="estado pendiente">
+        <h3>En preparación</h3>
+        <ul>
+          <li>Puesta en marcha en el servidor</li>
+          <li>Carga del catálogo real del local</li>
+          <li>Creación de las cuentas del personal</li>
+          <li>Capacitación del equipo</li>
+        </ul>
+      </div>
+
+      <div class="estado pendiente">
+        <h3>En desarrollo</h3>
+        <ul>
+          <li>Boleta y factura electrónica ante el SII</li>
+          <li>Pantalla de reportes del negocio</li>
+          <li>Pantalla de alertas</li>
+          <li>Anulación de ventas desde la app</li>
+          <li>Descuentos y pago dividido en el mostrador</li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Lo que necesitamos saber</h2>
+    <p class="intro">
+      Estas preguntas ordenan el trabajo que viene. No todas tienen que
+      responderse hoy, pero las de documentos tributarios y las de puesta en
+      marcha son las que hoy detienen el avance: ninguna se resuelve
+      programando.
+    </p>
+
+    <div class="bloque-preguntas">
+      <p>El local y su catálogo</p>
+      <ol>
+        <li>¿Cuántos productos distintos maneja, más o menos?<em>Bajo mil no tiene problema; sobre cinco mil cambia cómo se guarda el catálogo en el celular.</em></li>
+        <li>¿Cómo lleva hoy el inventario: cuaderno, Excel, de memoria?<em>Si existe un Excel, se migra y se ahorra buena parte de la carga inicial.</em></li>
+        <li>¿Hay productos que se venden por peso o fracción, como medio kilo de queso?</li>
+        <li>¿Todos los productos traen código de barra, o hay sueltos y a granel?</li>
+        <li>¿Hay productos exentos de IVA?<em>Hoy el sistema asume 19% parejo.</em></li>
+        <li>¿Maneja precios distintos por cantidad, tipo mayorista y detalle?</li>
+        <li>¿Con cuántos proveedores trabaja habitualmente?</li>
+      </ol>
+    </div>
+
+    <div class="bloque-preguntas">
+      <p>Las personas y los turnos</p>
+      <ol>
+        <li>¿Cuántas personas trabajan en el local y qué hace cada una?<em>Define cuántos de los cuatro roles se usan de verdad.</em></li>
+        <li>¿Cuántas cajas funcionan al mismo tiempo en hora punta?</li>
+        <li>¿Un vendedor puede hacer descuentos por su cuenta? ¿Hasta qué monto o qué porcentaje?</li>
+        <li>¿Quién puede anular una venta ya cobrada?</li>
+        <li>¿Qué se hace hoy si alguien termina el turno y se va sin cerrar la caja?</li>
+        <li>¿Quién revisa las diferencias de caja y cada cuánto?</li>
+      </ol>
+    </div>
+
+    <div class="bloque-preguntas">
+      <p>Boletas, facturas e impuestos</p>
+      <ol>
+        <li>¿Ya tiene certificado digital y está inscrito como emisor electrónico ante el SII?<em>Es el trámite que más demora y no depende del sistema. Conviene empezarlo ahora.</em></li>
+        <li>¿Hoy emite boleta con algún sistema o proveedor? ¿Cuál?</li>
+        <li>¿Necesita emitir solo boleta, o también factura a empresas?<em>La factura agrega datos del comprador y los libros de compra y venta.</em></li>
+        <li>¿Con qué frecuencia emite factura: todos los días, una vez al mes?</li>
+        <li>¿Quién asume el costo mensual del certificado y del servicio de emisión?</li>
+        <li>¿Necesita emitir notas de crédito por devoluciones?</li>
+        <li>¿Su contador le pide algún informe específico que hoy arma a mano?</li>
+      </ol>
+    </div>
+
+    <div class="bloque-preguntas">
+      <p>La operación de todos los días</p>
+      <ol>
+        <li>¿A qué hora abre y a qué hora cierra?<em>Los avisos automáticos y el respaldo se programan en torno a ese horario.</em></li>
+        <li>¿Recibe la mercadería en horario de atención o antes de abrir?</li>
+        <li>¿Qué hace hoy cuando un producto se vence? ¿Queda anotado en alguna parte?</li>
+        <li>¿Acepta devoluciones o cambios? ¿Con qué regla?</li>
+        <li>¿Vende fiado o lleva cuenta corriente a clientes conocidos?</li>
+        <li>¿Hay una sola bodega, o más de un lugar donde guarda mercadería?</li>
+        <li>¿Con qué frecuencia le gustaría hacer la toma de inventario?</li>
+      </ol>
+    </div>
+
+    <div class="bloque-preguntas">
+      <p>Equipos e internet</p>
+      <ol>
+        <li>¿Con qué equipos va a operar: celulares, tablet, computador? ¿De qué año son?</li>
+        <li>¿Cómo es la señal de internet en el local? ¿Se corta seguido?<em>El sistema sigue vendiendo sin señal, pero conviene saber con qué frecuencia va a ocurrir.</em></li>
+        <li>¿Tiene impresora de tickets? ¿Es térmica de 58 u 80 milímetros?</li>
+        <li>¿Tiene lector de código de barras físico, o se usará la cámara del celular?</li>
+        <li>¿Hay una cuenta de correo del local para recibir los avisos y el resumen diario?</li>
+      </ol>
+    </div>
+
+    <div class="bloque-preguntas">
+      <p>La partida</p>
+      <ol>
+        <li>¿Cuándo quiere empezar a usarlo de verdad, con ventas reales?</li>
+        <li>¿Prefiere partir con todo, o primero solo vender y después sumar inventario?<em>Partir acotado suele funcionar mejor: el equipo aprende una cosa a la vez.</em></li>
+        <li>¿Quién va a cargar el catálogo inicial y cuándo?</li>
+        <li>¿Hay una fecha que no se pueda mover, como una temporada alta o un inventario anual?</li>
+        <li>¿Quién será la contraparte para las dudas del día a día?</li>
+        <li>¿Quiere un dominio propio, o sirve la dirección que entrega el servidor?</li>
+      </ol>
+    </div>
+
+    <div class="bloque-preguntas">
+      <p>Para revisar y corregir después de partir</p>
+      <ol>
+        <li>Después de la primera semana: ¿qué fue lo que más le costó al equipo?</li>
+        <li>¿Qué sigue haciendo en papel que esperaba dejar de hacer?</li>
+        <li>¿Hay algo que el sistema lo obliga a hacer y que antes era más rápido?<em>Si aparece algo así, se corrige: es señal de que la pantalla quedó mal pensada.</em></li>
+        <li>¿Qué número mira primero cuando quiere saber cómo va el negocio?</li>
+        <li>¿Qué tendría que pasar para que dejara de usar el sistema?<em>Es la pregunta más útil de todas y conviene hacerla en voz alta.</em></li>
+      </ol>
+    </div>
+  </section>
+
+  <p class="pie">
+    Documento preparado el 15-09-2026 · Describe el sistema tal como está
+    construido a esa fecha. Las funciones marcadas «en desarrollo» todavía no
+    están disponibles para usar.
+  </p>
+
+</div>
+</body>
+</html>
