@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { DEMO_ACTIVO, DEMO_COOKIE, esRolValido, usuarioDemo } from '../demo';
 
 /**
  * Cliente de servidor: actúa COMO EL USUARIO, respetando sus políticas RLS.
@@ -47,6 +48,13 @@ export interface CurrentUser {
 
 /** Perfil del usuario autenticado, o null si no hay sesión o está desactivado. */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
+  // MODO DEMO: devuelve un usuario ficticio sin consultar Supabase.
+  // Ver src/lib/demo/index.ts — solo se activa con NEXT_PUBLIC_DEMO=true.
+  if (DEMO_ACTIVO) {
+    const rol = (await cookies()).get(DEMO_COOKIE)?.value;
+    return usuarioDemo(esRolValido(rol) ? rol : 'admin');
+  }
+
   const client = await createClient();
 
   const { data: { user } } = await client.auth.getUser();

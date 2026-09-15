@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react';
 import { syncCatalog } from '@/lib/offline/catalog';
+import { DEMO_ACTIVO } from '@/lib/demo';
+import { sembrarCatalogoDemo } from '@/lib/demo/seed';
 
 /**
  * Replica el catálogo al dispositivo en segundo plano.
@@ -15,6 +17,11 @@ export function SyncCatalogo() {
     let cancelled = false;
 
     const run = () => {
+      // En demo no hay Supabase: se siembra el catálogo de ejemplo.
+      if (DEMO_ACTIVO) {
+        void sembrarCatalogoDemo().catch(() => {});
+        return;
+      }
       if (!navigator.onLine) return;
       void syncCatalog().catch(() => {
         // Silencioso a propósito: no hay nada que el cajero pueda hacer.

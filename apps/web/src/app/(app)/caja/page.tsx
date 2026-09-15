@@ -1,10 +1,38 @@
 import { createClient, getCurrentUser } from '@/lib/supabase/server';
+import { DEMO_ACTIVO } from '@/lib/demo';
+import { DEMO_CAJA, DEMO_MOVIMIENTOS_CAJA, DEMO_CIERRES } from '@/lib/demo/data';
 import { CajaClient } from './CajaClient';
 
 export const metadata = { title: 'Caja' };
 
 export default async function CajaPage() {
   const user = await getCurrentUser();
+
+  if (DEMO_ACTIVO) {
+    const puedeVerHistorial = user!.role === 'admin' || user!.role === 'supervisor';
+    return (
+      <CajaClient
+        session={{
+          id: DEMO_CAJA.id,
+          opened_at: DEMO_CAJA.opened_at,
+          opening_amount: DEMO_CAJA.opening_amount,
+        }}
+        resumen={{
+          opening_amount: DEMO_CAJA.opening_amount,
+          cash_sales: DEMO_CAJA.cash_sales,
+          cash_in: DEMO_CAJA.cash_in,
+          cash_out: DEMO_CAJA.cash_out,
+          expected_amount: DEMO_CAJA.expected_amount,
+          sales_count: DEMO_CAJA.sales_count,
+          sales_total: DEMO_CAJA.sales_total,
+          average_ticket: DEMO_CAJA.average_ticket,
+        }}
+        movimientos={DEMO_MOVIMIENTOS_CAJA}
+        historial={puedeVerHistorial ? DEMO_CIERRES : []}
+      />
+    );
+  }
+
   const client = await createClient();
 
   const { data: session } = await client

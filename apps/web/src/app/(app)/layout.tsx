@@ -3,6 +3,8 @@ import { getCurrentUser } from '@/lib/supabase/server';
 import { BottomNav } from '@/components/BottomNav';
 import { EstadoConexion } from '@/components/EstadoConexion';
 import { SyncCatalogo } from '@/components/SyncCatalogo';
+import { DemoBanner } from '@/components/DemoBanner';
+import { DEMO_ACTIVO } from '@/lib/demo';
 
 const ROL_LABEL: Record<string, string> = {
   admin: 'Administrador',
@@ -34,6 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-dvh flex flex-col">
+      {DEMO_ACTIVO && <DemoBanner rolActual={user.role} />}
       <EstadoConexion />
 
       <header className="sticky top-0 z-30 bg-white border-b border-[var(--borde)] px-4 py-2.5 flex items-center justify-between">
@@ -41,9 +44,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <p className="font-semibold text-sm truncate">{user.fullName || 'Sin nombre'}</p>
           <p className="text-[11px] text-[var(--texto-suave)]">{ROL_LABEL[user.role]}</p>
         </div>
-        <form action="/api/logout" method="post">
-          <button className="tap px-3 text-sm text-[var(--texto-suave)]">Salir</button>
-        </form>
+        {!DEMO_ACTIVO && (
+          <form action="/api/logout" method="post">
+            <button className="tap px-3 text-sm text-[var(--texto-suave)]">Salir</button>
+          </form>
+        )}
       </header>
 
       {/* pb-20: deja espacio para que la barra inferior no tape el contenido */}

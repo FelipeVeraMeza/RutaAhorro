@@ -1,10 +1,14 @@
-import { getCurrentUser } from '@/lib/supabase/server';
-import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser, createClient } from '@/lib/supabase/server';
+import { DEMO_ACTIVO } from '@/lib/demo';
 import { PosClient } from './PosClient';
 
 export const metadata = { title: 'Vender' };
 
 export default async function PosPage() {
+  // En demo la caja esta siempre abierta: el objetivo es ver el POS, no
+  // tropezar con el requisito de abrir caja en cada recarga.
+  if (DEMO_ACTIVO) return <PosClient hasOpenSession />;
+
   const user = await getCurrentUser();
   const client = await createClient();
 

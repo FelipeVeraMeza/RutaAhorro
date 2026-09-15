@@ -1,6 +1,7 @@
 'use client';
 
 import { supabase } from '../supabase/client';
+import { DEMO_ACTIVO } from '../demo';
 import { db, type QueuedSale } from './db';
 
 /**
@@ -62,8 +63,20 @@ export async function syncQueue(): Promise<SyncResult> {
 
   syncing = true;
   try {
-    const client = supabase();
     const queue = await pendingSales();
+
+    // En demo no hay servidor: se simula una sincronización exitosa para poder
+    // ver el indicador de "por sincronizar" y cómo se vacía.
+    if (DEMO_ACTIVO) {
+      for (const sale of queue) {
+        await db().saleQueue.delete(sale.clientUuid);
+        result.sent++;
+      }
+      result.remaining = 0;
+      return result;
+    }
+
+    const client = supabase();
 
     for (const sale of queue) {
       await db().saleQueue.update(sale.clientUuid, { status: 'enviando' });

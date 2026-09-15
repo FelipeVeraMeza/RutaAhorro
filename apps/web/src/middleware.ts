@@ -8,6 +8,17 @@ import { NextResponse, type NextRequest } from 'next/server';
  * turnos sin volver a escribir su clave (RF-M1-06, US-02).
  */
 export async function middleware(request: NextRequest) {
+  // MODO DEMO: sin sesión, todas las rutas quedan abiertas. Dev-only.
+  if (process.env.NEXT_PUBLIC_DEMO === 'true') {
+    if (request.nextUrl.pathname.startsWith('/login')) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/pos';
+      url.search = '';
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
