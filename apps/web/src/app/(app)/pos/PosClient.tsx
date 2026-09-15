@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   addToCart, cartTotals, setQuantity, removeFromCart,
-  formatCLP, toUserMessage, type CartLine,
+  formatCLP, toUserMessage, construirComprobante,
+  type CartLine, type Comprobante as DatosComprobante,
 } from '@rutaahorro/core';
 import { findByBarcode, searchProducts, localProductCount, syncCatalog } from '@/lib/offline/catalog';
 import { DEMO_ACTIVO } from '@/lib/demo';
@@ -13,19 +14,29 @@ import { enqueueSale, newClientUuid, syncQueue } from '@/lib/offline/sync';
 import type { LocalProduct } from '@/lib/offline/db';
 import { Escaner } from './Escaner';
 import { Cobro } from './Cobro';
+import { Comprobante } from './Comprobante';
 
 type Aviso = { tipo: 'ok' | 'error' | 'info'; texto: string } | null;
 
 // Nota: el descuento por línea (RF-M5-08) aún no está en esta pantalla. Cuando
 // se agregue, vuelven a entrar `role` y `maxDiscountPct` para aplicar el tope
 // por rol con `isDiscountAllowed` de @rutaahorro/core.
-export function PosClient({ hasOpenSession }: { hasOpenSession: boolean }) {
+export function PosClient({
+  hasOpenSession, local = '', cajero = '',
+}: {
+  hasOpenSession: boolean;
+  /** Nombre del local, para encabezar el comprobante. */
+  local?: string;
+  /** Quien atendió: va impreso en el comprobante. */
+  cajero?: string;
+}) {
   const [lines, setLines] = useState<CartLine[]>([]);
   const [scannerOn, setScannerOn] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<LocalProduct[]>([]);
   const [aviso, setAviso] = useState<Aviso>(null);
   const [cobrando, setCobrando] = useState(false);
+  const [comprobante, setComprobante] = useState<DatosComprobante | null>(null);
   const [catalogReady, setCatalogReady] = useState<boolean | null>(null);
   const avisoTimer = useRef<number | null>(null);
 
@@ -114,11 +125,25 @@ export function PosClient({ hasOpenSession }: { hasOpenSession: boolean }) {
       total: totals.total,
     });
 
+    // El comprobante se arma con las líneas ANTES de vaciar el carrito
+    // (RF-M5-14). El folio queda en null a propósito: lo asigna la base al
+    // sincronizar, nunca el dispositivo. Dos cajeros sin señal inventarían
+    // folios que después chocan.
+    setComprobante(construirComprobante({
+      lineas: lines,
+      pagos: payments.map((p) => ({
+        metodo: p.method, monto: p.amount, recibido: p.received_amount,
+      })),
+      fecha: soldAt,
+      local,
+      cajero,
+    }));
+
     // La venta se confirma de inmediato en pantalla: el cajero no espera a la
-    // red ni siquiera cuando hay buena señal (ADR-005).
+    // red ni siquiera cuando hay buena señal (ADR-005). El comprobante que
+    // acaba de aparecer ya es el aviso; un toast encima sería ruido.
     setLines([]);
     setCobrando(false);
-    notificar('ok', `Venta registrada · ${formatCLP(totals.total)}`);
 
     if (navigator.onLine) {
       void syncQueue().then((r) => {
@@ -298,6 +323,10 @@ export function PosClient({ hasOpenSession }: { hasOpenSession: boolean }) {
             confirmarVenta(payments).catch((e) => notificar('error', toUserMessage(e)))
           }
         />
+      )}
+
+      {comprobante && (
+        <Comprobante datos={comprobante} onCerrar={() => setComprobante(null)} />
       )}
     </div>
   );

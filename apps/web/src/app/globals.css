@@ -87,3 +87,26 @@ input, select, textarea, button {
 @utility flash-ok {
   animation: pulso-ok 600ms ease-out;
 }
+
+/**
+ * Impresión del comprobante de venta (RF-M5-14).
+ *
+ * Solo se imprime el ticket: todo lo demás se oculta. Se usa `visibility` en
+ * vez de `display` para no recalcular el layout y que el ticket conserve el
+ * ancho de la hoja. Pensado para impresora térmica de 58/80 mm, pero sale
+ * legible en una hoja carta.
+ */
+@media print {
+  body * { visibility: hidden; }
+  #ticket, #ticket * { visibility: visible; }
+  #ticket {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    color: #000;
+    font-size: 12px;
+  }
+  .no-imprimir { display: none !important; }
+  @page { margin: 4mm; }
+}
