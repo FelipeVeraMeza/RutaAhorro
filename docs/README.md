@@ -52,6 +52,11 @@ todo lo demás es tu contrato de implementación.
 | [16 — Plan de pruebas (QA)](16-plan-pruebas.md) | Casos de concurrencia, seguridad, offline y negocio |
 | [17 — Inventario de alcance](17-inventario-alcance.md) | **Estado real del sistema**: qué está hecho, qué falta pantalla, qué no existe |
 
+### Bitácora
+| Doc | Contenido |
+|---|---|
+| [Bitácora](bitacora/) | Registro por fecha de qué se revisó, qué se encontró y qué se decidió. Los documentos numerados dicen el estado actual; la bitácora dice **cómo se llegó a él** |
+
 ---
 
 ## Convenciones
@@ -73,3 +78,4 @@ todo lo demás es tu contrato de implementación.
 | 1.1 | 2026-09-14 | Felipe Vera | P-07 respondida: se incorpora control de vencimiento por lote con FEFO (ADR-007, RF-M4-14 a RF-M4-20) |
 | 1.2 | 2026-09-14 | Felipe Vera | Trabajo simultáneo: +4 RF de gestión de empleados, +11 RF del módulo M10, +7 RNF de concurrencia, y nuevo [plan de pruebas QA](16-plan-pruebas.md) |
 | 1.3 | 2026-09-15 | Felipe Vera | [Inventario de alcance](17-inventario-alcance.md) por auditoría de código: 31 % entregable, 65 % construido |
+| 1.4 | 2026-09-15 | Felipe Vera | R-17 (pérdida de datos en la toma de inventario), P-26 (tasas por producto), P-03 ampliada a facturas. S-7 y S-9 en revisión. Se abre la [bitácora](bitacora/) |
