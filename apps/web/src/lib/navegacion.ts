@@ -49,6 +49,16 @@ export const NAVEGACION: ItemNav[] = [
     href: '/inventario', label: 'Inventario', labelCorto: 'Stock', icono: '📋',
     roles: ['admin', 'supervisor', 'bodega'], enMovil: true,
   },
+  {
+    href: '/proveedores', label: 'Proveedores', labelCorto: 'Prov.', icono: '🚚',
+    roles: ['admin', 'supervisor', 'bodega'], enMovil: false,
+  },
+  // Pendientes: /reportes y /alertas. No se listan hasta que existan —
+  // un menú con enlaces muertos se siente peor que un menú corto.
+  {
+    href: '/usuarios', label: 'Usuarios', labelCorto: 'Usuarios', icono: '👥',
+    roles: ['admin'], enMovil: false,
+  },
 ];
 
 export function navPara(rol: Rol): ItemNav[] {
