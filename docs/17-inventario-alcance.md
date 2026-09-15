@@ -43,10 +43,14 @@ De los **101 requerimientos funcionales**:
 
 | Estado | Cantidad | % |
 |---|:--:|:--:|
-| ✅ Hecho y verificado | 31 | 31 % |
-| 🔵 En la base, sin pantalla | 34 | 34 % |
-| 🟡 Parcial | 9 | 9 % |
-| ⬜ No empezado | 27 | 27 % |
+| ✅ Hecho y verificado | 37 | 37 % |
+| 🔵 En la base, sin pantalla | 29 | 29 % |
+| 🟡 Parcial | 10 | 10 % |
+| ⬜ No empezado | 25 | 25 % |
+
+> **Actualizado 2026-09-15.** El módulo de productos (M2) pasó de 3 a 9
+> requerimientos terminados: alta, edición, baja, categorías, códigos múltiples
+> y carga masiva. Se eliminó el bloqueo de R-02 del lado del software.
 
 > **Lectura de jefe de proyecto:** el sistema está al 31 % de entregable, pero
 > al 65 % de construido. Un tercio del trabajo restante es "ponerle pantalla a
@@ -84,23 +88,23 @@ De los **101 requerimientos funcionales**:
 
 | RF | Ítem | Estado | Falta |
 |---|---|:--:|---|
-| M2-01 | Crear producto | 🔵 | **Pantalla de alta/edición** |
-| M2-02 | Varios códigos de barra por producto | 🔵 | Tabla y restricción listas |
+| M2-01 | Crear producto | ✅ | Formulario con validación |
+| M2-02 | Varios códigos de barra por producto | ✅ | Se agregan y quitan desde el formulario |
 | M2-03 | Un código no puede estar en dos productos | ✅ | `UNIQUE (tenant_id, barcode)` |
-| M2-04 | Crear producto escaneando | ⬜ | Se detecta el código desconocido, pero no abre el formulario |
+| M2-04 | Crear producto escaneando | 🟡 | El formulario tiene escáner; falta el salto desde el POS |
 | M2-05 | Buscar por nombre, código o SKU | ✅ | Local en el POS, y en la pantalla Productos |
-| M2-06 | Categorías | 🔵 | Tabla lista, sin pantalla |
+| M2-06 | Categorías | ✅ | Se eligen y se crean desde el formulario |
 | M2-07 | Imagen del producto | ⬜ | Requiere Storage |
-| M2-08 | Desactivar producto | 🔵 | Columna y políticas listas |
+| M2-08 | Desactivar producto | ✅ | Con reactivación y borrado definitivo si no tiene historial |
 | M2-09 | Historial de cambios de precio | 🔵 | Trigger `trg_price_history` funcionando; sin pantalla |
 | M2-10 | Margen visible solo a admin | ✅ | Verificado: el vendedor no lo recibe |
-| M2-11 | Carga masiva desde Excel/CSV | ⬜ | **Bloqueante para la puesta en marcha (R-02)** |
-| M2-12 | Validar el archivo antes de aplicar | ⬜ | — |
+| M2-11 | Carga masiva desde Excel/CSV | ✅ | Plantilla, vista previa y aplicación |
+| M2-12 | Validar el archivo antes de aplicar | ✅ | Todo o nada, con 31 pruebas |
 | M2-13 | Generar etiquetas con código de barras | 🟡 | `generateInternalBarcode()` existe y está probado; falta impresión |
 | M2-14 | Productos por peso o fracción | 🟡 | La base soporta decimales; el POS no pide cantidad fraccionada |
 | M2-15 | Duplicar producto | ⬜ | — |
 
-**Estado del módulo: 3 ✅ · 5 🔵 · 2 🟡 · 5 ⬜**
+**Estado del módulo: 9 ✅ · 0 🔵 · 3 🟡 · 3 ⬜** *(actualizado 2026-09-15)*
 
 ---
 
@@ -307,7 +311,8 @@ base y solo se ven parcialmente en Inicio.
 | Caja | ✅ | admin, supervisor, vendedor |
 | Productos (lista) | 🟡 Solo lectura | todos |
 | Inventario / stock | 🟡 Solo lectura | admin, supervisor, bodega |
-| **Alta/edición de producto** | ⬜ | admin, supervisor, bodega |
+| Alta/edición de producto | ✅ | admin, supervisor, bodega |
+| Carga masiva de productos | ✅ | admin, supervisor, bodega |
 | **Kardex de producto** | ⬜ | admin, supervisor, bodega |
 | **Ajuste de stock** | ⬜ | admin, supervisor, bodega |
 | **Toma de inventario** | ⬜ | admin, supervisor, bodega |
@@ -320,7 +325,7 @@ base y solo se ven parcialmente en Inicio.
 | **Configuración** | ⬜ | admin |
 | **Recuperar contraseña** | ⬜ | todos |
 
-**6 de 18 pantallas construidas.** De las 12 que faltan, **8 solo necesitan
+**8 de 19 pantallas construidas.** De las 12 que faltan, **8 solo necesitan
 interfaz**: la lógica ya existe y está probada.
 
 ---
@@ -410,3 +415,4 @@ impedir que el local empiece a operar.
 | Versión | Fecha | Autor | Cambio |
 |---|---|---|---|
 | 1.0 | 2026-09-14 | Felipe Vera | Inventario inicial por auditoría de código |
+| 1.1 | 2026-09-15 | Felipe Vera | Módulo de productos terminado: alta, edición, baja y carga masiva. M2 de 3 a 9 ✅ |

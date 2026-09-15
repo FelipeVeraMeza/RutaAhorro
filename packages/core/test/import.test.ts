@@ -1,0 +1,268 @@
+import { describe, it, expect } from 'vitest';
+import {
+  parsearProductos, partirLinea, detectarSeparador, leerNumero, plantillaCSV,
+} from '../src/import.js';
+
+const ENC = 'nombre;sku;codigo_barras;categoria;precio_venta;costo;unidad;stock_inicial;stock_minimo;perecible;dias_alerta';
+
+describe('lectura de números como los escribe una persona en Chile', () => {
+  it('lee un entero simple', () => {
+    expect(leerNumero('1990')).toBe(1990);
+  });
+
+  it('interpreta el punto como separador de miles, no decimal', () => {
+    // "1.990" en Chile es mil novecientos noventa. Leerlo como 1,99 sería
+    // cargar el catálogo completo con precios mil veces menores.
+    expect(leerNumero('1.990')).toBe(1990);
+    expect(leerNumero('12.345')).toBe(12345);
+    expect(leerNumero('1.234.567')).toBe(1234567);
+  });
+
+  it('acepta la coma como decimal', () => {
+    expect(leerNumero('1.234,56')).toBeCloseTo(1234.56);
+    expect(leerNumero('0,5')).toBeCloseTo(0.5);
+  });
+
+  it('ignora el símbolo de peso y los espacios', () => {
+    expect(leerNumero('$1.990')).toBe(1990);
+    expect(leerNumero('  2490  ')).toBe(2490);
+  });
+
+  it('devuelve null si no hay número', () => {
+    expect(leerNumero('')).toBeNull();
+    expect(leerNumero('abc')).toBeNull();
+  });
+});
+
+describe('separador del archivo', () => {
+  it('detecta punto y coma, que es lo que exporta Excel en Chile', () => {
+    expect(detectarSeparador('a;b;c\n1;2;3')).toBe(';');
+  });
+
+  it('detecta coma', () => {
+    expect(detectarSeparador('a,b,c\n1,2,3')).toBe(',');
+  });
+});
+
+describe('partir líneas', () => {
+  it('respeta las comillas', () => {
+    expect(partirLinea('"Arroz, grado 1";ARR;1590', ';'))
+      .toEqual(['Arroz, grado 1', 'ARR', '1590']);
+  });
+
+  it('maneja comillas escapadas', () => {
+    expect(partirLinea('"Bebida ""cola"" 1.5L";BEB', ';'))
+      .toEqual(['Bebida "cola" 1.5L', 'BEB']);
+  });
+
+  it('respeta campos vacíos', () => {
+    expect(partirLinea('a;;c', ';')).toEqual(['a', '', 'c']);
+  });
+});
+
+describe('importación válida', () => {
+  it('carga un archivo correcto', () => {
+    const csv = [ENC,
+      'Arroz 1 kg;ARR-1K;7801234000018;Abarrotes;1590;1100;unidad;40;10;no;30',
+      'Leche 1 L;LEC-1L;7801234000056;Lácteos;1190;850;unidad;36;20;si;10',
+    ].join('\n');
+
+    const r = parsearProductos(csv);
+    expect(r.ok).toBe(true);
+    expect(r.errores).toHaveLength(0);
+    expect(r.filas).toHaveLength(2);
+    expect(r.filas[0].nombre).toBe('Arroz 1 kg');
+    expect(r.filas[0].precio_venta).toBe(1590);
+    expect(r.filas[1].perecible).toBe(true);
+    expect(r.filas[1].dias_alerta).toBe(10);
+  });
+
+  it('acepta precios escritos con punto de miles', () => {
+    const csv = [ENC, 'Aceite;ACE;;Abarrotes;2.490;1.850;unidad;10;5;no;30'].join('\n');
+    const r = parsearProductos(csv);
+    expect(r.ok).toBe(true);
+    expect(r.filas[0].precio_venta).toBe(2490);
+    expect(r.filas[0].costo).toBe(1850);
+  });
+
+  it('rellena valores por defecto cuando faltan columnas opcionales', () => {
+    const r = parsearProductos(['nombre;precio_venta', 'Pan;2190'].join('\n'));
+    expect(r.ok).toBe(true);
+    expect(r.filas[0]).toMatchObject({
+      costo: 0, unidad: 'unidad', stock_inicial: 0,
+      stock_minimo: 0, perecible: false, dias_alerta: 30,
+    });
+  });
+
+  it('ignora el BOM que agrega Excel', () => {
+    const r = parsearProductos('﻿nombre;precio_venta\nPan;2190');
+    expect(r.ok).toBe(true);
+    expect(r.filas[0].nombre).toBe('Pan');
+  });
+
+  it('acepta archivos separados por coma', () => {
+    const r = parsearProductos('nombre,precio_venta\nPan,2190');
+    expect(r.ok).toBe(true);
+    expect(r.filas[0].precio_venta).toBe(2190);
+  });
+
+  it('interpreta varias formas de decir que sí', () => {
+    for (const v of ['si', 'Sí', 'SI', 'true', '1', 'x']) {
+      const r = parsearProductos([
+        'nombre;precio_venta;perecible', `Yogurt;590;${v}`,
+      ].join('\n'));
+      expect(r.filas[0].perecible, `valor "${v}"`).toBe(true);
+    }
+  });
+});
+
+describe('errores que impiden cargar', () => {
+  it('rechaza el archivo si falta una columna obligatoria', () => {
+    const r = parsearProductos('sku;costo\nARR;1100');
+    expect(r.ok).toBe(false);
+    expect(r.errores.some((e) => e.mensaje.includes('nombre'))).toBe(true);
+    expect(r.errores.some((e) => e.mensaje.includes('precio_venta'))).toBe(true);
+    expect(r.filas).toHaveLength(0);
+  });
+
+  it('rechaza un archivo vacío', () => {
+    expect(parsearProductos('').ok).toBe(false);
+  });
+
+  it('detecta un precio no numérico e indica la fila de Excel', () => {
+    // US-06: "la fila 45 tiene un precio no numérico"
+    const csv = [ENC,
+      'Arroz;ARR;;Abarrotes;1590;1100;unidad;40;10;no;30',
+      'Fideos;FID;;Abarrotes;mil pesos;640;unidad;12;12;no;30',
+    ].join('\n');
+
+    const r = parsearProductos(csv);
+    expect(r.ok).toBe(false);
+    const err = r.errores.find((e) => e.columna === 'precio_venta');
+    expect(err?.fila).toBe(3);      // encabezado = 1, Arroz = 2, Fideos = 3
+    expect(err?.valor).toBe('mil pesos');
+  });
+
+  it('detecta un SKU repetido e indica con cuál choca', () => {
+    const csv = [ENC,
+      'Arroz;REP;;Abarrotes;1590;1100;unidad;40;10;no;30',
+      'Fideos;REP;;Abarrotes;990;640;unidad;12;12;no;30',
+    ].join('\n');
+
+    const r = parsearProductos(csv);
+    expect(r.ok).toBe(false);
+    const err = r.errores.find((e) => e.columna === 'sku');
+    expect(err?.fila).toBe(3);
+    expect(err?.mensaje).toContain('fila 2');
+  });
+
+  it('detecta un código de barras repetido', () => {
+    const csv = [ENC,
+      'Arroz;A;7801234000018;Abarrotes;1590;1100;unidad;40;10;no;30',
+      'Fideos;B;7801234000018;Abarrotes;990;640;unidad;12;12;no;30',
+    ].join('\n');
+
+    const r = parsearProductos(csv);
+    expect(r.ok).toBe(false);
+    expect(r.errores.some((e) => e.columna === 'codigo_barras')).toBe(true);
+  });
+
+  it('rechaza precios y stock negativos', () => {
+    const csv = [ENC,
+      'Malo;M;;Abarrotes;-500;100;unidad;-3;0;no;30',
+    ].join('\n');
+    const r = parsearProductos(csv);
+    expect(r.ok).toBe(false);
+    expect(r.errores.filter((e) => e.mensaje.includes('negativ')).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('nombre vacío invalida la fila', () => {
+    const r = parsearProductos([ENC, ';SKU;;Cat;1000;500;unidad;1;1;no;30'].join('\n'));
+    expect(r.ok).toBe(false);
+    expect(r.errores.some((e) => e.columna === 'nombre')).toBe(true);
+  });
+
+  it('NO carga NADA si alguna fila falla (todo o nada)', () => {
+    // US-06: "NO se carga ningún producto hasta que corrija el archivo"
+    const csv = [ENC,
+      'Bueno 1;B1;;Cat;1000;500;unidad;5;1;no;30',
+      'Malo;;;Cat;no es precio;500;unidad;5;1;no;30',
+      'Bueno 2;B2;;Cat;2000;900;unidad;5;1;no;30',
+    ].join('\n');
+
+    const r = parsearProductos(csv);
+    expect(r.ok).toBe(false);
+    // Las filas buenas se parsean para poder mostrar la vista previa, pero
+    // `ok:false` es lo que impide aplicar la carga.
+    expect(r.filas).toHaveLength(2);
+    expect(r.errores).toHaveLength(1);
+  });
+
+  it('reporta todos los errores de una vez, no solo el primero', () => {
+    // Corregir de a un error por intento con 800 productos es inaceptable.
+    const csv = [ENC,
+      'A;;;Cat;malo;500;unidad;1;1;no;30',
+      'B;;;Cat;1000;malo;unidad;1;1;no;30',
+      ';;;Cat;1000;500;unidad;1;1;no;30',
+    ].join('\n');
+
+    const r = parsearProductos(csv);
+    expect(r.errores.length).toBe(3);
+    expect(r.errores.map((e) => e.fila).sort()).toEqual([2, 3, 4]);
+  });
+});
+
+describe('avisos que no impiden cargar', () => {
+  it('avisa si el precio es menor al costo, pero deja cargar', () => {
+    const csv = [ENC, 'Invertido;INV;;Cat;500;1500;unidad;5;1;no;30'].join('\n');
+    const r = parsearProductos(csv);
+    expect(r.ok).toBe(true);
+    expect(r.avisos.some((a) => a.mensaje.includes('menor al costo'))).toBe(true);
+  });
+
+  it('avisa si el dígito de control del código no cuadra', () => {
+    const csv = [ENC, 'Malcopiado;MC;4006381333932;Cat;1000;500;unidad;5;1;no;30'].join('\n');
+    const r = parsearProductos(csv);
+    expect(r.ok).toBe(true);   // no bloquea: hay comercios con códigos propios
+    expect(r.avisos.some((a) => a.columna === 'codigo_barras')).toBe(true);
+  });
+
+  it('avisa y corrige una unidad no reconocida', () => {
+    const csv = [ENC, 'Raro;R;;Cat;1000;500;bidones;5;1;no;30'].join('\n');
+    const r = parsearProductos(csv);
+    expect(r.ok).toBe(true);
+    expect(r.filas[0].unidad).toBe('unidad');
+    expect(r.avisos.some((a) => a.columna === 'unidad')).toBe(true);
+  });
+});
+
+describe('plantilla de ejemplo', () => {
+  it('la plantilla que se entrega al cliente se importa sin errores', () => {
+    // Si la plantilla no pasa su propia validación, el cliente queda atrapado.
+    const r = parsearProductos(plantillaCSV());
+    expect(r.ok).toBe(true);
+    expect(r.errores).toHaveLength(0);
+    expect(r.avisos).toHaveLength(0);
+    expect(r.filas).toHaveLength(3);
+  });
+
+  it('incluye BOM para que Excel muestre bien los acentos', () => {
+    expect(plantillaCSV().startsWith('﻿')).toBe(true);
+  });
+});
+
+describe('escala', () => {
+  it('procesa 1.000 productos sin problemas', () => {
+    const filas = [ENC];
+    for (let i = 1; i <= 1000; i++) {
+      filas.push(`Producto ${i};SKU-${i};;Cat;${1000 + i};${500 + i};unidad;10;5;no;30`);
+    }
+    const inicio = Date.now();
+    const r = parsearProductos(filas.join('\n'));
+    const ms = Date.now() - inicio;
+
+    expect(r.ok).toBe(true);
+    expect(r.filas).toHaveLength(1000);
+    expect(ms).toBeLessThan(1000);
+  });
+});
