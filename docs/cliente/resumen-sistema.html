@@ -25,6 +25,7 @@
     --superficie: #FFFFFF;
     --tinta:      #17211C;
     --tinta-2:    #566159;
+    --tinta-3:    #7E8A81;
     --verde:      #14664A;
     --verde-tenue:#E2EFE8;
     --ambar:      #8A5A00;
@@ -43,6 +44,7 @@
       --superficie: #171F19;
       --tinta:      #E8EFE9;
       --tinta-2:    #9AA89D;
+      --tinta-3:    #76847A;
       --verde:      #59BE92;
       --verde-tenue:#173026;
       --ambar:      #D6A550;
@@ -57,6 +59,7 @@
     --superficie: #171F19;
     --tinta:      #E8EFE9;
     --tinta-2:    #9AA89D;
+    --tinta-3:    #76847A;
     --verde:      #59BE92;
     --verde-tenue:#173026;
     --ambar:      #D6A550;
@@ -78,147 +81,234 @@
   }
 
   .hoja {
-    max-width: 56rem;
+    max-width: 54rem;
     margin: 0 auto;
     padding-inline: 20px;
     padding-block: 3rem 4rem;
   }
 
-  /* ---------- Encabezado ---------- */
+  p { max-width: 64ch; }
 
-  .cabecera {
+  /* ===== Portada ===== */
+
+  .portada {
     border-bottom: 2px solid var(--tinta);
-    padding-bottom: 1.5rem;
+    padding-bottom: 2rem;
     margin-bottom: 2.5rem;
   }
 
-  .marca {
+  .eyebrow {
     font-family: var(--mono);
     font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--verde);
-    margin: 0 0 0.75rem;
+    margin: 0 0 0.85rem;
   }
 
   h1 {
     font-family: var(--serif);
     font-weight: 600;
-    font-size: clamp(2rem, 6vw, 3rem);
-    line-height: 1.1;
-    letter-spacing: -0.015em;
+    font-size: clamp(2.25rem, 7vw, 3.25rem);
+    line-height: 1.08;
+    letter-spacing: -0.02em;
     text-wrap: balance;
-    margin: 0 0 0.75rem;
+    margin: 0 0 1rem;
   }
 
   .bajada {
-    font-size: 1.125rem;
+    font-size: 1.1875rem;
+    line-height: 1.55;
     color: var(--tinta-2);
-    max-width: 48ch;
-    margin: 0 0 1.5rem;
+    max-width: 44ch;
+    margin: 0 0 1.75rem;
   }
 
-  .meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 2rem;
+  .ficha {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1rem 1.5rem;
     font-family: var(--mono);
     font-size: 0.8125rem;
-    color: var(--tinta-2);
   }
 
-  .meta span strong {
-    color: var(--tinta);
+  .ficha div {
+    border-top: 1px solid var(--borde-duro);
+    padding-top: 0.5rem;
+  }
+
+  .ficha dt {
+    color: var(--tinta-3);
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.15rem;
+  }
+
+  .ficha dd { margin: 0; color: var(--tinta); }
+
+  /* ===== Índice ===== */
+
+  .indice { margin-bottom: 3rem; }
+
+  .indice h2 { margin-bottom: 1rem; }
+
+  .indice ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    columns: 2;
+    column-gap: 2.5rem;
+    font-size: 0.9375rem;
+  }
+
+  @media (max-width: 620px) { .indice ol { columns: 1; } }
+
+  .indice li {
+    break-inside: avoid;
+    display: grid;
+    grid-template-columns: 2.2rem 1fr;
+    gap: 0.5rem;
+    padding: 0.32rem 0;
+    border-bottom: 1px dotted var(--borde-duro);
+  }
+
+  .indice .n {
+    font-family: var(--mono);
+    font-size: 0.8125rem;
+    color: var(--verde);
     font-weight: 600;
   }
 
-  /* ---------- Secciones ---------- */
+  /* ===== Secciones ===== */
 
-  section { margin-bottom: 3.5rem; }
+  section { margin-bottom: 3rem; }
 
   h2 {
     font-family: var(--serif);
     font-weight: 600;
-    font-size: 1.5rem;
-    letter-spacing: -0.01em;
+    font-size: 1.625rem;
+    letter-spacing: -0.012em;
     text-wrap: balance;
-    margin: 0 0 0.5rem;
+    margin: 0 0 0.6rem;
     padding-bottom: 0.5rem;
     border-bottom: 1px solid var(--borde-duro);
+    display: grid;
+    grid-template-columns: 2.6rem 1fr;
+    gap: 0.4rem;
+    align-items: baseline;
+  }
+
+  h2 .n {
+    font-family: var(--mono);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--verde);
   }
 
   .intro {
     color: var(--tinta-2);
-    max-width: 62ch;
-    margin: 0 0 2rem;
+    max-width: 64ch;
+    margin: 0 0 1.75rem;
   }
 
-  p { max-width: 62ch; }
-
-  /* ---------- Grupos de pantallas ---------- */
-
-  .grupo { margin-bottom: 2.5rem; }
-
-  .grupo-titulo {
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--verde);
-    margin: 0 0 1rem;
-  }
-
-  .pantallas {
-    display: grid;
-    gap: 1px;
-    background: var(--borde);
-    border: 1px solid var(--borde);
-  }
+  /* ===== Ficha de pantalla ===== */
 
   .pantalla {
     background: var(--superficie);
-    padding: 1.25rem 1.375rem;
-    display: grid;
-    grid-template-columns: 13rem 1fr;
-    gap: 0.5rem 2rem;
-    align-items: start;
+    border: 1px solid var(--borde);
+    padding: 1.5rem 1.625rem;
+    margin-bottom: 1.25rem;
   }
 
-  @media (max-width: 640px) {
-    .pantalla { grid-template-columns: 1fr; }
+  .pantalla-cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 1rem;
+    padding-bottom: 0.75rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--borde);
   }
 
   .pantalla h3 {
-    font-family: var(--sans);
-    font-size: 1rem;
+    font-family: var(--serif);
+    font-size: 1.25rem;
     font-weight: 600;
     margin: 0;
   }
 
-  .quien {
-    display: block;
+  .roles {
     font-family: var(--mono);
     font-size: 0.6875rem;
-    font-weight: 400;
     letter-spacing: 0.04em;
     color: var(--tinta-2);
-    margin-top: 0.25rem;
+    background: var(--verde-tenue);
+    padding: 0.2rem 0.55rem;
+    border-radius: 2px;
   }
 
-  .pantalla ul {
+  .proposito {
+    font-size: 1rem;
+    color: var(--tinta);
+    margin: 0 0 1.25rem;
+  }
+
+  .sub {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--tinta-3);
+    margin: 1.25rem 0 0.6rem;
+  }
+
+  .pasos {
+    counter-reset: paso;
+    list-style: none;
     margin: 0;
-    padding-left: 1.1rem;
+    padding: 0;
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .pasos li {
+    counter-increment: paso;
+    display: grid;
+    grid-template-columns: 1.7rem 1fr;
+    gap: 0.6rem;
     font-size: 0.9375rem;
     color: var(--tinta-2);
   }
 
-  .pantalla li { margin-bottom: 0.3rem; }
-  .pantalla li:last-child { margin-bottom: 0; }
-  .pantalla li strong { color: var(--tinta); font-weight: 500; }
+  .pasos li::before {
+    content: counter(paso);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--verde);
+    background: var(--verde-tenue);
+    width: 1.35rem;
+    height: 1.35rem;
+    display: grid;
+    place-items: center;
+    margin-top: 0.15rem;
+  }
 
-  /* ---------- Ticket ---------- */
+  .detalles {
+    margin: 0;
+    padding-left: 1.15rem;
+    font-size: 0.9375rem;
+    color: var(--tinta-2);
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  .detalles strong, .pasos strong { color: var(--tinta); font-weight: 600; }
+
+  /* ===== Ticket ===== */
 
   .ticket-zona {
     display: grid;
@@ -243,19 +333,20 @@
     max-width: 100%;
     white-space: pre;
     overflow-x: auto;
+    margin: 0;
   }
 
   .ticket-pie {
     font-family: var(--mono);
     font-size: 0.6875rem;
-    color: var(--tinta-2);
-    margin-top: 0.5rem;
+    color: var(--tinta-3);
+    margin: 0.5rem 0 0;
     text-align: center;
     width: 17rem;
     max-width: 100%;
   }
 
-  /* ---------- Tabla de roles ---------- */
+  /* ===== Tablas ===== */
 
   .tabla-envoltorio { overflow-x: auto; }
 
@@ -263,13 +354,14 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9375rem;
-    min-width: 34rem;
+    min-width: 32rem;
   }
 
   th, td {
     text-align: left;
     padding: 0.7rem 0.9rem;
     border-bottom: 1px solid var(--borde);
+    vertical-align: top;
   }
 
   thead th {
@@ -278,18 +370,36 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--tinta-2);
+    color: var(--tinta-3);
     border-bottom: 1px solid var(--borde-duro);
   }
 
-  tbody th {
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
+  tbody th { font-weight: 600; white-space: nowrap; }
   td { color: var(--tinta-2); }
 
-  /* ---------- Estado ---------- */
+  /* ===== Avisos ===== */
+
+  .aviso, .destacado {
+    padding: 1.15rem 1.35rem;
+    margin: 1.5rem 0 0;
+    font-size: 0.9375rem;
+  }
+
+  .aviso {
+    background: var(--ambar-tenue);
+    border: 1px solid var(--ambar);
+  }
+
+  .destacado {
+    background: var(--verde-tenue);
+    border-left: 3px solid var(--verde);
+  }
+
+  .aviso p, .destacado p { margin: 0; max-width: 68ch; }
+  .aviso p + p, .destacado p + p { margin-top: 0.7rem; }
+  .aviso strong, .destacado strong { color: var(--tinta); }
+
+  /* ===== Estado ===== */
 
   .estados {
     display: grid;
@@ -301,7 +411,7 @@
     background: var(--superficie);
     border: 1px solid var(--borde);
     border-left: 3px solid var(--verde);
-    padding: 1.1rem 1.25rem;
+    padding: 1.15rem 1.35rem;
   }
 
   .estado.pendiente { border-left-color: var(--ambar); }
@@ -313,7 +423,7 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--verde);
-    margin: 0 0 0.6rem;
+    margin: 0 0 0.7rem;
   }
 
   .estado.pendiente h3 { color: var(--ambar); }
@@ -323,303 +433,555 @@
     padding-left: 1.1rem;
     font-size: 0.9375rem;
     color: var(--tinta-2);
+    display: grid;
+    gap: 0.3rem;
   }
 
-  .estado li { margin-bottom: 0.3rem; }
+  /* ===== Cuestionario ===== */
 
-  .aviso {
-    background: var(--ambar-tenue);
-    border: 1px solid var(--ambar);
-    padding: 1.1rem 1.25rem;
-    margin-top: 1.5rem;
-    font-size: 0.9375rem;
-  }
+  .bloque-preguntas { margin-bottom: 2.25rem; break-inside: avoid; }
 
-  .aviso p { margin: 0; max-width: 68ch; }
-  .aviso strong { color: var(--tinta); }
-
-  .destacado {
-    background: var(--verde-tenue);
-    border-left: 3px solid var(--verde);
-    padding: 1.1rem 1.25rem;
-    margin-top: 1.5rem;
-    font-size: 0.9375rem;
-  }
-
-  .destacado p { margin: 0; max-width: 68ch; }
-
-  /* ---------- Preguntas ---------- */
-
-  .bloque-preguntas { margin-bottom: 2rem; }
-
-  .bloque-preguntas > p {
+  .bloque-preguntas > h3 {
     font-family: var(--mono);
     font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--verde);
-    margin: 0 0 0.85rem;
+    margin: 0 0 1rem;
     padding-bottom: 0.4rem;
     border-bottom: 1px solid var(--borde);
   }
 
-  .bloque-preguntas ol {
+  .preguntas {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 0.7rem;
+    gap: 1.15rem;
   }
 
-  .bloque-preguntas li {
+  .preguntas > li {
     display: grid;
-    grid-template-columns: 1.6rem 1fr;
-    gap: 0.6rem;
-    font-size: 0.9375rem;
-    max-width: 68ch;
+    grid-template-columns: 2.1rem 1fr;
+    gap: 0.7rem;
+    break-inside: avoid;
   }
 
-  .bloque-preguntas li::before {
-    content: "?";
+  .preguntas .n {
     font-family: var(--mono);
-    font-weight: 600;
-    color: var(--borde-duro);
-    line-height: 1.65;
-  }
-
-  .bloque-preguntas em {
-    display: block;
-    font-style: normal;
     font-size: 0.8125rem;
-    color: var(--tinta-2);
+    font-weight: 600;
+    color: var(--verde);
+    background: var(--verde-tenue);
+    height: 1.5rem;
+    display: grid;
+    place-items: center;
     margin-top: 0.1rem;
   }
 
+  .preguntas .q {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--tinta);
+    max-width: 62ch;
+  }
+
+  .preguntas .nota {
+    margin: 0.15rem 0 0;
+    font-size: 0.8125rem;
+    color: var(--tinta-2);
+    max-width: 62ch;
+  }
+
+  .respuesta {
+    border-bottom: 1px dotted var(--borde-duro);
+    height: 1.6rem;
+    margin-top: 0.4rem;
+    max-width: 44rem;
+  }
+
   .pie {
-    margin-top: 4rem;
-    padding-top: 1.5rem;
+    margin-top: 3.5rem;
+    padding-top: 1.25rem;
     border-top: 1px solid var(--borde-duro);
     font-family: var(--mono);
     font-size: 0.75rem;
-    color: var(--tinta-2);
+    color: var(--tinta-3);
+    max-width: none;
   }
 
-  /* ---------- Impresión ---------- */
+  /* ===== Impresión ===== */
 
   @media print {
     :root {
       --papel: #FFFFFF;
       --superficie: #FFFFFF;
       --tinta: #000000;
-      --tinta-2: #333333;
+      --tinta-2: #2E2E2E;
+      --tinta-3: #5A5A5A;
       --verde: #0C4A34;
-      --verde-tenue: #F0F5F2;
+      --verde-tenue: #EEF4F1;
       --ambar: #6B4500;
-      --ambar-tenue: #FAF5EA;
-      --borde: #CCCCCC;
-      --borde-duro: #888888;
+      --ambar-tenue: #FBF6EC;
+      --borde: #C9C9C9;
+      --borde-duro: #7A7A7A;
     }
-    body { font-size: 11pt; }
+    body { font-size: 10.5pt; }
     .hoja { padding-block: 0; max-width: none; }
-    section { break-inside: avoid; margin-bottom: 2rem; }
-    .pantalla, .estado, .aviso, .destacado, .ticket { break-inside: avoid; }
-    .bloque-preguntas { break-inside: avoid; }
-    @page { margin: 16mm; }
+    .salto { break-before: page; }
+    section { margin-bottom: 1.75rem; }
+    .pantalla, .estado, .aviso, .destacado, .ticket,
+    .bloque-preguntas, .preguntas > li, .indice li { break-inside: avoid; }
+    h2, h3 { break-after: avoid; }
+    @page { margin: 16mm 15mm; }
   }
 </style>
+</head>
+<body>
 
 <div class="hoja">
 
-  <header class="cabecera">
-    <p class="marca">Resumen funcional · Para el cliente</p>
+  <header class="portada">
+    <p class="eyebrow">Resumen funcional · Documento para el cliente</p>
     <h1>Sistema RutaAhorro</h1>
     <p class="bajada">
       Inventario, ventas y caja para el almacén. Funciona en el celular, en la
       tablet y en el computador, con la misma cuenta.
     </p>
-    <div class="meta">
-      <span><strong>Fecha</strong> 15 de septiembre de 2026</span>
-      <span><strong>Pantallas</strong> 10</span>
-      <span><strong>Moneda</strong> Peso chileno, sin decimales</span>
-      <span><strong>IVA</strong> 19% incluido en el precio</span>
-    </div>
+    <dl class="ficha">
+      <div><dt>Fecha</dt><dd>15 de septiembre de 2026</dd></div>
+      <div><dt>Pantallas</dt><dd>10</dd></div>
+      <div><dt>Moneda</dt><dd>Peso chileno, sin decimales</dd></div>
+      <div><dt>IVA</dt><dd>19% incluido en el precio</dd></div>
+    </dl>
   </header>
 
-  <section>
-    <h2>Qué resuelve</h2>
+  <nav class="indice">
+    <h2><span class="n">—</span> Contenido</h2>
+    <ol>
+      <li><span class="n">1</span> Qué resuelve</li>
+      <li><span class="n">2</span> Cómo se entra y quién ve qué</li>
+      <li><span class="n">3</span> Vender</li>
+      <li><span class="n">4</span> Caja</li>
+      <li><span class="n">5</span> Inicio</li>
+      <li><span class="n">6</span> Productos</li>
+      <li><span class="n">7</span> Carga masiva del catálogo</li>
+      <li><span class="n">8</span> Inventario</li>
+      <li><span class="n">9</span> Proveedores</li>
+      <li><span class="n">10</span> Recepción de mercadería</li>
+      <li><span class="n">11</span> Usuarios</li>
+      <li><span class="n">12</span> El comprobante</li>
+      <li><span class="n">13</span> Si se cae internet</li>
+      <li><span class="n">14</span> Qué protege el sistema</li>
+      <li><span class="n">15</span> En qué está hoy</li>
+      <li><span class="n">16</span> Lo que necesitamos saber</li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <section class="salto">
+    <h2><span class="n">1</span> Qué resuelve</h2>
     <p class="intro">
       Hoy el control del local se reparte entre un cuaderno, la memoria y la
-      calculadora. Este sistema junta las tres cosas: qué hay en la bodega,
-      qué se vendió, y cuánto efectivo debería haber en la caja al cerrar.
+      calculadora. Este sistema junta las tres cosas en un solo lugar: qué hay
+      en la bodega, qué se vendió, y cuánto efectivo debería haber en la caja
+      al momento de cerrar.
     </p>
     <p>
-      Cada movimiento queda registrado con quién lo hizo y cuándo. Nada se
-      borra: un producto que ya no se vende se desactiva y sus ventas antiguas
-      siguen a la vista. Eso es lo que permite, al final del día, saber si la
-      caja cuadra y por qué.
+      La idea de fondo es simple: <strong>cada movimiento queda registrado con
+      quién lo hizo y cuándo</strong>. Una venta, una recepción de mercadería,
+      un ajuste de stock, un retiro de efectivo. Nada se borra. Un producto que
+      ya no se vende se desactiva, y sus ventas antiguas siguen a la vista.
+    </p>
+    <p>
+      Eso es lo que permite responder, al final del día, las tres preguntas que
+      más cuestan hoy: <strong>¿cuadra la caja?</strong>,
+      <strong>¿cuánta plata tengo en mercadería?</strong> y
+      <strong>¿qué se está vendiendo y qué está quedando parado?</strong>
+    </p>
+    <p>
+      El sistema está pensado primero para el celular, porque es lo que hay a
+      mano en el mostrador. La misma cuenta abre en tablet o computador, con
+      más espacio para las pantallas de revisión.
     </p>
   </section>
 
-  <section>
-    <h2>Las pantallas</h2>
+  <!-- 2 -->
+  <section class="salto">
+    <h2><span class="n">2</span> Cómo se entra y quién ve qué</h2>
     <p class="intro">
-      Cada persona ve solo las pantallas de su trabajo. El vendedor entra y lo
-      primero que tiene al frente es la de vender.
+      Cada persona tiene su propia cuenta, con su correo y su clave. No hay una
+      clave compartida del local. Eso es lo que permite saber quién hizo cada
+      venta y quién movió el stock.
     </p>
 
-    <div class="grupo">
-      <p class="grupo-titulo">Vender y cobrar</p>
-      <div class="pantallas">
-
-        <article class="pantalla">
-          <h3>Vender
-            <span class="quien">Administrador · Supervisor · Vendedor</span>
-          </h3>
-          <ul>
-            <li><strong>Escanea con la cámara del celular.</strong> Uno tras otro, sin tocar la pantalla entre producto y producto. Suena y vibra cuando lee.</li>
-            <li>Si un producto no tiene código, se busca por nombre.</li>
-            <li>Se cambian cantidades y se quitan líneas antes de cobrar.</li>
-            <li>El total se actualiza a medida que se agrega.</li>
-            <li><strong>Cobra en efectivo, débito, crédito o transferencia.</strong> En efectivo sugiere los montos con que suele pagar la gente y calcula el vuelto.</li>
-            <li>Al terminar entrega el comprobante para el cliente.</li>
-            <li>No deja vender si la caja no está abierta.</li>
-          </ul>
-        </article>
-
-        <article class="pantalla">
-          <h3>Caja
-            <span class="quien">Administrador · Supervisor · Vendedor</span>
-          </h3>
-          <ul>
-            <li>Se abre declarando con cuánto efectivo se parte.</li>
-            <li>Se anotan los ingresos y egresos del turno con su motivo.</li>
-            <li><strong>Al cerrar se cuenta la plata y el sistema dice cuánto debería haber</strong> y cuál es la diferencia.</li>
-            <li>Si hay diferencia, pide explicarla antes de cerrar.</li>
-            <li>Una caja cerrada ya no se puede modificar.</li>
-            <li>Queda el historial de todos los cierres.</li>
-          </ul>
-        </article>
-
+    <div class="pantalla">
+      <div class="pantalla-cabecera">
+        <h3>Ingreso</h3>
+        <span class="roles">Todos</span>
       </div>
+      <p class="proposito">
+        La pantalla de entrada. Correo y clave, una sola vez por dispositivo.
+      </p>
+      <p class="sub">Detalles</p>
+      <ul class="detalles">
+        <li><strong>La sesión se mantiene entre turnos.</strong> El cajero no tiene que escribir su clave cada mañana.</li>
+        <li>Si olvida la clave, se recupera por correo.</li>
+        <li>La misma cuenta puede estar abierta en el celular y en el computador a la vez.</li>
+        <li>El administrador puede ver quién está conectado en este momento.</li>
+      </ul>
     </div>
 
-    <div class="grupo">
-      <p class="grupo-titulo">Productos e inventario</p>
-      <div class="pantallas">
-
-        <article class="pantalla">
-          <h3>Productos
-            <span class="quien">Todos los roles</span>
-          </h3>
-          <ul>
-            <li>Nombre, precio, costo, categoría y stock mínimo.</li>
-            <li><strong>Varios códigos de barra por producto</strong>, para cuando el proveedor cambia el envase.</li>
-            <li>Un mismo código no puede quedar en dos productos.</li>
-            <li>Los productos se desactivan, no se borran: las ventas antiguas siguen siendo consultables.</li>
-            <li>La ganancia por producto la ve solo el administrador.</li>
-          </ul>
-        </article>
-
-        <article class="pantalla">
-          <h3>Carga masiva
-            <span class="quien">Administrador · Supervisor · Bodega</span>
-          </h3>
-          <ul>
-            <li>Sube el catálogo completo desde una planilla Excel o CSV.</li>
-            <li>Muestra una vista previa antes de aplicar nada.</li>
-            <li><strong>Es todo o nada:</strong> si una fila tiene un error, no entra ninguna. Así no queda medio catálogo cargado.</li>
-          </ul>
-        </article>
-
-        <article class="pantalla">
-          <h3>Inventario
-            <span class="quien">Administrador · Supervisor · Bodega</span>
-          </h3>
-          <ul>
-            <li>Stock actual de cada producto y <strong>cuánta plata hay en mercadería</strong>.</li>
-            <li><strong>Movimientos:</strong> todo cambio de stock queda anotado, con quién y por qué. No se puede editar ni borrar.</li>
-            <li><strong>Toma de inventario:</strong> se cuenta lo que hay en la bodega y el sistema aplica las diferencias.</li>
-            <li>Ajustes manuales exigiendo un motivo.</li>
-          </ul>
-        </article>
-
-      </div>
+    <p class="sub">Qué ve cada rol</p>
+    <div class="tabla-envoltorio">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Rol</th>
+            <th scope="col">Para qué entra</th>
+            <th scope="col">Pantallas que ve</th>
+            <th scope="col">No ve</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Administrador</th>
+            <td>Saber cómo está el negocio</td>
+            <td>Todas</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <th scope="row">Supervisor</th>
+            <td>Operar y autorizar</td>
+            <td>Inicio, Vender, Caja, Productos, Inventario, Proveedores</td>
+            <td>Usuarios</td>
+          </tr>
+          <tr>
+            <th scope="row">Vendedor</th>
+            <td>Vender rápido</td>
+            <td>Vender, Caja, Productos</td>
+            <td>Inventario, Proveedores, Usuarios, y la ganancia de cada producto</td>
+          </tr>
+          <tr>
+            <th scope="row">Bodega</th>
+            <td>Controlar la mercadería</td>
+            <td>Productos, Inventario, Proveedores, Recepción</td>
+            <td>Caja y Vender</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <div class="grupo">
-      <p class="grupo-titulo">Compras y proveedores</p>
-      <div class="pantallas">
-
-        <article class="pantalla">
-          <h3>Proveedores
-            <span class="quien">Administrador · Supervisor · Bodega</span>
-          </h3>
-          <ul>
-            <li>Datos de contacto, con <strong>validación del RUT</strong>.</li>
-            <li>Qué productos entrega cada uno.</li>
-          </ul>
-        </article>
-
-        <article class="pantalla">
-          <h3>Recepción de mercadería
-            <span class="quien">Administrador · Supervisor · Bodega</span>
-          </h3>
-          <ul>
-            <li>Se registra lo que llegó <strong>con su documento: guía, factura o boleta</strong>, y su número.</li>
-            <li>Lote y fecha de vencimiento. <strong>En perecibles el vencimiento es obligatorio.</strong></li>
-            <li>Sube el stock y recalcula el costo promedio solo.</li>
-            <li><strong>Avisa si el proveedor subió el precio</strong> respecto de la compra anterior.</li>
-            <li>Una recepción mal cargada se puede anular.</li>
-          </ul>
-        </article>
-
-      </div>
-    </div>
-
-    <div class="grupo">
-      <p class="grupo-titulo">Administración</p>
-      <div class="pantallas">
-
-        <article class="pantalla">
-          <h3>Inicio
-            <span class="quien">Administrador · Supervisor</span>
-          </h3>
-          <ul>
-            <li>Ventas del día, cuántas fueron y el promedio por venta.</li>
-            <li>Productos que bajaron del stock mínimo.</li>
-            <li><strong>Lotes vencidos o por vencer, con la plata que está en riesgo.</strong></li>
-          </ul>
-        </article>
-
-        <article class="pantalla">
-          <h3>Usuarios
-            <span class="quien">Solo administrador</span>
-          </h3>
-          <ul>
-            <li><strong>Se invita al empleado por correo</strong> y él elige su propia clave.</li>
-            <li>Cuatro roles, cada uno con sus permisos.</li>
-            <li>Muestra quién está conectado en este momento.</li>
-            <li>Se desactiva a quien deja de trabajar, sin borrar sus ventas.</li>
-          </ul>
-        </article>
-
-        <article class="pantalla">
-          <h3>Ingreso
-            <span class="quien">Todos</span>
-          </h3>
-          <ul>
-            <li>Correo y clave. <strong>Cada persona tiene su cuenta</strong>, así se sabe quién hizo cada venta.</li>
-            <li>La sesión se mantiene entre turnos sin volver a escribir la clave.</li>
-          </ul>
-        </article>
-
-      </div>
+    <div class="destacado">
+      <p>
+        <strong>No es solo que no aparezca el botón.</strong> El sistema tampoco
+        le entrega esa información al dispositivo. Un vendedor no puede llegar a
+        ver el costo ni la ganancia de un producto aunque busque la forma.
+      </p>
     </div>
   </section>
 
-  <section>
-    <h2>El comprobante para el cliente</h2>
+  <!-- 3 -->
+  <section class="salto">
+    <h2><span class="n">3</span> Vender</h2>
+
+    <div class="pantalla">
+      <div class="pantalla-cabecera">
+        <h3>Vender</h3>
+        <span class="roles">Administrador · Supervisor · Vendedor</span>
+      </div>
+      <p class="proposito">
+        La pantalla donde se pasa la mayor parte del día. Está hecha para
+        atender rápido con una sola mano, de pie, con un cliente al frente.
+      </p>
+
+      <p class="sub">Paso a paso de una venta</p>
+      <ol class="pasos">
+        <li>El vendedor abre su caja al empezar el turno. Si no lo ha hecho, el sistema no lo deja vender y lo manda a hacerlo.</li>
+        <li><strong>Se escanean los productos con la cámara del celular.</strong> Uno tras otro, sin tocar la pantalla entre producto y producto. Suena y vibra cada vez que lee.</li>
+        <li>Si un producto no tiene código de barra, se busca escribiendo parte del nombre.</li>
+        <li>Se ajustan las cantidades o se quita una línea si el cliente se arrepintió.</li>
+        <li>El total se va actualizando abajo, siempre a la vista.</li>
+        <li>Se aprieta <strong>Cobrar</strong> y se elige el medio de pago: efectivo, débito, crédito o transferencia.</li>
+        <li>Si es efectivo, el sistema ofrece los montos con que suele pagar la gente y <strong>calcula el vuelto solo</strong>.</li>
+        <li>Aparece el comprobante para entregarle al cliente, y con un toque se empieza la venta siguiente.</li>
+      </ol>
+
+      <p class="sub">Detalles que importan</p>
+      <ul class="detalles">
+        <li><strong>El escaneo es continuo.</strong> No hay que apretar un botón por producto: la cámara queda abierta y va leyendo. Espera un momento entre lectura y lectura para no contar dos veces el mismo código.</li>
+        <li><strong>Avisa si no queda stock</strong> de lo que se está vendiendo, pero no bloquea la venta. Si el producto está físicamente ahí, se vende igual y después se corrige el inventario.</li>
+        <li>Si se escanea un código que no está en el catálogo, avisa y deja el código listo para buscarlo o darlo de alta.</li>
+        <li>Los montos nunca llevan decimales.</li>
+        <li><strong>Funciona sin internet.</strong> Esto se explica en detalle en el punto 13.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="salto">
+    <h2><span class="n">4</span> Caja</h2>
+
+    <div class="pantalla">
+      <div class="pantalla-cabecera">
+        <h3>Caja</h3>
+        <span class="roles">Administrador · Supervisor · Vendedor</span>
+      </div>
+      <p class="proposito">
+        Controla el efectivo del turno de punta a punta: con cuánto se parte,
+        qué entró y qué salió, y cuánto debería haber al cerrar.
+      </p>
+
+      <p class="sub">Paso a paso de un turno</p>
+      <ol class="pasos">
+        <li><strong>Abrir caja</strong> declarando con cuánto efectivo se parte. Ese número es la base de todo el cálculo posterior.</li>
+        <li>Durante el turno se anotan los movimientos que no son ventas: un retiro para pagar un flete, un ingreso de plata, una compra menor. <strong>Cada uno con su motivo escrito.</strong></li>
+        <li>Al terminar, se cuenta la plata que hay en la caja y se escribe el total.</li>
+        <li>El sistema muestra <strong>cuánto debería haber</strong>, cuánto hay, y la diferencia.</li>
+        <li>Si hay diferencia, pide explicarla antes de dejar cerrar.</li>
+        <li>Queda un resumen del turno: ventas por medio de pago, movimientos y diferencia final.</li>
+      </ol>
+
+      <p class="sub">Detalles que importan</p>
+      <ul class="detalles">
+        <li><strong>Cada persona tiene su propia caja.</strong> Si dos venden en el mismo turno, cada una responde por la suya y las diferencias no se mezclan.</li>
+        <li>Una persona no puede tener dos cajas abiertas al mismo tiempo.</li>
+        <li><strong>Una caja cerrada no se puede modificar.</strong> Ni por el administrador. Si algo quedó mal, se corrige con un movimiento nuevo que queda registrado, no borrando el anterior.</li>
+        <li>Queda el historial de todos los cierres, con quién cerró, a qué hora y con qué diferencia.</li>
+        <li>El sistema avisa si una caja quedó abierta demasiado tiempo, por si alguien se fue sin cerrar.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="salto">
+    <h2><span class="n">5</span> Inicio</h2>
+
+    <div class="pantalla">
+      <div class="pantalla-cabecera">
+        <h3>Inicio</h3>
+        <span class="roles">Administrador · Supervisor</span>
+      </div>
+      <p class="proposito">
+        Lo primero que ve el dueño al entrar. Responde en diez segundos cómo va
+        el día y qué necesita atención.
+      </p>
+
+      <p class="sub">Qué muestra</p>
+      <ul class="detalles">
+        <li><strong>Ventas de hoy:</strong> cuánta plata, cuántas ventas y el promedio por venta. Ese promedio es el número que muestra si el local está vendiendo más unidades o más caro.</li>
+        <li><strong>Productos bajo el stock mínimo:</strong> los que hay que reponer, con cuánto queda de cada uno.</li>
+        <li><strong>Lotes vencidos o por vencer,</strong> con <strong>la plata que está en riesgo</strong>. No solo cuántas unidades: cuánto dinero se pierde si no se venden a tiempo.</li>
+      </ul>
+
+      <p class="sub">Detalles que importan</p>
+      <ul class="detalles">
+        <li>Los números son del día en curso, en hora de Chile, y se actualizan solos.</li>
+        <li>Las ventas anuladas no se cuentan en el total.</li>
+        <li>El vendedor no ve esta pantalla: entra directo a vender.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="salto">
+    <h2><span class="n">6</span> Productos</h2>
+
+    <div class="pantalla">
+      <div class="pantalla-cabecera">
+        <h3>Productos</h3>
+        <span class="roles">Todos los roles</span>
+      </div>
+      <p class="proposito">
+        El catálogo del local. Es la base de todo lo demás: sin el producto
+        cargado no se puede vender ni controlar su stock.
+      </p>
+
+      <p class="sub">Qué se carga en cada producto</p>
+      <ul class="detalles">
+        <li>Nombre, precio de venta y costo.</li>
+        <li>Categoría, para agrupar y después filtrar.</li>
+        <li><strong>Stock mínimo:</strong> bajo esa cantidad el producto aparece en los avisos de reposición.</li>
+        <li><strong>Uno o varios códigos de barra.</strong> Es común que el proveedor cambie el envase y el código: se agrega el nuevo sin perder el anterior, y los dos siguen sirviendo para escanear.</li>
+        <li>Si es perecible, se marca. Eso hace que al recibirlo se exija la fecha de vencimiento.</li>
+      </ul>
+
+      <p class="sub">Detalles que importan</p>
+      <ul class="detalles">
+        <li><strong>Un mismo código de barra no puede quedar en dos productos.</strong> El sistema lo impide al guardar, porque si no el escáner nunca sabría cuál de los dos cobrar.</li>
+        <li><strong>Los productos se desactivan, no se borran.</strong> Dejan de aparecer al vender, pero sus ventas antiguas siguen consultables. Solo se puede borrar de verdad un producto que nunca se vendió.</li>
+        <li>Un producto desactivado se puede volver a activar cuando se vuelva a trabajar.</li>
+        <li><strong>La ganancia y el costo los ve solo el administrador.</strong></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="salto">
+    <h2><span class="n">7</span> Carga masiva del catálogo</h2>
+
+    <div class="pantalla">
+      <div class="pantalla-cabecera">
+        <h3>Importar productos</h3>
+        <span class="roles">Administrador · Supervisor · Bodega</span>
+      </div>
+      <p class="proposito">
+        Para cargar el catálogo completo de una vez, en lugar de escribir
+        producto por producto. Es lo que se usa al poner el sistema en marcha.
+      </p>
+
+      <p class="sub">Paso a paso</p>
+      <ol class="pasos">
+        <li>Se descarga la plantilla desde la misma pantalla.</li>
+        <li>Se llena en Excel con los productos del local.</li>
+        <li>Se sube el archivo.</li>
+        <li><strong>El sistema muestra una vista previa</strong> con lo que va a entrar y lo que está mal escrito, indicando la fila exacta y el problema.</li>
+        <li>Recién ahí se confirma la carga.</li>
+      </ol>
+
+      <p class="sub">Detalles que importan</p>
+      <ul class="detalles">
+        <li><strong>Es todo o nada.</strong> Si una sola fila tiene un error, no entra ninguna. Esto es a propósito: medio catálogo cargado es peor que ninguno, porque nadie sabe qué quedó adentro y qué no.</li>
+        <li>Revisa precios y costos en formato chileno, códigos repetidos dentro del mismo archivo, y códigos que ya existen en el sistema.</li>
+        <li>Se puede usar también después, para actualizar precios de muchos productos a la vez.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section class="salto">
+    <h2><span class="n">8</span> Inventario</h2>
+
+    <div class="pantalla">
+      <div class="pantalla-cabecera">
+        <h3>Inventario</h3>
+        <span class="roles">Administrador · Supervisor · Bodega</span>
+      </div>
+      <p class="proposito">
+        Qué hay, cuánto vale, y por qué cambió. Tiene tres partes que se eligen
+        arriba.
+      </p>
+
+      <p class="sub">Stock</p>
+      <ul class="detalles">
+        <li>Cuánto hay de cada producto, ahora.</li>
+        <li><strong>Cuánta plata hay en mercadería</strong>, valorizada al costo.</li>
+        <li>En los productos perecibles, el detalle por lote con su fecha de vencimiento.</li>
+      </ul>
+
+      <p class="sub">Movimientos</p>
+      <ul class="detalles">
+        <li>El historial de <strong>todo</strong> lo que cambió el stock: ventas, recepciones, ajustes, mermas, devoluciones.</li>
+        <li>Cada movimiento dice qué producto, cuánto, cuándo, quién y por qué.</li>
+        <li><strong>No se puede editar ni borrar.</strong> Ni el administrador puede. Si hubo un error se registra un movimiento que lo corrige, y quedan los dos a la vista. Es lo que hace que el historial sirva para algo.</li>
+      </ul>
+
+      <p class="sub">Toma de inventario</p>
+      <ol class="pasos">
+        <li>Se recorre la bodega contando lo que hay de verdad.</li>
+        <li>Se anota la cantidad contada de cada producto. No hace falta contar todo: se puede hacer por partes.</li>
+        <li>El sistema muestra la diferencia entre lo contado y lo que tenía registrado.</li>
+        <li>Al aplicar, el stock queda igual a lo contado y cada diferencia queda registrada como un movimiento.</li>
+      </ol>
+
+      <p class="sub">Ajustes</p>
+      <ul class="detalles">
+        <li>Para corregir una cantidad puntual sin hacer una toma completa: un producto que se rompió, uno que se venció, uno que apareció.</li>
+        <li><strong>Siempre exige un motivo escrito.</strong> Un ajuste sin explicación es un descuadre disfrazado.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="salto">
+    <h2><span class="n">9</span> Proveedores</h2>
+
+    <div class="pantalla">
+      <div class="pantalla-cabecera">
+        <h3>Proveedores</h3>
+        <span class="roles">Administrador · Supervisor · Bodega</span>
+      </div>
+      <p class="proposito">
+        Quién le vende al local, para asociarlo después a cada recepción de
+        mercadería.
+      </p>
+      <p class="sub">Detalles</p>
+      <ul class="detalles">
+        <li>Razón social, RUT, contacto y teléfono.</li>
+        <li><strong>El RUT se valida al escribirlo</strong>, con su dígito verificador. Si está mal tecleado, el sistema lo dice en el momento y no cuando haya que emitir un documento.</li>
+        <li>Se puede desactivar un proveedor con el que se dejó de trabajar, sin perder el historial de sus compras.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="salto">
+    <h2><span class="n">10</span> Recepción de mercadería</h2>
+
+    <div class="pantalla">
+      <div class="pantalla-cabecera">
+        <h3>Recepción</h3>
+        <span class="roles">Administrador · Supervisor · Bodega</span>
+      </div>
+      <p class="proposito">
+        Registrar lo que llegó del proveedor. Es el momento en que sube el
+        stock y se actualiza el costo de cada producto.
+      </p>
+
+      <p class="sub">Paso a paso</p>
+      <ol class="pasos">
+        <li>Se elige el proveedor.</li>
+        <li><strong>Se indica con qué documento llegó la mercadería</strong> —guía de despacho, factura o boleta— y su número. Así cada ingreso al inventario queda respaldado por su papel.</li>
+        <li>Se agregan los productos que llegaron, con la cantidad y el costo al que vinieron.</li>
+        <li>En los productos perecibles se anota el <strong>lote y la fecha de vencimiento</strong>. Son obligatorios: sin eso no se puede confirmar.</li>
+        <li>Se confirma. El stock sube al instante.</li>
+      </ol>
+
+      <p class="sub">Detalles que importan</p>
+      <ul class="detalles">
+        <li><strong>El costo promedio se recalcula solo.</strong> Si había 10 unidades a $800 y llegan 10 a $1.000, el costo pasa a $900. Ese es el número con que se valoriza el inventario y se calcula la ganancia real.</li>
+        <li><strong>Avisa si el proveedor subió el precio</strong> respecto de la compra anterior. Es el momento de darse cuenta, no cuando se revisan los márgenes a fin de mes.</li>
+        <li>Una recepción mal cargada <strong>se puede anular</strong>: el stock vuelve atrás y queda el registro de la anulación.</li>
+        <li>Al vender un producto con lotes, <strong>siempre sale primero el que vence antes</strong>. No hay que acordarse: el sistema lo hace.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="salto">
+    <h2><span class="n">11</span> Usuarios</h2>
+
+    <div class="pantalla">
+      <div class="pantalla-cabecera">
+        <h3>Usuarios</h3>
+        <span class="roles">Solo administrador</span>
+      </div>
+      <p class="proposito">
+        Dar de alta al personal y definir qué puede hacer cada uno.
+      </p>
+
+      <p class="sub">Paso a paso para sumar a alguien</p>
+      <ol class="pasos">
+        <li>El administrador escribe el nombre y el correo de la persona, y elige su rol.</li>
+        <li><strong>Le llega un correo de invitación.</strong></li>
+        <li>La persona abre el enlace y <strong>define su propia clave</strong>. El administrador nunca conoce la clave de nadie.</li>
+        <li>Desde ese momento entra con sus permisos y sus ventas quedan a su nombre.</li>
+      </ol>
+
+      <p class="sub">Detalles que importan</p>
+      <ul class="detalles">
+        <li><strong>Muestra quién está conectado en este momento</strong>, entendiendo por conectado a quien tuvo actividad en los últimos cinco minutos.</li>
+        <li>A quien deja de trabajar se le desactiva la cuenta: deja de poder entrar, pero <strong>sus ventas siguen registradas a su nombre</strong>.</li>
+        <li>Nadie puede cambiarse el rol a sí mismo ni desactivarse solo. Si el único administrador se quitara el permiso, nadie podría volver a entrar a administrar.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="salto">
+    <h2><span class="n">12</span> El comprobante</h2>
     <p class="intro">
       Al terminar la venta se entrega este papel. Se imprime en impresora
       térmica o se manda por WhatsApp.
@@ -628,15 +990,19 @@
     <div class="ticket-zona">
       <div>
         <p>
-          Muestra cada producto con su cantidad y su precio, y abajo el desglose:
-          el <strong>neto</strong>, el <strong>IVA</strong> y el
+          Muestra cada producto con su cantidad y su precio, y abajo el
+          desglose: el <strong>neto</strong>, el <strong>IVA</strong> y el
           <strong>total</strong>. El IVA se calcula sobre el precio que ya lo
           incluye, que es como se marcan los precios en góndola.
         </p>
         <p>
-          Si se pagó en efectivo, también sale el vuelto. El número de venta es
-          correlativo y no se salta ni se repite, aunque estén vendiendo dos
-          personas a la vez.
+          Si se pagó en efectivo, también sale con cuánto pagó el cliente y el
+          vuelto que se le entregó.
+        </p>
+        <p>
+          El número de venta es correlativo: <strong>no se salta ni se
+          repite</strong>, aunque estén vendiendo dos personas al mismo tiempo
+          desde dos celulares distintos.
         </p>
       </div>
       <div>
@@ -668,81 +1034,95 @@ Vuelto                    $4.130
       <p>
         <strong>Este comprobante todavía no es una boleta electrónica.</strong>
         Sirve para que el cliente sepa qué se llevó y cuánto pagó, y por eso lo
-        dice en el propio papel. La emisión de boleta y factura electrónica ante
-        el Servicio de Impuestos Internos está en desarrollo y requiere
-        trámites previos del contribuyente: certificado digital, inscripción
-        como emisor electrónico y autorización de folios.
+        dice impreso en el propio papel.
+      </p>
+      <p>
+        La emisión de boleta y factura electrónica ante el Servicio de Impuestos
+        Internos está en desarrollo. Requiere tres trámites previos que hace el
+        contribuyente, no el sistema: <strong>certificado digital de firma
+        electrónica</strong>, <strong>inscripción como emisor electrónico</strong>
+        en el SII y <strong>autorización de folios</strong>. Conviene empezarlos
+        cuanto antes, porque son los que más demoran y avanzan en paralelo al
+        desarrollo.
       </p>
     </div>
   </section>
 
-  <section>
-    <h2>Si se cae internet</h2>
+  <!-- 13 -->
+  <section class="salto">
+    <h2><span class="n">13</span> Si se cae internet</h2>
     <p class="intro">
-      El caso más importante del local: que se corte la señal en plena hora
-      punta.
+      Es el caso que más importa resolver bien: que se corte la señal justo en
+      hora punta, con cola en la caja.
     </p>
+
     <div class="destacado">
       <p>
-        <strong>El local sigue vendiendo.</strong> El catálogo de productos está
-        guardado en el propio celular, así que el escáner y la búsqueda siguen
-        funcionando. Las ventas se guardan en el dispositivo y se suben solas
-        cuando vuelve la señal, sin duplicarse. En pantalla hay un indicador que
-        muestra cuántas ventas están esperando subir.
+        <strong>El local sigue vendiendo.</strong> El catálogo completo está
+        guardado dentro del propio celular, así que el escáner, la búsqueda y
+        el cobro siguen funcionando exactamente igual.
+      </p>
+      <p>
+        Las ventas se guardan en el dispositivo y <strong>se suben solas cuando
+        vuelve la señal</strong>, sin que nadie tenga que hacer nada. No se
+        duplican aunque la conexión se corte a medio subir.
+      </p>
+      <p>
+        En la pantalla hay un indicador que muestra si hay conexión y cuántas
+        ventas están esperando subir, para que el encargado sepa en todo momento
+        cómo está la situación.
       </p>
     </div>
+
+    <p class="sub">Qué sí necesita conexión</p>
+    <ul class="detalles">
+      <li>Cargar productos nuevos y la carga masiva.</li>
+      <li>Recepción de mercadería y toma de inventario.</li>
+      <li>Invitar usuarios.</li>
+      <li>Ver los números del día actualizados en Inicio.</li>
+    </ul>
+    <p style="margin-top:0.75rem">
+      Todo lo demás —vender y cobrar, que es lo que no puede parar— funciona sin
+      señal.
+    </p>
   </section>
 
-  <section>
-    <h2>Quién ve qué</h2>
-    <div class="tabla-envoltorio">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Rol</th>
-            <th scope="col">Entra a</th>
-            <th scope="col">No ve</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <th scope="row">Administrador</th>
-            <td>Todo, incluidos usuarios y ganancias</td>
-            <td>—</td>
-          </tr>
-          <tr>
-            <th scope="row">Supervisor</th>
-            <td>Vender, caja, productos, inventario, proveedores</td>
-            <td>Usuarios</td>
-          </tr>
-          <tr>
-            <th scope="row">Vendedor</th>
-            <td>Vender, caja, productos</td>
-            <td>Inventario, proveedores, usuarios, ganancias</td>
-          </tr>
-          <tr>
-            <th scope="row">Bodega</th>
-            <td>Productos, inventario, proveedores, recepción</td>
-            <td>Caja, vender, usuarios</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+  <!-- 14 -->
+  <section class="salto">
+    <h2><span class="n">14</span> Qué protege el sistema</h2>
+    <p class="intro">
+      Varias decisiones del diseño existen para que, cuando algo no cuadre, se
+      pueda averiguar qué pasó.
+    </p>
+    <ul class="detalles">
+      <li><strong>Cada persona con su cuenta.</strong> Toda venta y todo movimiento queda atribuido a alguien.</li>
+      <li><strong>El historial de inventario no se puede alterar.</strong> Ni editar ni borrar, por nadie.</li>
+      <li><strong>Una caja cerrada queda congelada.</strong> No se puede volver atrás para maquillar una diferencia.</li>
+      <li><strong>Nada se elimina.</strong> Productos, proveedores y usuarios se desactivan; su historial permanece.</li>
+      <li><strong>Los datos de este local son solo de este local.</strong> El sistema está preparado para operar varios locales sin que uno pueda ver la información de otro.</li>
+      <li><strong>Respaldo diario automático</strong> de toda la información, con treinta días de retención. Esta pieza está construida y se activa en la puesta en marcha.</li>
+    </ul>
   </section>
 
-  <section>
-    <h2>En qué está hoy</h2>
+  <!-- 15 -->
+  <section class="salto">
+    <h2><span class="n">15</span> En qué está hoy</h2>
+    <p class="intro">
+      Estado al 15 de septiembre de 2026, para que quede claro qué se puede
+      usar ya y qué viene después.
+    </p>
     <div class="estados">
-
       <div class="estado">
         <h3>Construido y probado</h3>
         <ul>
-          <li>Las 10 pantallas de este documento</li>
+          <li>Las 11 pantallas de este documento</li>
           <li>Venta con escáner y modo sin internet</li>
           <li>Ciclo completo de caja con arqueo</li>
+          <li>Catálogo y carga masiva</li>
           <li>Inventario con lotes y vencimientos</li>
           <li>Recepción con costo promedio</li>
           <li>Comprobante de venta con IVA</li>
+          <li>Usuarios, roles y permisos</li>
         </ul>
       </div>
 
@@ -752,6 +1132,7 @@ Vuelto                    $4.130
           <li>Puesta en marcha en el servidor</li>
           <li>Carga del catálogo real del local</li>
           <li>Creación de las cuentas del personal</li>
+          <li>Activación del respaldo diario</li>
           <li>Capacitación del equipo</li>
         </ul>
       </div>
@@ -761,106 +1142,109 @@ Vuelto                    $4.130
         <ul>
           <li>Boleta y factura electrónica ante el SII</li>
           <li>Pantalla de reportes del negocio</li>
-          <li>Pantalla de alertas</li>
-          <li>Anulación de ventas desde la app</li>
+          <li>Pantalla de avisos y alertas</li>
+          <li>Anulación de ventas desde la aplicación</li>
           <li>Descuentos y pago dividido en el mostrador</li>
+          <li>Impresión de etiquetas con código de barra</li>
         </ul>
       </div>
-
     </div>
   </section>
 
-  <section>
-    <h2>Lo que necesitamos saber</h2>
+  <!-- 16 -->
+  <section class="salto">
+    <h2><span class="n">16</span> Lo que necesitamos saber</h2>
     <p class="intro">
-      Estas preguntas ordenan el trabajo que viene. No todas tienen que
-      responderse hoy, pero las de documentos tributarios y las de puesta en
-      marcha son las que hoy detienen el avance: ninguna se resuelve
-      programando.
+      Estas preguntas ordenan el trabajo que viene. No hace falta responderlas
+      todas hoy, pero las del bloque C y las del bloque F son las que hoy
+      detienen el avance: ninguna se resuelve programando. Cada una tiene su
+      número, para poder responder por escrito indicando a cuál corresponde.
     </p>
 
     <div class="bloque-preguntas">
-      <p>El local y su catálogo</p>
-      <ol>
-        <li>¿Cuántos productos distintos maneja, más o menos?<em>Bajo mil no tiene problema; sobre cinco mil cambia cómo se guarda el catálogo en el celular.</em></li>
-        <li>¿Cómo lleva hoy el inventario: cuaderno, Excel, de memoria?<em>Si existe un Excel, se migra y se ahorra buena parte de la carga inicial.</em></li>
-        <li>¿Hay productos que se venden por peso o fracción, como medio kilo de queso?</li>
-        <li>¿Todos los productos traen código de barra, o hay sueltos y a granel?</li>
-        <li>¿Hay productos exentos de IVA?<em>Hoy el sistema asume 19% parejo.</em></li>
-        <li>¿Maneja precios distintos por cantidad, tipo mayorista y detalle?</li>
-        <li>¿Con cuántos proveedores trabaja habitualmente?</li>
+      <h3>A · El local y su catálogo</h3>
+      <ol class="preguntas">
+        <li><span class="n">1</span><div><p class="q">¿Cuántos productos distintos maneja el local, más o menos?</p><p class="nota">Bajo mil no presenta problema. Sobre cinco mil cambia la forma en que se guarda el catálogo dentro del celular.</p><div class="respuesta"></div></div></li>
+        <li><span class="n">2</span><div><p class="q">¿Cómo lleva hoy el inventario: cuaderno, Excel, de memoria?</p><p class="nota">Si existe un Excel, se puede migrar y se ahorra buena parte de la carga inicial.</p><div class="respuesta"></div></div></li>
+        <li><span class="n">3</span><div><p class="q">¿Hay productos que se vendan por peso o fracción, como medio kilo de queso?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">4</span><div><p class="q">¿Todos los productos traen código de barra, o hay sueltos y a granel?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">5</span><div><p class="q">¿Hay productos exentos de IVA?</p><p class="nota">Hoy el sistema asume 19% parejo para todo el catálogo.</p><div class="respuesta"></div></div></li>
+        <li><span class="n">6</span><div><p class="q">¿Maneja precios distintos según la cantidad, tipo mayorista y detalle?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">7</span><div><p class="q">¿Con cuántos proveedores trabaja habitualmente?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">8</span><div><p class="q">¿Qué porcentaje del catálogo es perecible, con fecha de vencimiento?</p><div class="respuesta"></div></div></li>
       </ol>
     </div>
 
     <div class="bloque-preguntas">
-      <p>Las personas y los turnos</p>
-      <ol>
-        <li>¿Cuántas personas trabajan en el local y qué hace cada una?<em>Define cuántos de los cuatro roles se usan de verdad.</em></li>
-        <li>¿Cuántas cajas funcionan al mismo tiempo en hora punta?</li>
-        <li>¿Un vendedor puede hacer descuentos por su cuenta? ¿Hasta qué monto o qué porcentaje?</li>
-        <li>¿Quién puede anular una venta ya cobrada?</li>
-        <li>¿Qué se hace hoy si alguien termina el turno y se va sin cerrar la caja?</li>
-        <li>¿Quién revisa las diferencias de caja y cada cuánto?</li>
+      <h3>B · Las personas y los turnos</h3>
+      <ol class="preguntas">
+        <li><span class="n">9</span><div><p class="q">¿Cuántas personas trabajan en el local y qué hace cada una?</p><p class="nota">Define cuáles de los cuatro roles se usan de verdad y cuáles sobran.</p><div class="respuesta"></div></div></li>
+        <li><span class="n">10</span><div><p class="q">¿Cuántas cajas funcionan al mismo tiempo en hora punta?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">11</span><div><p class="q">¿Un vendedor puede hacer descuentos por su cuenta? ¿Hasta qué monto o qué porcentaje?</p><p class="nota">El sistema permite fijar un tope distinto por rol.</p><div class="respuesta"></div></div></li>
+        <li><span class="n">12</span><div><p class="q">¿Quién puede anular una venta ya cobrada?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">13</span><div><p class="q">¿Qué se hace hoy si alguien termina el turno y se va sin cerrar la caja?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">14</span><div><p class="q">¿Quién revisa las diferencias de caja, y cada cuánto?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">15</span><div><p class="q">¿Hay rotación de personal frecuente?</p><p class="nota">Define cuán seguido habrá que dar de alta y de baja cuentas.</p><div class="respuesta"></div></div></li>
       </ol>
     </div>
 
     <div class="bloque-preguntas">
-      <p>Boletas, facturas e impuestos</p>
-      <ol>
-        <li>¿Ya tiene certificado digital y está inscrito como emisor electrónico ante el SII?<em>Es el trámite que más demora y no depende del sistema. Conviene empezarlo ahora.</em></li>
-        <li>¿Hoy emite boleta con algún sistema o proveedor? ¿Cuál?</li>
-        <li>¿Necesita emitir solo boleta, o también factura a empresas?<em>La factura agrega datos del comprador y los libros de compra y venta.</em></li>
-        <li>¿Con qué frecuencia emite factura: todos los días, una vez al mes?</li>
-        <li>¿Quién asume el costo mensual del certificado y del servicio de emisión?</li>
-        <li>¿Necesita emitir notas de crédito por devoluciones?</li>
-        <li>¿Su contador le pide algún informe específico que hoy arma a mano?</li>
+      <h3>C · Boletas, facturas e impuestos</h3>
+      <ol class="preguntas">
+        <li><span class="n">16</span><div><p class="q">¿Ya tiene certificado digital de firma electrónica y está inscrito como emisor electrónico ante el SII?</p><p class="nota">Es el trámite que más demora y no depende del sistema. Es la respuesta más urgente de todo este documento.</p><div class="respuesta"></div></div></li>
+        <li><span class="n">17</span><div><p class="q">¿Hoy emite boleta con algún sistema o proveedor? ¿Cuál?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">18</span><div><p class="q">¿Necesita emitir solo boleta, o también factura a empresas?</p><p class="nota">La factura agrega los datos del comprador y los libros de compra y venta. Es bastante más que otro tipo de documento.</p><div class="respuesta"></div></div></li>
+        <li><span class="n">19</span><div><p class="q">¿Con qué frecuencia emite factura: todos los días, una vez al mes?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">20</span><div><p class="q">¿Quién asume el costo mensual del certificado y del servicio de emisión?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">21</span><div><p class="q">¿Necesita emitir notas de crédito por devoluciones o anulaciones?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">22</span><div><p class="q">¿Su contador le pide algún informe específico que hoy arma a mano?</p><div class="respuesta"></div></div></li>
       </ol>
     </div>
 
     <div class="bloque-preguntas">
-      <p>La operación de todos los días</p>
-      <ol>
-        <li>¿A qué hora abre y a qué hora cierra?<em>Los avisos automáticos y el respaldo se programan en torno a ese horario.</em></li>
-        <li>¿Recibe la mercadería en horario de atención o antes de abrir?</li>
-        <li>¿Qué hace hoy cuando un producto se vence? ¿Queda anotado en alguna parte?</li>
-        <li>¿Acepta devoluciones o cambios? ¿Con qué regla?</li>
-        <li>¿Vende fiado o lleva cuenta corriente a clientes conocidos?</li>
-        <li>¿Hay una sola bodega, o más de un lugar donde guarda mercadería?</li>
-        <li>¿Con qué frecuencia le gustaría hacer la toma de inventario?</li>
+      <h3>D · La operación de todos los días</h3>
+      <ol class="preguntas">
+        <li><span class="n">23</span><div><p class="q">¿A qué hora abre y a qué hora cierra el local?</p><p class="nota">Los avisos automáticos y el respaldo diario se programan en torno a ese horario.</p><div class="respuesta"></div></div></li>
+        <li><span class="n">24</span><div><p class="q">¿Recibe la mercadería en horario de atención o antes de abrir?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">25</span><div><p class="q">¿Qué hace hoy cuando un producto se vence? ¿Queda anotado en alguna parte?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">26</span><div><p class="q">¿Acepta devoluciones o cambios? ¿Con qué regla?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">27</span><div><p class="q">¿Vende fiado o lleva cuenta corriente a clientes conocidos?</p><p class="nota">Hoy el sistema no contempla esa modalidad. Si existe, hay que conversarla.</p><div class="respuesta"></div></div></li>
+        <li><span class="n">28</span><div><p class="q">¿Hay una sola bodega, o más de un lugar donde se guarda mercadería?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">29</span><div><p class="q">¿Con qué frecuencia le gustaría hacer la toma de inventario?</p><div class="respuesta"></div></div></li>
       </ol>
     </div>
 
     <div class="bloque-preguntas">
-      <p>Equipos e internet</p>
-      <ol>
-        <li>¿Con qué equipos va a operar: celulares, tablet, computador? ¿De qué año son?</li>
-        <li>¿Cómo es la señal de internet en el local? ¿Se corta seguido?<em>El sistema sigue vendiendo sin señal, pero conviene saber con qué frecuencia va a ocurrir.</em></li>
-        <li>¿Tiene impresora de tickets? ¿Es térmica de 58 u 80 milímetros?</li>
-        <li>¿Tiene lector de código de barras físico, o se usará la cámara del celular?</li>
-        <li>¿Hay una cuenta de correo del local para recibir los avisos y el resumen diario?</li>
+      <h3>E · Equipos e internet</h3>
+      <ol class="preguntas">
+        <li><span class="n">30</span><div><p class="q">¿Con qué equipos va a operar: celulares, tablet, computador? ¿De qué año son?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">31</span><div><p class="q">¿Cómo es la señal de internet en el local? ¿Se corta seguido?</p><p class="nota">El sistema sigue vendiendo sin señal, pero conviene saber con qué frecuencia va a ocurrir.</p><div class="respuesta"></div></div></li>
+        <li><span class="n">32</span><div><p class="q">¿Tiene impresora de tickets? ¿Es térmica de 58 u 80 milímetros?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">33</span><div><p class="q">¿Tiene lector de código de barra físico, o se usará la cámara del celular?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">34</span><div><p class="q">¿Hay una cuenta de correo del local para recibir los avisos y el resumen diario?</p><div class="respuesta"></div></div></li>
       </ol>
     </div>
 
     <div class="bloque-preguntas">
-      <p>La partida</p>
-      <ol>
-        <li>¿Cuándo quiere empezar a usarlo de verdad, con ventas reales?</li>
-        <li>¿Prefiere partir con todo, o primero solo vender y después sumar inventario?<em>Partir acotado suele funcionar mejor: el equipo aprende una cosa a la vez.</em></li>
-        <li>¿Quién va a cargar el catálogo inicial y cuándo?</li>
-        <li>¿Hay una fecha que no se pueda mover, como una temporada alta o un inventario anual?</li>
-        <li>¿Quién será la contraparte para las dudas del día a día?</li>
-        <li>¿Quiere un dominio propio, o sirve la dirección que entrega el servidor?</li>
+      <h3>F · La partida</h3>
+      <ol class="preguntas">
+        <li><span class="n">35</span><div><p class="q">¿Cuándo quiere empezar a usarlo de verdad, con ventas reales?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">36</span><div><p class="q">¿Prefiere partir con todo, o primero solo vender y después sumar inventario?</p><p class="nota">Partir acotado suele funcionar mejor: el equipo aprende una cosa a la vez.</p><div class="respuesta"></div></div></li>
+        <li><span class="n">37</span><div><p class="q">¿Quién va a cargar el catálogo inicial y cuándo?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">38</span><div><p class="q">¿Hay una fecha que no se pueda mover, como una temporada alta o un inventario anual?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">39</span><div><p class="q">¿Quién será la contraparte para las dudas del día a día?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">40</span><div><p class="q">¿Quiere un dominio propio, o sirve la dirección que entrega el servidor?</p><div class="respuesta"></div></div></li>
       </ol>
     </div>
 
     <div class="bloque-preguntas">
-      <p>Para revisar y corregir después de partir</p>
-      <ol>
-        <li>Después de la primera semana: ¿qué fue lo que más le costó al equipo?</li>
-        <li>¿Qué sigue haciendo en papel que esperaba dejar de hacer?</li>
-        <li>¿Hay algo que el sistema lo obliga a hacer y que antes era más rápido?<em>Si aparece algo así, se corrige: es señal de que la pantalla quedó mal pensada.</em></li>
-        <li>¿Qué número mira primero cuando quiere saber cómo va el negocio?</li>
-        <li>¿Qué tendría que pasar para que dejara de usar el sistema?<em>Es la pregunta más útil de todas y conviene hacerla en voz alta.</em></li>
+      <h3>G · Para revisar después de partir</h3>
+      <ol class="preguntas">
+        <li><span class="n">41</span><div><p class="q">Después de la primera semana: ¿qué fue lo que más le costó al equipo?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">42</span><div><p class="q">¿Qué sigue haciendo en papel que esperaba dejar de hacer?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">43</span><div><p class="q">¿Hay algo que el sistema lo obliga a hacer y que antes era más rápido?</p><p class="nota">Si aparece algo así, se corrige. Es señal de que esa pantalla quedó mal pensada.</p><div class="respuesta"></div></div></li>
+        <li><span class="n">44</span><div><p class="q">¿Qué número mira primero cuando quiere saber cómo va el negocio?</p><div class="respuesta"></div></div></li>
+        <li><span class="n">45</span><div><p class="q">¿Qué tendría que pasar para que dejara de usar el sistema?</p><p class="nota">Es la pregunta más útil de todas y conviene hacerla en voz alta.</p><div class="respuesta"></div></div></li>
       </ol>
     </div>
   </section>
