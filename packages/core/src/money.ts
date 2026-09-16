@@ -72,3 +72,122 @@ export function marginPct(salePrice: number, cost: number): number {
 export function change(received: number, total: number): number {
   return Math.max(clp(received) - clp(total), 0);
 }
+
+// ---------------------------------------------------------------------------
+// Validación de campos de dinero
+// ---------------------------------------------------------------------------
+
+export interface MontoValidado {
+  valido: boolean;
+  /** Monto en pesos enteros. 0 cuando no es válido. */
+  valor: number;
+  /** Mensaje en lenguaje del negocio, o null si está bien. */
+  error: string | null;
+}
+
+export interface OpcionesMonto {
+  /** Si el campo puede quedar vacío. Por defecto, no. */
+  permiteVacio?: boolean;
+  /** Si acepta cero como monto válido. Por defecto, sí. */
+  permiteCero?: boolean;
+  /** Tope superior, para atajar un cero de más al teclear. */
+  maximo?: number;
+  /** Cómo se llama el campo en el mensaje de error. */
+  etiqueta?: string;
+}
+
+/**
+ * Valida lo que el usuario escribió en un campo de dinero.
+ *
+ * `parseCLP` solo interpreta: limpia el formato y devuelve un número, y ese
+ * número puede ser negativo porque acepta el signo menos. Eso basta para
+ * mostrar un total, pero no para guardar: un "ingreso" de caja de −500 entra
+ * como egreso encubierto y descuadra el arqueo sin dejar rastro de que alguien
+ * escribió un signo.
+ *
+ * Esta función es la que deben usar los formularios antes de enviar. Los
+ * mensajes están en lenguaje del negocio (RNF-22): el cajero no tiene por qué
+ * leer "valor inválido".
+ */
+export function validarMonto(entrada: string, opciones: OpcionesMonto = {}): MontoValidado {
+  const {
+    permiteVacio = false,
+    permiteCero = true,
+    maximo,
+    etiqueta = 'monto',
+  } = opciones;
+
+  const texto = String(entrada ?? '').trim();
+
+  if (texto === '') {
+    return permiteVacio
+      ? { valido: true, valor: 0, error: null }
+      : { valido: false, valor: 0, error: `Escribe el ${etiqueta}` };
+  }
+
+  // Un texto que no contiene ningún dígito no es un monto a medio escribir:
+  // es otra cosa. Distinguirlo permite un mensaje más útil que "inválido".
+  if (!/\d/.test(texto)) {
+    return { valido: false, valor: 0, error: `El ${etiqueta} tiene que ser un número` };
+  }
+
+  const valor = parseCLP(texto);
+  if (valor === null || !Number.isFinite(valor)) {
+    return { valido: false, valor: 0, error: `El ${etiqueta} tiene que ser un número` };
+  }
+
+  if (valor < 0) {
+    return { valido: false, valor: 0, error: `El ${etiqueta} no puede ser negativo` };
+  }
+
+  if (valor === 0 && !permiteCero) {
+    return { valido: false, valor: 0, error: `El ${etiqueta} tiene que ser mayor que cero` };
+  }
+
+  if (typeof maximo === 'number' && valor > maximo) {
+    return {
+      valido: false,
+      valor: 0,
+      error: `El ${etiqueta} supera el máximo permitido de ${formatCLP(maximo)}`,
+    };
+  }
+
+  return { valido: true, valor, error: null };
+}
+
+/**
+ * Valida una cantidad de producto: unidades, no pesos.
+ *
+ * Acepta decimales porque hay productos que se venden por peso (RF-M2-14),
+ * pero nunca negativos: un conteo de inventario de −5 o un ajuste a cantidad
+ * negativa dejarían un saldo que no existe en ninguna bodega.
+ */
+export function validarCantidad(
+  entrada: string,
+  opciones: { permiteVacio?: boolean; permiteCero?: boolean; maximo?: number } = {},
+): MontoValidado {
+  const { permiteVacio = false, permiteCero = true, maximo } = opciones;
+  const texto = String(entrada ?? '').trim();
+
+  if (texto === '') {
+    return permiteVacio
+      ? { valido: true, valor: 0, error: null }
+      : { valido: false, valor: 0, error: 'Escribe la cantidad' };
+  }
+
+  const valor = Number(texto.replace(',', '.'));
+  if (!Number.isFinite(valor)) {
+    return { valido: false, valor: 0, error: 'La cantidad tiene que ser un número' };
+  }
+  if (valor < 0) {
+    return { valido: false, valor: 0, error: 'La cantidad no puede ser negativa' };
+  }
+  if (valor === 0 && !permiteCero) {
+    return { valido: false, valor: 0, error: 'La cantidad tiene que ser mayor que cero' };
+  }
+  if (typeof maximo === 'number' && valor > maximo) {
+    return { valido: false, valor: 0, error: `La cantidad supera el máximo de ${maximo}` };
+  }
+
+  return { valido: true, valor, error: null };
+}

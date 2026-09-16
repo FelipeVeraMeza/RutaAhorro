@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { formatCLP, toUserMessage } from '@rutaahorro/core';
+import { formatCLP, validarCantidad, toUserMessage } from '@rutaahorro/core';
 import { repoProductos, type Producto } from '@/lib/productos';
 import {
   repoInventario, ETIQUETA_MOVIMIENTO, MOTIVOS_SUGERIDOS, type Movimiento,
@@ -32,6 +32,7 @@ export function InventarioClient({
   const [ajustando, setAjustando] = useState<Producto | null>(null);
   const [conteo, setConteo] = useState<Record<string, string>>({});
   const [aplicandoToma, setAplicandoToma] = useState(false);
+  const [revisandoToma, setRevisandoToma] = useState(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -59,13 +60,30 @@ export function InventarioClient({
   );
   const bajoMinimo = productos.filter((p) => p.stockMinimo > 0 && p.stock <= p.stockMinimo).length;
 
+  /**
+   * Lo que realmente se va a aplicar.
+   *
+   * Se calcula aparte de la lista visible porque el filtro de búsqueda esconde
+   * productos cuyo conteo sigue en memoria: contar por partes es deliberado,
+   * pero aplicar a ciegas no. Esta lista es la que se muestra en la revisión
+   * previa (docs/21, A-1 y A-2).
+   */
+  const aplicables = Object.entries(conteo)
+    .map(([productoId, texto]) => {
+      const v = validarCantidad(texto, { permiteVacio: true });
+      const producto = productos.find((p) => p.id === productoId);
+      return { productoId, texto, v, producto };
+    })
+    .filter((x) => x.texto.trim() !== '');
+
+  const invalidos = aplicables.filter((x) => !x.v.valido);
+  const validos = aplicables.filter((x) => x.v.valido);
+
   async function aplicarToma() {
-    const items = Object.entries(conteo)
-      .filter(([, v]) => v.trim() !== '')
-      .map(([productoId, v]) => ({ productoId, contado: Number(v) }))
-      .filter((i) => Number.isFinite(i.contado));
+    const items = validos.map((x) => ({ productoId: x.productoId, contado: x.v.valor }));
 
     if (items.length === 0) return;
+    setRevisandoToma(false);
     setAplicandoToma(true);
     setError(null);
     try {
@@ -85,8 +103,6 @@ export function InventarioClient({
       setAplicandoToma(false);
     }
   }
-
-  const contados = Object.values(conteo).filter((v) => v.trim() !== '').length;
 
   return (
     <div className="px-4 py-5">
@@ -245,7 +261,8 @@ export function InventarioClient({
           <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden mb-4">
             {productos.map((p) => {
               const valor = conteo[p.id] ?? '';
-              const dif = valor.trim() === '' ? null : Number(valor) - p.stock;
+              const v = validarCantidad(valor, { permiteVacio: true });
+              const dif = valor.trim() === '' || !v.valido ? null : v.valor - p.stock;
               return (
                 <li key={p.id} className="px-4 py-2.5 flex items-center justify-between gap-3">
                   <div className="min-w-0">
@@ -259,6 +276,9 @@ export function InventarioClient({
                       )}
                       {dif === 0 && <span className="text-marca-700"> · cuadra</span>}
                     </p>
+                    {valor.trim() !== '' && !v.valido && (
+                      <p className="text-xs text-[var(--color-alerta)]">{v.error}</p>
+                    )}
                   </div>
                   <input
                     inputMode="decimal" value={valor}
@@ -274,18 +294,34 @@ export function InventarioClient({
 
           <div className="sticky bottom-20 lg:bottom-4">
             <button
-              onClick={() => void aplicarToma()}
-              disabled={contados === 0 || aplicandoToma}
+              onClick={() => setRevisandoToma(true)}
+              disabled={validos.length === 0 || aplicandoToma || invalidos.length > 0}
               className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-40 shadow-lg"
             >
               {aplicandoToma
                 ? 'Aplicando…'
-                : contados === 0
-                  ? 'Anota al menos un conteo'
-                  : `Aplicar toma de ${contados} ${contados === 1 ? 'producto' : 'productos'}`}
+                : invalidos.length > 0
+                  ? `Corrige ${invalidos.length} ${invalidos.length === 1 ? 'conteo' : 'conteos'}`
+                  : validos.length === 0
+                    ? 'Anota al menos un conteo'
+                    : `Revisar toma de ${validos.length} ${validos.length === 1 ? 'producto' : 'productos'}`}
             </button>
           </div>
         </>
+      )}
+
+      {revisandoToma && (
+        <RevisionToma
+          filas={validos.map((x) => ({
+            nombre: x.producto?.nombre ?? 'Producto',
+            unidad: x.producto?.unidad ?? '',
+            sistema: x.producto?.stock ?? 0,
+            contado: x.v.valor,
+          }))}
+          aplicando={aplicandoToma}
+          onConfirmar={() => void aplicarToma()}
+          onCancelar={() => setRevisandoToma(false)}
+        />
       )}
 
       {ajustando && (
@@ -312,11 +348,12 @@ function DialogoAjuste({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const nueva = Number(cantidad);
-  const delta = Number.isFinite(nueva) ? nueva - producto.stock : 0;
+  const v = validarCantidad(cantidad, { maximo: 1_000_000 });
+  const delta = v.valido ? v.valor - producto.stock : 0;
 
   async function guardar() {
     setError(null);
+    if (!v.valido) { setError(v.error); return; }
     if (motivo.trim() === '') { setError('El motivo es obligatorio'); return; }
     if (delta === 0) { setError('La cantidad es la misma: no hay nada que ajustar'); return; }
 
@@ -324,7 +361,7 @@ function DialogoAjuste({
     try {
       await repoInventario().ajustar({
         productoId: producto.id,
-        nuevaCantidad: nueva,
+        nuevaCantidad: v.valor,
         tipo: esMerma ? 'merma' : delta > 0 ? 'ajuste_positivo' : 'ajuste_negativo',
         motivo: motivo.trim(),
       });
@@ -356,7 +393,10 @@ function DialogoAjuste({
             className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] num text-right text-lg"
             autoFocus
           />
-          {delta !== 0 && Number.isFinite(nueva) && (
+          {cantidad.trim() !== '' && !v.valido && (
+            <p className="text-sm text-[var(--color-alerta)] mt-1.5">{v.error}</p>
+          )}
+          {delta !== 0 && v.valido && (
             <p className={`text-sm num mt-1.5 ${delta < 0 ? 'text-[var(--color-alerta)]' : 'text-marca-700'}`}>
               {delta > 0 ? 'Se sumarán' : 'Se restarán'} {Math.abs(delta)} {producto.unidad}
             </p>
@@ -401,7 +441,7 @@ function DialogoAjuste({
         )}
 
         <button
-          onClick={() => void guardar()} disabled={guardando}
+          onClick={() => void guardar()} disabled={guardando || !v.valido}
           className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50"
         >
           {guardando ? 'Guardando…' : 'Registrar ajuste'}
@@ -411,6 +451,96 @@ function DialogoAjuste({
           El ajuste queda en el historial con tu nombre y el motivo. No se puede
           editar ni borrar después.
         </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Revisión previa a aplicar la toma.
+ *
+ * Aplicar una toma ajusta el stock de muchos productos de una vez y cada
+ * ajuste queda en el kardex, que es inmutable: no hay "deshacer". Además, el
+ * filtro de búsqueda puede estar escondiendo productos ya contados, así que
+ * antes de este diálogo el usuario apretaba un botón que decía "47 productos"
+ * sin poder ver cuáles eran (docs/21, A-1 y A-2).
+ */
+function RevisionToma({
+  filas, aplicando, onConfirmar, onCancelar,
+}: {
+  filas: Array<{ nombre: string; unidad: string; sistema: number; contado: number }>;
+  aplicando: boolean;
+  onConfirmar: () => void;
+  onCancelar: () => void;
+}) {
+  const conDiferencia = filas.filter((f) => f.contado !== f.sistema);
+  const faltantes = conDiferencia.filter((f) => f.contado < f.sistema).length;
+  const sobrantes = conDiferencia.filter((f) => f.contado > f.sistema).length;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center"
+      role="dialog" aria-modal="true" aria-label="Revisar la toma de inventario"
+    >
+      <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl max-h-[90vh] flex flex-col">
+        <div className="px-5 pt-5 pb-3 border-b border-[var(--borde)]">
+          <h2 className="font-semibold">Revisar antes de aplicar</h2>
+          <p className="text-sm text-[var(--texto-suave)] mt-1">
+            {filas.length} {filas.length === 1 ? 'producto contado' : 'productos contados'}
+            {conDiferencia.length === 0
+              ? ' · todo cuadra'
+              : ` · ${conDiferencia.length} con diferencia`}
+          </p>
+          {conDiferencia.length > 0 && (
+            <p className="text-xs text-[var(--texto-suave)] mt-0.5 num">
+              {faltantes > 0 && `${faltantes} con menos de lo registrado`}
+              {faltantes > 0 && sobrantes > 0 && ' · '}
+              {sobrantes > 0 && `${sobrantes} con más`}
+            </p>
+          )}
+        </div>
+
+        <ul className="flex-1 overflow-y-auto divide-y divide-[var(--borde)]">
+          {filas.map((f, i) => {
+            const dif = f.contado - f.sistema;
+            return (
+              <li key={i} className="px-5 py-2.5 flex items-center justify-between gap-3">
+                <span className="text-sm min-w-0 truncate">{f.nombre}</span>
+                <span className="num text-xs whitespace-nowrap shrink-0">
+                  <span className="text-[var(--texto-suave)]">{f.sistema}</span>
+                  {' → '}
+                  <span className="font-semibold">{f.contado}</span>
+                  {' '}{f.unidad}
+                  {dif !== 0 && (
+                    <span className={dif < 0 ? 'text-[var(--color-alerta)]' : 'text-[var(--color-aviso)]'}>
+                      {' '}({dif > 0 ? '+' : ''}{dif})
+                    </span>
+                  )}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+
+        <div className="px-5 pt-3 pb-5 border-t border-[var(--borde)] space-y-2"
+             style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}>
+          <p className="text-[11px] text-[var(--texto-suave)]">
+            Cada diferencia queda en el historial con tu nombre. No se puede
+            deshacer: si algo sale mal, se corrige con un ajuste nuevo.
+          </p>
+          <button
+            onClick={onConfirmar} disabled={aplicando}
+            className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50"
+          >
+            {aplicando ? 'Aplicando…' : `Aplicar toma de ${filas.length}`}
+          </button>
+          <button
+            onClick={onCancelar} disabled={aplicando}
+            className="tap w-full py-3 rounded-xl border border-[var(--borde)]"
+          >
+            Seguir contando
+          </button>
+        </div>
       </div>
     </div>
   );

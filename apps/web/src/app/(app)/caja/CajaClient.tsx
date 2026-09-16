@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCLP, parseCLP, toUserMessage } from '@rutaahorro/core';
+import { formatCLP, validarMonto, toUserMessage } from '@rutaahorro/core';
 import { supabase } from '@/lib/supabase/client';
 
 interface Session { id: string; opened_at: string; opening_amount: number }
@@ -38,7 +38,15 @@ export function CajaClient({
   const [nota, setNota] = useState('');
 
   const esperado = Number(resumen?.expected_amount ?? 0);
-  const diferencia = (parseCLP(contado) ?? 0) - esperado;
+
+  // Los tres campos de dinero pasan por `validarMonto` y no por `parseCLP`:
+  // parseCLP acepta el signo menos, y un monto negativo aquí descuadra el
+  // arqueo sin dejar rastro de que alguien escribió un "−". Ver docs/21 A-3.
+  const inicial = validarMonto(montoInicial, { etiqueta: 'efectivo inicial', maximo: 5_000_000 });
+  const cont = validarMonto(contado, { etiqueta: 'efectivo contado', maximo: 50_000_000 });
+  const mov = validarMonto(movMonto, { permiteCero: false, maximo: 50_000_000 });
+
+  const diferencia = cont.valor - esperado;
 
   /** El query builder de Supabase es un thenable, no una Promise: por eso PromiseLike. */
   async function accion(fn: () => PromiseLike<{ error: { message: string } | null }>) {
@@ -73,13 +81,16 @@ export function CajaClient({
             placeholder="0"
             className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] text-xl num text-right"
           />
+          {montoInicial !== '' && inicial.error && (
+            <p role="alert" className="text-sm text-[var(--color-alerta)] mt-2">{inicial.error}</p>
+          )}
           {error && <p role="alert" className="text-sm text-[var(--color-alerta)] mt-2">{error}</p>}
           <button
-            disabled={cargando}
+            disabled={cargando || !inicial.valido}
             onClick={() =>
               accion(() =>
                 supabase().rpc('fn_open_cash_session', {
-                  p_opening_amount: parseCLP(montoInicial) ?? 0,
+                  p_opening_amount: inicial.valor,
                 }),
               )
             }
@@ -96,7 +107,7 @@ export function CajaClient({
 
   // ---------------------------------------------------------------- cerrar
   if (cerrando) {
-    const necesitaNota = (parseCLP(contado) ?? 0) !== esperado;
+    const necesitaNota = cont.valido && cont.valor !== esperado;
     return (
       <div className="px-4 py-6">
         <h1 className="text-lg font-semibold mb-1">Cerrar caja</h1>
@@ -120,7 +131,11 @@ export function CajaClient({
             />
           </div>
 
-          {contado !== '' && (
+          {contado !== '' && cont.error && (
+            <p role="alert" className="text-sm text-[var(--color-alerta)]">{cont.error}</p>
+          )}
+
+          {contado !== '' && cont.valido && (
             <div className={`px-4 py-3 rounded-xl ${
               diferencia === 0 ? 'bg-marca-50' : 'bg-amber-50'
             }`}>
@@ -130,7 +145,7 @@ export function CajaClient({
               </div>
               <div className="flex justify-between text-sm mt-1">
                 <span>Contado</span>
-                <span className="num">{formatCLP(parseCLP(contado) ?? 0)}</span>
+                <span className="num">{formatCLP(cont.valor)}</span>
               </div>
               <div className="flex justify-between font-bold mt-2 pt-2 border-t border-black/10">
                 <span>{diferencia === 0 ? 'Cuadra' : diferencia < 0 ? 'Faltante' : 'Sobrante'}</span>
@@ -139,7 +154,7 @@ export function CajaClient({
             </div>
           )}
 
-          {necesitaNota && contado !== '' && (
+          {necesitaNota && (
             <div>
               <label htmlFor="nota" className="block text-sm font-medium mb-1.5">
                 ¿A qué se debe la diferencia? <span className="text-[var(--color-alerta)]">*</span>
@@ -165,12 +180,12 @@ export function CajaClient({
               Volver
             </button>
             <button
-              disabled={cargando || contado === '' || (necesitaNota && nota.trim() === '')}
+              disabled={cargando || !cont.valido || (necesitaNota && nota.trim() === '')}
               onClick={async () => {
                 const ok = await accion(() =>
                   supabase().rpc('fn_close_cash_session', {
                     p_session_id: session.id,
-                    p_counted_amount: parseCLP(contado) ?? 0,
+                    p_counted_amount: cont.valor,
                     p_notes: nota.trim() || null,
                   }),
                 );
@@ -240,6 +255,9 @@ export function CajaClient({
               placeholder="Motivo (obligatorio)"
               className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)]"
             />
+            {movMonto !== '' && mov.error && (
+              <p role="alert" className="text-sm text-[var(--color-alerta)]">{mov.error}</p>
+            )}
             {error && <p role="alert" className="text-sm text-[var(--color-alerta)]">{error}</p>}
             <div className="flex gap-2">
               <button
@@ -249,12 +267,12 @@ export function CajaClient({
                 Cancelar
               </button>
               <button
-                disabled={cargando || !movMotivo.trim() || !parseCLP(movMonto)}
+                disabled={cargando || !movMotivo.trim() || !mov.valido}
                 onClick={async () => {
                   const ok = await accion(() =>
                     supabase().rpc('fn_add_cash_movement', {
                       p_type: vistaMovimiento,
-                      p_amount: parseCLP(movMonto) ?? 0,
+                      p_amount: mov.valor,
                       p_reason: movMotivo.trim(),
                     }),
                   );
