@@ -4,7 +4,7 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-09-15, fin del día.**
+> **Corte: 2026-09-16.**
 
 ---
 
@@ -52,10 +52,12 @@ datos de ejemplo en IndexedDB y un banner amarillo con selector de rol.
 |---|---|
 | `npm run dev` | Frontend en :3000 |
 | `npm run dev:worker` | Worker en :8080 (no se levanta con `npm run dev`) |
-| `npm test` | 154 pruebas de lógica de negocio |
+| `npm test` | 206 pruebas de lógica de negocio |
 | `npm run typecheck` | Tipos en los tres paquetes |
 | `npm run db:check` | Valida el SQL con el parser de PostgreSQL |
-| `npm run db:bundle` | Genera `supabase/bundle.sql` para pegar en Supabase |
+| `npm run db:instalar` | Genera `supabase/instalar.sql`: esquema + arranque, un solo archivo |
+| `npm run db:admin` | Crea un usuario contra la base real y verifica su perfil |
+| `npm run db:bundle` | Genera solo el esquema, sin el arranque |
 | `npm run build:web` | Compila core + web |
 | `npm run job -w @rutaahorro/worker` | Lista y ejecuta los trabajos programados |
 
@@ -64,9 +66,11 @@ Si tocas `packages/core`, recompílalo antes de compilar la web:
 
 ---
 
-## ESTADO AL 2026-09-15
+## ESTADO AL 2026-09-16
 
-**154 pruebas · SQL validado · build de producción verificado con demo apagado · 10 rutas.**
+**206 pruebas · SQL validado · build de producción verificado con demo apagado · 11 rutas.**
+
+Las 11 pantallas están auditadas (`docs/21`). Nueve, línea por línea.
 
 ### Funcionando
 
@@ -97,9 +101,12 @@ Comprobante de venta con desglose de IVA.
 
 ### 1 · Poner en producción — bloqueado en Felipe, no en programar
 
-1. **Esquema en Supabase:** `npm run db:bundle` → SQL Editor → después
-   **`supabase/seed-produccion.sql`** (no `seed.sql`, que trae 12 productos de
-   ejemplo con códigos EAN inventados).
+1. **Esquema en Supabase:** `npm run db:instalar` → pegar
+   `supabase/instalar.sql` completo en el SQL Editor. Es un solo archivo:
+   esquema más tenant y tienda, sin productos. Antes de ejecutarlo, cambiar
+   `v_nombre text := 'RutaAhorro';` por el nombre real del local.
+   Después, el primer administrador:
+   `npm run db:admin -- --correo=... --nombre="..."`.
 2. **Railway**, un solo servicio: Root Directory `/`, build
    `npm ci --include=dev && npm run build:web`, start
    `npm run start -w @rutaahorro/web`, healthcheck `/manifest.webmanifest`,
@@ -128,15 +135,21 @@ Detalle completo en `docs/09-despliegue.md §3`.
 
 ### 3 · Hallazgos abiertos de la auditoría
 
-`docs/21-qa-pantallas.md`. El más importante:
+`docs/21-qa-pantallas.md`. Las 11 pantallas ya están auditadas. Lo abierto,
+por gravedad:
 
-- **A-4:** el alta de producto hace tres escrituras encadenadas sin
-  transacción. Si falla la de códigos de barra, queda el producto sin códigos
-  y al reintentar se crea un duplicado. Corresponde una `fn_create_product`
-  transaccional, como el resto del sistema.
-
-También quedan sin auditar cuatro pantallas: Proveedores, Importar, el
-formulario de producto y el Ingreso.
+- **F-3:** `repoSupabase.actualizar` borra todos los códigos de barra del
+  producto y los reinserta, sin transacción. Si la inserción falla —porque
+  otro producto tomó ese código— el producto queda **sin ningún código**, que
+  es justo el que no aparecerá al escanear. Es A-4 en la edición, y
+  `fn_create_product` no lo cubre: corresponde una `fn_update_product`.
+- **M-7:** M4-16 (stock por lote) figura ✅ en el inventario de alcance y el
+  código no lo respalda. **Hay que verificarlo.** Es exactamente el patrón que
+  ya produjo el hallazgo de RF-M3-08: un requerimiento cerrado sin evidencia.
+- **L-5:** recuperar contraseña (RF-M1-05) no existe. Hoy el dueño entra al
+  panel de Supabase cada vez que un vendedor olvida su clave.
+- **M-1:** un movimiento de caja mal ingresado no se puede corregir. Ahora al
+  menos se advierte antes de registrarlo.
 
 ---
 
