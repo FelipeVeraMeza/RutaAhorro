@@ -3,7 +3,8 @@
 import { weightedAverageCost } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
-import { db, normalizeSearch } from '../offline/db';
+import { db } from '../offline/db';
+import { repoProductos } from '../productos';
 
 /**
  * Proveedores y recepción de mercadería (módulo M3).
@@ -31,6 +32,12 @@ export interface LineaRecepcion {
   cantidad: number;
   costoUnitario: number;
   costoAnterior: number;
+  /**
+   * Stock actual del producto. Se necesita para calcular el costo promedio
+   * ponderado que se le muestra al usuario: sin el stock, el promedio no se
+   * puede ponderar y el numero mostrado seria simplemente el costo entrante.
+   */
+  stock: number;
   perecible: boolean;
   lote?: string;
   vencimiento?: string;
@@ -269,20 +276,53 @@ export function repoProveedores(): RepositorioProveedores {
   return DEMO_ACTIVO ? repoLocal : repoSupabase;
 }
 
-/** Búsqueda de productos para la recepción (usa el catálogo local). */
+/**
+ * Búsqueda de productos para la recepción.
+ *
+ * Delega en el repositorio de productos en vez de leer IndexedDB directamente.
+ * La versión anterior sacaba el costo de la clave `demo:costos`, que solo
+ * escribe el repositorio local: en producción devolvía 0 para todo, y con
+ * costo anterior 0 el aviso de variación de costo (RF-M3-08) no se disparaba
+ * nunca. Pasando por el repositorio, cada modo entrega su costo real.
+ */
 export async function buscarParaRecepcion(termino: string) {
-  const q = normalizeSearch(termino);
-  if (q.length < 2) return [];
-  const todos = await db().products.toArray();
-  const costos = JSON.parse((await db().meta.get('demo:costos'))?.value ?? '{}') as Record<string, number>;
-  return todos
-    .filter((p) => p.isActive && (p.nameSearch.includes(q) || (p.sku && normalizeSearch(p.sku).includes(q))))
-    .slice(0, 12)
-    .map((p) => ({
-      productId: p.id,
-      nombre: p.name,
-      perecible: p.tracksExpiry,
-      costoAnterior: costos[p.id] ?? 0,
-      stock: p.stock,
-    }));
+  if (termino.trim().length < 2) return [];
+  const encontrados = await repoProductos().listar(
+    { busqueda: termino, soloActivos: true },
+    true,
+  );
+  return encontrados.slice(0, 12).map(paraRecepcion);
+}
+
+/**
+ * Datos de un producto llegado por escáner.
+ *
+ * El lector solo entrega el código; el costo anterior y el stock hay que
+ * buscarlos igual que en la búsqueda por nombre. Sin esto, una línea agregada
+ * escaneando parte con costo 0 y se puede confirmar una recepción que deja el
+ * costo promedio del producto en cero.
+ */
+export async function productoParaRecepcion(
+  productId: string,
+  nombre: string,
+): Promise<ReturnType<typeof paraRecepcion> | null> {
+  const encontrados = await repoProductos().listar(
+    { busqueda: nombre, soloActivos: true },
+    true,
+  );
+  const p = encontrados.find((x) => x.id === productId);
+  return p ? paraRecepcion(p) : null;
+}
+
+function paraRecepcion(p: {
+  id: string; nombre: string; perecible: boolean;
+  costoPromedio?: number; stock: number;
+}) {
+  return {
+    productId: p.id,
+    nombre: p.nombre,
+    perecible: p.perecible,
+    costoAnterior: p.costoPromedio ?? 0,
+    stock: p.stock,
+  };
 }

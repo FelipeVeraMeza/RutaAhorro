@@ -158,7 +158,7 @@ De los **101 requerimientos funcionales**:
 | M4-09 | Advertir venta sin stock | ✅ | Probado |
 | M4-10 | Merma como ajuste diferenciado | 🔵 | — |
 | M4-11 | Kardex inmutable | ✅ | Trigger que rechaza UPDATE/DELETE |
-| M4-12 | Consultar kardex con filtros | ✅ | Pantalla Inventario, pestaña Movimientos |
+| M4-12 | Consultar kardex con filtros | 🟡 | Hay pantalla, pero **sin filtros**: 80 movimientos fijos, sin filtrar por producto, fecha ni tipo |
 | M4-13 | Stock por ubicación | ⬜ | Prioridad *Could* |
 | M4-14 | Marcar producto como perecible | ✅ | Desde el formulario de producto |
 | M4-15 | Exigir vencimiento al recepcionar | ✅ | Validado en base y pedido en la pantalla |
@@ -429,3 +429,4 @@ impedir que el local empiece a operar.
 | 1.0 | 2026-09-14 | Felipe Vera | Inventario inicial por auditoría de código |
 | 1.1 | 2026-09-15 | Felipe Vera | Módulo de productos terminado: alta, edición, baja y carga masiva. M2 de 3 a 9 ✅ |
 | 1.2 | 2026-09-15 | QA | Re-verificación contra el código de M1, M3 y M4: 14 filas corregidas (usuarios, proveedores, recepción, ajustes, kardex y toma ya tienen pantalla). M4-06 baja a 🟡: no existe filtro por categoría. Contadores por módulo pendientes de recalcular |
+| 1.3 | 2026-09-15 | QA | Auditoría de pantallas. M4-12 baja de ✅ a 🟡: la pantalla de kardex existe pero no tiene los filtros que pide el requerimiento; la marca ✅ de la v1.2 fue generosa. Ver informe en 21 |

@@ -8,7 +8,8 @@ import {
   shouldWarnCostVariation, toUserMessage,
 } from '@rutaahorro/core';
 import {
-  repoProveedores, buscarParaRecepcion, type Proveedor, type LineaRecepcion,
+  repoProveedores, buscarParaRecepcion, productoParaRecepcion,
+  type Proveedor, type LineaRecepcion,
 } from '@/lib/datos/proveedores';
 import { findByBarcode } from '@/lib/offline/catalog';
 import { useScanner } from '@/lib/scanner/useScanner';
@@ -37,7 +38,10 @@ export function RecepcionClient() {
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
-  const agregar = useCallback((p: { productId: string; nombre: string; perecible: boolean; costoAnterior: number }) => {
+  const agregar = useCallback((p: {
+    productId: string; nombre: string; perecible: boolean;
+    costoAnterior: number; stock: number;
+  }) => {
     setLineas((prev) => {
       if (prev.some((l) => l.productId === p.productId)) {
         setAviso(`${p.nombre} ya está en la lista`);
@@ -49,6 +53,7 @@ export function RecepcionClient() {
         cantidad: 1,
         costoUnitario: p.costoAnterior,
         costoAnterior: p.costoAnterior,
+        stock: p.stock,
         perecible: p.perecible,
         lote: '',
         vencimiento: '',
@@ -61,14 +66,18 @@ export function RecepcionClient() {
     enabled: escaneando,
     onScan: async (code) => {
       const prod = await findByBarcode(code);
-      if (prod) {
-        agregar({
-          productId: prod.id, nombre: prod.name,
-          perecible: prod.tracksExpiry, costoAnterior: 0,
-        });
-      } else {
+      if (!prod) {
         setAviso(`El código ${code} no está en el catálogo. Créalo primero en Productos.`);
+        return;
       }
+      // El lector solo entrega el código: el costo anterior y el stock hay que
+      // buscarlos aparte. Antes se agregaba con costo 0 y eso apagaba el aviso
+      // de variación (RF-M3-08) en toda línea escaneada.
+      const datos = await productoParaRecepcion(prod.id, prod.name);
+      agregar(datos ?? {
+        productId: prod.id, nombre: prod.name,
+        perecible: prod.tracksExpiry, costoAnterior: 0, stock: 0,
+      });
     },
   });
 
@@ -233,7 +242,7 @@ export function RecepcionClient() {
         <ul className="space-y-2">
           {lineas.map((l) => {
             const nuevoPromedio = weightedAverageCost({
-              currentStock: 0, currentAvgCost: l.costoAnterior,
+              currentStock: l.stock, currentAvgCost: l.costoAnterior,
               incomingQty: l.cantidad, incomingUnitCost: l.costoUnitario,
             });
             const variacion = costVariationPct(l.costoAnterior, l.costoUnitario);
