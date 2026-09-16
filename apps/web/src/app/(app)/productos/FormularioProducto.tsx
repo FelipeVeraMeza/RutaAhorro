@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatCLP, parseCLP, marginPct, isValidEan, normalizeBarcode, toUserMessage } from '@rutaahorro/core';
+import {
+  formatCLP, marginPct, isValidEan, normalizeBarcode, toUserMessage,
+  validarMonto, validarCantidad,
+} from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
 import { useScanner } from '@/lib/scanner/useScanner';
 
@@ -49,8 +52,17 @@ export function FormularioProducto({
     else stop();
   }, [escaneando, start, stop]);
 
-  const precioNum = parseCLP(precio) ?? 0;
-  const costoNum = parseCLP(costo) ?? 0;
+  // Precio y costo son dinero; el resto son cantidades. La distinción no es
+  // cosmética: `parseCLP` borra todo lo que no sea dígito, así que un stock
+  // mínimo de "1.5" kg se convertía en 15. Ver docs/21.
+  const vPrecio = validarMonto(precio, { etiqueta: 'precio de venta', permiteCero: false, maximo: 50_000_000 });
+  const vCosto = validarMonto(costo, { etiqueta: 'costo', permiteVacio: true, maximo: 50_000_000 });
+  const vStockMinimo = validarCantidad(stockMinimo, { permiteVacio: true, maximo: 1_000_000 });
+  const vStockInicial = validarCantidad(stockInicial, { permiteVacio: true, maximo: 1_000_000 });
+  const vDiasAlerta = validarCantidad(diasAlerta, { permiteVacio: true, maximo: 3650 });
+
+  const precioNum = vPrecio.valor;
+  const costoNum = vCosto.valor;
   const margen = precioNum > 0 && costoNum > 0 ? marginPct(precioNum, costoNum) : null;
 
   async function agregarCodigo(bruto: string) {
@@ -79,7 +91,13 @@ export function FormularioProducto({
     setError(null);
 
     if (nombre.trim() === '') { setError('El nombre es obligatorio'); return; }
-    if (precioNum <= 0) { setError('El precio de venta debe ser mayor que cero'); return; }
+    for (const v of [vPrecio, vCosto, vStockMinimo, vStockInicial, vDiasAlerta]) {
+      if (!v.valido) { setError(v.error); return; }
+    }
+    if (perecible && vDiasAlerta.valor <= 0) {
+      setError('Un producto perecible necesita cuántos días antes avisar');
+      return;
+    }
 
     setGuardando(true);
     try {
@@ -96,22 +114,26 @@ export function FormularioProducto({
         categoriaId: catId,
         unidad,
         precioVenta: precioNum,
-        stockMinimo: parseCLP(stockMinimo) ?? 0,
+        stockMinimo: vStockMinimo.valor,
         perecible,
-        diasAlerta: parseCLP(diasAlerta) ?? 30,
+        diasAlerta: vDiasAlerta.valor || 30,
         codigos,
       };
 
       if (esEdicion) {
+        // El costo solo viaja si el usuario escribió algo. Con el campo en
+        // blanco se mandaba 0, y `actualizar` lo escribe tal cual: editar el
+        // nombre de un producto con el costo vacío le ponía el costo promedio
+        // en cero, y con él el margen y el inventario valorizado.
         await repo.actualizar(producto.id, {
           ...base,
-          ...(puedeVerCostos ? { costo: costoNum } : {}),
+          ...(puedeVerCostos && costo.trim() !== '' ? { costo: costoNum } : {}),
         });
       } else {
         await repo.crear({
           ...base,
           costo: costoNum,
-          stockInicial: parseCLP(stockInicial) ?? 0,
+          stockInicial: vStockInicial.valor,
         });
       }
       onGuardado();

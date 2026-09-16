@@ -4,6 +4,21 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 
+/**
+ * A dónde mandar al usuario después de entrar.
+ *
+ * El parámetro `next` viene de la URL y lo escribe quien sea. Sin este filtro,
+ * un enlace con `?next=https://sitio-falso.cl` llevaría a la víctima a una
+ * copia del login justo después de autenticarse de verdad: el momento en que
+ * menos sospecha. Solo se aceptan rutas internas; `//` se descarta porque el
+ * navegador la interpreta como otro dominio.
+ */
+function destinoSeguro(next: string | null): string {
+  if (!next) return '/pos';
+  if (!next.startsWith('/') || next.startsWith('//')) return '/pos';
+  return next;
+}
+
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
@@ -30,7 +45,7 @@ function LoginForm() {
       return;
     }
 
-    router.push(params.get('next') ?? '/pos');
+    router.push(destinoSeguro(params.get('next')));
     router.refresh();
   }
 
@@ -106,8 +121,16 @@ function LoginForm() {
           </button>
         </form>
 
+        {/*
+          Mientras RF-M1-05 no exista, este texto dice la verdad y nada más.
+          Antes prometía que el administrador podía restablecer la contraseña,
+          y no puede: no hay pantalla para eso, y reinvitar a alguien que ya
+          tiene cuenta falla en Supabase Auth. Una promesa que el sistema no
+          cumple deja al usuario esperando un correo que nunca llega.
+        */}
         <p className="text-center text-xs text-[var(--texto-suave)] mt-6">
-          ¿Olvidaste tu contraseña? Pídele al administrador que la restablezca.
+          ¿Olvidaste tu contraseña? Todavía no se puede recuperar desde aquí.
+          Avísale a quien administra el sistema.
         </p>
       </div>
     </main>
