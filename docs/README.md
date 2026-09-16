@@ -54,6 +54,7 @@ todo lo demás es tu contrato de implementación.
 | [18 — Documentos tributarios (SII)](18-documentos-tributarios-sii.md) | Boleta y factura electrónica: qué exige el SII, modelo, simulador |
 | [19 — Cronograma](19-cronograma.md) | **Orden de trabajo por estado**, dependencias y estimaciones |
 | [20 — Bitácora 2026-09-15](20-bitacora-2026-09-15.md) | Cierre del día: decisiones, hallazgos y bloqueos |
+| [21 — Auditoría de pantallas (QA)](21-qa-pantallas.md) | Hallazgos por pantalla, corregidos y pendientes, por severidad |
 
 ---
 
