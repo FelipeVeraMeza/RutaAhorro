@@ -22,11 +22,14 @@ locales con la misma infraestructura.
 
 **Lee primero, en este orden:**
 
-1. `docs/19-cronograma.md` — qué sigue y en qué orden. Es la fuente autorizada.
-2. `docs/21-qa-pantallas.md` — hallazgos de la auditoría, corregidos y pendientes.
-3. `docs/17-inventario-alcance.md` — estado ítem por ítem. **Ojo:** los
+1. `docs/22-tareas-pendientes.md` — **el backlog operativo.** Qué falta, quién
+   lo desbloquea y en qué orden. Empieza por acá.
+2. `docs/19-cronograma.md` — el orden por fases. Fuente autorizada.
+3. `docs/21-qa-pantallas.md` — la auditoría de las 11 pantallas, corregido y
+   abierto.
+4. `docs/17-inventario-alcance.md` — estado ítem por ítem. **Ojo:** los
    contadores por módulo están desactualizados y lo dice el propio documento.
-4. `docs/README.md` — índice de los 21 documentos.
+5. `docs/README.md` — índice de los 22 documentos.
 
 ---
 
@@ -56,7 +59,7 @@ datos de ejemplo en IndexedDB y un banner amarillo con selector de rol.
 | `npm run typecheck` | Tipos en los tres paquetes |
 | `npm run db:check` | Valida el SQL con el parser de PostgreSQL |
 | `npm run db:instalar` | Genera `supabase/instalar.sql`: esquema + arranque, un solo archivo |
-| `npm run db:admin` | Crea un usuario contra la base real y verifica su perfil |
+| `npm run db:admin` | Crea un usuario contra la base real y **verifica su perfil** |
 | `npm run db:bundle` | Genera solo el esquema, sin el arranque |
 | `npm run build:web` | Compila core + web |
 | `npm run job -w @rutaahorro/worker` | Lista y ejecuta los trabajos programados |
@@ -68,88 +71,124 @@ Si tocas `packages/core`, recompílalo antes de compilar la web:
 
 ## ESTADO AL 2026-09-16
 
-**206 pruebas · SQL validado · build de producción verificado con demo apagado · 11 rutas.**
-
-Las 11 pantallas están auditadas (`docs/21`). Nueve, línea por línea.
+**206 pruebas · typecheck limpio · SQL validado · build de producción verificado
+con demo apagado · 11 rutas.**
 
 ### Funcionando
 
-Base de datos completa (26 tablas, 23 funciones, RLS al 100 %). POS con
-escáner y modo offline. Ciclo de caja con arqueo. Productos con alta, edición,
-baja, categorías y códigos múltiples. Carga masiva CSV. Usuarios con
-invitación por correo y roles. Proveedores y recepción con lotes, vencimiento
-y aviso de variación de costo. Inventario con ajustes, kardex y toma.
-Comprobante de venta con desglose de IVA.
+Base de datos completa (26 tablas, 24 funciones, RLS al 100 %). POS con escáner
+y modo offline. Ciclo de caja con arqueo. Productos con alta transaccional,
+edición, baja, categorías y códigos múltiples. Carga masiva CSV. Etiquetas
+EAN-13 imprimibles. Usuarios con invitación por correo y roles. Proveedores y
+recepción con lotes, vencimiento y aviso de variación de costo. Inventario con
+ajustes, kardex y toma. Comprobante de venta con desglose de IVA.
 
-### Lo que se hizo hoy
+**Las 11 pantallas están auditadas.** Nueve, línea por línea.
+
+### Lo que se hizo el 2026-09-16
 
 | Commit | Qué |
 |---|---|
-| `02a37ce` | El worker respeta el `PORT` de Railway |
-| `ce7d584` | Fuera los `railway.json`; Node fijado con `.node-version` |
-| `80efb0c` | ADR-008: todo en Railway, un solo servicio. 15 documentos alineados |
-| `a48c4c9` | P-03 respondida: entra el módulo tributario. Docs 18, 19, 20, ADR-009 |
-| `0072026` | Comprobante de venta con neto e IVA (RF-M5-14) |
-| `6dcb602`, `1ba0132` | Documento funcional para el cliente |
-| `9882d1f` | Tres bugs de recepción + `seed-produccion.sql` |
-| `87a8096` | Informe de auditoría de pantallas |
-| `b338b45` | Validación de montos y revisión previa a la toma |
+| `f1930b1` | Open redirect en el login, cantidades decimales y costo borrado al editar |
+| `6eacb28` | Auditoría de las 4 pantallas que faltaban + `Modal` y `Campo` compartidos |
+| `225d9b1` | `db:instalar` en un archivo y `db:admin` con verificación del perfil |
+| `c30aa1f` | `docs/22`: backlog operativo consolidado |
+
+Lo transversal del `6eacb28`: había **nueve diálogos** escritos a mano, ninguno
+cerraba con Escape ni atrapaba el foco, y **trece `<label>` sin `htmlFor`** —se
+ven como etiquetas y no lo son—. Ahora hay dos componentes compartidos,
+`apps/web/src/components/Modal.tsx` y `Campo.tsx`, y los usan todas las
+pantallas. **Úsalos para cualquier diálogo o campo nuevo.**
+
+---
+
+## LO PRIMERO QUE DEBERÍAS HACER
+
+Preguntarme si ya apliqué el esquema en Supabase y desplegué en Railway.
+**Hasta que eso pase, el sistema no existe para el cliente**: todo lo que se ha
+visto corre contra IndexedDB.
+
+```bash
+npm run db:instalar
+# pegar supabase/instalar.sql completo en Supabase > SQL Editor > Run
+# antes, cambiar  v_nombre text := 'RutaAhorro';  por el nombre real del local
+npm run db:admin -- --correo=dueno@almacen.cl --nombre="Nombre Apellido"
+```
+
+`instalar.sql` deja tablas, funciones, disparadores, RLS con políticas por rol,
+vistas, y un tenant con una tienda. **Sin ningún producto**, a propósito.
+
+`db:admin` existe porque el paso delicado es invisible: el perfil no lo crea el
+panel de Supabase, lo crea el disparador `handle_new_user` leyendo
+`raw_user_meta_data`. Si ese JSON no trae `tenant_id`, el usuario se crea igual,
+entra al login igual, y queda sin perfil — y la app lo rechaza sin decir por qué.
 
 ---
 
 ## LO PENDIENTE, EN ORDEN
 
-### 1 · Poner en producción — bloqueado en Felipe, no en programar
+Detalle completo con IDs en `docs/22-tareas-pendientes.md`. Resumen:
 
-1. **Esquema en Supabase:** `npm run db:instalar` → pegar
-   `supabase/instalar.sql` completo en el SQL Editor. Es un solo archivo:
-   esquema más tenant y tienda, sin productos. Antes de ejecutarlo, cambiar
-   `v_nombre text := 'RutaAhorro';` por el nombre real del local.
-   Después, el primer administrador:
-   `npm run db:admin -- --correo=... --nombre="..."`.
-2. **Railway**, un solo servicio: Root Directory `/`, build
-   `npm ci --include=dev && npm run build:web`, start
-   `npm run start -w @rutaahorro/web`, healthcheck `/manifest.webmanifest`,
-   Serverless OFF, y la variable `PORT=8080` (sin ella, `next start` se va al
-   3000 y Railway apunta al 8080: 502).
-3. Dominio ya generado: `https://rutaahorroweb-production.up.railway.app`.
-   Cargarlo en `NEXT_PUBLIC_APP_URL` y **redesplegar**: las `NEXT_PUBLIC_*` se
-   hornean en el build.
-4. Supabase → Authentication → URL Configuration: Site URL y
-   `https://<dominio>/**` en Redirect URLs.
+### Bloqueado en Felipe o en el cliente, no en programar
 
-Detalle completo en `docs/09-despliegue.md §3`.
+- **B-01 a B-03** — aplicar el esquema, crear el admin, desplegar en Railway.
+- **B-04, B-05** — **certificado digital** y **enrolamiento como emisor
+  electrónico ante el SII**. Son trámites con plazos ajenos y son la ruta
+  crítica del módulo tributario. Hay que empezarlos ya, en paralelo al
+  desarrollo, no cuando el código esté listo.
+- **B-07** — imprimir una etiqueta EAN-13 y escanearla con el POS. El patrón de
+  módulos y el SVG están verificados; el papel contra el lector, no.
 
-### 2 · Seguir el cronograma
+### Defectos abiertos, por daño
 
-`docs/19-cronograma.md`. Resumido:
+1. **T-02 · `fn_update_product` transaccional.** Hoy `repoSupabase.actualizar`
+   borra todos los códigos de barra del producto y los reinserta. Si la
+   inserción falla, el producto queda **sin ningún código**: deja de aparecer
+   al escanear y nadie entiende por qué. Es el hallazgo A-4 en la edición y
+   `fn_create_product` no lo cubre. **Es lo peor que hay abierto.**
+2. **T-03 · verificar M4-16 (stock por lote).** Figura ✅ en el inventario de
+   alcance y el código no lo respalda. Es el mismo patrón que ya produjo el
+   hallazgo de RF-M3-08: un requerimiento cerrado sin evidencia.
+3. **T-01 · usar `products.description`.** La columna existe en la base desde el
+   primer día y **ninguna pantalla la lee ni la escribe**: no está en el
+   formulario, ni en el `SELECT` del repositorio, ni en la ficha del POS.
+4. **T-04** recuperar contraseña · **T-05** anular venta (`fn_void_sale` está
+   probada y no la invoca ninguna pantalla) · **T-06** corregir un movimiento de
+   caja.
 
-- **F1 · Cerrar el POS** — anular venta (`fn_void_sale` está probada y **no la
-  invoca ninguna pantalla**), descuento por línea, pago mixto.
-- **F2 · Reportes** — existen 11 vistas en la base y la app usa 3.
-- **F3 · Alertas y configuración** — la tabla `alerts` se llena sola y no hay
-  dónde verla.
-- **F4 · QA de concurrencia** — CP-01 a CP-08 de `docs/16-plan-pruebas.md`.
-- **F5 · DTE simulado** — `docs/18` y `ADR-009`.
-- **F6 · DTE real** — depende de trámites del cliente.
+### La deuda silenciosa
 
-### 3 · Hallazgos abiertos de la auditoría
+**T-40 · los casos CP-01 a CP-08 de `docs/16-plan-pruebas.md` nunca se han
+ejecutado.** Siete requerimientos de concurrencia están marcados como hechos y
+descansan en diseño, no en pruebas. Dos cajeros vendiendo el último producto al
+mismo tiempo no se ha probado jamás. Es el riesgo más grande del proyecto.
 
-`docs/21-qa-pantallas.md`. Las 11 pantallas ya están auditadas. Lo abierto,
-por gravedad:
+---
 
-- **F-3:** `repoSupabase.actualizar` borra todos los códigos de barra del
-  producto y los reinserta, sin transacción. Si la inserción falla —porque
-  otro producto tomó ese código— el producto queda **sin ningún código**, que
-  es justo el que no aparecerá al escanear. Es A-4 en la edición, y
-  `fn_create_product` no lo cubre: corresponde una `fn_update_product`.
-- **M-7:** M4-16 (stock por lote) figura ✅ en el inventario de alcance y el
-  código no lo respalda. **Hay que verificarlo.** Es exactamente el patrón que
-  ya produjo el hallazgo de RF-M3-08: un requerimiento cerrado sin evidencia.
-- **L-5:** recuperar contraseña (RF-M1-05) no existe. Hoy el dueño entra al
-  panel de Supabase cada vez que un vendedor olvida su clave.
-- **M-1:** un movimiento de caja mal ingresado no se puede corregir. Ahora al
-  menos se advierte antes de registrarlo.
+## SOBRE LA BOLETA — NO CONFUNDIR DOS COSAS
+
+**Identificar un producto al escanearlo ya funciona.** `product_barcodes` con
+`unique (tenant_id, barcode)`, el escáner del POS y la búsqueda están completos.
+No necesita QR ni nada nuevo. Lo único que falta es T-01, la descripción.
+
+**La boleta electrónica es otra cosa, y el formato importa.** La representación
+impresa **no lleva QR**: lleva el **timbre electrónico en PDF417**. Es requisito
+del SII, no una preferencia de diseño. Y el timbre no se puede dibujar: contiene
+la firma del documento con el **certificado digital del contribuyente** y
+consume un folio de un **CAF** autorizado. Sin B-04 y B-05 no hay boleta válida
+por mucho código que se escriba. Ver `docs/18-documentos-tributarios-sii.md` §2.
+
+El generador de EAN-13 que escribí a mano en `core` **no sirve** para el timbre:
+PDF417 es otro formato, con corrección de errores Reed-Solomon y varios modos de
+compactación. Ahí probablemente convenga una biblioteca.
+
+**Lo que sí se entrega hoy** es el comprobante interno de venta: detalle, neto,
+IVA desglosado, total, imprimible en térmica de 58/80 mm, y dice
+`NO ES DOCUMENTO TRIBUTARIO` en pantalla y en el papel. Eso no es un detalle: un
+papel que se parece a una boleta y no lo es, es un problema para el cliente.
+
+El simulador completo (F5, tareas T-20 a T-28) **se puede programar hoy**, sin
+esperar ningún trámite.
 
 ---
 
@@ -162,8 +201,8 @@ por gravedad:
    contrario, nunca editando ni borrando.
 3. **Una caja cerrada no se modifica.**
 4. **El dinero se guarda en enteros.** Nunca decimales, nunca float (RNF-32).
-5. **`service_role` jamás llega al navegador.** Vive en el servidor: el único
-   uso legítimo hoy es el route handler de invitación de usuarios.
+5. **`service_role` jamás llega al navegador.** Vive en el servidor: hoy el
+   route handler de invitación de usuarios y el script `tools/crear-admin.mjs`.
 6. **La seguridad vive en la base**, con RLS en el 100 % de las tablas. Ocultar
    un botón no es seguridad.
 7. **Los precios incluyen IVA.** El IVA se extrae del total, nunca se suma
@@ -171,8 +210,14 @@ por gravedad:
    descuadre de un peso.
 8. **Un ADR no se edita.** Si una decisión cambia, se escribe uno nuevo que
    declara superado al anterior.
-9. **Los campos de dinero usan `validarMonto`, no `parseCLP`.** `parseCLP`
-   interpreta y acepta el signo menos; validar es otra cosa.
+9. **Dinero con `validarMonto`, cantidades con `validarCantidad`.** Nunca
+   `parseCLP` para una cantidad: borra todo lo que no sea dígito, así que "1,5"
+   se convierte en 15. Y nunca `Number()` a secas sobre lo que escribe el
+   usuario: `Number("1,")` es `NaN`. Los dos errores ya ocurrieron, en pantallas
+   distintas.
+10. **Diálogos con `<Modal>` y campos con `<Campo>`**, de
+    `apps/web/src/components/`. No escribir un `role="dialog"` a mano: los nueve
+    que había estaban todos mal.
 
 ---
 
@@ -180,9 +225,8 @@ por gravedad:
 
 No avanzan programando. Están en `docs/15-preguntas-abiertas.md`.
 
-- **P-28 — ¿Tiene certificado digital y enrolamiento como emisor electrónico
-  ante el SII?** Es la ruta crítica del módulo tributario. Los trámites tienen
-  que empezar ya, en paralelo al desarrollo.
+- **P-28 — ¿Tiene certificado digital y enrolamiento ante el SII?** Ruta
+  crítica del módulo tributario.
 - **P-27 — ¿Qué proveedor de DTE?** Condiciona todo el diseño de F6.
 - **P-26 — El cliente había pedido Vercel + Railway** y se decidió solo
   Railway (ADR-008). Hay que decírselo.
@@ -193,10 +237,10 @@ No avanzan programando. Están en `docs/15-preguntas-abiertas.md`.
   "RutaAhorro". Lo correcto sería SimplePyme = producto, RutaAhorro = primer
   cliente.
 
-**P-03 se respondió hoy:** el cliente sí requiere boleta y factura electrónica
+**P-03 ya se respondió:** el cliente sí requiere boleta y factura electrónica
 ante el SII. Eso era R-01, el mayor riesgo del proyecto, y dejó de ser riesgo
 para ser alcance. Ni la propuesta comercial ni el plan de trabajo lo
-contemplaban: hay que revisar precio y plazo.
+contemplaban: **hay que revisar precio y plazo** (T-41).
 
 ---
 
@@ -205,7 +249,8 @@ contemplaban: hay que revisar precio y plazo.
 - **Español de Chile**, incluidos los nombres de variables y funciones del
   dominio (`repoProductos`, `confirmarRecepcion`, `validarMonto`).
 - **Errores en lenguaje del negocio**, nunca técnicos: "No hay stock suficiente
-  de Coca-Cola 1.5L", jamás "constraint violation".
+  de Coca-Cola 1.5L", jamás "constraint violation". Todo error que llegue al
+  usuario pasa por `toUserMessage`.
 - **Móvil primero.** El objetivo táctil mínimo es 44 px (RNF-16).
 - **Color nunca solo:** todo estado va con color *y* texto (RNF-46).
 - **Los comentarios explican el porqué, no el qué.** Si un comentario describe
@@ -217,28 +262,16 @@ contemplaban: hay que revisar precio y plazo.
 
 Como **jefe de proyecto y QA**, no como programador que ejecuta órdenes.
 
-- **Verifica el estado real, no lo asumas.** Hoy aparecieron tres
-  requerimientos marcados como hechos que no funcionaban en producción, y un
-  plan de despliegue que describía otro proyecto. Los documentos mienten;
-  el código no.
+- **Verifica el estado real, no lo asumas.** Ya aparecieron tres requerimientos
+  marcados como hechos que no funcionaban en producción, un plan de despliegue
+  que describía otro proyecto, un contrato que prometía atomicidad que el código
+  no daba, y un documento al cliente que ofrecía una función inexistente. Los
+  documentos mienten; el código no.
 - **Dime lo que no quiero oír.** Si algo está mal estimado, si una decisión mía
   contradice un pedido del cliente, o si un requerimiento "listo" no lo está.
-- **No declares terminado lo que no probaste.** Pruebas, typecheck y build de
-  producción con `NEXT_PUBLIC_DEMO=false` antes de decir que algo funciona.
+- **No declares terminado lo que no probaste.** `npm test`, `npm run typecheck`
+  y `NEXT_PUBLIC_DEMO=false npm run build:web` antes de decir que algo funciona.
 - **Si encuentras un bug mientras haces otra cosa, dilo.** Aunque no sea lo que
   te pedí.
 - Al terminar una tanda, deja registrado lo que hiciste: commit con el porqué
   en el mensaje, y el documento correspondiente actualizado.
-
----
-
-## LO PRIMERO QUE DEBERÍAS HACER
-
-Preguntarme si ya apliqué el esquema en Supabase y desplegué en Railway.
-**Hasta que eso pase, el sistema no existe para el cliente**: todo lo que se ha
-visto corre contra IndexedDB.
-
-Y una advertencia que no hay que perder de vista: **los siete requerimientos de
-concurrencia marcados como hechos descansan en diseño, no en pruebas.** Los
-casos CP-01 a CP-08 siguen pendientes. Es el riesgo silencioso más grande que
-tiene el proyecto.
