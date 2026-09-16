@@ -15,3 +15,4 @@ export * from './expiry.js';
 export * from './errors.js';
 export * from './import.js';
 export * from './comprobante.js';
+export * from './etiqueta.js';

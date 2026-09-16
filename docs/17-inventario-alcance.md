@@ -112,7 +112,7 @@ De los **101 requerimientos funcionales**:
 | M2-10 | Margen visible solo a admin | ✅ | Verificado: el vendedor no lo recibe |
 | M2-11 | Carga masiva desde Excel/CSV | ✅ | Plantilla, vista previa y aplicación |
 | M2-12 | Validar el archivo antes de aplicar | ✅ | Todo o nada, con 31 pruebas |
-| M2-13 | Generar etiquetas con código de barras | 🟡 | `generateInternalBarcode()` existe y está probado; falta impresión |
+| M2-13 | Generar etiquetas con código de barras | ✅ | Pantalla /productos/etiquetas: EAN-13 en SVG, tres tamaños, con precio, y asignación de código interno a productos sin código de fábrica |
 | M2-14 | Productos por peso o fracción | 🟡 | La base soporta decimales; el POS no pide cantidad fraccionada |
 | M2-15 | Duplicar producto | ⬜ | — |
 

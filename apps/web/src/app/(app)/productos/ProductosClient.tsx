@@ -110,6 +110,13 @@ export function ProductosClient({
         {puedeEditar && (
           <div className="flex gap-2">
             <Link
+              href="/productos/etiquetas"
+              title="Imprimir etiquetas con código de barra"
+              className="tap inline-flex items-center px-3 py-2.5 rounded-xl border border-[var(--borde)] text-sm font-medium"
+            >
+              🏷️ <span className="hidden sm:inline ml-1.5">Etiquetas</span>
+            </Link>
+            <Link
               href="/productos/importar"
               className="tap inline-flex items-center px-3 py-2.5 rounded-xl border border-[var(--borde)] text-sm font-medium"
             >

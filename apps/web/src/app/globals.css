@@ -98,7 +98,25 @@ input, select, textarea, button {
  */
 @media print {
   body * { visibility: hidden; }
-  #ticket, #ticket * { visibility: visible; }
+  #ticket, #ticket *,
+  #hoja-etiquetas, #hoja-etiquetas * { visibility: visible; }
+
+  /* Hoja de etiquetas (RF-M2-13). Las medidas del SVG van en milímetros y no
+     se tocan: si la hoja escala, el lector deja de reconocer el código. */
+  #hoja-etiquetas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3mm;
+    padding: 0;
+    border: 0;
+    background: #fff;
+  }
+  #hoja-etiquetas .etiqueta { break-inside: avoid; }
+
   #ticket {
     position: absolute;
     left: 0;
