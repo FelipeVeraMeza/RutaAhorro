@@ -111,3 +111,26 @@ describe('mensajes de error en lenguaje del negocio (RNF-20)', () => {
     expect(errorCode({ message: 'cualquier cosa' })).toBeNull();
   });
 });
+
+describe('errores del alta de producto (fn_create_product)', () => {
+  it('nombra el producto que ya ocupa el código de barra', () => {
+    expect(toUserMessage('CODIGO_EN_USO:7801234000018:Arroz grado 1 · 1 kg'))
+      .toBe('El código 7801234000018 ya está en "Arroz grado 1 · 1 kg"');
+  });
+
+  it('funciona aunque venga sin el nombre del dueño', () => {
+    expect(toUserMessage('CODIGO_EN_USO:7801234000018'))
+      .toBe('El código 7801234000018 ya está en otro producto');
+  });
+
+  it('traduce el resto de los códigos nuevos', () => {
+    expect(toUserMessage('SIN_PERMISO_CREAR_PRODUCTO')).toBe('No tienes permiso para crear productos');
+    expect(toUserMessage('NOMBRE_REQUERIDO')).toBe('El producto necesita un nombre');
+    expect(toUserMessage('MONTO_NEGATIVO')).toBe('El precio y el costo no pueden ser negativos');
+    expect(toUserMessage('CANTIDAD_NEGATIVA')).toBe('La cantidad no puede ser negativa');
+  });
+
+  it('no deja pasar un código sin traducir como si fuera mensaje al usuario', () => {
+    expect(toUserMessage('ALGO_QUE_NO_EXISTE')).not.toContain('ALGO_QUE_NO_EXISTE');
+  });
+});

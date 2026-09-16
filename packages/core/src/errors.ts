@@ -11,6 +11,13 @@ export const ERROR_MESSAGES: Record<string, string> = {
   SIN_PERMISO: 'No tienes permiso para esta acción',
   SIN_PERMISO_ANULAR: 'No tienes permiso para anular esta venta',
   SIN_PERMISO_AJUSTAR: 'No tienes permiso para ajustar el stock',
+  SIN_PERMISO_CREAR_PRODUCTO: 'No tienes permiso para crear productos',
+  NOMBRE_REQUERIDO: 'El producto necesita un nombre',
+  MONTO_NEGATIVO: 'El precio y el costo no pueden ser negativos',
+  CANTIDAD_NEGATIVA: 'La cantidad no puede ser negativa',
+  DIAS_ALERTA_REQUERIDOS: 'Un producto perecible necesita cuántos días antes avisar',
+  CODIGO_EN_USO: 'Ese código de barra ya está en otro producto',
+  SIN_TIENDA: 'No hay ninguna tienda activa para registrar el stock',
   CAJA_NO_ABIERTA: 'Debes abrir caja antes de vender',
   CAJA_YA_ABIERTA: 'Ya tienes una caja abierta',
   CAJA_YA_CERRADA: 'Esta caja ya fue cerrada',
@@ -56,6 +63,15 @@ export function toUserMessage(error: unknown): string {
     const base = ERROR_MESSAGES[code];
     if (base) {
       if (detail && code === 'STOCK_INSUFICIENTE') return `No hay stock suficiente de ${detail}`;
+      if (detail && code === 'CODIGO_EN_USO') {
+        // El detalle viene como "<codigo>:<nombre del producto que lo tiene>".
+        // Decir cuál producto lo ocupa evita que el usuario busque a ciegas.
+        const [codigo, ...resto] = detail.split(':');
+        const duenio = resto.join(':').trim();
+        return duenio
+          ? `El código ${codigo} ya está en "${duenio}"`
+          : `El código ${codigo} ya está en otro producto`;
+      }
       if (detail && code === 'PRODUCTO_INACTIVO') return `"${detail}" está desactivado`;
       if (detail && code === 'VENCIMIENTO_REQUERIDO') return `"${detail}" es perecible: indica la fecha de vencimiento`;
       if (detail && code === 'LOTE_YA_VENCIDO') return `"${detail}" ya está vencido, no puede recibirse`;

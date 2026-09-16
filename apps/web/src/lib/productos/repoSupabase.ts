@@ -111,54 +111,31 @@ export const repoSupabase: RepositorioProductos = {
     return data ? aProducto(data as unknown as FilaBD) : null;
   },
 
+  /**
+   * Alta de producto en una sola transacción.
+   *
+   * Antes eran tres llamadas encadenadas —producto, códigos de barra, stock
+   * inicial— sin transacción. Si fallaba la segunda, el producto quedaba
+   * creado sin códigos, el usuario veía un error y al reintentar creaba un
+   * duplicado: dos filas del mismo artículo, y la que no tiene códigos es
+   * justo la que nunca aparecerá al escanear. Ver docs/21, hallazgo A-4.
+   */
   async crear(datos: ProductoNuevo) {
-    const client = supabase();
-    const { tenantId, storeId } = await tenantYTienda();
-
-    const { data, error } = await client
-      .from('products')
-      .insert({
-        tenant_id: tenantId,
-        name: datos.nombre,
-        sku: datos.sku,
-        category_id: datos.categoriaId,
-        unit: datos.unidad,
-        sale_price: datos.precioVenta,
-        avg_cost: datos.costo,
-        last_cost: datos.costo,
-        min_stock: datos.stockMinimo,
-        tracks_expiry: datos.perecible,
-        expiry_alert_days: datos.diasAlerta,
-      })
-      .select('id')
-      .single();
+    const { data, error } = await supabase().rpc('fn_create_product', {
+      p_name: datos.nombre,
+      p_sku: datos.sku,
+      p_category_id: datos.categoriaId,
+      p_unit: datos.unidad,
+      p_sale_price: datos.precioVenta,
+      p_avg_cost: datos.costo,
+      p_min_stock: datos.stockMinimo,
+      p_tracks_expiry: datos.perecible,
+      p_expiry_alert_days: datos.diasAlerta,
+      p_barcodes: datos.codigos.filter(Boolean),
+      p_initial_stock: datos.stockInicial,
+    });
     if (error) throw error;
-
-    const id = data.id as string;
-
-    if (datos.codigos.length > 0) {
-      const { error: e } = await client.from('product_barcodes').insert(
-        datos.codigos.filter(Boolean).map((barcode, i) => ({
-          tenant_id: tenantId, product_id: id, barcode, is_primary: i === 0,
-        })),
-      );
-      if (e) throw e;
-    }
-
-    // El stock inicial entra por el kardex, nunca escribiendo stock_levels
-    // directamente (ADR-006). Así el saldo siempre tiene un movimiento que lo
-    // explica.
-    if (datos.stockInicial > 0 && storeId) {
-      const { error: e } = await client.rpc('fn_adjust_stock', {
-        p_product_id: id,
-        p_new_quantity: datos.stockInicial,
-        p_movement_type: 'inventario_inicial',
-        p_reason: 'Stock inicial al crear el producto',
-      });
-      if (e) throw e;
-    }
-
-    return { id };
+    return { id: (data as { product_id: string }).product_id };
   },
 
   async actualizar(id, datos: ProductoEditable) {
