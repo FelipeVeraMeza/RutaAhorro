@@ -60,12 +60,12 @@ porque `product_barcodes` tiene `unique (tenant_id, barcode)`.
 
 ### Alta
 
-| # | Pantalla | Hallazgo |
-|---|---|---|
-| A-1 | Inventario | **Aplicar la toma no pide confirmación.** Ajusta el stock de muchos productos y queda en el kardex, que es inmutable. Un toque accidental en «Aplicar toma de 47 productos» no pregunta nada |
-| A-2 | Inventario | La toma **aplica conteos de productos ocultos por el filtro**. Contar por partes es deliberado y correcto, pero no hay pantalla de revisión previa: el usuario no puede ver qué 47 productos va a ajustar |
-| A-3 | Todas | **`parseCLP` acepta negativos** y ningún campo de dinero lo valida. Un «ingreso» de caja de −500 se registra como egreso encubierto. Afecta apertura de caja, movimientos, conteo de cierre y ajustes |
-| A-4 | Productos | **El alta no es atómica.** Son tres escrituras encadenadas (producto → códigos → stock inicial) sin transacción. Si falla la de códigos, queda el producto sin códigos y el usuario ve un error; al reintentar, crea un duplicado. El resto del sistema usa funciones transaccionales justamente para esto |
+| # | Pantalla | Hallazgo | Estado |
+|---|---|---|---|
+| A-1 | Inventario | Aplicar la toma no pedía confirmación, y el kardex es inmutable | ✅ Diálogo de revisión previa |
+| A-2 | Inventario | La toma aplicaba conteos de productos ocultos por el filtro, sin poder verlos | ✅ La revisión los lista todos |
+| A-3 | Todas | `parseCLP` acepta negativos y ningún campo de dinero lo validaba | ✅ `validarMonto` en los 5 campos |
+| A-4 | Productos | **El alta no es atómica.** Tres escrituras encadenadas (producto → códigos → stock inicial) sin transacción. Si falla la de códigos, queda el producto sin códigos y el usuario ve un error; al reintentar, crea un duplicado. El resto del sistema usa funciones transaccionales justamente para esto | ⬜ Pendiente |
 
 ### Media
 
@@ -73,7 +73,7 @@ porque `product_barcodes` tiene `unique (tenant_id, barcode)`.
 |---|---|---|
 | M-1 | Caja | No se puede corregir un movimiento mal ingresado. Un egreso de 50.000 en vez de 5.000 no tiene arreglo dentro del sistema |
 | M-2 | Caja | El botón «Cerrar caja» no advierte que el cierre es irreversible |
-| M-3 | Inventario | El ajuste y el conteo aceptan cantidades negativas |
+| M-3 | Inventario | ~~El ajuste y el conteo aceptan cantidades negativas~~ · ✅ resuelto con `validarCantidad` |
 | M-4 | Inventario | El kardex trae 80 movimientos fijos, **sin filtros ni paginación**. Por eso M4-12 bajó a 🟡 |
 | M-5 | Productos | Sin paginación: con un catálogo de 1.000 productos renderiza los 1.000. Depende de P-02 |
 | M-6 | Recepción | Se puede confirmar con costo unitario 0 sin ningún aviso |
@@ -128,10 +128,10 @@ No todo son hallazgos. Estas decisiones resistieron la revisión:
 
 El orden sugerido, que se integra a [19](19-cronograma.md):
 
-1. A-3 y M-3 juntos: una validación de monto compartida en `core`, con
-   pruebas, y aplicarla en los cinco campos de dinero.
-2. A-1 y A-2 juntos: pantalla de revisión previa a aplicar la toma, que además
-   resuelve la confirmación.
+1. ~~A-3 y M-3: validación compartida en `core`.~~ **Hecho:** `validarMonto` y
+   `validarCantidad`, 16 pruebas, aplicadas a los cinco campos.
+2. ~~A-1 y A-2: revisión previa a aplicar la toma.~~ **Hecho:** diálogo que
+   lista cada producto con sistema → contado y la diferencia.
 3. A-4: función transaccional `fn_create_product`, como el resto del sistema.
 4. M-1 y M-2 con el resto del módulo de caja.
 5. Las de severidad baja, en una pasada de accesibilidad junto con las cuatro
