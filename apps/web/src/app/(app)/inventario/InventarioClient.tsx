@@ -6,6 +6,8 @@ import { repoProductos, type Producto } from '@/lib/productos';
 import {
   repoInventario, ETIQUETA_MOVIMIENTO, MOTIVOS_SUGERIDOS, type Movimiento,
 } from '@/lib/datos/inventario';
+import { Modal } from '@/components/Modal';
+import { Campo } from '@/components/Campo';
 
 type Vista = 'stock' | 'kardex' | 'toma';
 
@@ -374,34 +376,34 @@ function DialogoAjuste({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
-      <div className="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl p-5 space-y-3"
-           style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}>
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Ajustar stock</h2>
-          <button onClick={onCancelar} className="tap px-3 text-sm text-[var(--texto-suave)]">Cancelar</button>
-        </div>
-
+    <Modal
+      titulo={`Ajustar stock de ${producto.nombre}`}
+      encabezado="visible"
+      onCerrar={onCancelar}
+      bloqueado={guardando}
+    >
+      <div className="p-5 space-y-3">
         <p className="text-sm">{producto.nombre}</p>
 
-        <div>
-          <label className="block text-sm font-medium mb-1.5">
-            Cantidad real <span className="text-[var(--texto-suave)] font-normal">(sistema: {producto.stock})</span>
-          </label>
-          <input
-            inputMode="decimal" value={cantidad} onChange={(e) => setCantidad(e.target.value)}
-            className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] num text-right text-lg"
-            autoFocus
-          />
-          {cantidad.trim() !== '' && !v.valido && (
-            <p className="text-sm text-[var(--color-alerta)] mt-1.5">{v.error}</p>
+        <Campo
+          etiqueta="Cantidad real"
+          ayuda={`El sistema tiene ${producto.stock} ${producto.unidad}.`}
+          error={cantidad.trim() !== '' && !v.valido ? v.error : null}
+        >
+          {(p) => (
+            <input
+              {...p}
+              inputMode="decimal" value={cantidad} onChange={(e) => setCantidad(e.target.value)}
+              className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] num text-right text-lg"
+              autoFocus
+            />
           )}
-          {delta !== 0 && v.valido && (
-            <p className={`text-sm num mt-1.5 ${delta < 0 ? 'text-[var(--color-alerta)]' : 'text-marca-700'}`}>
-              {delta > 0 ? 'Se sumarán' : 'Se restarán'} {Math.abs(delta)} {producto.unidad}
-            </p>
-          )}
-        </div>
+        </Campo>
+        {delta !== 0 && v.valido && (
+          <p className={`text-sm num ${delta < 0 ? 'text-[var(--color-alerta)]' : 'text-marca-700'}`}>
+            {delta > 0 ? 'Se sumarán' : 'Se restarán'} {Math.abs(delta)} {producto.unidad}
+          </p>
+        )}
 
         <label className="flex items-center gap-2.5 text-sm">
           <input
@@ -411,28 +413,31 @@ function DialogoAjuste({
           Registrar como <strong>merma</strong> (producto perdido)
         </label>
 
-        <div>
-          <label className="block text-sm font-medium mb-1.5">
-            Motivo <span className="text-[var(--color-alerta)]">*</span>
-          </label>
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            {MOTIVOS_SUGERIDOS.map((m) => (
-              <button
-                key={m} onClick={() => setMotivo(m)}
-                className={`tap px-2.5 py-1.5 rounded-lg text-xs border ${
-                  motivo === m ? 'border-marca-500 bg-marca-50' : 'border-[var(--borde)]'
-                }`}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
-          <input
-            value={motivo} onChange={(e) => setMotivo(e.target.value)}
-            placeholder="…o escribe otro motivo"
-            className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
-          />
-        </div>
+        <Campo etiqueta="Motivo" obligatorio>
+          {(p) => (
+            <>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {MOTIVOS_SUGERIDOS.map((m) => (
+                  <button
+                    key={m} onClick={() => setMotivo(m)}
+                    aria-pressed={motivo === m}
+                    className={`tap px-2.5 py-1.5 rounded-lg text-xs border ${
+                      motivo === m ? 'border-marca-500 bg-marca-50' : 'border-[var(--borde)]'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+              <input
+                {...p}
+                value={motivo} onChange={(e) => setMotivo(e.target.value)}
+                placeholder="…o escribe otro motivo"
+                className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
+              />
+            </>
+          )}
+        </Campo>
 
         {error && (
           <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">
@@ -452,7 +457,7 @@ function DialogoAjuste({
           editar ni borrar después.
         </p>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -478,11 +483,13 @@ function RevisionToma({
   const sobrantes = conDiferencia.filter((f) => f.contado > f.sistema).length;
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center"
-      role="dialog" aria-modal="true" aria-label="Revisar la toma de inventario"
+    <Modal
+      titulo="Revisar la toma de inventario"
+      ancho="md"
+      onCerrar={onCancelar}
+      bloqueado={aplicando}
     >
-      <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl max-h-[90vh] flex flex-col">
+      <div className="max-h-[85dvh] flex flex-col">
         <div className="px-5 pt-5 pb-3 border-b border-[var(--borde)]">
           <h2 className="font-semibold">Revisar antes de aplicar</h2>
           <p className="text-sm text-[var(--texto-suave)] mt-1">
@@ -536,12 +543,12 @@ function RevisionToma({
           </button>
           <button
             onClick={onCancelar} disabled={aplicando}
-            className="tap w-full py-3 rounded-xl border border-[var(--borde)]"
+            className="tap w-full py-3 rounded-xl border border-[var(--borde)] disabled:opacity-50"
           >
             Seguir contando
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

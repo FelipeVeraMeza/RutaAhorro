@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { formatCLP, marginPct, toUserMessage } from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
+import { Modal } from '@/components/Modal';
 import { FormularioProducto } from './FormularioProducto';
 
 type Estado = 'todos' | 'normal' | 'bajo' | 'agotado';
@@ -44,6 +45,8 @@ export function ProductosClient({
   const [creando, setCreando] = useState(false);
   const [confirmando, setConfirmando] = useState<Producto | null>(null);
   const [puedeBorrarDef, setPuedeBorrarDef] = useState(false);
+  const [consultandoHistorial, setConsultandoHistorial] = useState(false);
+  const [ejecutando, setEjecutando] = useState(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -72,15 +75,25 @@ export function ProductosClient({
   }, [cargar]);
 
   async function abrirConfirmacion(p: Producto) {
+    // `puedeBorrarDef` se baja antes de consultar. Si se conserva el valor del
+    // producto anterior, el diálogo ofrece "Eliminar definitivamente" para un
+    // producto que sí tiene ventas: la base lo rechaza, pero la pantalla ya
+    // mintió. Ver docs/21, hallazgo B-4.
+    setPuedeBorrarDef(false);
+    setConsultandoHistorial(true);
     setConfirmando(p);
     try {
       setPuedeBorrarDef(!(await repoProductos().tieneMovimientos(p.id)));
     } catch {
       setPuedeBorrarDef(false);
+    } finally {
+      setConsultandoHistorial(false);
     }
   }
 
   async function ejecutar(accion: 'desactivar' | 'reactivar' | 'eliminar', p: Producto) {
+    if (ejecutando) return;
+    setEjecutando(true);
     try {
       const repo = repoProductos();
       if (accion === 'desactivar') await repo.desactivar(p.id);
@@ -95,6 +108,8 @@ export function ProductosClient({
           : toUserMessage(e),
       );
       setConfirmando(null);
+    } finally {
+      setEjecutando(false);
     }
   }
 
@@ -250,9 +265,13 @@ export function ProductosClient({
                       >
                         Editar
                       </button>
+                      {/* Reactivar no es destructivo: no lleva el color de
+                          alerta, que queda reservado para quitar (docs/21 B-1). */}
                       <button
                         onClick={() => void abrirConfirmacion(p)}
-                        className="tap px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)] text-[var(--color-alerta)]"
+                        className={`tap px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)] ${
+                          p.activo ? 'text-[var(--color-alerta)]' : 'text-marca-700'
+                        }`}
                       >
                         {p.activo ? 'Quitar' : 'Reactivar'}
                       </button>
@@ -284,30 +303,41 @@ export function ProductosClient({
 
       {/* Confirmación de baja */}
       {confirmando && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
-          <div className="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl p-5"
-               style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}>
+        <Modal
+          titulo={confirmando.activo
+            ? `Quitar ${confirmando.nombre}`
+            : `Reactivar ${confirmando.nombre}`}
+          onCerrar={() => setConfirmando(null)}
+          bloqueado={ejecutando}
+        >
+          <div className="p-5">
             {confirmando.activo ? (
               <>
                 <h2 className="font-semibold mb-2">Quitar &ldquo;{confirmando.nombre}&rdquo;</h2>
-                <p className="text-sm text-[var(--texto-suave)] mb-4">
-                  {puedeBorrarDef
-                    ? 'Este producto no tiene ventas ni movimientos, así que puedes eliminarlo definitivamente o solo desactivarlo.'
-                    : 'Este producto ya tiene historial. Se desactivará para que deje de venderse, pero se conserva para no perder la trazabilidad de sus ventas pasadas.'}
+                <p className="text-sm text-[var(--texto-suave)] mb-4" aria-live="polite">
+                  {consultandoHistorial
+                    ? 'Revisando si este producto tiene ventas o movimientos…'
+                    : puedeBorrarDef
+                      ? 'Este producto no tiene ventas ni movimientos, así que puedes eliminarlo definitivamente o solo desactivarlo.'
+                      : 'Este producto ya tiene historial. Se desactivará para que deje de venderse, pero se conserva para no perder la trazabilidad de sus ventas pasadas.'}
                 </p>
 
                 <div className="space-y-2">
                   <button
                     onClick={() => void ejecutar('desactivar', confirmando)}
-                    className="tap w-full py-3 rounded-xl bg-marca-500 text-white font-semibold"
+                    disabled={ejecutando}
+                    className="tap w-full py-3 rounded-xl bg-marca-500 text-white font-semibold disabled:opacity-50"
                   >
-                    Desactivar
+                    {ejecutando ? 'Guardando…' : 'Desactivar'}
                   </button>
 
-                  {puedeBorrarDef && puedeEliminar && (
+                  {/* Solo aparece cuando la consulta terminó: ofrecerlo antes
+                      es ofrecer algo que la base va a rechazar (docs/21 B-4). */}
+                  {!consultandoHistorial && puedeBorrarDef && puedeEliminar && (
                     <button
                       onClick={() => void ejecutar('eliminar', confirmando)}
-                      className="tap w-full py-3 rounded-xl border border-[var(--color-alerta)] text-[var(--color-alerta)] font-semibold"
+                      disabled={ejecutando}
+                      className="tap w-full py-3 rounded-xl border border-[var(--color-alerta)] text-[var(--color-alerta)] font-semibold disabled:opacity-50"
                     >
                       Eliminar definitivamente
                     </button>
@@ -315,7 +345,8 @@ export function ProductosClient({
 
                   <button
                     onClick={() => setConfirmando(null)}
-                    className="tap w-full py-3 rounded-xl border border-[var(--borde)]"
+                    disabled={ejecutando}
+                    className="tap w-full py-3 rounded-xl border border-[var(--borde)] disabled:opacity-50"
                   >
                     Cancelar
                   </button>
@@ -330,13 +361,15 @@ export function ProductosClient({
                 <div className="space-y-2">
                   <button
                     onClick={() => void ejecutar('reactivar', confirmando)}
-                    className="tap w-full py-3 rounded-xl bg-marca-500 text-white font-semibold"
+                    disabled={ejecutando}
+                    className="tap w-full py-3 rounded-xl bg-marca-500 text-white font-semibold disabled:opacity-50"
                   >
-                    Reactivar
+                    {ejecutando ? 'Guardando…' : 'Reactivar'}
                   </button>
                   <button
                     onClick={() => setConfirmando(null)}
-                    className="tap w-full py-3 rounded-xl border border-[var(--borde)]"
+                    disabled={ejecutando}
+                    className="tap w-full py-3 rounded-xl border border-[var(--borde)] disabled:opacity-50"
                   >
                     Cancelar
                   </button>
@@ -344,7 +377,7 @@ export function ProductosClient({
               </>
             )}
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

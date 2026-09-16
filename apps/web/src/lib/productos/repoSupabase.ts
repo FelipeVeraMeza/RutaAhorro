@@ -1,6 +1,6 @@
 'use client';
 
-import type { FilaProducto } from '@rutaahorro/core';
+import { toUserMessage, type FilaProducto } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import type {
   FiltroProductos, Producto, ProductoEditable, ProductoNuevo,
@@ -231,7 +231,10 @@ export const repoSupabase: RepositorioProductos = {
     return (data.products as unknown as { name: string } | null)?.name ?? 'otro producto';
   },
 
-  async importarLote(filas: FilaProducto[]): Promise<ResultadoLote> {
+  async importarLote(
+    filas: FilaProducto[],
+    onProgreso?: (hechas: number, total: number) => void,
+  ): Promise<ResultadoLote> {
     const resultado: ResultadoLote = { creados: 0, actualizados: 0, errores: [] };
     const cats = await this.categorias();
 
@@ -272,12 +275,16 @@ export const repoSupabase: RepositorioProductos = {
           resultado.creados++;
         }
       } catch (e) {
+        // `toUserMessage` y no `e.message`: lo que sale de Postgres es
+        // "duplicate key value violates unique constraint …", y el almacenero
+        // que sube su planilla no tiene por qué leer eso.
         resultado.errores.push({
           fila: i + 2,
           nombre: fila.nombre,
-          mensaje: e instanceof Error ? e.message : 'Error desconocido',
+          mensaje: toUserMessage(e),
         });
       }
+      onProgreso?.(i + 1, filas.length);
     }
     return resultado;
   },

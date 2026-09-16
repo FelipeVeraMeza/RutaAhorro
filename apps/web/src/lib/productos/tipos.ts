@@ -87,6 +87,21 @@ export interface RepositorioProductos {
   crearCategoria(nombre: string): Promise<Categoria>;
   /** Códigos ya usados, para avisar de duplicados antes de guardar. */
   codigoEnUso(codigo: string, excluirProductoId?: string): Promise<string | null>;
-  /** Carga masiva. Todo o nada. */
-  importarLote(filas: import('@rutaahorro/core').FilaProducto[]): Promise<ResultadoLote>;
+  /**
+   * Carga masiva, fila por fila.
+   *
+   * **No es atómica**, y el comentario anterior decía que sí. Cada fila se
+   * aplica por separado: si la número 300 falla, las 299 anteriores ya están
+   * en el catálogo. Por eso el resultado devuelve creados, actualizados y
+   * errores en vez de lanzar, y por eso la pantalla tiene que decirle al
+   * usuario que lo cargado se queda cargado. Hacerla atómica de verdad pide
+   * una función transaccional en la base, como `fn_create_product`.
+   *
+   * `onProgreso` se llama después de cada fila para poder mostrar avance: en
+   * un celular con 4G, 600 productos son varios minutos de pantalla quieta.
+   */
+  importarLote(
+    filas: import('@rutaahorro/core').FilaProducto[],
+    onProgreso?: (hechas: number, total: number) => void,
+  ): Promise<ResultadoLote>;
 }

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCLP, validarMonto, toUserMessage } from '@rutaahorro/core';
 import { supabase } from '@/lib/supabase/client';
+import { Campo } from '@/components/Campo';
 
 interface Session { id: string; opened_at: string; opening_amount: number }
 interface Movimiento { id: string; type: string; amount: number; reason: string; created_at: string }
@@ -111,9 +112,21 @@ export function CajaClient({
     return (
       <div className="px-4 py-6">
         <h1 className="text-lg font-semibold mb-1">Cerrar caja</h1>
-        <p className="text-sm text-[var(--texto-suave)] mb-5">
+        <p className="text-sm text-[var(--texto-suave)] mb-3">
           Cuenta el efectivo que hay ahora en la caja.
         </p>
+
+        {/* El cierre es irreversible por diseño (ADR-006: el arqueo es un
+            hecho del negocio, no un borrador). La pantalla no lo decía en
+            ninguna parte y el botón se ve igual que cualquier otro. docs/21 M-2. */}
+        <div className="flex gap-2.5 px-3 py-2.5 rounded-xl bg-amber-50 border border-[var(--color-aviso)]/30 mb-4">
+          <span aria-hidden className="text-base leading-tight">⚠️</span>
+          <p className="text-xs text-[var(--color-aviso)] leading-relaxed">
+            <strong>El cierre no se puede deshacer.</strong> Una vez cerrada, la
+            caja queda registrada con el monto contado y ya no admite ventas ni
+            movimientos: para seguir operando hay que abrir una caja nueva.
+          </p>
+        </div>
 
         <div className="tarjeta p-4 space-y-4">
           <div>
@@ -240,24 +253,43 @@ export function CajaClient({
 
         {vistaMovimiento ? (
           <div className="space-y-3">
-            <input
-              type="text"
-              inputMode="numeric"
-              value={movMonto}
-              onChange={(e) => setMovMonto(e.target.value)}
-              placeholder="Monto"
-              className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] num text-right"
-            />
-            <input
-              type="text"
-              value={movMotivo}
-              onChange={(e) => setMovMotivo(e.target.value)}
-              placeholder="Motivo (obligatorio)"
-              className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)]"
-            />
-            {movMonto !== '' && mov.error && (
-              <p role="alert" className="text-sm text-[var(--color-alerta)]">{mov.error}</p>
-            )}
+            {/* Un movimiento mal ingresado no se puede corregir dentro del
+                sistema (docs/21 M-1). Mientras eso siga así, lo mínimo es
+                decirlo antes y no después. */}
+            <p className="text-xs text-[var(--color-aviso)] bg-amber-50 px-3 py-2 rounded-lg">
+              Revisa el monto antes de registrar: un movimiento de caja no se
+              puede editar ni borrar después.
+            </p>
+            <Campo
+              etiqueta={vistaMovimiento === 'ingreso' ? 'Monto que entra' : 'Monto que sale'}
+              obligatorio
+              error={movMonto !== '' ? mov.error : null}
+            >
+              {(p) => (
+                <input
+                  {...p}
+                  type="text"
+                  inputMode="numeric"
+                  value={movMonto}
+                  onChange={(e) => setMovMonto(e.target.value)}
+                  placeholder="0"
+                  autoFocus
+                  className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] num text-right"
+                />
+              )}
+            </Campo>
+            <Campo etiqueta="Motivo" obligatorio>
+              {(p) => (
+                <input
+                  {...p}
+                  type="text"
+                  value={movMotivo}
+                  onChange={(e) => setMovMotivo(e.target.value)}
+                  placeholder={vistaMovimiento === 'egreso' ? 'Ej: compra de bolsas' : 'Ej: vuelto del día anterior'}
+                  className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)]"
+                />
+              )}
+            </Campo>
             {error && <p role="alert" className="text-sm text-[var(--color-alerta)]">{error}</p>}
             <div className="flex gap-2">
               <button

@@ -7,6 +7,8 @@ import {
 } from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
 import { useScanner } from '@/lib/scanner/useScanner';
+import { Modal } from '@/components/Modal';
+import { Campo } from '@/components/Campo';
 
 const UNIDADES = ['unidad', 'kg', 'gramo', 'litro', 'ml', 'paquete', 'caja'];
 
@@ -145,45 +147,57 @@ export function FormularioProducto({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 overflow-y-auto" role="dialog" aria-modal="true">
-      <div className="min-h-full flex items-end sm:items-center justify-center sm:p-4">
-        <div className="w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl">
-          <header className="sticky top-0 bg-white border-b border-[var(--borde)] px-4 py-3 flex items-center justify-between rounded-t-2xl">
-            <h2 className="font-semibold">{esEdicion ? 'Editar producto' : 'Nuevo producto'}</h2>
-            <button onClick={onCancelar} className="tap px-3 text-sm text-[var(--texto-suave)]">
-              Cancelar
-            </button>
-          </header>
-
+    <Modal
+      titulo={esEdicion ? 'Editar producto' : 'Nuevo producto'}
+      ancho="lg"
+      encabezado="visible"
+      onCerrar={onCancelar}
+      bloqueado={guardando}
+    >
+      <>
           <div className="p-4 space-y-4">
             <Campo etiqueta="Nombre" obligatorio>
-              <input
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="Ej: Arroz grado 1 · 1 kg"
-                className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
-                autoFocus
-              />
+              {(p) => (
+                <input
+                  {...p}
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  placeholder="Ej: Arroz grado 1 · 1 kg"
+                  className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
+                  autoFocus
+                />
+              )}
             </Campo>
 
             <div className="grid grid-cols-2 gap-3">
-              <Campo etiqueta="Precio de venta" obligatorio>
-                <input
-                  inputMode="numeric" value={precio}
-                  onChange={(e) => setPrecio(e.target.value)}
-                  placeholder="0"
-                  className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
-                />
-              </Campo>
-
-              {puedeVerCostos && (
-                <Campo etiqueta="Costo">
+              {/* El error se muestra apenas el campo tiene algo escrito: esperar
+                  a "Guardar" obliga a recorrer el formulario hacia atrás. */}
+              <Campo
+                etiqueta="Precio de venta" obligatorio
+                error={precio !== '' ? vPrecio.error : null}
+              >
+                {(p) => (
                   <input
-                    inputMode="numeric" value={costo}
-                    onChange={(e) => setCosto(e.target.value)}
+                    {...p}
+                    inputMode="numeric" value={precio}
+                    onChange={(e) => setPrecio(e.target.value)}
                     placeholder="0"
                     className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
                   />
+                )}
+              </Campo>
+
+              {puedeVerCostos && (
+                <Campo etiqueta="Costo" error={costo !== '' ? vCosto.error : null}>
+                  {(p) => (
+                    <input
+                      {...p}
+                      inputMode="numeric" value={costo}
+                      onChange={(e) => setCosto(e.target.value)}
+                      placeholder="0"
+                      className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
+                    />
+                  )}
                 </Campo>
               )}
             </div>
@@ -200,41 +214,55 @@ export function FormularioProducto({
 
             <div className="grid grid-cols-2 gap-3">
               <Campo etiqueta="SKU / código interno">
-                <input
-                  value={sku} onChange={(e) => setSku(e.target.value)}
-                  placeholder="Opcional"
-                  className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
-                />
+                {(p) => (
+                  <input
+                    {...p}
+                    value={sku} onChange={(e) => setSku(e.target.value)}
+                    placeholder="Opcional"
+                    className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
+                  />
+                )}
               </Campo>
               <Campo etiqueta="Unidad">
-                <select
-                  value={unidad} onChange={(e) => setUnidad(e.target.value)}
-                  className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
-                >
-                  {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
-                </select>
+                {(p) => (
+                  <select
+                    {...p}
+                    value={unidad} onChange={(e) => setUnidad(e.target.value)}
+                    className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
+                  >
+                    {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                )}
               </Campo>
             </div>
 
             <Campo etiqueta="Categoría">
-              <select
-                value={categoriaId}
-                onChange={(e) => { setCategoriaId(e.target.value); setNuevaCategoria(''); }}
-                className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
-              >
-                <option value="">Sin categoría</option>
-                {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </select>
-              <input
-                value={nuevaCategoria}
-                onChange={(e) => { setNuevaCategoria(e.target.value); setCategoriaId(''); }}
-                placeholder="…o escribe una categoría nueva"
-                className="tap w-full mt-2 px-3 py-2.5 rounded-xl border border-dashed border-[var(--borde)] text-sm"
-              />
+              {(p) => (
+                <>
+                  <select
+                    {...p}
+                    value={categoriaId}
+                    onChange={(e) => { setCategoriaId(e.target.value); setNuevaCategoria(''); }}
+                    className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
+                  >
+                    <option value="">Sin categoría</option>
+                    {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                  <input
+                    value={nuevaCategoria}
+                    onChange={(e) => { setNuevaCategoria(e.target.value); setCategoriaId(''); }}
+                    aria-label="Nombre de una categoría nueva"
+                    placeholder="…o escribe una categoría nueva"
+                    className="tap w-full mt-2 px-3 py-2.5 rounded-xl border border-dashed border-[var(--borde)] text-sm"
+                  />
+                </>
+              )}
             </Campo>
 
             {/* Códigos de barras: RF-M2-02 permite varios por producto */}
             <Campo etiqueta="Códigos de barras">
+              {(p) => (
+                <>
               {codigos.length > 0 && (
                 <ul className="flex flex-wrap gap-2 mb-2">
                   {codigos.map((c) => (
@@ -254,6 +282,7 @@ export function FormularioProducto({
 
               <div className="flex gap-2">
                 <input
+                  {...p}
                   inputMode="numeric" value={codigoNuevo}
                   onChange={(e) => setCodigoNuevo(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void agregarCodigo(codigoNuevo); } }}
@@ -285,29 +314,43 @@ export function FormularioProducto({
               )}
               {errorCamara && <p className="text-xs text-[var(--color-alerta)] mt-1">{errorCamara}</p>}
               {avisoCodigo && (
-                <p className={`text-xs mt-1.5 ${
+                <p role="status" className={`text-xs mt-1.5 ${
                   avisoCodigo.startsWith('Aviso') ? 'text-[var(--color-aviso)]' : 'text-[var(--color-alerta)]'
                 }`}>
                   {avisoCodigo}
                 </p>
               )}
+                </>
+              )}
             </Campo>
 
             <div className="grid grid-cols-2 gap-3">
-              <Campo etiqueta="Stock mínimo">
-                <input
-                  inputMode="numeric" value={stockMinimo}
-                  onChange={(e) => setStockMinimo(e.target.value)}
-                  className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
-                />
-              </Campo>
-              {!esEdicion && (
-                <Campo etiqueta="Stock inicial">
+              <Campo
+                etiqueta="Stock mínimo"
+                error={stockMinimo !== '' ? vStockMinimo.error : null}
+              >
+                {(p) => (
                   <input
-                    inputMode="numeric" value={stockInicial}
-                    onChange={(e) => setStockInicial(e.target.value)}
+                    {...p}
+                    inputMode="decimal" value={stockMinimo}
+                    onChange={(e) => setStockMinimo(e.target.value)}
                     className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
                   />
+                )}
+              </Campo>
+              {!esEdicion && (
+                <Campo
+                  etiqueta="Stock inicial"
+                  error={stockInicial !== '' ? vStockInicial.error : null}
+                >
+                  {(p) => (
+                    <input
+                      {...p}
+                      inputMode="decimal" value={stockInicial}
+                      onChange={(e) => setStockInicial(e.target.value)}
+                      className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
+                    />
+                  )}
                 </Campo>
               )}
             </div>
@@ -331,14 +374,19 @@ export function FormularioProducto({
 
               {perecible && (
                 <div className="mt-3 pl-8">
-                  <label className="block text-xs font-medium mb-1">
-                    Avisar cuántos días antes de vencer
-                  </label>
-                  <input
-                    inputMode="numeric" value={diasAlerta}
-                    onChange={(e) => setDiasAlerta(e.target.value)}
-                    className="tap w-24 px-3 py-2 rounded-lg border border-[var(--borde)] num text-right"
-                  />
+                  <Campo
+                    etiqueta="Avisar cuántos días antes de vencer"
+                    error={diasAlerta !== '' ? vDiasAlerta.error : null}
+                  >
+                    {(p) => (
+                      <input
+                        {...p}
+                        inputMode="numeric" value={diasAlerta}
+                        onChange={(e) => setDiasAlerta(e.target.value)}
+                        className="tap w-24 px-3 py-2 rounded-lg border border-[var(--borde)] num text-right"
+                      />
+                    )}
+                  </Campo>
                 </div>
               )}
             </div>
@@ -368,26 +416,7 @@ export function FormularioProducto({
               {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear producto'}
             </button>
           </footer>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Campo({
-  etiqueta, obligatorio, children,
-}: {
-  etiqueta: string;
-  obligatorio?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium mb-1.5">
-        {etiqueta}
-        {obligatorio && <span className="text-[var(--color-alerta)]"> *</span>}
-      </label>
-      {children}
-    </div>
+      </>
+    </Modal>
   );
 }

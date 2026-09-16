@@ -11,6 +11,16 @@ import { repoProductos, type ResultadoLote } from '@/lib/productos';
 
 type Paso = 'elegir' | 'revisar' | 'aplicando' | 'listo';
 
+/**
+ * Tope del archivo.
+ *
+ * `file.text()` carga todo el CSV en memoria y `parsearProductos` lo recorre en
+ * el hilo principal. Un archivo de decenas de megas congela el navegador del
+ * celular sin ningún mensaje: parece que la aplicación se colgó. 4 MB son del
+ * orden de 40.000 productos, muy por encima de cualquier almacén.
+ */
+const MAX_BYTES = 4 * 1024 * 1024;
+
 export function ImportarClient() {
   const router = useRouter();
   const [paso, setPaso] = useState<Paso>('elegir');
@@ -18,19 +28,34 @@ export function ImportarClient() {
   const [analisis, setAnalisis] = useState<ResultadoImportacion | null>(null);
   const [resultado, setResultado] = useState<ResultadoLote | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [avance, setAvance] = useState({ hechas: 0, total: 0 });
 
   function descargarPlantilla() {
-    const blob = new Blob([plantillaCSV()], { type: 'text/csv;charset=utf-8' });
+    // El BOM es para Excel: sin él abre el CSV en ANSI y los acentos de
+    // "Categoría" o "Días alerta" salen rotos en la planilla del cliente.
+    const blob = new Blob(['﻿', plantillaCSV()], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'plantilla-productos-rutaahorro.csv';
+    // Anclar al documento y liberar la URL en el siguiente ciclo: revocarla en
+    // la misma vuelta que el clic es una carrera, y en Safari de iPhone la
+    // descarga se cancela antes de empezar.
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   async function elegirArchivo(file: File) {
     setError(null);
+    if (file.size > MAX_BYTES) {
+      setError(
+        `El archivo pesa ${(file.size / 1024 / 1024).toFixed(1)} MB y el máximo son 4 MB. ` +
+        'Divídelo en varias planillas y súbelas una por una.',
+      );
+      return;
+    }
     setNombreArchivo(file.name);
     try {
       const texto = await file.text();
@@ -43,10 +68,14 @@ export function ImportarClient() {
 
   async function aplicar() {
     if (!analisis?.ok) return;
+    setAvance({ hechas: 0, total: analisis.filas.length });
     setPaso('aplicando');
     setError(null);
     try {
-      setResultado(await repoProductos().importarLote(analisis.filas));
+      setResultado(await repoProductos().importarLote(
+        analisis.filas,
+        (hechas, total) => setAvance({ hechas, total }),
+      ));
       setPaso('listo');
     } catch (e) {
       setError(toUserMessage(e));
@@ -262,11 +291,29 @@ export function ImportarClient() {
 
   // ------------------------------------------------------------- paso 3
   if (paso === 'aplicando') {
+    const pct = avance.total > 0 ? Math.round((avance.hechas / avance.total) * 100) : 0;
     return (
       <div className="px-4 py-16 text-center">
         <p className="text-4xl mb-3 animate-pulse" aria-hidden>📦</p>
-        <p className="font-medium">Cargando productos…</p>
-        <p className="text-sm text-[var(--texto-suave)]">No cierres esta pantalla.</p>
+        <p className="font-medium" aria-live="polite">
+          Cargando productos… {avance.hechas} de {avance.total}
+        </p>
+
+        {/* La carga no es atómica: se aplica fila por fila. Sin barra, una
+            planilla de 600 productos son minutos de pantalla quieta y el
+            usuario cierra creyendo que se colgó — y lo que ya entró, queda. */}
+        <div
+          className="mx-auto mt-3 max-w-xs h-2 rounded-full bg-[var(--borde)] overflow-hidden"
+          role="progressbar"
+          aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
+          aria-label="Avance de la carga"
+        >
+          <div className="h-full bg-marca-500 transition-all" style={{ width: `${pct}%` }} />
+        </div>
+
+        <p className="text-sm text-[var(--texto-suave)] mt-3">
+          No cierres esta pantalla: los productos ya cargados se quedan cargados.
+        </p>
       </div>
     );
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import type { FilaProducto } from '@rutaahorro/core';
+import { toUserMessage, type FilaProducto } from '@rutaahorro/core';
 import { db, normalizeSearch, type LocalProduct } from '../offline/db';
 import { DEMO_PRODUCTOS } from '../demo/data';
 import type {
@@ -241,7 +241,10 @@ export const repoLocal: RepositorioProductos = {
     return p?.name ?? 'otro producto';
   },
 
-  async importarLote(filas: FilaProducto[]): Promise<ResultadoLote> {
+  async importarLote(
+    filas: FilaProducto[],
+    onProgreso?: (hechas: number, total: number) => void,
+  ): Promise<ResultadoLote> {
     const resultado: ResultadoLote = { creados: 0, actualizados: 0, errores: [] };
     const cats = await leerCategorias();
 
@@ -296,9 +299,10 @@ export const repoLocal: RepositorioProductos = {
         resultado.errores.push({
           fila: i + 2,
           nombre: fila.nombre,
-          mensaje: e instanceof Error ? e.message : 'Error desconocido',
+          mensaje: toUserMessage(e),
         });
       }
+      onProgreso?.(i + 1, filas.length);
     }
     return resultado;
   },

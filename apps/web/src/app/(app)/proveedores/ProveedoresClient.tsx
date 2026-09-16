@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { formatCLP, isValidRut, formatRut, toUserMessage } from '@rutaahorro/core';
 import { repoProveedores, type Proveedor, type Recepcion } from '@/lib/datos/proveedores';
+import { Modal } from '@/components/Modal';
+import { Campo } from '@/components/Campo';
 
 const TIPO_DOC: Record<string, string> = {
   guia: 'Guía', factura: 'Factura', boleta: 'Boleta', sin_documento: 'Sin documento',
@@ -23,6 +25,7 @@ export function ProveedoresClient({ puedeAnular }: { puedeAnular: boolean }) {
   const [creando, setCreando] = useState(false);
   const [anulando, setAnulando] = useState<Recepcion | null>(null);
   const [motivo, setMotivo] = useState('');
+  const [anulacionEnCurso, setAnulacionEnCurso] = useState(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -41,7 +44,10 @@ export function ProveedoresClient({ puedeAnular }: { puedeAnular: boolean }) {
   useEffect(() => { void cargar(); }, [cargar]);
 
   async function anular() {
-    if (!anulando || motivo.trim() === '') return;
+    if (!anulando || motivo.trim() === '' || anulacionEnCurso) return;
+    // Anular devuelve stock. Sin este candado, dos toques seguidos en un
+    // celular lento mandan dos anulaciones de la misma recepción.
+    setAnulacionEnCurso(true);
     try {
       await repoProveedores().anularRecepcion(anulando.id, motivo.trim());
       setAnulando(null); setMotivo('');
@@ -49,6 +55,8 @@ export function ProveedoresClient({ puedeAnular }: { puedeAnular: boolean }) {
     } catch (e) {
       setError(toUserMessage(e));
       setAnulando(null);
+    } finally {
+      setAnulacionEnCurso(false);
     }
   }
 
@@ -197,34 +205,43 @@ export function ProveedoresClient({ puedeAnular }: { puedeAnular: boolean }) {
       )}
 
       {anulando && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
-          <div className="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl p-5 space-y-3"
-               style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}>
+        <Modal
+          titulo="Anular recepción"
+          onCerrar={() => { setAnulando(null); setMotivo(''); }}
+          bloqueado={anulacionEnCurso}
+        >
+          <div className="p-5 space-y-3">
             <h2 className="font-semibold">Anular recepción</h2>
             <p className="text-sm text-[var(--texto-suave)]">
               Se devolverá el stock al valor anterior. La recepción no se borra: queda
               registrada como anulada junto con el motivo.
             </p>
-            <textarea
-              value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3}
-              placeholder="Motivo (obligatorio)"
-              className="w-full px-3 py-2 rounded-xl border border-[var(--borde)]"
-            />
+            <Campo etiqueta="Motivo" obligatorio>
+              {(p) => (
+                <textarea
+                  {...p}
+                  value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3}
+                  placeholder="Ej: llegó menos mercadería de la facturada"
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--borde)]"
+                />
+              )}
+            </Campo>
             <div className="flex gap-2">
               <button onClick={() => { setAnulando(null); setMotivo(''); }}
-                      className="tap px-4 py-3 rounded-xl border border-[var(--borde)]">
+                      disabled={anulacionEnCurso}
+                      className="tap px-4 py-3 rounded-xl border border-[var(--borde)] disabled:opacity-50">
                 Cancelar
               </button>
               <button
                 onClick={() => void anular()}
-                disabled={motivo.trim() === ''}
+                disabled={motivo.trim() === '' || anulacionEnCurso}
                 className="tap flex-1 py-3 rounded-xl bg-[var(--color-alerta)] text-white font-semibold disabled:opacity-40"
               >
-                Anular recepción
+                {anulacionEnCurso ? 'Anulando…' : 'Anular recepción'}
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -246,11 +263,15 @@ function FormProveedor({
   const [guardando, setGuardando] = useState(false);
 
   const rutValido = rut.trim() === '' || isValidRut(rut);
+  // Un correo mal escrito no rompe nada hoy, pero sí cuando haya que mandarle
+  // la orden de compra al proveedor y el correo rebote sin que nadie se entere.
+  const correoValido = email.trim() === '' || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
 
   async function guardar() {
     setError(null);
     if (nombre.trim() === '') { setError('El nombre es obligatorio'); return; }
     if (!rutValido) { setError('El RUT no es válido'); return; }
+    if (!correoValido) { setError('Revisa el correo: le falta el @ o el punto del dominio'); return; }
 
     setGuardando(true);
     try {
@@ -272,40 +293,62 @@ function FormProveedor({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center overflow-y-auto" role="dialog" aria-modal="true">
-      <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-5 space-y-3"
-           style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}>
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">{proveedor ? 'Editar proveedor' : 'Nuevo proveedor'}</h2>
-          <button onClick={onCancelar} className="tap px-3 text-sm text-[var(--texto-suave)]">Cancelar</button>
-        </div>
-
-        <input value={nombre} onChange={(e) => setNombre(e.target.value)}
-               placeholder="Nombre o razón social *" autoFocus
-               className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]" />
-
-        <div>
-          <input value={rut} onChange={(e) => setRut(e.target.value)}
-                 placeholder="RUT (opcional)"
-                 className={`tap w-full px-3 py-2.5 rounded-xl border ${
-                   rutValido ? 'border-[var(--borde)]' : 'border-[var(--color-alerta)]'
-                 }`} />
-          {!rutValido && (
-            <p className="text-xs text-[var(--color-alerta)] mt-1">
-              El dígito verificador no cuadra
-            </p>
+    <Modal
+      titulo={proveedor ? 'Editar proveedor' : 'Nuevo proveedor'}
+      ancho="md"
+      encabezado="visible"
+      onCerrar={onCancelar}
+      bloqueado={guardando}
+    >
+      <div className="p-5 space-y-3">
+        <Campo etiqueta="Nombre o razón social" obligatorio>
+          {(p) => (
+            <input {...p} value={nombre} onChange={(e) => setNombre(e.target.value)}
+                   placeholder="Ej: Distribuidora Los Andes Ltda." autoFocus
+                   className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]" />
           )}
-        </div>
+        </Campo>
 
-        <input value={contacto} onChange={(e) => setContacto(e.target.value)}
-               placeholder="Persona de contacto"
-               className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]" />
-        <input value={telefono} onChange={(e) => setTelefono(e.target.value)}
-               inputMode="tel" placeholder="Teléfono"
-               className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]" />
-        <input value={email} onChange={(e) => setEmail(e.target.value)}
-               inputMode="email" autoCapitalize="none" placeholder="Correo"
-               className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]" />
+        <Campo
+          etiqueta="RUT"
+          ayuda="Opcional. Se valida el dígito verificador al escribirlo."
+          error={!rutValido ? 'El dígito verificador no cuadra' : null}
+        >
+          {(p) => (
+            <input {...p} value={rut} onChange={(e) => setRut(e.target.value)}
+                   placeholder="76.123.456-7"
+                   className={`tap w-full px-3 py-2.5 rounded-xl border ${
+                     rutValido ? 'border-[var(--borde)]' : 'border-[var(--color-alerta)]'
+                   }`} />
+          )}
+        </Campo>
+
+        <Campo etiqueta="Persona de contacto">
+          {(p) => (
+            <input {...p} value={contacto} onChange={(e) => setContacto(e.target.value)}
+                   placeholder="Ej: Marcela Soto"
+                   className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]" />
+          )}
+        </Campo>
+
+        <Campo etiqueta="Teléfono">
+          {(p) => (
+            <input {...p} value={telefono} onChange={(e) => setTelefono(e.target.value)}
+                   type="tel" inputMode="tel" autoComplete="tel" placeholder="+56 9 1234 5678"
+                   className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]" />
+          )}
+        </Campo>
+
+        <Campo etiqueta="Correo" error={correoValido ? null : 'Ese correo no tiene forma de correo'}>
+          {(p) => (
+            <input {...p} value={email} onChange={(e) => setEmail(e.target.value)}
+                   type="email" inputMode="email" autoCapitalize="none"
+                   placeholder="contacto@proveedor.cl"
+                   className={`tap w-full px-3 py-2.5 rounded-xl border ${
+                     correoValido ? 'border-[var(--borde)]' : 'border-[var(--color-alerta)]'
+                   }`} />
+          )}
+        </Campo>
 
         {error && (
           <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">
@@ -318,6 +361,6 @@ function FormProveedor({
           {guardando ? 'Guardando…' : proveedor ? 'Guardar cambios' : 'Crear proveedor'}
         </button>
       </div>
-    </div>
+    </Modal>
   );
 }

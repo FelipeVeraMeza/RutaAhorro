@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  formatCLP, parseCLP, weightedAverageCost, costVariationPct,
+  formatCLP, parseCLP, validarCantidad, weightedAverageCost, costVariationPct,
   shouldWarnCostVariation, toUserMessage,
 } from '@rutaahorro/core';
 import {
@@ -31,6 +31,16 @@ export function RecepcionClient() {
   const [documento, setDocumento] = useState('');
 
   const [lineas, setLineas] = useState<LineaRecepcion[]>([]);
+  /**
+   * Lo que el usuario tiene escrito en el campo de cantidad, por producto.
+   *
+   * La línea guarda `cantidad` como número, y el campo mostraba ese número
+   * directamente. Escribir "1,5" —la coma decimal de Chile— pasaba por
+   * `Number("1,")`, que es NaN, y el campo saltaba a 0 en mitad del tecleo: no
+   * había forma de escribir media unidad. El texto crudo vive acá y el número
+   * se deriva con `validarCantidad`, que sí entiende la coma.
+   */
+  const [cantidadTexto, setCantidadTexto] = useState<Record<string, string>>({});
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState<Awaited<ReturnType<typeof buscarParaRecepcion>>>([]);
   const [escaneando, setEscaneando] = useState(false);
@@ -263,22 +273,46 @@ export function RecepcionClient() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[11px] text-[var(--texto-suave)] mb-1">Cantidad</label>
+                    {/* La etiqueta se repite en cada línea, así que el nombre
+                        accesible lleva el producto: tabulando por veinte filas,
+                        "Cantidad" veinte veces no dice dónde está uno parado. */}
+                    <span className="block text-[11px] text-[var(--texto-suave)] mb-1" aria-hidden>Cantidad</span>
                     <input
-                      inputMode="decimal" value={l.cantidad}
-                      onChange={(e) => actualizar(l.productId, { cantidad: Number(e.target.value) || 0 })}
+                      inputMode="decimal"
+                      aria-label={`Cantidad recibida de ${l.nombre}`}
+                      value={cantidadTexto[l.productId] ?? String(l.cantidad)}
+                      onChange={(e) => {
+                        const texto = e.target.value;
+                        setCantidadTexto((p) => ({ ...p, [l.productId]: texto }));
+                        actualizar(l.productId, {
+                          cantidad: validarCantidad(texto, { permiteVacio: true, maximo: 1_000_000 }).valor,
+                        });
+                      }}
                       className="tap w-full px-3 py-2 rounded-lg border border-[var(--borde)] num text-right"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-[var(--texto-suave)] mb-1">Costo unitario</label>
+                    <span className="block text-[11px] text-[var(--texto-suave)] mb-1" aria-hidden>Costo unitario</span>
                     <input
-                      inputMode="numeric" value={l.costoUnitario}
+                      inputMode="numeric"
+                      aria-label={`Costo unitario de ${l.nombre}`}
+                      value={l.costoUnitario}
                       onChange={(e) => actualizar(l.productId, { costoUnitario: parseCLP(e.target.value) ?? 0 })}
-                      className="tap w-full px-3 py-2 rounded-lg border border-[var(--borde)] num text-right"
+                      className={`tap w-full px-3 py-2 rounded-lg border num text-right ${
+                        l.costoUnitario === 0 ? 'border-[var(--color-aviso)]' : 'border-[var(--borde)]'
+                      }`}
                     />
                   </div>
                 </div>
+
+                {/* M-6: confirmar con costo 0 deja el costo promedio, el margen
+                    y el inventario valorizado en cero sin que nadie lo note. */}
+                {l.costoUnitario === 0 && (
+                  <p className="text-xs text-[var(--color-aviso)] bg-amber-50 px-2.5 py-1.5 rounded-lg mt-2">
+                    ⚠ Costo en cero. Si confirmas así, este producto queda sin costo
+                    y su margen y su valorización dejan de servir.
+                  </p>
+                )}
 
                 {/* RF-M3-08: advertir variación de costo antes de confirmar */}
                 {alerta && l.costoAnterior > 0 && (
@@ -291,20 +325,23 @@ export function RecepcionClient() {
                 {l.perecible && (
                   <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-[var(--borde)]">
                     <div>
-                      <label className="block text-[11px] text-[var(--texto-suave)] mb-1">Lote</label>
+                      <span className="block text-[11px] text-[var(--texto-suave)] mb-1" aria-hidden>Lote</span>
                       <input
                         value={l.lote ?? ''}
+                        aria-label={`Número de lote de ${l.nombre}`}
                         onChange={(e) => actualizar(l.productId, { lote: e.target.value })}
                         placeholder="Opcional"
                         className="tap w-full px-3 py-2 rounded-lg border border-[var(--borde)] text-sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-[var(--texto-suave)] mb-1">
+                      <span className="block text-[11px] text-[var(--texto-suave)] mb-1" aria-hidden>
                         Vencimiento <span className="text-[var(--color-alerta)]">*</span>
-                      </label>
+                      </span>
                       <input
                         type="date" min={hoy()} value={l.vencimiento ?? ''}
+                        aria-label={`Fecha de vencimiento de ${l.nombre} (obligatoria)`}
+                        aria-invalid={l.vencimiento ? undefined : true}
                         onChange={(e) => actualizar(l.productId, { vencimiento: e.target.value })}
                         className={`tap w-full px-2 py-2 rounded-lg border text-sm ${
                           l.vencimiento ? 'border-[var(--borde)]' : 'border-[var(--color-alerta)]'

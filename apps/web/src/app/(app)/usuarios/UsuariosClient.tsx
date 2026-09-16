@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { toUserMessage } from '@rutaahorro/core';
 import { repoUsuarios, type Usuario } from '@/lib/datos/usuarios';
 import { NOMBRE_ROL, LEMA_ROL, type Rol } from '@/lib/navegacion';
+import { Modal } from '@/components/Modal';
+import { Campo } from '@/components/Campo';
 
 const ROLES: Rol[] = ['admin', 'supervisor', 'vendedor', 'bodega'];
 
@@ -180,44 +182,44 @@ export function UsuariosClient({ miId }: { miId: string }) {
 
       {/* Invitación */}
       {invitando && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
-          <div
-            className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-5 space-y-4"
-            style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
-          >
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold">Invitar empleado</h2>
-              <button onClick={() => setInvitando(false)} className="tap px-3 text-sm text-[var(--texto-suave)]">
-                Cancelar
-              </button>
-            </div>
-
+        <Modal
+          titulo="Invitar empleado"
+          ancho="md"
+          encabezado="visible"
+          onCerrar={() => setInvitando(false)}
+          bloqueado={enviando}
+        >
+          <div className="p-5 space-y-4">
             <p className="text-sm text-[var(--texto-suave)]">
               Le llegará un correo para que cree su propia contraseña.
               Tú nunca la conocerás.
             </p>
 
-            <div>
-              <label htmlFor="nom" className="block text-sm font-medium mb-1.5">Nombre</label>
-              <input
-                id="nom" value={nombre} onChange={(e) => setNombre(e.target.value)}
-                placeholder="Ej: Jorge Peña"
-                className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
-              />
-            </div>
+            <Campo etiqueta="Nombre" obligatorio>
+              {(p) => (
+                <input
+                  {...p} value={nombre} onChange={(e) => setNombre(e.target.value)}
+                  placeholder="Ej: Jorge Peña" autoFocus
+                  className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
+                />
+              )}
+            </Campo>
 
-            <div>
-              <label htmlFor="mail" className="block text-sm font-medium mb-1.5">Correo</label>
-              <input
-                id="mail" type="email" inputMode="email" autoCapitalize="none"
-                value={email} onChange={(e) => setEmail(e.target.value)}
-                placeholder="jorge@correo.cl"
-                className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
-              />
-            </div>
+            <Campo etiqueta="Correo" obligatorio>
+              {(p) => (
+                <input
+                  {...p} type="email" inputMode="email" autoCapitalize="none"
+                  value={email} onChange={(e) => setEmail(e.target.value)}
+                  placeholder="jorge@correo.cl"
+                  className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
+                />
+              )}
+            </Campo>
 
-            <div>
-              <span className="block text-sm font-medium mb-1.5">Rol</span>
+            {/* Un grupo de radios necesita fieldset/legend: sin eso el lector de
+                pantalla lee las cuatro opciones sueltas, sin decir de qué son. */}
+            <fieldset>
+              <legend className="block text-sm font-medium mb-1.5">Rol</legend>
               <div className="space-y-2">
                 {ROLES.map((r) => (
                   <label
@@ -238,7 +240,7 @@ export function UsuariosClient({ miId }: { miId: string }) {
                   </label>
                 ))}
               </div>
-            </div>
+            </fieldset>
 
             {error && (
               <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">
@@ -254,7 +256,7 @@ export function UsuariosClient({ miId }: { miId: string }) {
               {enviando ? 'Enviando…' : 'Enviar invitación'}
             </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

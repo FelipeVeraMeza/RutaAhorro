@@ -50,8 +50,9 @@ desktop.ini
 *.sql.gz
 backups/
 
-# Bundle generado por tools/sql-check/bundle.js
+# Generados por tools/sql-check/ — se regeneran con npm run db:bundle / db:instalar
 supabase/bundle.sql
+supabase/instalar.sql
 
 # PDF generado desde docs/cliente/resumen-sistema.html
 *.pdf

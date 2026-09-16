@@ -2,22 +2,8 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { destinoSeguro } from '@rutaahorro/core';
 import { supabase } from '@/lib/supabase/client';
-
-/**
- * A dónde mandar al usuario después de entrar.
- *
- * El parámetro `next` viene de la URL y lo escribe quien sea. Sin este filtro,
- * un enlace con `?next=https://sitio-falso.cl` llevaría a la víctima a una
- * copia del login justo después de autenticarse de verdad: el momento en que
- * menos sospecha. Solo se aceptan rutas internas; `//` se descarta porque el
- * navegador la interpreta como otro dominio.
- */
-function destinoSeguro(next: string | null): string {
-  if (!next) return '/pos';
-  if (!next.startsWith('/') || next.startsWith('//')) return '/pos';
-  return next;
-}
 
 function LoginForm() {
   const router = useRouter();
@@ -45,6 +31,8 @@ function LoginForm() {
       return;
     }
 
+    // `next` viene de la URL y lo escribe quien sea: `destinoSeguro` solo deja
+    // pasar rutas internas. Vive en core, con pruebas (packages/core/test).
     router.push(destinoSeguro(params.get('next')));
     router.refresh();
   }
@@ -74,6 +62,7 @@ function LoginForm() {
               autoComplete="username"
               autoCapitalize="none"
               required
+              autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] bg-white focus:outline-none focus:ring-2 focus:ring-marca-500"
@@ -99,6 +88,8 @@ function LoginForm() {
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
+                aria-pressed={showPassword}
+                aria-label={showPassword ? 'Ocultar la contraseña' : 'Mostrar la contraseña'}
                 className="absolute right-2 top-1/2 -translate-y-1/2 tap px-2 text-sm text-marca-600 font-medium"
               >
                 {showPassword ? 'Ocultar' : 'Ver'}
