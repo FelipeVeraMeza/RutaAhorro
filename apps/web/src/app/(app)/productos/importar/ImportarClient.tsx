@@ -4,7 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  parsearProductos, plantillaCSV, formatCLP, COLUMNAS, COLUMNAS_OBLIGATORIAS,
+  parsearProductos, parsearFilas, leerXlsx, ErrorPlanilla, plantillaCSV,
+  formatCLP, COLUMNAS, COLUMNAS_OBLIGATORIAS,
   type ResultadoImportacion, toUserMessage,
 } from '@rutaahorro/core';
 import { repoProductos, type ResultadoLote } from '@/lib/productos';
@@ -28,6 +29,7 @@ export function ImportarClient() {
   const [analisis, setAnalisis] = useState<ResultadoImportacion | null>(null);
   const [resultado, setResultado] = useState<ResultadoLote | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
   const [avance, setAvance] = useState({ hechas: 0, total: 0 });
 
   function descargarPlantilla() {
@@ -49,6 +51,7 @@ export function ImportarClient() {
 
   async function elegirArchivo(file: File) {
     setError(null);
+    setAviso(null);
     if (file.size > MAX_BYTES) {
       setError(
         `El archivo pesa ${(file.size / 1024 / 1024).toFixed(1)} MB y el máximo son 4 MB. ` +
@@ -58,11 +61,27 @@ export function ImportarClient() {
     }
     setNombreArchivo(file.name);
     try {
-      const texto = await file.text();
-      setAnalisis(parsearProductos(texto));
+      // Se mira el contenido y no la extensión: un archivo renombrado a .csv
+      // que por dentro es un Excel es un caso real, y el mensaje "falta la
+      // columna nombre" no ayudaría a entender qué pasó.
+      const datos = new Uint8Array(await file.arrayBuffer());
+      const esZip = datos.length > 1 && datos[0] === 0x50 && datos[1] === 0x4b;
+      const pareceExcel = esZip || /\.(xlsx|xlsm|xls)$/i.test(file.name);
+
+      if (pareceExcel) {
+        const { filas, hoja, totalHojas } = await leerXlsx(datos);
+        if (totalHojas > 1) {
+          setAviso(`El libro tiene ${totalHojas} hojas. Se leyó «${hoja}», la primera.`);
+        }
+        setAnalisis(parsearFilas(filas));
+      } else {
+        setAnalisis(parsearProductos(new TextDecoder('utf-8').decode(datos)));
+      }
       setPaso('revisar');
     } catch (e) {
-      setError(toUserMessage(e));
+      // ErrorPlanilla ya viene escrito para el usuario y dice qué hacer;
+      // pasarlo por toUserMessage lo convertiría en "Ocurrió un problema".
+      setError(e instanceof ErrorPlanilla ? e.message : toUserMessage(e));
     }
   }
 
@@ -92,7 +111,8 @@ export function ImportarClient() {
         <section className="tarjeta p-4">
           <h2 className="font-semibold text-sm mb-1">1 · Descarga la plantilla</h2>
           <p className="text-sm text-[var(--texto-suave)] mb-3">
-            Ábrela en Excel, reemplaza las filas de ejemplo por tus productos y guárdala como CSV.
+            Ábrela en Excel y reemplaza las filas de ejemplo por tus productos. Puedes
+            guardarla como Excel o como CSV: leemos las dos.
           </p>
           <button
             onClick={descargarPlantilla}
@@ -124,14 +144,19 @@ export function ImportarClient() {
           </p>
           <label className="tap flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-[var(--borde)] cursor-pointer">
             <span className="text-3xl" aria-hidden>📄</span>
-            <span className="text-sm font-medium">Elegir archivo CSV</span>
+            <span className="text-sm font-medium">Elegir archivo</span>
+            <span className="text-xs text-[var(--texto-suave)]">Excel (.xlsx) o CSV</span>
             <input
               type="file"
-              accept=".csv,text/csv"
+              accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="sr-only"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) void elegirArchivo(f); }}
             />
           </label>
+          <p className="text-xs text-[var(--texto-suave)] mt-3">
+            Si tu lista está en Excel, súbela tal cual. No hace falta convertirla a nada.
+            De un libro con varias hojas se lee la primera.
+          </p>
         </section>
 
         {error && (
@@ -150,6 +175,12 @@ export function ImportarClient() {
     return (
       <div className="px-4 py-5 space-y-4">
         <Cabecera />
+
+        {aviso && (
+          <p role="status" className="text-sm text-[var(--color-aviso)] bg-amber-50 px-3 py-2 rounded-lg">
+            ⚠ {aviso}
+          </p>
+        )}
 
         <div className={`tarjeta p-4 ${ok ? 'border-marca-300' : 'border-[var(--color-alerta)]'}`}>
           <p className="text-xs text-[var(--texto-suave)] truncate mb-1">{nombreArchivo}</p>

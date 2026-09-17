@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parsearProductos, partirLinea, detectarSeparador, leerNumero, plantillaCSV,
+  parsearProductos, parsearFilas, partirLinea, detectarSeparador, leerNumero, plantillaCSV,
 } from '../src/import.js';
 
 const ENC = 'nombre;sku;codigo_barras;categoria;precio_venta;costo;unidad;stock_inicial;stock_minimo;perecible;dias_alerta';
@@ -264,5 +264,73 @@ describe('escala', () => {
     expect(r.ok).toBe(true);
     expect(r.filas).toHaveLength(1000);
     expect(ms).toBeLessThan(1000);
+  });
+});
+
+describe('parsearFilas — el camino que comparten el CSV y el Excel', () => {
+  const ENCABEZADO = ['nombre', 'sku', 'precio_venta'];
+
+  it('valida una matriz sin pasar por texto', () => {
+    const r = parsearFilas([ENCABEZADO, ['Coca-Cola 1.5L', 'CC15', '2290']]);
+    expect(r.ok).toBe(true);
+    expect(r.filas[0].nombre).toBe('Coca-Cola 1.5L');
+    expect(r.filas[0].precio_venta).toBe(2290);
+  });
+
+  // Un punto y coma dentro de una celda de Excel es un nombre de producto
+  // normal. Si el .xlsx se convirtiera a CSV para reusar el otro camino, esa
+  // celda partiría la fila en dos.
+  it('un punto y coma dentro de una celda no parte la fila', () => {
+    const r = parsearFilas([ENCABEZADO, ['Pack 2; oferta', 'P2', '1990']]);
+    expect(r.ok).toBe(true);
+    expect(r.filas[0].nombre).toBe('Pack 2; oferta');
+  });
+
+  it('una celda con salto de línea tampoco', () => {
+    const r = parsearFilas([ENCABEZADO, ['Jabón' + String.fromCharCode(10) + 'líquido', 'J1', '990']]);
+    expect(r.ok).toBe(true);
+    expect(r.filas).toHaveLength(1);
+  });
+
+  it('acepta encabezados con mayúsculas y espacios de más', () => {
+    const r = parsearFilas([['  Nombre ', 'PRECIO_VENTA'], ['Azúcar', '1190']]);
+    expect(r.ok).toBe(true);
+    expect(r.filas[0].nombre).toBe('Azúcar');
+  });
+
+  it('una matriz vacía avisa que el archivo está vacío', () => {
+    expect(parsearFilas([]).errores[0].mensaje).toMatch(/vacío/);
+    expect(parsearFilas([[], ['', '  ']]).errores[0].mensaje).toMatch(/vacío/);
+  });
+});
+
+describe('numeración de filas', () => {
+  // El usuario abre su planilla, va a la fila que dice el error y tiene que
+  // encontrar ahí el producto del que le hablamos. Antes las líneas en blanco
+  // se descartaban ANTES de numerar y todos los números salían corridos.
+  it('una línea en blanco al medio no corre el número de las siguientes', () => {
+    const r = parsearProductos([ENC, 'Bueno;B1;;;1000;;;;;;', '', 'Malo;M1;;;no-es-precio;;;;;;'].join(String.fromCharCode(10)));
+    expect(r.errores[0].fila).toBe(4);
+  });
+
+  it('en una matriz pasa lo mismo', () => {
+    const r = parsearFilas([
+      ['nombre', 'precio_venta'],
+      ['Bueno', '1000'],
+      [],
+      ['Malo', 'no-es-precio'],
+    ]);
+    expect(r.errores[0].fila).toBe(4);
+  });
+
+  it('las filas en blanco no se cuentan como productos', () => {
+    const r = parsearFilas([
+      ['nombre', 'precio_venta'],
+      ['Uno', '1000'],
+      [],
+      ['Dos', '2000'],
+    ]);
+    expect(r.ok).toBe(true);
+    expect(r.filas).toHaveLength(2);
   });
 });

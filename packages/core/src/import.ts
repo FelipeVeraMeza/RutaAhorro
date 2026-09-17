@@ -122,27 +122,55 @@ function leerBooleano(valor: string): boolean {
  * Valida y convierte el contenido de un CSV.
  * Nunca lanza excepciones: devuelve los errores para mostrárselos al usuario.
  */
+/**
+ * Convierte un CSV en la misma matriz que devuelve el lector de Excel.
+ *
+ * Las líneas en blanco se conservan como filas vacías en vez de descartarse.
+ * Antes se filtraban antes de numerar, así que una línea en blanco al medio
+ * corría todos los números hacia arriba: el usuario iba a la fila 14 que decía
+ * el error y encontraba otro producto.
+ */
+function matrizDesdeCsv(texto: string): string[][] {
+  const sinBom = texto.replace(/^﻿/, '');
+  const sep = detectarSeparador(sinBom);
+  return sinBom.split(/\r?\n/).map((l) => (l.trim() === '' ? [] : partirLinea(l, sep)));
+}
+
+/** Lee un archivo CSV de productos. */
 export function parsearProductos(texto: string): ResultadoImportacion {
+  return parsearFilas(matrizDesdeCsv(texto));
+}
+
+/**
+ * Valida una planilla de productos ya convertida en filas y columnas.
+ *
+ * Es el único validador que hay, y por eso recibe una matriz en vez de texto:
+ * el CSV y el .xlsx llegan acá por caminos distintos y se revisan con las
+ * mismas reglas. Dos validadores paralelos son dos juegos de reglas que con el
+ * tiempo dejan de coincidir, y el que se usa menos es el que se rompe sin que
+ * nadie lo note.
+ *
+ * El índice de cada fila en la matriz es el número que el usuario ve en Excel
+ * menos uno: la posición 0 es el encabezado, o sea la fila 1.
+ */
+export function parsearFilas(matriz: string[][]): ResultadoImportacion {
   const errores: ErrorFila[] = [];
   const avisos: ErrorFila[] = [];
   const filas: FilaProducto[] = [];
 
-  const sinBom = texto.replace(/^﻿/, '');
-  const lineas = sinBom.split(/\r?\n/).filter((l) => l.trim() !== '');
-
-  if (lineas.length === 0) {
+  const primera = matriz.findIndex((f) => f.some((c) => c.trim() !== ''));
+  if (primera === -1) {
     return { ok: false, filas: [], errores: [{ fila: 0, columna: '', mensaje: 'El archivo está vacío', valor: '' }], avisos: [], totalFilas: 0 };
   }
 
-  const sep = detectarSeparador(sinBom);
-  const encabezado = partirLinea(lineas[0], sep).map((c) => c.toLowerCase().replace(/\s+/g, '_'));
+  const encabezado = matriz[primera].map((c) => c.toLowerCase().trim().replace(/\s+/g, '_'));
 
   for (const obligatoria of COLUMNAS_OBLIGATORIAS) {
     if (!encabezado.includes(obligatoria)) {
       errores.push({
         fila: 1, columna: obligatoria,
         mensaje: `Falta la columna obligatoria "${obligatoria}"`,
-        valor: encabezado.join(sep),
+        valor: encabezado.join(', '),
       });
     }
   }
@@ -160,9 +188,10 @@ export function parsearProductos(texto: string): ResultadoImportacion {
   const skusVistos = new Map<string, number>();
   const codigosVistos = new Map<string, number>();
 
-  for (let i = 1; i < lineas.length; i++) {
+  for (let i = primera + 1; i < matriz.length; i++) {
+    const cols = matriz[i];
+    if (cols.every((c) => c.trim() === '')) continue;  // fila en blanco al medio
     const nFila = i + 1; // como lo ve el usuario en Excel
-    const cols = partirLinea(lineas[i], sep);
 
     const nombre = campo(cols, 'nombre');
     if (nombre === '') {
@@ -278,7 +307,7 @@ export function parsearProductos(texto: string): ResultadoImportacion {
     filas,
     errores,
     avisos,
-    totalFilas: lineas.length - 1,
+    totalFilas: matriz.length - primera - 1,
   };
 }
 
