@@ -344,7 +344,7 @@ declare
   v_lot_id  uuid;
   v_result  jsonb := '[]'::jsonb;
 begin
-  if current_user_role() not in ('admin','supervisor','bodega') then
+  if coalesce(current_user_role()::text, '') not in ('admin','supervisor','bodega') then
     raise exception 'SIN_PERMISO' using errcode = '42501';
   end if;
   if v_store is null then
@@ -443,7 +443,7 @@ declare
   v_user   uuid := auth.uid();
   v_lot    product_lots%rowtype;
 begin
-  if current_user_role() not in ('admin','supervisor','bodega') then
+  if coalesce(current_user_role()::text, '') not in ('admin','supervisor','bodega') then
     raise exception 'SIN_PERMISO_AJUSTAR' using errcode = '42501';
   end if;
   if coalesce(trim(p_reason),'') = '' then

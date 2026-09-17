@@ -1,6 +1,8 @@
 'use client';
 
-import { toUserMessage, type FilaProducto } from '@rutaahorro/core';
+import {
+  codigosDesdeImportacion, planCodigos, toUserMessage, type FilaProducto,
+} from '@rutaahorro/core';
 import { db, normalizeSearch, type LocalProduct } from '../offline/db';
 import { DEMO_PRODUCTOS } from '../demo/data';
 import type {
@@ -172,28 +174,51 @@ export const repoLocal: RepositorioProductos = {
     return { id };
   },
 
+  /**
+   * Edición atómica, igual que `fn_update_product` en Supabase: o se guarda
+   * todo o no se guarda nada. Dexie da la transacción; la regla de que
+   * `codigos` sin definir no toca los códigos tiene que ser la misma en los
+   * dos repositorios, o el modo demo probaría un comportamiento que en
+   * producción no existe.
+   */
   async actualizar(id, datos: ProductoEditable) {
     const actual = await db().products.get(id);
     if (!actual) throw new Error('NO_ENCONTRADO');
 
-    await db().products.put({
-      ...actual,
-      name: datos.nombre,
-      nameSearch: normalizeSearch(datos.nombre),
-      sku: datos.sku,
-      salePrice: datos.precioVenta,
-      unit: datos.unidad,
-      categoryId: datos.categoriaId,
-      tracksExpiry: datos.perecible,
-      minStock: datos.stockMinimo,
-      updatedAt: new Date().toISOString(),
-    });
-    if (typeof datos.costo === 'number') await guardarCosto(id, datos.costo);
+    const previos = (await db().barcodes.where('productId').equals(id).toArray())
+      .map((b) => b.barcode);
+    const plan = planCodigos(previos, datos.codigos);
 
-    await db().barcodes.where('productId').equals(id).delete();
-    for (const c of datos.codigos.filter(Boolean)) {
-      await db().barcodes.put({ barcode: c, productId: id });
+    // Se comprueba antes de escribir para poder nombrar el producto que ya
+    // tiene el código, en vez de dejar que reviente el índice.
+    for (const c of plan.agregar) {
+      const duenio = await this.codigoEnUso(c, id);
+      if (duenio) throw new Error(`CODIGO_EN_USO:${c}:${duenio}`);
     }
+
+    await db().transaction('rw', db().products, db().barcodes, async () => {
+      await db().products.put({
+        ...actual,
+        name: datos.nombre,
+        nameSearch: normalizeSearch(datos.nombre),
+        sku: datos.sku,
+        salePrice: datos.precioVenta,
+        unit: datos.unidad,
+        categoryId: datos.categoriaId,
+        tracksExpiry: datos.perecible,
+        minStock: datos.stockMinimo,
+        updatedAt: new Date().toISOString(),
+      });
+
+      if (plan.tocar) {
+        if (plan.quitar.length > 0) await db().barcodes.bulkDelete(plan.quitar);
+        for (const c of plan.agregar) {
+          await db().barcodes.put({ barcode: c, productId: id });
+        }
+      }
+    });
+
+    if (typeof datos.costo === 'number') await guardarCosto(id, datos.costo);
   },
 
   async desactivar(id) {
@@ -266,6 +291,13 @@ export const repoLocal: RepositorioProductos = {
           : undefined;
 
         if (existente) {
+          // Sin código en la fila no se tocan los códigos del producto: una
+          // planilla de precios no trae esa columna y antes dejaba el catálogo
+          // invisible al escáner. Con código, se suma al que ya tenía.
+          const previos = (await db().barcodes.where('productId').equals(existente.id).toArray())
+            .map((b) => b.barcode);
+          const codigos = codigosDesdeImportacion(previos, fila.codigo_barras);
+
           await this.actualizar(existente.id, {
             nombre: fila.nombre,
             sku: fila.sku,
@@ -276,7 +308,7 @@ export const repoLocal: RepositorioProductos = {
             stockMinimo: fila.stock_minimo,
             perecible: fila.perecible,
             diasAlerta: fila.dias_alerta,
-            codigos: fila.codigo_barras ? [fila.codigo_barras] : [],
+            ...(codigos ? { codigos } : {}),
           });
           resultado.actualizados++;
         } else {

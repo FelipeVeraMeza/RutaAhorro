@@ -44,8 +44,23 @@ export interface ProductoNuevo {
   stockInicial: number;
 }
 
-export type ProductoEditable = Omit<ProductoNuevo, 'stockInicial' | 'costo'> &
-  Partial<Pick<ProductoNuevo, 'costo'>>;
+/**
+ * Lo que se puede cambiar de un producto existente.
+ *
+ * Dos campos son opcionales y significan cosas distintas de "vacío":
+ *
+ * - `costo` ausente = **no tocar el costo promedio**. Lo mantiene la recepción
+ *   con el promedio ponderado; mandar 0 porque el campo estaba en blanco le
+ *   borraba el costo al producto, y con él el margen y el inventario
+ *   valorizado.
+ * - `codigos` ausente = **no tocar los códigos de barra**. Un arreglo vacío sí
+ *   los borra, porque eso es lo que pide quien vacía la lista en el
+ *   formulario. La carga masiva mandaba `[]` cuando la planilla no traía
+ *   columna de código, y eso dejaba invisibles al escáner a todos los
+ *   productos que la planilla tocara.
+ */
+export type ProductoEditable = Omit<ProductoNuevo, 'stockInicial' | 'costo' | 'codigos'> &
+  Partial<Pick<ProductoNuevo, 'costo' | 'codigos'>>;
 
 export interface Categoria {
   id: string;
@@ -71,6 +86,11 @@ export interface RepositorioProductos {
   listar(filtro: FiltroProductos, verCostos: boolean): Promise<Producto[]>;
   obtener(id: string, verCostos: boolean): Promise<Producto | null>;
   crear(datos: ProductoNuevo): Promise<{ id: string }>;
+  /**
+   * Edición atómica. Si `datos.codigos` viene sin definir, los códigos de
+   * barra quedan como estaban; si viene con un arreglo, el producto queda con
+   * exactamente esos.
+   */
   actualizar(id: string, datos: ProductoEditable): Promise<void>;
   /** Desactiva. Nunca borra: la trazabilidad depende de conservar el registro. */
   desactivar(id: string): Promise<void>;

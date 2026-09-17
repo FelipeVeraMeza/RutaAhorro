@@ -42,7 +42,7 @@ declare
   v_dueno   text;
   v_i       integer := 0;
 begin
-  if current_user_role() not in ('admin','supervisor','bodega') then
+  if coalesce(current_user_role()::text, '') not in ('admin','supervisor','bodega') then
     raise exception 'SIN_PERMISO_CREAR_PRODUCTO' using errcode = '42501';
   end if;
 

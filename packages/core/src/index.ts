@@ -17,3 +17,4 @@ export * from './import.js';
 export * from './comprobante.js';
 export * from './etiqueta.js';
 export * from './destino.js';
+export * from './codigos.js';

@@ -1,6 +1,6 @@
 'use client';
 
-import { toUserMessage, type FilaProducto } from '@rutaahorro/core';
+import { codigosDesdeImportacion, toUserMessage, type FilaProducto } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import type {
   FiltroProductos, Producto, ProductoEditable, ProductoNuevo,
@@ -138,36 +138,34 @@ export const repoSupabase: RepositorioProductos = {
     return { id: (data as { product_id: string }).product_id };
   },
 
+  /**
+   * Edición de producto en una sola transacción.
+   *
+   * Antes eran dos llamadas: un `update` al producto y, aparte, un `delete`
+   * de todos sus códigos de barra seguido de un `insert`. Si la inserción
+   * fallaba —código recién tomado por otro, conexión caída en el mostrador,
+   * token vencido entre una llamada y la otra— el producto quedaba sin ningún
+   * código. En la pantalla de productos no se nota: el artículo sigue ahí con
+   * su nombre y su precio. Se nota en la caja, cuando el lector pita y no pasa
+   * nada. Ver docs/22, T-02.
+   */
   async actualizar(id, datos: ProductoEditable) {
-    const client = supabase();
-    const { tenantId } = await tenantYTienda();
-
-    const cambios: Record<string, unknown> = {
-      name: datos.nombre,
-      sku: datos.sku,
-      category_id: datos.categoriaId,
-      unit: datos.unidad,
-      sale_price: datos.precioVenta,
-      min_stock: datos.stockMinimo,
-      tracks_expiry: datos.perecible,
-      expiry_alert_days: datos.diasAlerta,
-    };
-    // avg_cost lo mantiene fn_confirm_receipt: no se toca desde aquí salvo
-    // que el rol tenga permiso y lo envíe explícitamente.
-    if (typeof datos.costo === 'number') cambios.avg_cost = datos.costo;
-
-    const { error } = await client.from('products').update(cambios).eq('id', id);
+    const { error } = await supabase().rpc('fn_update_product', {
+      p_product_id: id,
+      p_name: datos.nombre,
+      p_sku: datos.sku,
+      p_category_id: datos.categoriaId,
+      p_unit: datos.unidad,
+      p_sale_price: datos.precioVenta,
+      // Nulo, no 0: nulo le dice a la función que deje el costo como estaba.
+      p_avg_cost: typeof datos.costo === 'number' ? datos.costo : null,
+      p_min_stock: datos.stockMinimo,
+      p_tracks_expiry: datos.perecible,
+      p_expiry_alert_days: datos.diasAlerta,
+      // Lo mismo con los códigos: nulo = no tocarlos.
+      p_barcodes: datos.codigos ? datos.codigos.filter(Boolean) : null,
+    });
     if (error) throw error;
-
-    await client.from('product_barcodes').delete().eq('product_id', id);
-    if (datos.codigos.filter(Boolean).length > 0) {
-      const { error: e } = await client.from('product_barcodes').insert(
-        datos.codigos.filter(Boolean).map((barcode, i) => ({
-          tenant_id: tenantId, product_id: id, barcode, is_primary: i === 0,
-        })),
-      );
-      if (e) throw e;
-    }
   },
 
   async desactivar(id) {
@@ -251,16 +249,29 @@ export const repoSupabase: RepositorioProductos = {
         }
 
         const { data: previo } = fila.sku
-          ? await supabase().from('products').select('id').eq('sku', fila.sku).maybeSingle()
+          ? await supabase()
+              .from('products')
+              .select('id, product_barcodes(barcode)')
+              .eq('sku', fila.sku)
+              .maybeSingle()
           : { data: null };
 
         if (previo) {
+          // Una planilla que actualiza precios no trae columna de código de
+          // barra, y antes eso se traducía en "el producto queda sin códigos":
+          // la planilla del proveedor dejaba el catálogo invisible al escáner.
+          // Sin código en la fila no se toca nada; con código, se suma a los
+          // que ya tenía en vez de reemplazarlos.
+          const previos = ((previo.product_barcodes ?? []) as Array<{ barcode: string }>)
+            .map((b) => b.barcode);
+          const codigos = codigosDesdeImportacion(previos, fila.codigo_barras);
+
           await this.actualizar(previo.id as string, {
             nombre: fila.nombre, sku: fila.sku, categoriaId, unidad: fila.unidad,
             precioVenta: fila.precio_venta, costo: fila.costo,
             stockMinimo: fila.stock_minimo, perecible: fila.perecible,
             diasAlerta: fila.dias_alerta,
-            codigos: fila.codigo_barras ? [fila.codigo_barras] : [],
+            ...(codigos ? { codigos } : {}),
           });
           resultado.actualizados++;
         } else {

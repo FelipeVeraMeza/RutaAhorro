@@ -332,7 +332,13 @@ declare
   v_total  integer := 0;
   v_result jsonb := '[]'::jsonb;
 begin
-  if current_user_role() not in ('admin','supervisor','bodega') then
+  -- El `coalesce` no es decorativo. `current_user_role()` devuelve NULL cuando
+  -- el usuario no tiene perfil —el caso que produce `handle_new_user` si la
+  -- invitación llegó sin `tenant_id`, que no es raro—, y `NULL not in (...)`
+  -- no vale verdadero ni falso: vale NULL. Un `if` con NULL no entra. El
+  -- guardia dejaba pasar justo a quien no tiene rol. Va igual en las ocho
+  -- comprobaciones de este tipo que hay en el esquema.
+  if coalesce(current_user_role()::text, '') not in ('admin','supervisor','bodega') then
     raise exception 'SIN_PERMISO' using errcode = '42501';
   end if;
   if v_store is null then
@@ -404,7 +410,7 @@ declare
   v_rec    purchase_receipts%rowtype;
   v_item   purchase_receipt_items%rowtype;
 begin
-  if current_user_role() <> 'admin' then
+  if coalesce(current_user_role()::text, '') <> 'admin' then
     raise exception 'SIN_PERMISO' using errcode = '42501';
   end if;
   if coalesce(trim(p_reason),'') = '' then
@@ -452,7 +458,7 @@ declare
   v_delta  numeric(14,3);
   v_cost   integer;
 begin
-  if current_user_role() not in ('admin','supervisor','bodega') then
+  if coalesce(current_user_role()::text, '') not in ('admin','supervisor','bodega') then
     raise exception 'SIN_PERMISO_AJUSTAR' using errcode = '42501';
   end if;
   if coalesce(trim(p_reason),'') = '' then
@@ -666,7 +672,7 @@ declare
   v_diffs  jsonb := '[]'::jsonb;
   v_value  integer := 0;
 begin
-  if current_user_role() not in ('admin','supervisor','bodega') then
+  if coalesce(current_user_role()::text, '') not in ('admin','supervisor','bodega') then
     raise exception 'SIN_PERMISO' using errcode = '42501';
   end if;
 
