@@ -4,7 +4,7 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-09-16.**
+> **Corte: 2026-09-17.**
 
 ---
 
@@ -69,36 +69,83 @@ Si tocas `packages/core`, recompílalo antes de compilar la web:
 
 ---
 
-## ESTADO AL 2026-09-16
+## ESTADO AL 2026-09-17
 
-**206 pruebas · typecheck limpio · SQL validado · build de producción verificado
-con demo apagado · 11 rutas.**
+**291 pruebas · typecheck limpio · SQL validado · build de producción verificado
+con demo apagado · 13 rutas.**
 
 ### Funcionando
 
-Base de datos completa (26 tablas, 24 funciones, RLS al 100 %). POS con escáner
-y modo offline. Ciclo de caja con arqueo. Productos con alta transaccional,
-edición, baja, categorías y códigos múltiples. Carga masiva CSV. Etiquetas
-EAN-13 imprimibles. Usuarios con invitación por correo y roles. Proveedores y
+Base de datos completa (26 tablas, 26 funciones, RLS al 100 %). POS con escáner
+y modo offline. Ciclo de caja con arqueo, cierre forzado y movimientos.
+Productos con alta y edición transaccionales, baja, categorías, descripción y
+códigos múltiples. Carga masiva desde **Excel o CSV**. Etiquetas EAN-13
+imprimibles. Usuarios con invitación por correo y roles. Proveedores y
 recepción con lotes, vencimiento y aviso de variación de costo. Inventario con
-ajustes, kardex y toma. Comprobante de venta con desglose de IVA.
+ajustes, kardex, toma y **lotes con baja de vencidos**. **Historial de ventas
+con anulación.** **Seis reportes con exportación a Excel.** Comprobante de
+venta con desglose de IVA.
 
-**Las 11 pantallas están auditadas.** Nueve, línea por línea.
+### Lo que se hizo el 2026-09-17
 
-### Lo que se hizo el 2026-09-16
+**Lo más importante son dos agujeros de seguridad.** No los encontró revisar
+pantallas —las dos pasadas anteriores no los vieron— los encontró revisar quién
+puede llamar a qué. Están detallados en `docs/21` §0.
+
+1. **Las funciones internas nunca estuvieron cerradas.** `0004` decía
+   `revoke execute on function fn_post_movement from authenticated, anon` y un
+   comentario al lado afirmaba que no se exponían. No cerraba nada: PostgreSQL
+   le concede EXECUTE a `public` al crear una función, y eso no se quita
+   revocándoselo a `authenticated`. `fn_post_movement` es `security definer`,
+   recibe **el tenant como parámetro** y no comprueba ni rol ni tenant. Un
+   vendedor podía, desde el navegador, escribir stock de productos de otro
+   local y forjar movimientos en el kardex —que es inmutable por diseño—
+   atribuidos a cualquier usuario, porque `p_user` también es parámetro.
+2. **Un vendedor podía hacerse administrador.** La política dejaba a cada uno
+   actualizar su propia fila de `profiles` para corregirse el nombre, pero RLS
+   trabaja por fila y no por columna: en esa fila están `role` y
+   `max_discount_pct`. `update profiles set role='admin' where id = miId`.
+
+Las dos están corregidas (migraciones 0009 y 0011). Con ellas, trece guardias
+de rol que no guardaban nada —`NULL not in (...)` vale NULL y un `if` con NULL
+no entra— y el tope de descuento, que estaba escrito en tres lugares y no se
+aplicaba en ninguno.
 
 | Commit | Qué |
 |---|---|
-| `f1930b1` | Open redirect en el login, cantidades decimales y costo borrado al editar |
-| `6eacb28` | Auditoría de las 4 pantallas que faltaban + `Modal` y `Campo` compartidos |
-| `225d9b1` | `db:instalar` en un archivo y `db:admin` con verificación del perfil |
-| `c30aa1f` | `docs/22`: backlog operativo consolidado |
+| `d72af07` | T-02: edición de producto atómica + cerrar las funciones internas |
+| `432b994` | T-03 y T-07: lotes visibles en Inventario y baja de lote vencido |
+| `cbc142e` | Carga masiva desde Excel (.xlsx), sin convertir a CSV |
+| `d87bd3e` | T-44: auditar Inicio línea por línea |
+| `c99b010` | T-44: auditar Usuarios · escalada de privilegios y tope de descuento |
+| `91b29b7` | La configuración del local deja de estar escrita a mano |
+| `9724f99` | Reportes: siete vistas que existían desde 0005 y no leía nadie |
+| `27e7557` | T-05: historial de ventas y anulación |
+| `b0f63d9` | T-08: cerrar la caja que otro dejó abierta |
+| `005078e` | Documentación al día |
+| `d8925bf` | T-01: usar la descripción del producto |
 
-Lo transversal del `6eacb28`: había **nueve diálogos** escritos a mano, ninguno
-cerraba con Escape ni atrapaba el foco, y **trece `<label>` sin `htmlFor`** —se
-ven como etiquetas y no lo son—. Ahora hay dos componentes compartidos,
-`apps/web/src/components/Modal.tsx` y `Campo.tsx`, y los usan todas las
-pantallas. **Úsalos para cualquier diálogo o campo nuevo.**
+**Las 11 pantallas están auditadas línea por línea.** No queda ninguna parcial.
+Dos rutas nuevas: `/reportes` y `/ventas`.
+
+**Diez requerimientos pasaron de "hecho en la base, falta la pantalla" a
+hecho.** Esa categoría bajó de 16 a 6 en `docs/17`.
+
+### Tres cosas que figuraban cumplidas y no lo estaban
+
+Vale la pena tenerlas presentes, porque las tres tienen la misma forma: **la
+pieza existía, estaba bien escrita, y no estaba conectada con nada.**
+
+- **M4-16 "Stock por lote · visible en pantalla Stock":** no estaba visible en
+  ninguna parte. Las dos vistas existían y solo las leía el worker.
+- **M1-14 "Ver quién está conectado":** `last_seen_at` no la escribía nadie.
+  Todos aparecían como "Nunca ha entrado". **Lo tapaba el modo demo**, porque
+  los datos de ejemplo traen la hora puesta.
+- **M2-11 "Carga masiva desde Excel/CSV":** leía CSV y nada más.
+
+Ese último punto del medio dejó una tarea, **T-15**: revisar qué otros campos
+rellena la maqueta que en producción no escribe nadie. No hay razón para creer
+que `last_seen_at` era el único.
 
 ---
 
@@ -107,6 +154,11 @@ pantallas. **Úsalos para cualquier diálogo o campo nuevo.**
 Preguntarme si ya apliqué el esquema en Supabase y desplegué en Railway.
 **Hasta que eso pase, el sistema no existe para el cliente**: todo lo que se ha
 visto corre contra IndexedDB.
+
+> **Ahora hay una razón más para hacerlo cuanto antes.** Las correcciones de
+> seguridad del 2026-09-17 viajan en el esquema. Si en algún momento se aplicó
+> una versión anterior en alguna parte, esa base tiene las dos puertas abiertas
+> y hay que reinstalar, o aplicarle a mano `0009` y `0011`, que son idempotentes.
 
 ```bash
 npm run db:instalar
@@ -141,20 +193,19 @@ Detalle completo con IDs en `docs/22-tareas-pendientes.md`. Resumen:
 
 ### Defectos abiertos, por daño
 
-1. **T-02 · `fn_update_product` transaccional.** Hoy `repoSupabase.actualizar`
-   borra todos los códigos de barra del producto y los reinserta. Si la
-   inserción falla, el producto queda **sin ningún código**: deja de aparecer
-   al escanear y nadie entiende por qué. Es el hallazgo A-4 en la edición y
-   `fn_create_product` no lo cubre. **Es lo peor que hay abierto.**
-2. **T-03 · verificar M4-16 (stock por lote).** Figura ✅ en el inventario de
-   alcance y el código no lo respalda. Es el mismo patrón que ya produjo el
-   hallazgo de RF-M3-08: un requerimiento cerrado sin evidencia.
-3. **T-01 · usar `products.description`.** La columna existe en la base desde el
-   primer día y **ninguna pantalla la lee ni la escribe**: no está en el
-   formulario, ni en el `SELECT` del repositorio, ni en la ficha del POS.
-4. **T-04** recuperar contraseña · **T-05** anular venta (`fn_void_sale` está
-   probada y no la invoca ninguna pantalla) · **T-06** corregir un movimiento de
-   caja.
+1. **T-14 · `unit_price` llega del cliente sin compararlo con el catálogo.** Es
+   lo que queda abierto del tope de descuento: se puede rodear vendiendo a
+   precio 1 en vez de aplicando un descuento. Que el precio viaje es
+   deliberado —una venta hecha sin conexión se sincroniza con el precio que
+   tenía al venderse— pero eso abre un camino que el tope no cubre. Cerrarlo
+   bien pide comparar contra `price_history` con la fecha de la venta.
+2. **T-15 · revisar el resto de los datos de demo.** ¿Qué otros campos rellena
+   la maqueta que en producción no escribe nadie? `last_seen_at` hizo que un
+   requerimiento figurara cumplido durante semanas.
+3. **T-04** recuperar contraseña · **T-06** corregir un movimiento de caja.
+4. **T-16 a T-19** — descuento por línea en el POS, pago mixto, pantalla de
+   configuración del local e historial de precios. Las cuatro están en la base
+   y no en la pantalla.
 
 ### La deuda silenciosa
 
@@ -218,6 +269,17 @@ esperar ningún trámite.
 10. **Diálogos con `<Modal>` y campos con `<Campo>`**, de
     `apps/web/src/components/`. No escribir un `role="dialog"` a mano: los nueve
     que había estaban todos mal.
+11. **Un guardia de rol se escribe en positivo.** `if rol not in (...)` deja
+    pasar a quien no tiene perfil, porque `NULL not in (...)` vale NULL y un
+    `if` con NULL no entra. Van con `coalesce(rol::text,'')`. Ya había trece
+    mal escritos.
+12. **Para cerrar una función de la base hay que revocarle a `public`**, no a
+    `authenticated`. PostgreSQL le concede EXECUTE a `public` al crearla, y
+    revocarle a otro rol no quita nada. Ese error dejó `fn_post_movement`
+    abierta a cualquier usuario con sesión.
+13. **Los valores del negocio se leen de `tenants.settings`**, con
+    `lib/datos/configuracion.ts`. Nada de escribir el IVA, el umbral de
+    variación de costo o el tope de descuento en el código.
 
 ---
 
