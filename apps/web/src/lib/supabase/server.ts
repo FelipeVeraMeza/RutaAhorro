@@ -46,6 +46,42 @@ export interface CurrentUser {
   isActive: boolean;
 }
 
+/**
+ * Cada cuánto se refresca `last_seen_at`, en minutos.
+ *
+ * La pantalla de Usuarios considera conectado a quien tuvo actividad en los
+ * últimos 5 (RF-M1-14), así que con 2 la marca nunca se enfría estando alguien
+ * navegando, y no se escribe una fila en cada clic.
+ */
+const MINUTOS_ENTRE_MARCAS = 2;
+
+/**
+ * Deja constancia de que el usuario está usando el sistema.
+ *
+ * `last_seen_at` está en la tabla de perfiles desde el primer día y **nadie la
+ * escribía**. La pantalla de Usuarios la lee para decir quién está conectado y
+ * cuándo entró por última vez, así que en producción todos aparecían como
+ * "Nunca ha entrado · ⚪ Desconectado", para siempre. Se veía bien solo en modo
+ * demo, porque los datos de ejemplo traen la hora ya puesta: el requerimiento
+ * figuraba cumplido y lo único que funcionaba era la maqueta.
+ *
+ * Si la escritura falla no pasa nada: es un dato de conveniencia, y nadie debe
+ * quedarse fuera del sistema porque no se pudo anotar la hora.
+ */
+async function marcarActividad(
+  client: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  ultima: string | null,
+) {
+  const frescura = ultima ? Date.now() - new Date(ultima).getTime() : Infinity;
+  if (frescura < MINUTOS_ENTRE_MARCAS * 60_000) return;
+  try {
+    await client.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', userId);
+  } catch {
+    // Ver arriba: no es motivo para romper la navegación.
+  }
+}
+
 /** Perfil del usuario autenticado, o null si no hay sesión o está desactivado. */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   // MODO DEMO: devuelve un usuario ficticio sin consultar Supabase.
@@ -62,13 +98,15 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   const { data: profile } = await client
     .from('profiles')
-    .select('full_name, role, tenant_id, store_id, max_discount_pct, is_active')
+    .select('full_name, role, tenant_id, store_id, max_discount_pct, is_active, last_seen_at')
     .eq('id', user.id)
     .maybeSingle();
 
   // Sin perfil, el usuario existe en Auth pero no está vinculado a ningún local.
   // Ver supabase/seed.sql para el procedimiento de vinculación.
   if (!profile) return null;
+
+  await marcarActividad(client, user.id, profile.last_seen_at as string | null);
 
   return {
     id: user.id,

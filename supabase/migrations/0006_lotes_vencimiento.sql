@@ -121,6 +121,25 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- fn_discount_within_limit — el tope de descuento del usuario
+--
+-- Réplica exacta de `discountWithinLimit` en packages/core/src/cart.ts,
+-- incluida la tolerancia: un descuento de "10 %" sobre $1.999 da 10,005 % por
+-- el redondeo a pesos, y rechazarlo sería incomprensible para quien lo aplicó.
+-- ---------------------------------------------------------------------------
+create or replace function public.fn_discount_within_limit(
+  p_discount integer, p_gross integer, p_max_pct numeric
+) returns boolean
+language sql immutable set search_path = public
+as $$
+  select case
+    when coalesce(p_discount, 0) <= 0 then true
+    when coalesce(p_gross, 0) <= 0     then false
+    else (p_discount::numeric * 100 / p_gross) <= coalesce(p_max_pct, 0) + 0.01
+  end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- fn_register_sale — versión con consumo FEFO
 -- ---------------------------------------------------------------------------
 create or replace function public.fn_register_sale(
@@ -151,6 +170,9 @@ declare
   v_disc      integer;
   v_subtotal  integer;
   v_sum       integer := 0;
+  v_bruto     integer := 0;
+  v_desc      integer := 0;
+  v_tope      numeric;
   v_paid      integer := 0;
   v_change    integer := 0;
   v_stock     numeric(14,3);
@@ -203,7 +225,15 @@ begin
     v_qty   := (v_item->>'quantity')::numeric;
     v_price := coalesce((v_item->>'unit_price')::integer, v_product.sale_price);
     v_disc  := coalesce((v_item->>'discount_amount')::integer, 0);
+    if v_disc < 0 then
+      raise exception 'MONTO_NEGATIVO' using errcode = 'P0001';
+    end if;
     v_subtotal := round(v_qty * v_price)::integer - v_disc;
+    -- Un descuento mayor que la línea no regala plata: igual que en core
+    -- (cart.ts), el subtotal de una línea nunca es negativo.
+    if v_subtotal < 0 then v_subtotal := 0; end if;
+    v_bruto := v_bruto + round(v_qty * v_price)::integer;
+    v_desc  := v_desc + v_disc;
     v_sum := v_sum + v_subtotal;
 
     select quantity into v_stock from stock_levels
@@ -228,6 +258,21 @@ begin
                              -v_qty, v_product.avg_cost, 'sale', v_sale, null, v_user);
   end loop;
 
+  -- El tope de descuento, aplicado acá y no solo en la pantalla. Hasta 0011
+  -- `max_discount_pct` existía en la tabla de perfiles, `discountWithinLimit`
+  -- existía en core y DESCUENTO_EXCEDE_LIMITE existía en la tabla de errores,
+  -- y esta función no leía ninguno de los tres: el descuento entraba tal como
+  -- lo mandara el cliente. Ver docs/21, hallazgo U-2.
+  v_desc := v_desc + coalesce(p_discount_total, 0);
+  if v_desc > 0 then
+    select coalesce(max_discount_pct, 0) into v_tope from profiles where id = v_user;
+    if not fn_discount_within_limit(v_desc, v_bruto, v_tope) then
+      raise exception 'DESCUENTO_EXCEDE_LIMITE' using errcode = 'P0001';
+    end if;
+    v_sum := v_sum - coalesce(p_discount_total, 0);
+    if v_sum < 0 then v_sum := 0; end if;
+  end if;
+
   for v_pay in select * from jsonb_array_elements(p_payments) loop
     v_paid := v_paid + (v_pay->>'amount')::integer;
     insert into sale_payments (sale_id, tenant_id, method, amount, received_amount, change_amount)
@@ -247,8 +292,12 @@ begin
   select coalesce(sum(greatest(coalesce(received_amount,0) - amount, 0)), 0)
     into v_change from sale_payments where sale_id = v_sale;
 
+  -- subtotal es el bruto de verdad: antes era `v_sum + p_discount_total`, que
+  -- no devolvía los descuentos por línea y dejaba subtotal - descuento <> total
+  -- en cuanto alguno existiera.
   update sales
-     set subtotal   = v_sum + coalesce(p_discount_total,0),
+     set subtotal   = v_bruto,
+         discount_total = v_desc,
          total      = v_sum,
          tax_amount = round(v_sum - (v_sum / (1 + v_iva/100.0)))::integer
    where id = v_sale;
