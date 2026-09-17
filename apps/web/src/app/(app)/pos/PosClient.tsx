@@ -12,6 +12,7 @@ import { DEMO_ACTIVO } from '@/lib/demo';
 import { sembrarCatalogoDemo } from '@/lib/demo/seed';
 import { enqueueSale, newClientUuid, syncQueue } from '@/lib/offline/sync';
 import type { LocalProduct } from '@/lib/offline/db';
+import { configuracionLocal, CONFIGURACION_POR_OMISION, type ConfiguracionLocal } from '@/lib/datos/configuracion';
 import { Escaner } from './Escaner';
 import { Cobro } from './Cobro';
 import { Comprobante } from './Comprobante';
@@ -31,6 +32,9 @@ export function PosClient({
   cajero?: string;
 }) {
   const [lines, setLines] = useState<CartLine[]>([]);
+  // Se arranca con los valores por omisión para no bloquear la venta mientras
+  // llega la configuración: en el mostrador nadie espera a una consulta.
+  const [config, setConfig] = useState<ConfiguracionLocal>(CONFIGURACION_POR_OMISION);
   const [scannerOn, setScannerOn] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<LocalProduct[]>([]);
@@ -46,6 +50,10 @@ export function PosClient({
     setAviso({ tipo, texto });
     if (avisoTimer.current) window.clearTimeout(avisoTimer.current);
     avisoTimer.current = window.setTimeout(() => setAviso(null), 3200);
+  }, []);
+
+  useEffect(() => {
+    void configuracionLocal().then(setConfig);
   }, []);
 
   // El catálogo local es lo que permite escanear sin internet.
@@ -129,6 +137,8 @@ export function PosClient({
     // (RF-M5-14). El folio queda en null a propósito: lo asigna la base al
     // sincronizar, nunca el dispositivo. Dos cajeros sin señal inventarían
     // folios que después chocan.
+    // El IVA sale de la configuración del local, no del 19 escrito por
+    // omisión en core: el comprobante decía "IVA (19%)" pasara lo que pasara.
     setComprobante(construirComprobante({
       lineas: lines,
       pagos: payments.map((p) => ({
@@ -137,6 +147,7 @@ export function PosClient({
       fecha: soldAt,
       local,
       cajero,
+      ivaPct: config.ivaPct,
     }));
 
     // La venta se confirma de inmediato en pantalla: el cajero no espera a la

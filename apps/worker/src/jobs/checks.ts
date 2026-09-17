@@ -85,12 +85,32 @@ export async function runExpiryCheck() {
   return { alertsCreated: created };
 }
 
-/** Avisa las cajas que quedaron abiertas al cierre del día (RF-M8-03). */
+/**
+ * Avisa las cajas que quedaron abiertas (RF-M8-03).
+ *
+ * Dos cosas que este trabajo no hacía:
+ *
+ * 1. **Miraba la hora de apertura.** Avisaba de toda caja abierta, incluida la
+ *    que un cajero abrió hace diez minutos. Si el trabajo corre mientras el
+ *    local está atendiendo —y corre todos los días— denuncia a todo el mundo
+ *    por estar trabajando. `cash_alert_hours` está en la configuración del
+ *    local desde la primera migración, con 12 horas, y nadie la leía.
+ *
+ * 2. **No repetía la alerta.** Los otros dos chequeos comprueban si ya hay una
+ *    sin leer del mismo objeto antes de crear otra, y este no: una caja que
+ *    alguien olvidó abierta una semana generaba siete alertas idénticas, y un
+ *    panel con la misma alerta siete veces deja de leerse.
+ */
 export async function runOpenCashCheck() {
   const tenants = await activeTenants();
-  const found: Array<{ tenant: string; user: string }> = [];
+  const found: Array<{ tenant: string; user: string; horas: number }> = [];
 
   for (const tenant of tenants) {
+    const horasLimite = Number(
+      (tenant.settings as { cash_alert_hours?: number | string })?.cash_alert_hours ?? 12,
+    );
+    const limite = Number.isFinite(horasLimite) && horasLimite > 0 ? horasLimite : 12;
+
     const { data } = await admin
       .from('v_cash_sessions_summary')
       .select('session_id, full_name, opened_at, sales_total')
@@ -98,13 +118,34 @@ export async function runOpenCashCheck() {
       .eq('status', 'abierta');
 
     for (const s of data ?? []) {
+      const horas = (Date.now() - new Date(s.opened_at as string).getTime()) / 3_600_000;
+      if (horas < limite) continue;
+
+      const { data: existing } = await admin
+        .from('alerts')
+        .select('id')
+        .eq('tenant_id', tenant.id)
+        .eq('type', 'cash_session_open')
+        .eq('is_read', false)
+        .contains('payload', { session_id: s.session_id })
+        .limit(1);
+
+      if ((existing ?? []).length > 0) continue;
+
       await admin.from('alerts').insert({
         tenant_id: tenant.id,
         type: 'cash_session_open',
         severity: 'warning',
-        payload: { session_id: s.session_id, user: s.full_name, opened_at: s.opened_at },
+        payload: {
+          session_id: s.session_id, user: s.full_name,
+          opened_at: s.opened_at, hours_open: Math.round(horas),
+        },
       });
-      found.push({ tenant: tenant.name, user: (s.full_name as string) ?? 'sin nombre' });
+      found.push({
+        tenant: tenant.name,
+        user: (s.full_name as string) ?? 'sin nombre',
+        horas: Math.round(horas),
+      });
     }
   }
 

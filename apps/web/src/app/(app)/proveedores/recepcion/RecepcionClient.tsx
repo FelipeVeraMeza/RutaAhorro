@@ -13,6 +13,7 @@ import {
 } from '@/lib/datos/proveedores';
 import { findByBarcode } from '@/lib/offline/catalog';
 import { useScanner } from '@/lib/scanner/useScanner';
+import { configuracionLocal, CONFIGURACION_POR_OMISION } from '@/lib/datos/configuracion';
 
 const TIPOS = [
   { id: 'guia', label: 'Guía de despacho' },
@@ -26,6 +27,10 @@ const hoy = () => new Date().toISOString().slice(0, 10);
 export function RecepcionClient() {
   const router = useRouter();
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  // El umbral de aviso de variación de costo lo fija el local (RF-M9-08). El
+  // 20 % que traía shouldWarnCostVariation por omisión era el único que se
+  // aplicaba, aunque tenants.settings dijera otra cosa.
+  const [umbralVariacion, setUmbralVariacion] = useState(CONFIGURACION_POR_OMISION.variacionCostoPct);
   const [proveedorId, setProveedorId] = useState('');
   const [tipoDoc, setTipoDoc] = useState('guia');
   const [documento, setDocumento] = useState('');
@@ -90,6 +95,10 @@ export function RecepcionClient() {
       });
     },
   });
+
+  useEffect(() => {
+    void configuracionLocal().then((c) => setUmbralVariacion(c.variacionCostoPct));
+  }, []);
 
   useEffect(() => { if (escaneando) void start(); else stop(); }, [escaneando, start, stop]);
 
@@ -256,7 +265,7 @@ export function RecepcionClient() {
               incomingQty: l.cantidad, incomingUnitCost: l.costoUnitario,
             });
             const variacion = costVariationPct(l.costoAnterior, l.costoUnitario);
-            const alerta = shouldWarnCostVariation(l.costoAnterior, l.costoUnitario);
+            const alerta = shouldWarnCostVariation(l.costoAnterior, l.costoUnitario, umbralVariacion);
 
             return (
               <li key={l.productId} className="tarjeta p-3">

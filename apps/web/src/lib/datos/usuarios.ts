@@ -2,6 +2,7 @@
 
 import { maxDiscountFor, type UserRole } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
+import { topeDescuentoDe } from './configuracion';
 import { DEMO_ACTIVO } from '../demo';
 import { db } from '../offline/db';
 import type { Rol } from '../navegacion';
@@ -42,25 +43,7 @@ const SEMILLA: Usuario[] = [
   { id: 'demo-bodega', nombre: 'Luis Rojas', email: 'luis@rutaahorro.cl', rol: 'bodega', activo: true, ultimaActividad: new Date(Date.now() - 4 * 3600000).toISOString(), descuentoMax: 0 },
 ];
 
-/**
- * Tope de descuento que le corresponde a un rol.
- *
- * Antes esto era una tabla fija escrita en el navegador, y el local no tenía
- * forma de cambiarla: RF-M9-08 pide justamente que el porcentaje máximo por
- * rol sea configurable. El valor vive en `tenants.settings.max_discount_pct`
- * desde el primer día —con los mismos números que estaban escritos acá— y
- * nadie lo leía. `maxDiscountFor` cae en el valor por omisión de core si el
- * local no configuró nada.
- */
-async function topeDescuento(rol: Rol): Promise<number> {
-  const { data } = await supabase()
-    .from('tenants')
-    .select('settings')
-    .maybeSingle();
-  const overrides = (data?.settings as { max_discount_pct?: Partial<Record<Rol, number>> } | null)
-    ?.max_discount_pct;
-  return maxDiscountFor(rol as UserRole, overrides);
-}
+
 
 async function leerLocal(): Promise<Usuario[]> {
   const raw = await db().meta.get(KEY);
@@ -151,7 +134,7 @@ const repoSupabase: RepositorioUsuarios = {
   async cambiarRol(id, rol) {
     const { error } = await supabase()
       .from('profiles')
-      .update({ role: rol, max_discount_pct: await topeDescuento(rol) })
+      .update({ role: rol, max_discount_pct: await topeDescuentoDe(rol) })
       .eq('id', id);
     if (error) throw error;
   },
