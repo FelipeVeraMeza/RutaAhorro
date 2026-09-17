@@ -4,12 +4,31 @@ import { useCallback, useEffect, useState } from 'react';
 import { formatCLP, validarCantidad, toUserMessage } from '@rutaahorro/core';
 import { repoProductos, type Producto } from '@/lib/productos';
 import {
-  repoInventario, ETIQUETA_MOVIMIENTO, MOTIVOS_SUGERIDOS, type Movimiento,
+  repoInventario, ETIQUETA_MOVIMIENTO, ETIQUETA_ESTADO_LOTE, MOTIVOS_SUGERIDOS,
+  type Movimiento, type Lote,
 } from '@/lib/datos/inventario';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 
-type Vista = 'stock' | 'kardex' | 'toma';
+type Vista = 'stock' | 'lotes' | 'kardex' | 'toma';
+
+const fecha = (iso: string) =>
+  new Date(`${iso}T12:00:00`).toLocaleDateString('es-CL', {
+    day: '2-digit', month: '2-digit', year: '2-digit',
+  });
+
+/**
+ * Cuánto falta para que venza, en palabras.
+ *
+ * El número de días solo no sirve en el mostrador: "-2" hay que interpretarlo.
+ * Y nunca va solo el color, siempre con texto (RNF-46).
+ */
+function cuandoVence(dias: number): string {
+  if (dias < 0) return dias === -1 ? 'venció ayer' : `venció hace ${Math.abs(dias)} días`;
+  if (dias === 0) return 'vence hoy';
+  if (dias === 1) return 'vence mañana';
+  return `vence en ${dias} días`;
+}
 
 const fechaHora = (iso: string) =>
   new Date(iso).toLocaleString('es-CL', {
@@ -31,6 +50,11 @@ export function InventarioClient({
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
 
+  const [lotes, setLotes] = useState<Lote[]>([]);
+  const [dandoDeBaja, setDandoDeBaja] = useState<Lote | null>(null);
+  const [motivoBaja, setMotivoBaja] = useState('');
+  const [bajaEnCurso, setBajaEnCurso] = useState(false);
+
   const [ajustando, setAjustando] = useState<Producto | null>(null);
   const [conteo, setConteo] = useState<Record<string, string>>({});
   const [aplicandoToma, setAplicandoToma] = useState(false);
@@ -39,12 +63,14 @@ export function InventarioClient({
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const [ps, ms] = await Promise.all([
+      const [ps, ms, ls] = await Promise.all([
         repoProductos().listar({ busqueda }, verCostos),
         repoInventario().kardex(null, 80),
+        repoInventario().lotes(),
       ]);
       setProductos(ps);
       setMovimientos(ms);
+      setLotes(ls);
     } catch (e) {
       setError(toUserMessage(e));
     } finally {
@@ -113,6 +139,7 @@ export function InventarioClient({
       <div className="flex gap-2 mb-4 overflow-x-auto sin-scrollbar" role="tablist">
         {([
           ['stock', 'Stock'],
+          ['lotes', 'Lotes'],
           ['kardex', 'Movimientos'],
           ...(puedeAjustar ? [['toma', 'Toma de inventario'] as const] : []),
         ] as const).map(([id, label]) => (
@@ -199,6 +226,81 @@ export function InventarioClient({
                   </li>
                 );
               })}
+            </ul>
+          )}
+        </>
+      )}
+
+      {/* ------------------------------------------------------------ LOTES */}
+      {vista === 'lotes' && (
+        <>
+          <p className="text-xs text-[var(--texto-suave)] mb-3">
+            Solo los productos marcados como perecibles llevan lote. Van del que vence
+            antes al que vence después, que es el orden en que salen al vender.
+          </p>
+
+          {(() => {
+            const vencidos = lotes.filter((l) => l.estado === 'vencido');
+            const enRiesgo = lotes.filter((l) => l.estado !== 'vigente');
+            if (enRiesgo.length === 0) return null;
+            return (
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="tarjeta p-3">
+                  <p className="text-[11px] text-[var(--texto-suave)]">Vencidos o por vencer</p>
+                  <p className="num text-lg font-bold text-[var(--color-aviso)]">{enRiesgo.length}</p>
+                </div>
+                {verCostos && (
+                  <div className="tarjeta p-3">
+                    <p className="text-[11px] text-[var(--texto-suave)]">
+                      {vencidos.length > 0 ? 'Perdido y en riesgo' : 'En riesgo'}
+                    </p>
+                    <p className="num text-lg font-bold">
+                      {formatCLP(enRiesgo.reduce((t, l) => t + l.valorEnRiesgo, 0))}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {cargando ? (
+            <p className="text-sm text-[var(--texto-suave)] text-center py-6">Cargando…</p>
+          ) : lotes.length === 0 ? (
+            <p className="text-center text-sm text-[var(--texto-suave)] py-8">
+              No hay lotes con existencia. Los lotes se crean al recibir mercadería de un
+              producto perecible.
+            </p>
+          ) : (
+            <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden">
+              {lotes.map((l) => (
+                <li key={l.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{l.productoNombre}</p>
+                    <p className={`text-xs num ${
+                      l.estado === 'vencido' ? 'text-[var(--color-alerta)]'
+                      : l.estado === 'por_vencer' ? 'text-[var(--color-aviso)]'
+                      : 'text-[var(--texto-suave)]'
+                    }`}>
+                      {l.estado === 'vencido' ? '🔴' : l.estado === 'por_vencer' ? '🟠' : '🟢'}
+                      {' '}{ETIQUETA_ESTADO_LOTE[l.estado]} · {cuandoVence(l.diasParaVencer)}
+                      {' '}({fecha(l.vence)})
+                    </p>
+                    <p className="text-xs text-[var(--texto-suave)] num truncate">
+                      {l.cantidad} en existencia
+                      {l.codigo && ` · lote ${l.codigo}`}
+                      {verCostos && ` · ${formatCLP(l.valorEnRiesgo)}`}
+                    </p>
+                  </div>
+                  {puedeAjustar && (
+                    <button
+                      onClick={() => { setDandoDeBaja(l); setMotivoBaja(''); }}
+                      className="tap px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)] shrink-0"
+                    >
+                      Dar de baja
+                    </button>
+                  )}
+                </li>
+              ))}
             </ul>
           )}
         </>
@@ -332,6 +434,76 @@ export function InventarioClient({
           onListo={() => { setAjustando(null); void cargar(); }}
           onCancelar={() => setAjustando(null)}
         />
+      )}
+
+      {dandoDeBaja && (
+        <Modal
+          titulo={`Dar de baja el lote de ${dandoDeBaja.productoNombre}`}
+          encabezado="visible"
+          onCerrar={() => setDandoDeBaja(null)}
+          bloqueado={bajaEnCurso}
+        >
+          <div className="p-5 space-y-3">
+            <p className="text-sm">
+              Se descuentan <strong className="num">{dandoDeBaja.cantidad}</strong> de{' '}
+              {dandoDeBaja.productoNombre}
+              {dandoDeBaja.codigo && <> (lote {dandoDeBaja.codigo})</>} como merma.
+            </p>
+            <p className="text-xs text-[var(--texto-suave)]">
+              El lote deja de contar para el stock y queda el movimiento en el historial.
+              No se borra: un producto que se botó es un hecho del negocio y tiene que
+              poder explicarse después.
+              {verCostos && <> Son {formatCLP(dandoDeBaja.valorEnRiesgo)} al costo.</>}
+            </p>
+
+            <Campo etiqueta="Motivo" ayuda="Queda escrito en el historial.">
+              {(props) => (
+                <input
+                  {...props}
+                  value={motivoBaja} onChange={(e) => setMotivoBaja(e.target.value)}
+                  list="motivos-baja-lote"
+                  placeholder="Producto vencido"
+                  className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)]"
+                  autoFocus
+                />
+              )}
+            </Campo>
+            <datalist id="motivos-baja-lote">
+              {MOTIVOS_SUGERIDOS.map((m) => <option key={m} value={m} />)}
+            </datalist>
+
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={async () => {
+                  setBajaEnCurso(true);
+                  setError(null);
+                  try {
+                    await repoInventario().darDeBajaLote(dandoDeBaja.id, motivoBaja.trim());
+                    setExito(`Lote de ${dandoDeBaja.productoNombre} dado de baja`);
+                    setDandoDeBaja(null);
+                    await cargar();
+                    setTimeout(() => setExito(null), 8000);
+                  } catch (e) {
+                    setError(toUserMessage(e));
+                    setDandoDeBaja(null);
+                  } finally {
+                    setBajaEnCurso(false);
+                  }
+                }}
+                disabled={bajaEnCurso || motivoBaja.trim() === ''}
+                className="tap w-full py-3.5 rounded-xl bg-[var(--color-alerta)] text-white font-bold disabled:opacity-50"
+              >
+                {bajaEnCurso ? 'Dando de baja…' : 'Dar de baja el lote'}
+              </button>
+              <button
+                onClick={() => setDandoDeBaja(null)} disabled={bajaEnCurso}
+                className="tap w-full py-3 rounded-xl border border-[var(--borde)] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

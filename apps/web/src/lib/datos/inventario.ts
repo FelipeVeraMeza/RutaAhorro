@@ -3,6 +3,7 @@
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import { db } from '../offline/db';
+import { DEMO_LOTES } from '../demo/data';
 
 /**
  * Movimientos de inventario: ajustes, mermas y kardex (módulo M4).
@@ -52,8 +53,46 @@ export interface Movimiento {
   usuario: string | null;
 }
 
+/**
+ * Un lote de un producto perecible.
+ *
+ * `estado` viene calculado desde la base (`v_expiring_lots`) y no en el
+ * navegador: el umbral depende de `expiry_alert_days` de cada producto, que la
+ * pantalla no tiene. Calcularlo acá habría significado inventar un número fijo
+ * para todos los productos, y el pan y el queso no se avisan con los mismos
+ * días.
+ */
+export interface Lote {
+  id: string;
+  productoId: string;
+  productoNombre: string;
+  codigo: string | null;
+  vence: string;
+  diasParaVencer: number;
+  cantidad: number;
+  costoUnitario: number;
+  valorEnRiesgo: number;
+  estado: 'vencido' | 'por_vencer' | 'vigente';
+}
+
+export const ETIQUETA_ESTADO_LOTE: Record<Lote['estado'], string> = {
+  vencido: 'Vencido',
+  por_vencer: 'Por vencer',
+  vigente: 'Vigente',
+};
+
 export interface RepositorioInventario {
   kardex(productoId: string | null, limite?: number): Promise<Movimiento[]>;
+  /** Lotes con existencia, del que vence antes al que vence después (FEFO). */
+  lotes(): Promise<Lote[]>;
+  /**
+   * Da de baja un lote completo como merma, con motivo obligatorio.
+   *
+   * No borra el lote: descuenta su cantidad por el kardex y lo desactiva. Un
+   * producto que se botó por vencido es un hecho del negocio y tiene que poder
+   * explicarse después (ADR-006).
+   */
+  darDeBajaLote(loteId: string, motivo: string): Promise<void>;
   ajustar(datos: {
     productoId: string;
     nuevaCantidad: number;
@@ -79,10 +118,57 @@ async function registrarMov(m: Omit<Movimiento, 'id' | 'fecha'>) {
   await db().meta.put({ key: KEY, value: JSON.stringify(movs.slice(0, 500)) });
 }
 
+const KEY_LOTES_BAJA = 'demo:lotes-dados-de-baja';
+
+async function lotesDadosDeBaja(): Promise<string[]> {
+  const raw = await db().meta.get(KEY_LOTES_BAJA);
+  return raw?.value ? (JSON.parse(raw.value) as string[]) : [];
+}
+
 const repoLocal: RepositorioInventario = {
   async kardex(productoId, limite = 100) {
     const movs = await leerMovs();
     return (productoId ? movs.filter((m) => m.productoId === productoId) : movs).slice(0, limite);
+  },
+
+  async lotes() {
+    const dados = await lotesDadosDeBaja();
+    return DEMO_LOTES
+      .filter((l) => !dados.includes(l.lot_id))
+      .map((l) => ({
+        id: l.lot_id,
+        productoId: l.product_id,
+        productoNombre: l.product_name,
+        codigo: l.lot_code,
+        vence: l.expiry_date,
+        diasParaVencer: l.days_to_expiry,
+        cantidad: l.quantity,
+        costoUnitario: l.unit_cost,
+        valorEnRiesgo: l.value_at_risk,
+        estado: l.expiry_status,
+      }))
+      .sort((a, b) => a.vence.localeCompare(b.vence));
+  },
+
+  async darDeBajaLote(loteId, motivo) {
+    if (motivo.trim() === '') throw new Error('MOTIVO_REQUERIDO');
+    const lote = DEMO_LOTES.find((l) => l.lot_id === loteId);
+    if (!lote) throw new Error('NO_ENCONTRADO');
+    if ((await lotesDadosDeBaja()).includes(loteId)) return;
+
+    const p = await db().products.get(lote.product_id);
+    const saldo = p ? Math.max(0, p.stock - lote.quantity) : 0;
+    if (p) await db().products.put({ ...p, stock: saldo, updatedAt: new Date().toISOString() });
+
+    await registrarMov({
+      productoId: lote.product_id, productoNombre: lote.product_name,
+      tipo: 'merma', cantidad: -lote.quantity, saldo,
+      motivo, usuario: 'Modo demo',
+    });
+    await db().meta.put({
+      key: KEY_LOTES_BAJA,
+      value: JSON.stringify([...(await lotesDadosDeBaja()), loteId]),
+    });
   },
 
   async ajustar({ productoId, nuevaCantidad, tipo, motivo }) {
@@ -127,6 +213,37 @@ const repoLocal: RepositorioInventario = {
 };
 
 const repoSupabase: RepositorioInventario = {
+  async lotes() {
+    // v_expiring_lots trae los tres estados, no solo los que vencen: el nombre
+    // engaña un poco. El `estado` lo calcula la vista con el
+    // `expiry_alert_days` de cada producto.
+    const { data, error } = await supabase()
+      .from('v_expiring_lots')
+      .select('lot_id, product_id, product_name, lot_code, expiry_date, quantity, unit_cost, value_at_risk, days_to_expiry, expiry_status')
+      .order('expiry_date', { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map((l) => ({
+      id: l.lot_id as string,
+      productoId: l.product_id as string,
+      productoNombre: (l.product_name as string) ?? 'Producto',
+      codigo: (l.lot_code as string | null) ?? null,
+      vence: l.expiry_date as string,
+      diasParaVencer: Number(l.days_to_expiry ?? 0),
+      cantidad: Number(l.quantity ?? 0),
+      costoUnitario: Number(l.unit_cost ?? 0),
+      valorEnRiesgo: Number(l.value_at_risk ?? 0),
+      estado: l.expiry_status as Lote['estado'],
+    }));
+  },
+
+  async darDeBajaLote(loteId, motivo) {
+    const { error } = await supabase().rpc('fn_write_off_lot', {
+      p_lot_id: loteId,
+      p_reason: motivo,
+    });
+    if (error) throw error;
+  },
+
   async kardex(productoId, limite = 100) {
     let q = supabase()
       .from('inventory_movements')
