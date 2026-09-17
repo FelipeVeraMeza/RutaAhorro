@@ -19,6 +19,7 @@ import type {
 interface FilaBD {
   id: string;
   name: string;
+  description: string | null;
   sku: string | null;
   category_id: string | null;
   unit: string;
@@ -35,7 +36,7 @@ interface FilaBD {
 }
 
 const SELECT_BASE =
-  'id, name, sku, category_id, unit, sale_price, min_stock, tracks_expiry, ' +
+  'id, name, description, sku, category_id, unit, sale_price, min_stock, tracks_expiry, ' +
   'expiry_alert_days, is_active, updated_at, ' +
   'categories(name), product_barcodes(barcode), stock_levels(quantity)';
 
@@ -45,6 +46,7 @@ function aProducto(f: FilaBD): Producto {
   return {
     id: f.id,
     nombre: f.name,
+    descripcion: f.description ?? null,
     sku: f.sku,
     categoriaId: f.category_id,
     categoriaNombre: f.categories?.name ?? null,
@@ -124,6 +126,7 @@ export const repoSupabase: RepositorioProductos = {
     const { data, error } = await supabase().rpc('fn_create_product', {
       p_name: datos.nombre,
       p_sku: datos.sku,
+      p_description: datos.descripcion,
       p_category_id: datos.categoriaId,
       p_unit: datos.unidad,
       p_sale_price: datos.precioVenta,
@@ -154,6 +157,7 @@ export const repoSupabase: RepositorioProductos = {
       p_product_id: id,
       p_name: datos.nombre,
       p_sku: datos.sku,
+      p_description: datos.descripcion,
       p_category_id: datos.categoriaId,
       p_unit: datos.unidad,
       p_sale_price: datos.precioVenta,
@@ -267,7 +271,8 @@ export const repoSupabase: RepositorioProductos = {
           const codigos = codigosDesdeImportacion(previos, fila.codigo_barras);
 
           await this.actualizar(previo.id as string, {
-            nombre: fila.nombre, sku: fila.sku, categoriaId, unidad: fila.unidad,
+            nombre: fila.nombre, descripcion: fila.descripcion,
+            sku: fila.sku, categoriaId, unidad: fila.unidad,
             precioVenta: fila.precio_venta, costo: fila.costo,
             stockMinimo: fila.stock_minimo, perecible: fila.perecible,
             diasAlerta: fila.dias_alerta,
@@ -276,7 +281,8 @@ export const repoSupabase: RepositorioProductos = {
           resultado.actualizados++;
         } else {
           await this.crear({
-            nombre: fila.nombre, sku: fila.sku, categoriaId, unidad: fila.unidad,
+            nombre: fila.nombre, descripcion: fila.descripcion,
+            sku: fila.sku, categoriaId, unidad: fila.unidad,
             precioVenta: fila.precio_venta, costo: fila.costo,
             stockMinimo: fila.stock_minimo, perecible: fila.perecible,
             diasAlerta: fila.dias_alerta,

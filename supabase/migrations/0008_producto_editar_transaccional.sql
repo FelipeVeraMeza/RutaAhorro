@@ -42,6 +42,7 @@ create or replace function public.fn_update_product(
   p_product_id        uuid,
   p_name              text,
   p_sku               text,
+  p_description       text,
   p_category_id       uuid,
   p_unit              text,
   p_sale_price        integer,
@@ -122,6 +123,10 @@ begin
   update products set
     name              = trim(p_name),
     sku               = nullif(trim(coalesce(p_sku,'')), ''),
+    -- Nulo = no tocar, igual que el costo y los códigos. La cadena vacía sí
+    -- la borra, porque es lo que pide quien vacía el campo en el formulario.
+    description       = case when p_description is null then description
+                             else nullif(trim(p_description), '') end,
     category_id       = p_category_id,
     unit              = coalesce(nullif(trim(coalesce(p_unit,'')), ''), 'unidad'),
     sale_price        = coalesce(p_sale_price, sale_price),

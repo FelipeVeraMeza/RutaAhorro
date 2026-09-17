@@ -12,6 +12,14 @@ export type UserRole = 'admin' | 'supervisor' | 'vendedor' | 'bodega';
 export interface CartLine {
   productId: string;
   name: string;
+  /**
+   * Qué es el producto, en palabras.
+   *
+   * Es lo que convierte "escaneé un código" en "esto es leche entera de 1
+   * litro". No entra en ningún cálculo: viaja para que la caja y el
+   * comprobante puedan mostrarla.
+   */
+  description?: string | null;
   unitPrice: number;
   quantity: number;
   discountAmount?: number;

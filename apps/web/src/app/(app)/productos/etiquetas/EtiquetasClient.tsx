@@ -96,6 +96,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
 
       await repoProductos().actualizar(p.id, {
         nombre: p.nombre,
+        descripcion: p.descripcion,
         sku: p.sku,
         categoriaId: p.categoriaId,
         unidad: p.unidad,

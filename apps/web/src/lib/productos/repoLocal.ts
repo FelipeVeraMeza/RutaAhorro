@@ -55,6 +55,7 @@ async function asegurarSembrado() {
     id: p.id,
     name: p.name,
     nameSearch: normalizeSearch(p.name),
+    description: p.description ?? null,
     sku: p.sku,
     salePrice: p.sale_price,
     unit: p.unit,
@@ -98,6 +99,7 @@ async function aProducto(p: LocalProduct, verCostos: boolean, cats: Categoria[],
   return {
     id: p.id,
     nombre: p.name,
+    descripcion: p.description ?? null,
     sku: p.sku,
     categoriaId: p.categoryId,
     categoriaNombre: cats.find((c) => c.id === p.categoryId)?.nombre ?? null,
@@ -157,6 +159,7 @@ export const repoLocal: RepositorioProductos = {
       id,
       name: datos.nombre,
       nameSearch: normalizeSearch(datos.nombre),
+      description: datos.descripcion,
       sku: datos.sku,
       salePrice: datos.precioVenta,
       unit: datos.unidad,
@@ -201,6 +204,7 @@ export const repoLocal: RepositorioProductos = {
         ...actual,
         name: datos.nombre,
         nameSearch: normalizeSearch(datos.nombre),
+        description: datos.descripcion,
         sku: datos.sku,
         salePrice: datos.precioVenta,
         unit: datos.unidad,
@@ -300,6 +304,7 @@ export const repoLocal: RepositorioProductos = {
 
           await this.actualizar(existente.id, {
             nombre: fila.nombre,
+            descripcion: fila.descripcion,
             sku: fila.sku,
             categoriaId,
             unidad: fila.unidad,
@@ -314,6 +319,7 @@ export const repoLocal: RepositorioProductos = {
         } else {
           await this.crear({
             nombre: fila.nombre,
+            descripcion: fila.descripcion,
             sku: fila.sku,
             categoriaId,
             unidad: fila.unidad,

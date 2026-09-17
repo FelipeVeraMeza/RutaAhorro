@@ -86,6 +86,7 @@ export function PosClient({
       addToCart(prev, {
         productId: p.id,
         name: p.name,
+        description: p.description ?? null,
         unitPrice: p.salePrice,
         quantity: qty,
         tracksExpiry: p.tracksExpiry,
@@ -233,6 +234,11 @@ export function PosClient({
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">{p.name}</span>
+                    {p.description && (
+                      <span className="block truncate text-xs text-[var(--texto-suave)]">
+                        {p.description}
+                      </span>
+                    )}
                     <span className="block text-xs text-[var(--texto-suave)] num">
                       Stock: {p.stock}
                       {p.tracksExpiry && ' · perecible'}
@@ -259,6 +265,11 @@ export function PosClient({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{l.name}</p>
+                    {/* Lo que confirma que se escaneó lo correcto: el nombre
+                        del catálogo puede ser "LE-1000 ENT" y no decir nada. */}
+                    {l.description && (
+                      <p className="text-xs text-[var(--texto-suave)] truncate">{l.description}</p>
+                    )}
                     <p className="text-xs text-[var(--texto-suave)] num">
                       {formatCLP(l.unitPrice)} c/u
                       {typeof l.stockAvailable === 'number' && l.stockAvailable < l.quantity && (

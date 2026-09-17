@@ -13,6 +13,8 @@ import { clp } from './money.js';
 
 export interface FilaProducto {
   nombre: string;
+  /** Qué es el producto, en palabras. Opcional. */
+  descripcion: string | null;
   sku: string | null;
   codigo_barras: string | null;
   categoria: string | null;
@@ -44,7 +46,7 @@ export interface ResultadoImportacion {
 
 /** Columnas de la plantilla. El orden no importa; los nombres sí. */
 export const COLUMNAS = [
-  'nombre', 'sku', 'codigo_barras', 'categoria', 'precio_venta',
+  'nombre', 'descripcion', 'sku', 'codigo_barras', 'categoria', 'precio_venta',
   'costo', 'unidad', 'stock_inicial', 'stock_minimo', 'perecible', 'dias_alerta',
 ] as const;
 
@@ -179,9 +181,17 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
   }
 
   const idx = (col: string) => encabezado.indexOf(col);
+  /**
+   * El valor de una columna, ya recortado.
+   *
+   * El recorte importa más desde que se leen planillas de Excel: una celda con
+   * solo espacios es indistinguible de una vacía para quien la mira, y sin
+   * recortar entraba como texto. Una categoría llamada "   " se habría creado
+   * de verdad, con ese nombre.
+   */
   const campo = (cols: string[], col: string) => {
     const i = idx(col);
-    return i === -1 ? '' : (cols[i] ?? '');
+    return i === -1 ? '' : (cols[i] ?? '').trim();
   };
 
   // Para detectar duplicados DENTRO del archivo
@@ -288,6 +298,7 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
     if (!filaTieneError && precio !== null && costo !== null && stock !== null && minimo !== null) {
       filas.push({
         nombre,
+        descripcion: campo(cols, 'descripcion') || null,
         sku,
         codigo_barras: codigo,
         categoria: campo(cols, 'categoria') || null,
@@ -315,9 +326,9 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
 export function plantillaCSV(): string {
   const ejemplo = [
     COLUMNAS.join(';'),
-    'Arroz grado 1 · 1 kg;ARR-1K;7801234000018;Abarrotes;1590;1100;unidad;40;10;no;30',
-    'Leche entera · 1 L;LEC-1L;7801234000056;Lácteos;1190;850;unidad;36;20;si;10',
-    'Detergente · 3 L;DET-3L;;Limpieza;5990;4300;unidad;9;4;no;30',
+    'Arroz grado 1 · 1 kg;Arroz grado 1, bolsa de 1 kilo;ARR-1K;7801234000018;Abarrotes;1590;1100;unidad;40;10;no;30',
+    'Leche entera · 1 L;Leche entera, caja de 1 litro;LEC-1L;7801234000056;Lácteos;1190;850;unidad;36;20;si;10',
+    'Detergente · 3 L;;DET-3L;;Limpieza;5990;4300;unidad;9;4;no;30',
   ];
   // BOM para que Excel en Windows abra los acentos correctamente
   return '﻿' + ejemplo.join('\r\n') + '\r\n';

@@ -18,6 +18,8 @@ export interface LocalProduct {
   id: string;
   name: string;
   nameSearch: string;      // normalizado: minúsculas y sin tildes
+  /** Qué es el producto. Se muestra al escanearlo en el POS. */
+  description?: string | null;
   sku: string | null;
   salePrice: number;
   unit: string;

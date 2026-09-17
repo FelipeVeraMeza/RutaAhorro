@@ -21,6 +21,7 @@
 create or replace function public.fn_create_product(
   p_name              text,
   p_sku               text,
+  p_description       text,
   p_category_id       uuid,
   p_unit              text,
   p_sale_price        integer,
@@ -87,10 +88,11 @@ begin
   end if;
 
   insert into products (
-    tenant_id, name, sku, category_id, unit, sale_price,
+    tenant_id, name, sku, description, category_id, unit, sale_price,
     avg_cost, last_cost, min_stock, tracks_expiry, expiry_alert_days
   ) values (
-    v_tenant, trim(p_name), nullif(trim(coalesce(p_sku,'')), ''), p_category_id,
+    v_tenant, trim(p_name), nullif(trim(coalesce(p_sku,'')), ''),
+    nullif(trim(coalesce(p_description,'')), ''), p_category_id,
     coalesce(nullif(trim(coalesce(p_unit,'')), ''), 'unidad'),
     coalesce(p_sale_price, 0), coalesce(p_avg_cost, 0), coalesce(p_avg_cost, 0),
     coalesce(p_min_stock, 0), coalesce(p_tracks_expiry, false),

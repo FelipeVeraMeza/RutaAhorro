@@ -79,7 +79,7 @@ semana que se suma al final del proyecto.
 
 | # | Qué era | Dónde quedó |
 |---|---|---|
-| T-01 | `description` del producto sin usar | ⬜ **sigue abierto**, ver abajo |
+| **T-01** | `description` del producto sin usar | Campo en el formulario, columna en la plantilla de carga, y se muestra al escanear en el POS |
 | **T-02** | La edición de producto no era transaccional: si fallaba la inserción de códigos, el producto quedaba **sin ninguno** y dejaba de aparecer al escanear | `fn_update_product` (0008). Y se encontró que la **carga masiva borraba códigos en el camino normal**, no en el de falla: una planilla de precios sin columna de código dejaba invisible al escáner todo lo que tocara |
 | **T-03** | Verificar M4-16 | Verificado: **no existía**. Hoy hay pestaña Lotes en Inventario |
 | **T-05** | Anular venta | Pantalla `/ventas`, con historial y búsqueda por folio |
@@ -95,7 +95,6 @@ Y cuatro que no estaban en esta lista porque nadie los había visto: **S-1** a
 | # | Tarea | Dónde | Por qué importa |
 |---|---|---|---|
 | **T-14** | **`unit_price` llega del cliente sin compararlo con el catálogo.** Es lo que queda abierto de S-4: el tope de descuento se puede rodear vendiendo a precio 1 en vez de aplicando un descuento | `fn_register_sale` | Es deliberado que el precio viaje —una venta sin conexión se sincroniza con el precio que tenía al venderse— pero eso abre un camino que el tope no cubre. Cerrarlo bien pide comparar contra `price_history` con la fecha de la venta |
-| **T-01** | **Usar `description` del producto.** La columna existe en la base y la aplicación no la lee ni la escribe | Formulario, `repoSupabase`, POS | Es lo que falta para que al escanear diga qué es el producto y no solo su nombre |
 | **T-04** | **Recuperar contraseña (RF-M1-05)** | Login | Hoy el dueño entra al panel de Supabase cada vez que un vendedor olvida su clave |
 | **T-06** | **Corregir un movimiento de caja (M-1).** Un egreso de 50.000 en vez de 5.000 no se puede enmendar | Caja | Descuadra el arqueo sin forma de explicarlo |
 | **T-09** | Kardex con filtros y paginación. Hoy trae 80 movimientos fijos | Inventario | Con tres meses de operación deja de servir para investigar nada |
@@ -170,7 +169,7 @@ del cliente; las de F6 no.
 4. **T-14** — cerrar lo que queda del tope de descuento.
 5. **T-15** — revisar los datos de demo. Es barato y puede destapar otros
    requerimientos que figuran cumplidos y solo funcionan en la maqueta.
-6. **T-01, T-04, T-06** — lo que falta para cerrar el día a día.
+6. **T-04, T-06** — lo que falta para cerrar el día a día.
 7. **T-16 a T-19** — las cuatro piezas que están en la base y no en la pantalla.
 8. **F5 completo** (T-20 a T-28), mientras corren los trámites.
 9. **F6** cuando B-04 y B-05 estén listos.

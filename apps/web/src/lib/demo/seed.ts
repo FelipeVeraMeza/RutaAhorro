@@ -18,6 +18,7 @@ export async function sembrarCatalogoDemo(): Promise<number> {
     id: p.id,
     name: p.name,
     nameSearch: normalizeSearch(p.name),
+    description: p.description ?? null,
     sku: p.sku,
     salePrice: p.sale_price,
     unit: p.unit,

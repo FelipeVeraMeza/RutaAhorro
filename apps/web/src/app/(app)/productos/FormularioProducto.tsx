@@ -27,6 +27,7 @@ export function FormularioProducto({
 
   const [nombre, setNombre] = useState(producto?.nombre ?? '');
   const [sku, setSku] = useState(producto?.sku ?? '');
+  const [descripcion, setDescripcion] = useState(producto?.descripcion ?? '');
   const [categoriaId, setCategoriaId] = useState(producto?.categoriaId ?? '');
   const [nuevaCategoria, setNuevaCategoria] = useState('');
   const [unidad, setUnidad] = useState(producto?.unidad ?? 'unidad');
@@ -112,6 +113,7 @@ export function FormularioProducto({
 
       const base = {
         nombre: nombre.trim(),
+        descripcion: descripcion.trim() || null,
         sku: sku.trim() || null,
         categoriaId: catId,
         unidad,
@@ -165,6 +167,21 @@ export function FormularioProducto({
                   placeholder="Ej: Arroz grado 1 · 1 kg"
                   className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
                   autoFocus
+                />
+              )}
+            </Campo>
+
+            <Campo
+              etiqueta="Descripción"
+              ayuda="Qué es, en palabras. Aparece al escanear el producto en la caja."
+            >
+              {(p) => (
+                <input
+                  {...p}
+                  value={descripcion}
+                  onChange={(e) => setDescripcion(e.target.value)}
+                  placeholder="Ej: Arroz grado 1, bolsa de 1 kilo"
+                  className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
                 />
               )}
             </Campo>

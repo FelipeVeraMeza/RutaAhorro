@@ -118,7 +118,7 @@ De los **101 requerimientos funcionales**:
 
 | RF | Ítem | Estado | Falta |
 |---|---|:--:|---|
-| M2-01 | Crear producto | ✅ | Formulario con validación |
+| M2-01 | Crear producto | ✅ | Formulario con validación. Incluye la descripción, que hasta el 2026-09-17 existía en la base y no leía ni escribía nadie |
 | M2-02 | Varios códigos de barra por producto | ✅ | Se agregan y quitan desde el formulario |
 | M2-03 | Un código no puede estar en dos productos | ✅ | `UNIQUE (tenant_id, barcode)` |
 | M2-04 | Crear producto escaneando | 🟡 | El formulario tiene escáner; falta el salto desde el POS |

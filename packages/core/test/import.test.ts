@@ -334,3 +334,50 @@ describe('numeración de filas', () => {
     expect(r.filas).toHaveLength(2);
   });
 });
+
+describe('columna descripcion', () => {
+  const ENCABEZADO = ['nombre', 'descripcion', 'precio_venta'];
+
+  it('se lee cuando viene', () => {
+    const r = parsearFilas([ENCABEZADO, ['Leche entera 1 L', 'Leche entera, caja de 1 litro', '1190']]);
+    expect(r.ok).toBe(true);
+    expect(r.filas[0].descripcion).toBe('Leche entera, caja de 1 litro');
+  });
+
+  it('es opcional: sin ella la fila sigue siendo válida', () => {
+    const r = parsearFilas([['nombre', 'precio_venta'], ['Leche entera 1 L', '1190']]);
+    expect(r.ok).toBe(true);
+    expect(r.filas[0].descripcion).toBeNull();
+  });
+
+  it('vacía queda en nulo, no en cadena vacía', () => {
+    const r = parsearFilas([ENCABEZADO, ['Leche', '   ', '1190']]);
+    expect(r.filas[0].descripcion).toBeNull();
+  });
+
+  it('la plantilla la incluye con un ejemplo', () => {
+    const lineas = plantillaCSV().split(String.fromCharCode(13) + String.fromCharCode(10));
+    expect(lineas[0]).toContain('descripcion');
+    expect(lineas[1]).toContain('bolsa de 1 kilo');
+  });
+});
+
+describe('celdas con solo espacios', () => {
+  // Importa más desde que se leen planillas de Excel: una celda con espacios
+  // se ve igual que una vacía, y sin recortar entraba como texto.
+  it('una categoría de puros espacios no crea una categoría', () => {
+    const r = parsearFilas([
+      ['nombre', 'categoria', 'precio_venta'],
+      ['Leche', '   ', '1190'],
+    ]);
+    expect(r.filas[0].categoria).toBeNull();
+  });
+
+  it('un sku de puros espacios queda en nulo', () => {
+    const r = parsearFilas([
+      ['nombre', 'sku', 'precio_venta'],
+      ['Leche', '  ', '1190'],
+    ]);
+    expect(r.filas[0].sku).toBeNull();
+  });
+});

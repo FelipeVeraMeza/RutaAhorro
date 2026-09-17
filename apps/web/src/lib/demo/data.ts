@@ -12,6 +12,14 @@
 export interface DemoProducto {
   id: string;
   name: string;
+  /**
+   * A propósito, varios productos la dejan vacía.
+   *
+   * Es la lección de U-2: cuando el catálogo de ejemplo rellena un campo que
+   * en producción puede venir vacío, la pantalla solo se prueba en su caso
+   * bonito. Acá conviven los dos, así que se ve cómo queda cada uno.
+   */
+  description?: string;
   sku: string;
   barcode: string;
   categoria: string;
@@ -24,20 +32,20 @@ export interface DemoProducto {
 }
 
 export const DEMO_PRODUCTOS: DemoProducto[] = [
-  { id: 'p01', name: 'Arroz grado 1 · 1 kg',      sku: 'ARR-1K',  barcode: '7801234000018', categoria: 'Abarrotes', sale_price: 1590, avg_cost: 1100, unit: 'unidad', stock: 42,  min_stock: 10, tracks_expiry: false },
+  { id: 'p01', name: 'Arroz grado 1 · 1 kg',      description: 'Arroz grado 1, bolsa de 1 kilo', sku: 'ARR-1K',  barcode: '7801234000018', categoria: 'Abarrotes', sale_price: 1590, avg_cost: 1100, unit: 'unidad', stock: 42,  min_stock: 10, tracks_expiry: false },
   { id: 'p02', name: 'Fideos spaghetti · 400 g',  sku: 'FID-400', barcode: '7801234000025', categoria: 'Abarrotes', sale_price:  990, avg_cost:  640, unit: 'unidad', stock: 8,   min_stock: 12, tracks_expiry: false },
-  { id: 'p03', name: 'Aceite vegetal · 900 ml',   sku: 'ACE-900', barcode: '7801234000032', categoria: 'Abarrotes', sale_price: 2490, avg_cost: 1850, unit: 'unidad', stock: 19,  min_stock: 6,  tracks_expiry: false },
+  { id: 'p03', name: 'Aceite vegetal · 900 ml',   description: 'Aceite vegetal de maravilla, botella de 900 ml', sku: 'ACE-900', barcode: '7801234000032', categoria: 'Abarrotes', sale_price: 2490, avg_cost: 1850, unit: 'unidad', stock: 19,  min_stock: 6,  tracks_expiry: false },
   { id: 'p04', name: 'Azúcar · 1 kg',             sku: 'AZU-1K',  barcode: '7801234000049', categoria: 'Abarrotes', sale_price: 1290, avg_cost:  900, unit: 'unidad', stock: 27,  min_stock: 8,  tracks_expiry: false },
-  { id: 'p05', name: 'Leche entera · 1 L',        sku: 'LEC-1L',  barcode: '7801234000056', categoria: 'Lácteos',   sale_price: 1190, avg_cost:  850, unit: 'unidad', stock: 36,  min_stock: 20, tracks_expiry: true },
-  { id: 'p06', name: 'Yogurt frutilla · 150 g',   sku: 'YOG-150', barcode: '7801234000063', categoria: 'Lácteos',   sale_price:  590, avg_cost:  390, unit: 'unidad', stock: 18,  min_stock: 24, tracks_expiry: true },
-  { id: 'p07', name: 'Queso gauda · 250 g',       sku: 'QUE-250', barcode: '7801234000070', categoria: 'Lácteos',   sale_price: 3290, avg_cost: 2400, unit: 'unidad', stock: 11,  min_stock: 6,  tracks_expiry: true },
+  { id: 'p05', name: 'Leche entera · 1 L',        description: 'Leche entera, caja de 1 litro', sku: 'LEC-1L',  barcode: '7801234000056', categoria: 'Lácteos',   sale_price: 1190, avg_cost:  850, unit: 'unidad', stock: 36,  min_stock: 20, tracks_expiry: true },
+  { id: 'p06', name: 'Yogurt frutilla · 150 g',   description: 'Yogurt de frutilla, pote de 150 gramos', sku: 'YOG-150', barcode: '7801234000063', categoria: 'Lácteos',   sale_price:  590, avg_cost:  390, unit: 'unidad', stock: 18,  min_stock: 24, tracks_expiry: true },
+  { id: 'p07', name: 'Queso gauda · 250 g',       description: 'Queso gauda laminado, bandeja de 250 gramos', sku: 'QUE-250', barcode: '7801234000070', categoria: 'Lácteos',   sale_price: 3290, avg_cost: 2400, unit: 'unidad', stock: 11,  min_stock: 6,  tracks_expiry: true },
   { id: 'p08', name: 'Bebida cola · 1.5 L',       sku: 'BEB-15',  barcode: '7801234000087', categoria: 'Bebidas',   sale_price: 1890, avg_cost: 1350, unit: 'unidad', stock: 54,  min_stock: 15, tracks_expiry: false },
   { id: 'p09', name: 'Agua mineral · 1.5 L',      sku: 'AGU-15',  barcode: '7801234000094', categoria: 'Bebidas',   sale_price:  990, avg_cost:  620, unit: 'unidad', stock: 31,  min_stock: 15, tracks_expiry: false },
-  { id: 'p10', name: 'Jugo naranja · 1 L',        sku: 'JUG-1L',  barcode: '7801234000100', categoria: 'Bebidas',   sale_price: 1390, avg_cost:  980, unit: 'unidad', stock: 14,  min_stock: 10, tracks_expiry: true },
+  { id: 'p10', name: 'Jugo naranja · 1 L',        description: 'Jugo de naranja, caja de 1 litro', sku: 'JUG-1L',  barcode: '7801234000100', categoria: 'Bebidas',   sale_price: 1390, avg_cost:  980, unit: 'unidad', stock: 14,  min_stock: 10, tracks_expiry: true },
   { id: 'p11', name: 'Detergente líquido · 3 L',  sku: 'DET-3L',  barcode: '7801234000117', categoria: 'Limpieza',  sale_price: 5990, avg_cost: 4300, unit: 'unidad', stock: 9,   min_stock: 4,  tracks_expiry: false },
   { id: 'p12', name: 'Cloro · 900 ml',            sku: 'CLO-900', barcode: '7801234000124', categoria: 'Limpieza',  sale_price:  890, avg_cost:  560, unit: 'unidad', stock: 3,   min_stock: 8,  tracks_expiry: false },
-  { id: 'p13', name: 'Pan de molde · 500 g',      sku: 'PAN-500', barcode: '7801234000131', categoria: 'Panadería', sale_price: 2190, avg_cost: 1550, unit: 'unidad', stock: 7,   min_stock: 10, tracks_expiry: true },
-  { id: 'p14', name: 'Huevos · docena',           sku: 'HUE-12',  barcode: '7801234000148', categoria: 'Abarrotes', sale_price: 3490, avg_cost: 2600, unit: 'unidad', stock: 22,  min_stock: 8,  tracks_expiry: true },
+  { id: 'p13', name: 'Pan de molde · 500 g',      description: 'Pan de molde blanco, bolsa de 500 gramos', sku: 'PAN-500', barcode: '7801234000131', categoria: 'Panadería', sale_price: 2190, avg_cost: 1550, unit: 'unidad', stock: 7,   min_stock: 10, tracks_expiry: true },
+  { id: 'p14', name: 'Huevos · docena',           description: 'Huevos de gallina, cartón de 12 unidades', sku: 'HUE-12',  barcode: '7801234000148', categoria: 'Abarrotes', sale_price: 3490, avg_cost: 2600, unit: 'unidad', stock: 22,  min_stock: 8,  tracks_expiry: true },
   { id: 'p15', name: 'Café instantáneo · 170 g',  sku: 'CAF-170', barcode: '7801234000155', categoria: 'Abarrotes', sale_price: 4990, avg_cost: 3700, unit: 'unidad', stock: 13,  min_stock: 5,  tracks_expiry: false },
 ];
 

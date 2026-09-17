@@ -14,6 +14,15 @@
 export interface Producto {
   id: string;
   nombre: string;
+  /**
+   * Qué es el producto, en palabras. "Leche entera, caja de 1 litro".
+   *
+   * La columna existe en la base desde el primer día y hasta el 2026-09-17 la
+   * aplicación no la leía ni la escribía. Es lo que hace que escanear un
+   * código diga qué es la cosa y no solo cómo se llama en el catálogo, que no
+   * es lo mismo cuando el nombre es "LE-1000 ENT".
+   */
+  descripcion: string | null;
   sku: string | null;
   categoriaId: string | null;
   categoriaNombre: string | null;
@@ -32,6 +41,7 @@ export interface Producto {
 
 export interface ProductoNuevo {
   nombre: string;
+  descripcion: string | null;
   sku: string | null;
   categoriaId: string | null;
   unidad: string;

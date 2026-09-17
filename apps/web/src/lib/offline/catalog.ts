@@ -25,7 +25,7 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
   for (let from = 0; ; from += PAGE) {
     let query = client
       .from('products')
-      .select('id, name, sku, sale_price, unit, category_id, tracks_expiry, min_stock, is_active, updated_at')
+      .select('id, name, description, sku, sale_price, unit, category_id, tracks_expiry, min_stock, is_active, updated_at')
       .order('updated_at', { ascending: true })
       .range(from, from + PAGE - 1);
     if (since) query = query.gt('updated_at', since);
@@ -39,6 +39,7 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
         id: p.id as string,
         name: p.name as string,
         nameSearch: normalizeSearch(p.name as string),
+        description: (p.description as string) ?? null,
         sku: (p.sku as string) ?? null,
         salePrice: Number(p.sale_price ?? 0),
         unit: (p.unit as string) ?? 'unidad',
