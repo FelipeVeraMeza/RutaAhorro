@@ -68,12 +68,29 @@ export default async function CajaPage() {
         .limit(10)
     : { data: [] };
 
+  // Cajas que otro dejó abiertas (RF-M6-10). fn_close_cash_session ya deja que
+  // un admin o supervisor las cierre; lo que faltaba era poder verlas. Una
+  // caja abierta de ayer impide que su dueño abra la de hoy, y la única salida
+  // era el panel de Supabase.
+  const { data: ajenas } = puedeVerHistorial
+    ? await client
+        .from('v_cash_sessions_summary')
+        .select('session_id, full_name, opened_at, sales_total, expected_amount, user_id, status')
+        .eq('status', 'abierta')
+        .neq('user_id', user!.id)
+        .order('opened_at')
+    : { data: [] };
+
   return (
     <CajaClient
       session={session ?? null}
       resumen={resumen}
       movimientos={movimientos}
       historial={historial ?? []}
+      cajasAjenas={(ajenas ?? []) as Array<{
+        session_id: string; full_name: string | null; opened_at: string;
+        sales_total: number | null; expected_amount: number | null;
+      }>}
     />
   );
 }

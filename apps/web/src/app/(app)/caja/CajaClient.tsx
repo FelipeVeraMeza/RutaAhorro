@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { formatCLP, validarMonto, toUserMessage } from '@rutaahorro/core';
 import { supabase } from '@/lib/supabase/client';
 import { Campo } from '@/components/Campo';
+import { Modal } from '@/components/Modal';
 
 interface Session { id: string; opened_at: string; opening_amount: number }
 interface Movimiento { id: string; type: string; amount: number; reason: string; created_at: string }
@@ -13,18 +14,26 @@ interface Cierre {
   closed_at: string | null; difference: number | null; sales_total: number | null;
 }
 
+/** Caja abierta por otra persona. Solo la ve quien puede cerrarla. */
+interface CajaAjena {
+  session_id: string; full_name: string | null; opened_at: string;
+  sales_total: number | null; expected_amount: number | null;
+}
+
 const hora = (iso: string) =>
   new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' });
 const fecha = (iso: string) =>
   new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'America/Santiago' });
 
 export function CajaClient({
-  session, resumen, movimientos, historial,
+  session, resumen, movimientos, historial, cajasAjenas = [],
 }: {
   session: Session | null;
   resumen: Record<string, unknown> | null;
   movimientos: Movimiento[];
   historial: Cierre[];
+  /** Cajas abiertas de otras personas. Vacío si quien mira no puede cerrarlas. */
+  cajasAjenas?: CajaAjena[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +47,10 @@ export function CajaClient({
   const [contado, setContado] = useState('');
   const [nota, setNota] = useState('');
 
+  const [forzando, setForzando] = useState<CajaAjena | null>(null);
+  const [contadoAjeno, setContadoAjeno] = useState('');
+  const [notaAjena, setNotaAjena] = useState('');
+
   const esperado = Number(resumen?.expected_amount ?? 0);
 
   // Los tres campos de dinero pasan por `validarMonto` y no por `parseCLP`:
@@ -46,6 +59,7 @@ export function CajaClient({
   const inicial = validarMonto(montoInicial, { etiqueta: 'efectivo inicial', maximo: 5_000_000 });
   const cont = validarMonto(contado, { etiqueta: 'efectivo contado', maximo: 50_000_000 });
   const mov = validarMonto(movMonto, { permiteCero: false, maximo: 50_000_000 });
+  const contAjeno = validarMonto(contadoAjeno, { etiqueta: 'efectivo contado', maximo: 50_000_000 });
 
   const diferencia = cont.valor - esperado;
 
@@ -101,6 +115,11 @@ export function CajaClient({
           </button>
         </div>
 
+        {cajasAjenas.length > 0 && (
+          <CajasAjenas cajas={cajasAjenas} onCerrar={(c) => {
+            setForzando(c); setContadoAjeno(''); setNotaAjena('');
+          }} />
+        )}
         {historial.length > 0 && <Historial cierres={historial} />}
       </div>
     );
@@ -357,8 +376,133 @@ export function CajaClient({
         Cerrar caja
       </button>
 
+      {cajasAjenas.length > 0 && (
+        <CajasAjenas cajas={cajasAjenas} onCerrar={(c) => {
+          setForzando(c); setContadoAjeno(''); setNotaAjena('');
+        }} />
+      )}
       {historial.length > 0 && <Historial cierres={historial} />}
+
+      {forzando && (
+        <Modal
+          titulo={`Cerrar la caja de ${forzando.full_name ?? 'otro usuario'}`}
+          encabezado="visible"
+          onCerrar={() => setForzando(null)}
+          bloqueado={cargando}
+        >
+          <div className="p-5 space-y-3">
+            <p className="text-sm">
+              Abierta el {fecha(forzando.opened_at)} a las {hora(forzando.opened_at)}.
+              {typeof forzando.expected_amount === 'number' && (
+                <> Debería haber <strong className="num">{formatCLP(forzando.expected_amount)}</strong> en
+                efectivo.</>
+              )}
+            </p>
+            <p className="text-xs text-[var(--texto-suave)]">
+              Cuenta el efectivo que hay ahora. El cierre queda a tu nombre y con tu
+              explicación: quien abrió la caja no está para contarla, así que la diferencia
+              tiene que poder justificarse después.
+            </p>
+
+            <Campo
+              etiqueta="Efectivo contado"
+              error={contadoAjeno.trim() !== '' && !contAjeno.valido ? contAjeno.error : null}
+            >
+              {(props) => (
+                <input
+                  {...props}
+                  inputMode="numeric" value={contadoAjeno}
+                  onChange={(e) => setContadoAjeno(e.target.value)}
+                  className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] num text-right text-lg"
+                  autoFocus
+                />
+              )}
+            </Campo>
+
+            <Campo etiqueta="Por qué la cierras tú" ayuda="Queda en el cierre.">
+              {(props) => (
+                <input
+                  {...props}
+                  value={notaAjena} onChange={(e) => setNotaAjena(e.target.value)}
+                  placeholder="Quedó abierta de ayer"
+                  className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)]"
+                />
+              )}
+            </Campo>
+
+            <div className="space-y-2 pt-1">
+              <button
+                disabled={cargando || !contAjeno.valido || notaAjena.trim() === ''}
+                onClick={async () => {
+                  const ok = await accion(() =>
+                    supabase().rpc('fn_close_cash_session', {
+                      p_session_id: forzando.session_id,
+                      p_counted_amount: contAjeno.valor,
+                      p_notes: notaAjena.trim(),
+                    }),
+                  );
+                  if (ok) setForzando(null);
+                }}
+                className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50"
+              >
+                {cargando ? 'Cerrando…' : 'Cerrar esa caja'}
+              </button>
+              <button
+                onClick={() => setForzando(null)} disabled={cargando}
+                className="tap w-full py-3 rounded-xl border border-[var(--borde)] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
+  );
+}
+
+/**
+ * Cajas que quedaron abiertas de otra persona (RF-M6-10).
+ *
+ * `fn_close_cash_session` deja que un admin o un supervisor cierre la caja de
+ * otro desde el primer día, y no había ninguna pantalla que lo permitiera. Una
+ * caja que alguien dejó abierta ayer impide abrir la de hoy —no se puede tener
+ * dos abiertas— y la única salida era el panel de Supabase.
+ */
+function CajasAjenas({
+  cajas, onCerrar,
+}: {
+  cajas: CajaAjena[];
+  onCerrar: (c: CajaAjena) => void;
+}) {
+  return (
+    <section className="tarjeta p-4 mt-4 border-[var(--color-aviso)]">
+      <h2 className="font-semibold text-sm mb-1">
+        ⚠ {cajas.length === 1 ? 'Una caja quedó abierta' : `${cajas.length} cajas quedaron abiertas`}
+      </h2>
+      <p className="text-xs text-[var(--texto-suave)] mb-2">
+        Mientras siga abierta, quien la abrió no puede abrir otra.
+      </p>
+      <ul className="divide-y divide-[var(--borde)]">
+        {cajas.map((c) => (
+          <li key={c.session_id} className="py-2 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm truncate">{c.full_name ?? 'Sin nombre'}</p>
+              <p className="text-xs text-[var(--texto-suave)] num">
+                desde el {fecha(c.opened_at)} a las {hora(c.opened_at)}
+                {typeof c.sales_total === 'number' && ` · ${formatCLP(c.sales_total)} vendidos`}
+              </p>
+            </div>
+            <button
+              onClick={() => onCerrar(c)}
+              className="tap px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)] shrink-0"
+            >
+              Cerrarla
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
