@@ -1,6 +1,6 @@
 # 22 — Tareas pendientes
 
-**Fecha:** 2026-09-16 · **Fuente:** auditado sobre el código, no sobre los documentos.
+**Fecha:** 2026-09-17 · **Fuente:** auditado sobre el código, no sobre los documentos.
 
 Este documento consolida en una sola lista lo que queda por hacer: los hallazgos
 abiertos de la [auditoría de pantallas](21-qa-pantallas.md), las fases del
@@ -75,23 +75,39 @@ semana que se suma al final del proyecto.
 
 ## 2. Defectos abiertos — ordenados por daño
 
+### Cerrados el 2026-09-17
+
+| # | Qué era | Dónde quedó |
+|---|---|---|
+| T-01 | `description` del producto sin usar | ⬜ **sigue abierto**, ver abajo |
+| **T-02** | La edición de producto no era transaccional: si fallaba la inserción de códigos, el producto quedaba **sin ninguno** y dejaba de aparecer al escanear | `fn_update_product` (0008). Y se encontró que la **carga masiva borraba códigos en el camino normal**, no en el de falla: una planilla de precios sin columna de código dejaba invisible al escáner todo lo que tocara |
+| **T-03** | Verificar M4-16 | Verificado: **no existía**. Hoy hay pestaña Lotes en Inventario |
+| **T-05** | Anular venta | Pantalla `/ventas`, con historial y búsqueda por folio |
+| **T-07** | Dar de baja lote vencido | Junto al lote, en Inventario |
+| **T-08** | Cierre forzado de caja | En Caja, arriba, para admin y supervisor |
+| **T-44** | Auditar Inicio y Usuarios | Hechas. Las 11 pantallas están auditadas línea por línea |
+
+Y cuatro que no estaban en esta lista porque nadie los había visto: **S-1** a
+**S-4** en [21](21-qa-pantallas.md) §0, dos de ellos críticos.
+
+### Abiertos
+
 | # | Tarea | Dónde | Por qué importa |
 |---|---|---|---|
-| **T-01** | **Usar `description` del producto.** La columna existe en la base y la aplicación no la lee ni la escribe: no está en el formulario, ni en el `SELECT` del repositorio, ni en la ficha del POS | Formulario de producto, `repoSupabase`, POS | Es exactamente lo que falta para que al escanear diga qué es el producto y no solo su nombre. También alimenta el detalle de la boleta |
-| **T-02** | **`fn_update_product` transaccional.** Hoy `repoSupabase.actualizar` borra todos los códigos de barra del producto y los reinserta. Si la inserción falla, el producto queda **sin ningún código** | `repoSupabase.ts` | Un producto sin código es un producto que no aparece al escanear: deja de venderse y nadie entiende por qué. Es el hallazgo A-4 en la edición |
-| **T-03** | **Verificar M4-16 (stock por lote).** Figura ✅ en el inventario de alcance y el listado no muestra lotes | Inventario | Es el mismo patrón que ya produjo el hallazgo de RF-M3-08: un requerimiento cerrado sin evidencia. Si no existe, el inventario de alcance miente |
+| **T-14** | **`unit_price` llega del cliente sin compararlo con el catálogo.** Es lo que queda abierto de S-4: el tope de descuento se puede rodear vendiendo a precio 1 en vez de aplicando un descuento | `fn_register_sale` | Es deliberado que el precio viaje —una venta sin conexión se sincroniza con el precio que tenía al venderse— pero eso abre un camino que el tope no cubre. Cerrarlo bien pide comparar contra `price_history` con la fecha de la venta |
+| **T-01** | **Usar `description` del producto.** La columna existe en la base y la aplicación no la lee ni la escribe | Formulario, `repoSupabase`, POS | Es lo que falta para que al escanear diga qué es el producto y no solo su nombre |
 | **T-04** | **Recuperar contraseña (RF-M1-05)** | Login | Hoy el dueño entra al panel de Supabase cada vez que un vendedor olvida su clave |
-| **T-05** | **Anular venta.** `fn_void_sale` está escrita y probada, y **ninguna pantalla la invoca** | POS | Una venta mal cobrada no tiene arreglo dentro del sistema |
-| **T-06** | **Corregir un movimiento de caja (M-1).** Un egreso de 50.000 en vez de 5.000 no se puede enmendar | Caja | Descuadra el arqueo sin forma de explicarlo. Hoy solo se advierte antes |
-| **T-07** | Dar de baja lote vencido. `fn_write_off_lot` probada, sin pantalla | Inventario | M4-19 figura como hecho |
-| **T-08** | Cierre forzado de caja (M6-10), sin pantalla | Caja | Una caja que quedó abierta de ayer bloquea la de hoy |
-| **T-09** | Kardex con filtros y paginación. Hoy trae 80 movimientos fijos (M-4) | Inventario | Con tres meses de operación, el kardex deja de servir para investigar nada |
-| **T-10** | Paginación en Productos (M-5) y en Proveedores/Recepciones (P-5) | Productos, Proveedores | Con 1.000 productos se renderizan los 1.000 |
-| **T-11** | Desactivar un proveedor (P-1). El modelo lo soporta, la pantalla no | Proveedores | Un proveedor con el que se dejó de trabajar sigue apareciendo en la lista |
+| **T-06** | **Corregir un movimiento de caja (M-1).** Un egreso de 50.000 en vez de 5.000 no se puede enmendar | Caja | Descuadra el arqueo sin forma de explicarlo |
+| **T-09** | Kardex con filtros y paginación. Hoy trae 80 movimientos fijos | Inventario | Con tres meses de operación deja de servir para investigar nada |
+| **T-10** | Paginación en Productos y en Proveedores/Recepciones | Productos, Proveedores | Con 1.000 productos se renderizan los 1.000 |
+| **T-11** | Desactivar un proveedor (P-1) | Proveedores | Un proveedor con el que se dejó de trabajar sigue en la lista |
 | **T-12** | Carga masiva atómica (I-1). Hoy aplica fila por fila | Importar | Una carga interrumpida deja medio catálogo. Ya se avisa en pantalla |
-| **T-13** | El título de Proveedores dice "Compras" y la navegación dice "Proveedores" (P-6) | Proveedores | Confunde al usuario nuevo |
-
----
+| **T-13** | El título de Proveedores dice "Compras" y la navegación dice "Proveedores" | Proveedores | Confunde al usuario nuevo |
+| **T-15** | **Revisar el resto de los datos de demo con la pregunta de U-2:** ¿qué otros campos rellena la maqueta que en producción no escribe nadie? | `lib/demo/data.ts` | `last_seen_at` hacía que RF-M1-14 figurara cumplido y solo funcionaba en demo. No hay razón para pensar que es el único |
+| **T-16** | Descuento por línea en el POS (M5-08) | POS | La base ya lo valida desde 0011; la pantalla no lo ofrece |
+| **T-17** | Pago mixto (M5-10) | POS | La base acepta varias filas de pago desde el primer día |
+| **T-18** | Pantalla de configuración del local (M9-08) | Nueva | La capa de lectura ya existe (`lib/datos/configuracion.ts`); falta poder escribirla sin entrar a Supabase |
+| **T-19** | Historial de cambios de precio (M2-09) | Formulario de producto | `trg_price_history` graba desde el primer día y nadie lo muestra |
 
 ## 3. Camino a la boleta — en orden
 
@@ -143,12 +159,18 @@ del cliente; las de F6 no.
 ## 5. Orden recomendado
 
 1. **B-01, B-02, B-03** — sin esto nada de lo demás es verificable de verdad.
+   Y ahora hay una razón más: las correcciones de seguridad S-1 a S-4 viajan en
+   el esquema, así que **la base tiene que instalarse con `instalar.sql` al
+   día**. Si alguna vez se aplicó una versión anterior en algún lado, hay que
+   reinstalar o aplicar 0009 y 0011 a mano.
 2. **B-04, B-05** en paralelo, el mismo día. Son trámites con plazos ajenos.
-3. **T-02** — deja productos invisibles al escáner. Es el peor defecto abierto.
-4. **T-03** — verificar antes de seguir cerrando requerimientos sobre una base
-   que puede estar mintiendo.
-5. **T-01** — barato y es justo lo que se pidió para identificar el producto.
-6. **T-05, T-06** — cerrar el POS y la caja.
-7. **T-40** — antes de que haya datos reales que perder.
+3. **T-40** — la concurrencia. Subió al tercer lugar porque es lo único grande
+   que sigue descansando en diseño y no en pruebas, y porque conviene hacerlo
+   antes de que haya datos reales que perder.
+4. **T-14** — cerrar lo que queda del tope de descuento.
+5. **T-15** — revisar los datos de demo. Es barato y puede destapar otros
+   requerimientos que figuran cumplidos y solo funcionan en la maqueta.
+6. **T-01, T-04, T-06** — lo que falta para cerrar el día a día.
+7. **T-16 a T-19** — las cuatro piezas que están en la base y no en la pantalla.
 8. **F5 completo** (T-20 a T-28), mientras corren los trámites.
 9. **F6** cuando B-04 y B-05 estén listos.

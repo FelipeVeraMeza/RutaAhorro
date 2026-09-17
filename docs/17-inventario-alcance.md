@@ -1,10 +1,28 @@
 # 17 — Inventario de alcance (estado real del sistema)
 
-**Fecha del corte:** 2026-09-15 (v1.1)
+**Fecha del corte:** 2026-09-17 (v1.3)
 **Método:** auditoría del código, no estimación. Se enumeraron funciones,
 vistas y tablas de `supabase/migrations/`, pantallas de `apps/web/src/app/`,
 trabajos de `apps/worker/` y módulos de `packages/core/`.
 
+> ✅ **Tercera pasada, 2026-09-17 (v1.3).** Los estados de M4, M5, M6, M7 y
+> M9 se contrastaron contra el código. Diez requerimientos pasaron de 🔵 a ✅
+> porque se les construyó la pantalla que les faltaba —los seis reportes, la
+> anulación de venta, la baja de lote, el cierre forzado de caja y los lotes en
+> Inventario—, y la categoría 🔵 bajó de 16 a 6.
+>
+> **Y tres filas decían más de lo que el código hacía.** Se corrigieron en su
+> propia fila, no se borraron:
+>
+> - **M4-16** "Stock por lote · visible en pantalla Stock": no estaba visible
+>   en ninguna parte.
+> - **M1-14** "Ver quién está conectado": no funcionaba en producción. Lo
+>   tapaba el modo demo.
+> - **M2-11** "Carga masiva desde Excel/CSV": leía CSV y nada más.
+>
+> Las tres tienen la misma forma, y conviene tenerla presente al leer el resto
+> de este documento: **la pieza existía y no estaba conectada con nada.**
+>
 > ⚠️ **Re-verificación del 2026-09-15 (v1.2).** Las filas de M1, M3 y M4 se
 > contrastaron contra el código: varias marcadas 🔵 o ⬜ ya tienen pantalla y
 > se corrigieron. **Los contadores por módulo y el resumen ejecutivo NO se
@@ -89,7 +107,7 @@ De los **101 requerimientos funcionales**:
 | M1-11 | Bloqueo tras 5 intentos fallidos | 🟡 | Supabase lo hace por defecto; falta verificar el umbral |
 | M1-12 | Invitar empleado por correo | ✅ | Route handler + pantalla. Exige `SUPABASE_SECRET_KEY` en el servidor |
 | M1-13 | Mismo usuario en varios dispositivos | ✅ | Por diseño de Supabase Auth |
-| M1-14 | Ver quién está conectado | ✅ | Conectado = actividad en los últimos 5 minutos |
+| M1-14 | Ver quién está conectado | ✅ | **Corregido 2026-09-17:** figuraba cumplido y no funcionaba en producción. `last_seen_at` no la escribía nadie; todos aparecían como "Nunca ha entrado". Se veía bien solo en demo, porque los datos de ejemplo traen la hora puesta |
 | M1-15 | Registrar inicio/cierre de sesión en bitácora | ⬜ | — |
 
 **Estado del módulo: 5 ✅ · 1 🔵 · 2 🟡 · 7 ⬜**
@@ -110,7 +128,7 @@ De los **101 requerimientos funcionales**:
 | M2-08 | Desactivar producto | ✅ | Con reactivación y borrado definitivo si no tiene historial |
 | M2-09 | Historial de cambios de precio | 🔵 | Trigger `trg_price_history` funcionando; sin pantalla |
 | M2-10 | Margen visible solo a admin | ✅ | Verificado: el vendedor no lo recibe |
-| M2-11 | Carga masiva desde Excel/CSV | ✅ | Plantilla, vista previa y aplicación |
+| M2-11 | Carga masiva desde Excel/CSV | ✅ | **Decía Excel y solo leía CSV.** Desde 2026-09-17 lee `.xlsx` de verdad, sin convertir |
 | M2-12 | Validar el archivo antes de aplicar | ✅ | Todo o nada, con 31 pruebas |
 | M2-13 | Generar etiquetas con código de barras | ✅ | Pantalla /productos/etiquetas: EAN-13 en SVG, tres tamaños, con precio, y asignación de código interno a productos sin código de fábrica |
 | M2-14 | Productos por peso o fracción | 🟡 | La base soporta decimales; el POS no pide cantidad fraccionada |
@@ -162,10 +180,10 @@ De los **101 requerimientos funcionales**:
 | M4-13 | Stock por ubicación | ⬜ | Prioridad *Could* |
 | M4-14 | Marcar producto como perecible | ✅ | Desde el formulario de producto |
 | M4-15 | Exigir vencimiento al recepcionar | ✅ | Validado en base y pedido en la pantalla |
-| M4-16 | Stock por lote | ✅ | Visible en pantalla Stock |
+| M4-16 | Stock por lote | ✅ | **Corregido 2026-09-17:** figuraba como visible en Stock y no lo estaba. La base sí lo mantenía; ninguna pantalla leía `v_stock_by_lot` ni `v_expiring_lots`. Hoy hay pestaña Lotes |
 | M4-17 | Consumo FEFO automático | ✅ | Probado: no descuenta dos veces del mismo lote |
 | M4-18 | Alertas de vencimiento | ✅ | Vista + trabajo del worker + pantalla |
-| M4-19 | Dar de baja lote vencido | 🔵 | `fn_write_off_lot` sin pantalla |
+| M4-19 | Dar de baja lote vencido | ✅ | Junto al lote, en Inventario |
 | M4-20 | Anular venta devuelve al lote exacto | ✅ | `sale_item_lots` |
 
 **Estado del módulo: 10 ✅ · 9 🔵 · 0 🟡 · 1 ⬜**
@@ -185,14 +203,14 @@ De los **101 requerimientos funcionales**:
 | M5-05 | Buscar por nombre | ✅ | — |
 | M5-06 | Modificar cantidad y eliminar líneas | ✅ | — |
 | M5-07 | Total en tiempo real sin decimales | ✅ | — |
-| M5-08 | Descuento por línea o total | 🔵 | `isDiscountAllowed()` probado; **sin control en el POS** |
+| M5-08 | Descuento por línea o total | 🔵 | La base ya lo valida (0011); falta el control en el POS. T-16 |
 | M5-09 | Medio de pago | ✅ | Los 4 medios |
 | M5-10 | Pago mixto | 🔵 | La base acepta varias filas de pago; la pantalla no |
 | M5-11 | Cálculo de vuelto | ✅ | Con montos sugeridos |
 | M5-12 | Venta atómica | ✅ | `fn_register_sale` |
 | M5-13 | Folio correlativo | ✅ | Sin saltos bajo concurrencia |
 | M5-14 | Comprobante compartible | ⬜ | — |
-| M5-15 | Anular venta | 🔵 | `fn_void_sale` **sin pantalla** |
+| M5-15 | Anular venta | ✅ | Pantalla `/ventas`, con historial y búsqueda por folio |
 | M5-16 | Impedir vender sin caja abierta | ✅ | — |
 | M5-17 | Vender sin conexión | ✅ | Cola en IndexedDB |
 | M5-18 | Sincronizar al reconectar, sin duplicar | ✅ | Idempotencia por `client_uuid` |
@@ -218,7 +236,7 @@ De los **101 requerimientos funcionales**:
 | M6-07 | Resumen del cierre | ✅ | — |
 | M6-08 | Caja cerrada inmutable | ✅ | Trigger |
 | M6-09 | Una sola caja abierta por usuario | ✅ | Índice único parcial |
-| M6-10 | Cierre forzado por admin | 🔵 | Función lista; sin pantalla |
+| M6-10 | Cierre forzado por admin | ✅ | En Caja, para admin y supervisor |
 | M6-11 | Alerta de caja abierta demasiado tiempo | 🟡 | `isSessionStale()` probado; worker avisa; sin aviso en pantalla |
 | M6-12 | Historial de cierres | ✅ | — |
 
@@ -234,17 +252,17 @@ De los **101 requerimientos funcionales**:
 | RF | Ítem | Estado | Falta |
 |---|---|:--:|---|
 | M7-01 | Dashboard del día | ✅ | Pantalla Inicio |
-| M7-02 | Ventas por período | 🔵 | `v_sales_daily` |
-| M7-03 | Ventas por usuario | 🔵 | `v_sales_by_user` |
-| M7-04 | Ventas por producto y categoría | 🔵 | `v_sales_by_product` |
-| M7-05 | Inventario valorizado | ✅ | Pantalla Stock |
-| M7-06 | Margen y utilidad | 🔵 | La vista calcula la utilidad bruta |
-| M7-07 | Productos sin movimiento | 🔵 | `v_stale_products` |
-| M7-08 | Mermas y ajustes | 🔵 | `v_adjustments` |
-| M7-09 | Exportar a Excel/CSV | ⬜ | — |
+| M7-02 | Ventas por período | ✅ | `/reportes`, con rango de fechas |
+| M7-03 | Ventas por usuario | ✅ | `/reportes` |
+| M7-04 | Ventas por producto y categoría | ✅ | `/reportes`, ordenable por monto o unidades |
+| M7-05 | Inventario valorizado | ✅ | Stock mostraba solo el total; el detalle por producto está en `/reportes` |
+| M7-06 | Margen y utilidad | ✅ | `/reportes`, solo para admin |
+| M7-07 | Productos sin movimiento | ✅ | `/reportes`, con umbral de días |
+| M7-08 | Mermas y ajustes | ✅ | `/reportes`, con motivo y responsable |
+| M7-09 | Exportar a Excel/CSV | ✅ | En los seis reportes |
 | M7-10 | Gráfico de los últimos 30 días | ⬜ | — |
 | M7-11 | Comparación con período anterior | ⬜ | Prioridad *Could* |
-| M7-12 | Reportes respetan permisos | ✅ | Por RLS |
+| M7-12 | Reportes respetan permisos | ✅ | Por RLS, y el costo no se pide siquiera cuando el rol no puede verlo |
 
 **Estado del módulo: 3 ✅ · 6 🔵 · 0 🟡 · 3 ⬜**
 
@@ -280,7 +298,7 @@ base y solo se ven parcialmente en Inicio.
 | M9-05 | Bitácora de auditoría | ✅ | Triggers escribiendo |
 | M9-06 | Detalle de cada registro | ✅ | — |
 | M9-07 | Bitácora inmutable | ✅ | Trigger que rechaza UPDATE/DELETE |
-| M9-08 | Configuración del local | 🔵 | `tenants.settings` existe; sin pantalla |
+| M9-08 | Configuración del local | 🟡 | La aplicación ya **lee** `tenants.settings` (IVA, umbral de costo, tope de descuento). Falta la pantalla para escribirlo. T-18 |
 | M9-09 | Versión y changelog visibles | ⬜ | — |
 | M9-10 | Actualizaciones sin intervención | ✅ | Por diseño de Railway: cada push a main despliega |
 

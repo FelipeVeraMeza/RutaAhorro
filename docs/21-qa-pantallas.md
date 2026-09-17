@@ -1,6 +1,6 @@
 # 21 — Auditoría de pantallas (QA)
 
-**Primera pasada:** 2026-09-15 · **Segunda pasada:** 2026-09-16
+**Primera pasada:** 2026-09-15 · **Segunda:** 2026-09-16 · **Tercera:** 2026-09-17
 **Método:** lectura del código de cada pantalla, contrastada contra
 [17](17-inventario-alcance.md) y [03](03-requerimientos-funcionales.md).
 
@@ -17,11 +17,131 @@
 | **Importar** | **Completa** · 2026-09-16 |
 | **Formulario de producto** | **Completa** · 2026-09-16 |
 | **Ingreso (login)** | **Completa** · 2026-09-16 |
-| Inicio | Parcial |
-| Usuarios | Parcial |
+| **Inicio** | **Completa** · 2026-09-17 |
+| **Usuarios** | **Completa** · 2026-09-17 |
 
-Con la segunda pasada, **las 11 pantallas de la aplicación están auditadas**,
-nueve de ellas línea por línea. Quedan parciales Inicio y Usuarios.
+Con la tercera pasada, **las 11 pantallas están auditadas línea por línea**. No
+queda ninguna parcial.
+
+> La tercera pasada encontró **dos agujeros de seguridad explotables** que las
+> dos anteriores no vieron, porque las dos revisaron pantallas y estos estaban
+> en la capa de permisos de la base. Están en la sección 0, antes que todo lo
+> demás, porque son de otra categoría que el resto de este documento.
+
+---
+
+## 0. Seguridad — lo que no es un problema de pantalla
+
+Dos hallazgos de la tercera pasada. No los encontró revisar pantallas: los
+encontró revisar quién puede llamar a qué. Los dos estaban en producción desde
+que existe el esquema, los dos son explotables desde el navegador por un
+usuario con sesión, y ninguno deja rastro que permita notarlo a tiempo.
+
+### S-1 · Las funciones internas nunca estuvieron cerradas — **crítica** · ✅ corregido
+
+La migración 0004 tenía esto, con un comentario al lado que afirmaba que esas
+funciones no se exponían:
+
+```sql
+revoke execute on function public.fn_post_movement from authenticated, anon;
+```
+
+**No cerraba nada.** Cuando PostgreSQL crea una función le concede EXECUTE a
+`public` —el pseudo-rol al que pertenecen todos— y ese permiso no se quita
+revocándoselo a `authenticated`: hay que revocárselo a `public`. Los tres
+`revoke` no quitaban ningún permiso, porque esos permisos directos nunca se
+habían concedido.
+
+Lo que quedaba abierto vía PostgREST:
+
+```
+POST /rest/v1/rpc/fn_post_movement
+  { p_tenant, p_store, p_product, p_type, p_quantity, ..., p_user }
+```
+
+`fn_post_movement` es `security definer`, **recibe el tenant como parámetro** y
+no comprueba ni rol ni tenant, porque se escribió para llamarse solo desde
+otras funciones que ya comprobaron las dos cosas. Con EXECUTE abierto,
+cualquier usuario con sesión —un vendedor, el rol más bajo— podía:
+
+- escribir stock de cualquier producto de **otro local**, que es exactamente lo
+  que el RLS existe para impedir;
+- escribir movimientos en el kardex, que es inmutable por diseño (ADR-006),
+  **atribuidos a cualquier usuario**, porque `p_user` también es parámetro.
+
+Lo mismo `fn_consume_lots` y `fn_next_folio`, esta última para quemarle folios
+a otro local y dejarle la numeración de ventas con huecos.
+
+Corregido en la migración 0009, que revoca de `public` y concede de forma
+explícita. Es idempotente y se puede aplicar sobre una base ya instalada.
+
+### S-2 · Un vendedor podía hacerse administrador — **crítica** · ✅ corregido
+
+La política de 0004:
+
+```sql
+create policy profiles_update on profiles for update to authenticated
+  using (tenant_id = current_tenant_id()
+         and (current_user_role() = 'admin' or id = auth.uid()))
+  with check (tenant_id = current_tenant_id());
+```
+
+El `id = auth.uid()` estaba para que cada uno pudiera corregirse el nombre.
+Pero **RLS trabaja por fila, no por columna**: quien puede actualizar su fila
+puede actualizar cualquier columna de su fila, y en esa fila están `role` y
+`max_discount_pct`. Desde el navegador, sin ninguna herramienta:
+
+```js
+supabase.from('profiles').update({ role: 'admin' }).eq('id', miId)
+```
+
+El `with check` no lo impedía porque solo miraba el tenant, que no cambia. El
+disparador de auditoría lo registraba, pero **registrar no es impedir**: cuando
+alguien lea el registro, el vendedor ya es administrador.
+
+Corregido en 0011 con un disparador `BEFORE UPDATE`, y no con una política,
+porque lo que hay que distinguir es *qué columna* cambió y eso RLS no lo sabe.
+El mismo disparador impide que el local quede sin ningún administrador activo.
+
+### S-3 · Ocho guardias de rol que no guardaban nada — **media** · ✅ corregido
+
+Repartido por trece funciones:
+
+```sql
+if current_user_role() not in ('admin','supervisor','bodega') then
+  raise exception 'SIN_PERMISO';
+end if;
+```
+
+`current_user_role()` devuelve NULL cuando el usuario no tiene perfil —el caso
+que produce `handle_new_user` si la invitación llegó sin `tenant_id`, que no es
+raro—. Y `NULL not in (...)` no vale verdadero ni falso: **vale NULL**, y un
+`if` con NULL no entra. El guardia dejaba pasar justo a quien no tiene rol.
+
+Hoy no era explotable porque `current_tenant_id()` también es NULL y todo
+falla más adelante, contra una restricción de no-nulo o una fila que no
+aparece. Pero fallaba por accidente, no por diseño, y el guardia se leía como
+si protegiera. Son trece en total: ocho escritas con `current_user_role()`
+directo y cinco con el rol en una variable, que la primera corrección no
+alcanzó. Dos de esas cinco son el control de stock insuficiente en la venta:
+con rol nulo, la venta pasaba igual sin stock.
+
+### S-4 · El tope de descuento no se aplicaba en ninguna parte — **alta** · ✅ corregido
+
+`DESCUENTO_EXCEDE_LIMITE` estaba en la tabla de errores desde el primer día.
+`profiles.max_discount_pct` estaba en el esquema. `discountWithinLimit` estaba
+en core, probado. Y `fn_register_sale` no leía ninguno de los tres: el
+`discount_amount` de cada línea entraba tal como lo mandara el cliente. Tres
+piezas correctas y ninguna conectada con otra.
+
+Corregido: se valida en la base, con la misma tolerancia de redondeo que core.
+
+> **Queda abierto y relacionado:** `fn_register_sale` acepta `unit_price` del
+> cliente sin compararlo con el precio del catálogo. Es deliberado —una venta
+> hecha sin conexión se sincroniza con el precio que tenía al momento de
+> venderse, no con el de ahora—, pero significa que el tope de descuento se
+> puede rodear vendiendo a precio 1 en vez de aplicando un descuento. Cerrarlo
+> bien pide comparar contra `price_history` con la fecha de la venta. Es T-14.
 
 ---
 
@@ -141,6 +261,30 @@ arreglo que vuelve en el próximo refactor.
 
 ---
 
+## 5b. Inicio
+
+| # | Hallazgo | Severidad | Estado |
+|---|---|---|---|
+| I-1 | **Los tres errores de consulta se ignoraban en silencio.** `const { data }` sin mirar `error`: si la consulta fallaba, el panel mostraba ceros. Un problema de red se veía exactamente igual que un día sin ventas, y el dueño leía "Vendido hoy $0" y concluía que no se había vendido nada | Alta | ✅ |
+| I-2 | **El día se calculaba con el desfase `-03:00` escrito fijo**, y Chile está en `-04:00` medio año. En invierno el "día de hoy" empezaba a las 23:00 de ayer y terminaba a las 22:59: lo vendido después de las 23:00 aparecía al día siguiente. La fecha sí se calculaba bien, con `timeZone: 'America/Santiago'`, y el desfase iba a mano al lado. `v_sales_daily` ya agrupaba correctamente desde 0005 y nadie la usaba | Media | ✅ |
+| I-3 | **Los dos paneles hacían `.limit(8)` sin `order by`.** Sin orden, PostgreSQL devuelve las ocho filas que quiera: el dueño veía ocho productos bajo mínimo que no eran los ocho más urgentes, y que cambiaban de una recarga a otra sin que nada hubiera pasado. `v_low_stock` ya traía la columna `shortfall`, tampoco usada. Tampoco decía cuántos más había | Media | ✅ |
+| I-4 | **La unidad estaba escrita a mano como "u".** El queso, el pan y la fruta se venden por kilo y son justo los perecibles que llevan lote: "2.5 u" de queso no significa nada. Y "vence en 1 días" | Baja | ✅ |
+
+---
+
+## 5c. Usuarios
+
+Además de S-2, que salió de acá y está en la sección 0.
+
+| # | Hallazgo | Severidad | Estado |
+|---|---|---|---|
+| U-2 | **"Conectado ahora" no funcionaba en producción.** `last_seen_at` está en la tabla desde el primer día y **nadie la escribía**. La pantalla la lee para decir quién está conectado y cuándo entró por última vez, así que todos aparecían como "Nunca ha entrado · Desconectado", para siempre. Se veía bien **solo en modo demo**, porque los datos de ejemplo traen la hora ya puesta: RF-M1-14 figuraba cumplido y lo único que funcionaba era la maqueta | Alta | ✅ |
+| U-3 | **El último administrador podía quedarse afuera.** La pantalla no deja cambiarse el rol ni desactivarse a uno mismo, y lo explica bien en un comentario. Pero eso es la pantalla, y la regla del proyecto es que esconder un botón no es seguridad: la misma llamada por fuera pasaba igual. Un local sin administrador activo no se arregla desde el sistema | Media | ✅ (en 0011, con S-2) |
+| U-4 | **El tope de descuento por rol estaba escrito en el navegador.** RF-M9-08 pide que sea configurable por local, y `tenants.settings.max_discount_pct` lo guarda desde el primer día —con los mismos números que estaban a mano— sin que nadie lo leyera | Media | ✅ |
+| U-5 | La invitación no valida que el correo no esté ya en el local antes de llamar al servidor; el error vuelve traducido, pero después del viaje | Baja | ⬜ |
+
+---
+
 ## 6. Hallazgos nuevos en pantallas ya auditadas
 
 Aparecieron revisando otra cosa. Se anotan igual.
@@ -152,7 +296,7 @@ Aparecieron revisando otra cosa. Se anotan igual.
 | R-3 | Recepción | Las cuatro etiquetas por línea se repetían idénticas en cada fila. Tabulando por veinte productos, "Cantidad" veinte veces no dice dónde está uno parado | Baja | ✅ |
 | Q-1 | Productos | B-4 era peor de lo anotado: `puedeBorrarDef` conservaba el valor del producto **anterior**, así que el diálogo ofrecía "Eliminar definitivamente" para un producto que sí tenía ventas. La base lo rechazaba, pero la pantalla ya había mentido | Media | ✅ |
 | Q-2 | Productos | Ninguna acción del diálogo tenía candado contra el doble toque | Baja | ✅ |
-| U-1 | Usuarios | El grupo de radios del rol usaba un `<span>` en vez de `fieldset`/`legend`: el lector leía las cuatro opciones sueltas, sin decir de qué eran | Baja | ✅ |
+| U-0 | Usuarios | El grupo de radios del rol usaba un `<span>` en vez de `fieldset`/`legend`: el lector leía las cuatro opciones sueltas, sin decir de qué eran | Baja | ✅ |
 
 ---
 
@@ -164,13 +308,13 @@ Aparecieron revisando otra cosa. Se anotan igual.
 | A-2 | La toma aplicaba conteos de productos ocultos por el filtro | ✅ La revisión los lista todos |
 | A-3 | `parseCLP` aceptaba negativos en campos de dinero | ✅ `validarMonto` |
 | A-4 | El alta de producto no era atómica | ✅ `fn_create_product` (migración 0007) |
-| M-1 | No se puede corregir un movimiento de caja mal ingresado | ⬜ Pendiente · ahora **se advierte antes** de registrar |
+| M-1 | No se puede corregir un movimiento de caja mal ingresado | ⬜ Pendiente · se advierte antes de registrar |
 | M-2 | "Cerrar caja" no advertía que el cierre es irreversible | ✅ Aviso explícito en la pantalla de cierre |
 | M-3 | El ajuste aceptaba cantidades negativas | ✅ `validarCantidad` |
 | M-4 | El kardex trae 80 movimientos fijos, sin filtros ni paginación | ⬜ Pendiente |
 | M-5 | Productos sin paginación | ⬜ Pendiente · depende de P-02 |
 | M-6 | Recepción con costo 0 sin aviso | ✅ (ver R-2) |
-| M-7 | M4-16 (stock por lote) figura ✅ y el listado no muestra lotes | ⬜ **Sin verificar** |
+| M-7 | M4-16 (stock por lote) figura ✅ y el listado no muestra lotes | ✅ **Verificado el 2026-09-17: no existía.** La base sí mantiene el stock por lote y las dos vistas estaban escritas; ninguna pantalla las leía. Hoy hay pestaña Lotes en Inventario |
 | B-1 | "Reactivar" usaba el color de alerta | ✅ |
 | B-2 | Los campos de movimiento de caja sin `<label>` | ✅ |
 | B-3 | El diálogo de ajuste sin nombre accesible | ✅ (ver X-1) |
@@ -180,13 +324,25 @@ Aparecieron revisando otra cosa. Se anotan igual.
 
 ## 8. Funciones de base sin pantalla
 
-Sin cambios desde la primera pasada.
+Las tres se cerraron el 2026-09-17, y con ellas las siete vistas de reportes,
+que eran el caso más caro: existían desde la migración 0005 sin que ninguna
+pantalla las consultara.
 
-| Función | Requerimiento | Estado |
+| Función o vista | Requerimiento | Estado |
 |---|---|---|
-| `fn_void_sale` | M5-15 · Anular venta | Probada, **no la invoca ninguna pantalla** |
-| `fn_write_off_lot` | M4-19 · Dar de baja lote vencido | Probada, sin pantalla |
-| Cierre forzado de caja | M6-10 | Sin pantalla |
+| `fn_void_sale` | M5-15 · Anular venta | ✅ Pantalla `/ventas` |
+| `fn_write_off_lot` | M4-19 · Dar de baja lote vencido | ✅ Pestaña Lotes en Inventario |
+| `fn_close_cash_session` de otro | M6-10 · Cierre forzado | ✅ En Caja |
+| `v_sales_daily` | M7-02 | ✅ `/reportes` |
+| `v_sales_by_user` | M7-03 | ✅ `/reportes` |
+| `v_sales_by_product` | M7-04, M7-06 | ✅ `/reportes` |
+| `v_inventory_valued` | M7-05 | ✅ `/reportes` |
+| `v_stale_products` | M7-07 | ✅ `/reportes` |
+| `v_adjustments` | M7-08 | ✅ `/reportes` |
+| `v_stock_by_lot`, `v_expiring_lots` | M4-16 | ✅ Pestaña Lotes |
+
+Queda una sola: `fn_next_folio` y `fn_post_movement` no tienen pantalla **a
+propósito**, y desde 0009 tampoco tienen permiso para tenerla.
 
 ---
 
@@ -216,22 +372,32 @@ No todo son hallazgos. Estas decisiones resistieron las dos revisiones:
 
 ## 10. Cómo seguir
 
-Por severidad, no por pantalla:
+Tras la tercera pasada, por severidad:
 
-1. **F-3 — `fn_update_product` transaccional.** Es el A-4 de la edición y deja
-   productos invisibles al escáner. Lo más grave abierto.
-2. **M-7 — verificar si M4-16 (stock por lote) existe de verdad.** Está marcado
-   como hecho en el inventario de alcance y el código no lo respalda. Si no
-   existe, es un requerimiento mal cerrado, que es exactamente lo que ya pasó
-   con RF-M3-08 en la primera pasada.
-3. **L-5 — recuperar contraseña (RF-M1-05).** Hoy el dueño tiene que entrar al
-   panel de Supabase cada vez que un vendedor olvida su clave.
-4. **M-1 — corregir un movimiento de caja.** Con el resto del módulo de caja.
-5. **P-1, P-5, P-6, M-4, M-5** — pantalla por pantalla, sin urgencia.
-6. **La carga masiva atómica** (I-1), si el cliente llega con una planilla
-   grande.
+1. **T-14 — `unit_price` sin comparar con el catálogo.** Es lo que queda
+   abierto de S-4: el tope de descuento se puede rodear vendiendo a precio 1.
+2. **T-40 — los casos CP-01 a CP-08 de concurrencia siguen sin ejecutarse.**
+   Siete requerimientos marcados como hechos que descansan en diseño y no en
+   pruebas. Dos cajeros vendiendo el último producto al mismo tiempo no se ha
+   probado nunca. Pesa más que todo lo demás de esta lista.
+3. **M-1 — corregir un movimiento de caja** mal ingresado.
+4. **L-5 — recuperar contraseña (RF-M1-05).** Hoy el dueño entra al panel de
+   Supabase cada vez que un vendedor olvida su clave.
+5. **M-4, M-5, P-1, P-5, P-6, I-1 de importar** — pantalla por pantalla, sin
+   urgencia.
 
-Y lo que no es de pantallas pero pesa más que todo lo anterior:
-**los casos CP-01 a CP-08 de concurrencia siguen sin ejecutarse**
-([16](16-plan-pruebas.md)). Siete requerimientos marcados como hechos descansan
-en diseño, no en pruebas.
+### Lo que esta pasada enseña sobre el método
+
+Los tres hallazgos más graves de hoy —S-1, S-2 y U-2— tienen la misma forma:
+**la pieza existía, estaba bien escrita, y no estaba conectada con nada.** Un
+`revoke` que no revocaba, una política que protegía la fila equivocada, una
+columna que nadie escribía. Ninguno se ve leyendo el código de una pantalla, y
+ninguno se ve leyendo el código de la base: se ven siguiendo un dato de punta a
+punta y preguntando quién lo escribe y quién puede escribirlo.
+
+Y U-2 agrega algo peor: **el modo demo lo tapaba.** Los datos de ejemplo traen
+`last_seen_at` con la hora puesta, así que la pantalla se veía perfecta y el
+requerimiento figuraba cumplido. Cada vez que el modo demo rellena un dato que
+en producción nadie escribe, esconde exactamente el defecto que debería
+mostrar. Vale la pena revisar el resto de los datos de ejemplo con esa
+pregunta.
