@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { createClient, getCurrentUser } from '@/lib/supabase/server';
-import { formatCLP } from '@rutaahorro/core';
+import { formatCLP, textoVencimiento, cantidadConUnidad } from '@rutaahorro/core';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { DEMO_VENTAS_HOY, DEMO_BAJO_STOCK, DEMO_LOTES } from '@/lib/demo/data';
 
@@ -11,6 +11,7 @@ interface FilaBajoStock {
   name: string;
   quantity: number;
   min_stock: number;
+  unit?: string | null;
 }
 
 interface FilaVencimiento {
@@ -20,7 +21,11 @@ interface FilaVencimiento {
   value_at_risk: number;
   expiry_status: string;
   days_to_expiry: number;
+  unit?: string | null;
 }
+
+/** Cuántas filas se muestran en cada panel antes de decir "y N más". */
+const TOPE_PANEL = 8;
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -30,41 +35,69 @@ export default async function DashboardPage() {
   let ticket = 0;
   let bajoStock: FilaBajoStock[] = [];
   let porVencer: FilaVencimiento[] = [];
+  let masBajoStock = 0;
+  let masPorVencer = 0;
+  // Los tres errores se ignoraban en silencio, y el panel mostraba ceros. Un
+  // problema de red se veía exactamente igual que un día sin ventas: el dueño
+  // leía "Vendido hoy $0" y creía que no se había vendido nada.
+  const fallaron: string[] = [];
 
   if (DEMO_ACTIVO) {
     total = DEMO_VENTAS_HOY.total;
     cantidadVentas = DEMO_VENTAS_HOY.cantidad;
     ticket = DEMO_VENTAS_HOY.ticket_promedio;
-    bajoStock = DEMO_BAJO_STOCK;
-    porVencer = DEMO_LOTES.filter((l) => l.expiry_status !== 'vigente');
+    const todosBajos = DEMO_BAJO_STOCK;
+    const todosPorVencer = DEMO_LOTES
+      .filter((l) => l.expiry_status !== 'vigente')
+      .sort((a, b) => a.days_to_expiry - b.days_to_expiry);
+    bajoStock = todosBajos.slice(0, TOPE_PANEL);
+    porVencer = todosPorVencer.slice(0, TOPE_PANEL);
+    masBajoStock = todosBajos.length - bajoStock.length;
+    masPorVencer = todosPorVencer.length - porVencer.length;
   } else {
     const client = await createClient();
     const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
 
-    const { data: ventas } = await client
-      .from('sales')
-      .select('total, status')
-      .gte('sold_at', `${hoy}T00:00:00-03:00`)
-      .lte('sold_at', `${hoy}T23:59:59-03:00`);
+    // v_sales_daily agrupa con `at time zone 'America/Santiago'`. Antes esta
+    // pantalla armaba el rango a mano con el desfase -03:00 escrito fijo, y
+    // Chile está en -04:00 medio año: en invierno el "día de hoy" empezaba a
+    // las 23:00 de ayer y terminaba a las 22:59, así que lo vendido después de
+    // las 23:00 aparecía al día siguiente. Además traía todas las ventas del
+    // día para sumarlas acá, anuladas incluidas.
+    const { data: dia, error: eVentas } = await client
+      .from('v_sales_daily')
+      .select('sales_count, total_amount, average_ticket')
+      .eq('sale_date', hoy)
+      .maybeSingle();
+    if (eVentas) fallaron.push('las ventas del día');
+    total = Number(dia?.total_amount ?? 0);
+    cantidadVentas = Number(dia?.sales_count ?? 0);
+    ticket = Number(dia?.average_ticket ?? 0);
 
-    const completadas = (ventas ?? []).filter((v) => v.status === 'completada');
-    total = completadas.reduce((s, v) => s + (v.total ?? 0), 0);
-    cantidadVentas = completadas.length;
-    ticket = cantidadVentas > 0 ? Math.round(total / cantidadVentas) : 0;
-
-    const { data: low } = await client
+    // Ordenado por lo que más falta. Sin `order by`, PostgreSQL devuelve las
+    // ocho filas que quiera: el dueño veía ocho productos bajo mínimo que no
+    // eran los ocho más urgentes, y cambiaban de una recarga a otra.
+    const { data: low, error: eLow, count: totalLow } = await client
       .from('v_low_stock')
-      .select('product_id, name, quantity, min_stock')
-      .limit(8);
+      .select('product_id, name, quantity, min_stock, unit', { count: 'exact' })
+      .order('shortfall', { ascending: false })
+      .limit(TOPE_PANEL);
+    if (eLow) fallaron.push('los productos bajo mínimo');
     bajoStock = (low ?? []) as unknown as FilaBajoStock[];
+    masBajoStock = Math.max(0, (totalLow ?? bajoStock.length) - bajoStock.length);
 
-    const { data: exp } = await client
+    const { data: exp, error: eExp, count: totalExp } = await client
       .from('v_expiring_lots')
-      .select('lot_id, product_name, quantity, value_at_risk, expiry_status, days_to_expiry')
+      .select(
+        'lot_id, product_name, quantity, value_at_risk, expiry_status, days_to_expiry, unit',
+        { count: 'exact' },
+      )
       .in('expiry_status', ['vencido', 'por_vencer'])
       .order('days_to_expiry', { ascending: true })
-      .limit(8);
+      .limit(TOPE_PANEL);
+    if (eExp) fallaron.push('los vencimientos');
     porVencer = (exp ?? []) as unknown as FilaVencimiento[];
+    masPorVencer = Math.max(0, (totalExp ?? porVencer.length) - porVencer.length);
   }
 
   const enRiesgo = porVencer.reduce((s, l) => s + Number(l.value_at_risk ?? 0), 0);
@@ -76,6 +109,13 @@ export default async function DashboardPage() {
         <h1 className="text-lg font-semibold">Hola, {primerNombre}</h1>
         <p className="text-sm text-[var(--texto-suave)]">Así va el día</p>
       </div>
+
+      {fallaron.length > 0 && (
+        <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">
+          No pudimos cargar {fallaron.join(' ni ')}. Lo que ves abajo puede estar
+          incompleto. Revisa tu conexión y vuelve a entrar.
+        </p>
+      )}
 
       <div className="grid grid-cols-3 gap-2">
         <Tarjeta label="Vendido hoy" value={formatCLP(total)} />
@@ -99,10 +139,8 @@ export default async function DashboardPage() {
                     {l.expiry_status === 'vencido' ? '🔴' : '🟡'} {l.product_name}
                   </span>
                   <span className="text-xs text-[var(--texto-suave)]">
-                    {l.expiry_status === 'vencido'
-                      ? `venció hace ${Math.abs(l.days_to_expiry)} días`
-                      : `vence en ${l.days_to_expiry} días`}
-                    {' · '}{l.quantity} u
+                    {textoVencimiento(Number(l.days_to_expiry))}
+                    {' · '}{cantidadConUnidad(Number(l.quantity), l.unit)}
                   </span>
                 </span>
                 <span className="num whitespace-nowrap">
@@ -111,6 +149,12 @@ export default async function DashboardPage() {
               </li>
             ))}
           </ul>
+          {masPorVencer > 0 && (
+            <p className="text-xs text-[var(--texto-suave)] mt-2">
+              Y {masPorVencer} {masPorVencer === 1 ? 'lote más' : 'lotes más'}.{' '}
+              <Link href="/inventario" className="underline">Ver todos</Link>
+            </p>
+          )}
         </section>
       )}
 
@@ -122,11 +166,18 @@ export default async function DashboardPage() {
               <li key={p.product_id} className="py-2 flex justify-between gap-2">
                 <span className="truncate">{p.name}</span>
                 <span className="num whitespace-nowrap text-[var(--color-aviso)]">
-                  {p.quantity} / {p.min_stock}
+                  {cantidadConUnidad(Number(p.quantity), p.unit)}
+                  {' / '}{p.min_stock}
                 </span>
               </li>
             ))}
           </ul>
+          {masBajoStock > 0 && (
+            <p className="text-xs text-[var(--texto-suave)] mt-2">
+              Y {masBajoStock} {masBajoStock === 1 ? 'producto más' : 'productos más'}.{' '}
+              <Link href="/inventario" className="underline">Ver todos</Link>
+            </p>
+          )}
         </section>
       )}
 

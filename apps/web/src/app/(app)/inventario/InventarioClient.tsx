@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { formatCLP, validarCantidad, toUserMessage } from '@rutaahorro/core';
+import {
+  formatCLP, validarCantidad, toUserMessage, textoVencimiento, cantidadConUnidad,
+} from '@rutaahorro/core';
 import { repoProductos, type Producto } from '@/lib/productos';
 import {
   repoInventario, ETIQUETA_MOVIMIENTO, ETIQUETA_ESTADO_LOTE, MOTIVOS_SUGERIDOS,
@@ -17,18 +19,6 @@ const fecha = (iso: string) =>
     day: '2-digit', month: '2-digit', year: '2-digit',
   });
 
-/**
- * Cuánto falta para que venza, en palabras.
- *
- * El número de días solo no sirve en el mostrador: "-2" hay que interpretarlo.
- * Y nunca va solo el color, siempre con texto (RNF-46).
- */
-function cuandoVence(dias: number): string {
-  if (dias < 0) return dias === -1 ? 'venció ayer' : `venció hace ${Math.abs(dias)} días`;
-  if (dias === 0) return 'vence hoy';
-  if (dias === 1) return 'vence mañana';
-  return `vence en ${dias} días`;
-}
 
 const fechaHora = (iso: string) =>
   new Date(iso).toLocaleString('es-CL', {
@@ -282,11 +272,11 @@ export function InventarioClient({
                       : 'text-[var(--texto-suave)]'
                     }`}>
                       {l.estado === 'vencido' ? '🔴' : l.estado === 'por_vencer' ? '🟠' : '🟢'}
-                      {' '}{ETIQUETA_ESTADO_LOTE[l.estado]} · {cuandoVence(l.diasParaVencer)}
+                      {' '}{ETIQUETA_ESTADO_LOTE[l.estado]} · {textoVencimiento(l.diasParaVencer)}
                       {' '}({fecha(l.vence)})
                     </p>
                     <p className="text-xs text-[var(--texto-suave)] num truncate">
-                      {l.cantidad} en existencia
+                      {cantidadConUnidad(l.cantidad, l.unidad)} en existencia
                       {l.codigo && ` · lote ${l.codigo}`}
                       {verCostos && ` · ${formatCLP(l.valorEnRiesgo)}`}
                     </p>
@@ -445,8 +435,11 @@ export function InventarioClient({
         >
           <div className="p-5 space-y-3">
             <p className="text-sm">
-              Se descuentan <strong className="num">{dandoDeBaja.cantidad}</strong> de{' '}
-              {dandoDeBaja.productoNombre}
+              Se descuentan{' '}
+              <strong className="num">
+                {cantidadConUnidad(dandoDeBaja.cantidad, dandoDeBaja.unidad)}
+              </strong>{' '}
+              de {dandoDeBaja.productoNombre}
               {dandoDeBaja.codigo && <> (lote {dandoDeBaja.codigo})</>} como merma.
             </p>
             <p className="text-xs text-[var(--texto-suave)]">

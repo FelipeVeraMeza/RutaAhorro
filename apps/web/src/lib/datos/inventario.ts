@@ -67,6 +67,7 @@ export interface Lote {
   productoId: string;
   productoNombre: string;
   codigo: string | null;
+  unidad: string;
   vence: string;
   diasParaVencer: number;
   cantidad: number;
@@ -140,6 +141,7 @@ const repoLocal: RepositorioInventario = {
         productoId: l.product_id,
         productoNombre: l.product_name,
         codigo: l.lot_code,
+        unidad: l.unit,
         vence: l.expiry_date,
         diasParaVencer: l.days_to_expiry,
         cantidad: l.quantity,
@@ -219,7 +221,7 @@ const repoSupabase: RepositorioInventario = {
     // `expiry_alert_days` de cada producto.
     const { data, error } = await supabase()
       .from('v_expiring_lots')
-      .select('lot_id, product_id, product_name, lot_code, expiry_date, quantity, unit_cost, value_at_risk, days_to_expiry, expiry_status')
+      .select('lot_id, product_id, product_name, lot_code, expiry_date, quantity, unit_cost, value_at_risk, days_to_expiry, expiry_status, unit')
       .order('expiry_date', { ascending: true });
     if (error) throw error;
     return (data ?? []).map((l) => ({
@@ -227,6 +229,7 @@ const repoSupabase: RepositorioInventario = {
       productoId: l.product_id as string,
       productoNombre: (l.product_name as string) ?? 'Producto',
       codigo: (l.lot_code as string | null) ?? null,
+      unidad: (l.unit as string) ?? 'unidad',
       vence: l.expiry_date as string,
       diasParaVencer: Number(l.days_to_expiry ?? 0),
       cantidad: Number(l.quantity ?? 0),

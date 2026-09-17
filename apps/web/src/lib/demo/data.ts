@@ -59,6 +59,8 @@ export interface DemoLote {
   value_at_risk: number;
   days_to_expiry: number;
   expiry_status: 'vencido' | 'por_vencer' | 'vigente';
+  /** La del producto. El queso va en kg, no en "u". */
+  unit: string;
 }
 
 function lote(
@@ -66,6 +68,7 @@ function lote(
   dias: number, cantidad: number, costo: number,
 ): DemoLote {
   return {
+    unit: DEMO_PRODUCTOS.find((p) => p.id === productId)?.unit ?? 'unidad',
     lot_id: id,
     product_id: productId,
     product_name: nombre,
@@ -145,6 +148,7 @@ export const DEMO_BAJO_STOCK = DEMO_PRODUCTOS
     name: p.name,
     quantity: p.stock,
     min_stock: p.min_stock,
+    unit: p.unit,
   }));
 
 /** Inventario valorizado, de mayor a menor capital inmovilizado. */

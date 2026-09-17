@@ -104,3 +104,38 @@ export function expiryAlerts(lots: Lot[], alertDays = 30, today = new Date()): E
 export function totalLotQuantity(lots: Lot[]): number {
   return Math.round(lots.reduce((s, l) => s + l.quantity, 0) * 1000) / 1000;
 }
+
+
+/**
+ * Cuándo vence, en palabras.
+ *
+ * El número de días solo no sirve en el mostrador: "-2" hay que interpretarlo,
+ * y quien está atendiendo no va a interpretar nada. Y el singular importa más
+ * de lo que parece: "vence en 1 días" es la clase de detalle por el que un
+ * cliente deja de confiar en lo que dice la pantalla.
+ *
+ * Vive en core y no en una pantalla porque lo usan dos —el panel de Inicio y
+ * la lista de lotes de Inventario— y tienen que decir lo mismo.
+ */
+export function textoVencimiento(dias: number): string {
+  if (dias < 0) {
+    return dias === -1 ? 'venció ayer' : `venció hace ${Math.abs(dias)} días`;
+  }
+  if (dias === 0) return 'vence hoy';
+  if (dias === 1) return 'vence mañana';
+  return `vence en ${dias} días`;
+}
+
+/**
+ * Cantidad con su unidad, como la diría una persona.
+ *
+ * La unidad estaba escrita a mano como "u" en el panel de Inicio. Para el
+ * queso, el pan o la fruta —que se venden por kilo y son justo los perecibles
+ * que llevan lote— "2.5 u" no significa nada.
+ */
+export function cantidadConUnidad(cantidad: number, unidad: string | null | undefined): string {
+  const u = (unidad ?? '').trim();
+  const n = Number.isInteger(cantidad) ? String(cantidad) : String(cantidad);
+  if (u === '' || u === 'unidad') return `${n} ${cantidad === 1 ? 'unidad' : 'unidades'}`;
+  return `${n} ${u}`;
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  allocateFefo, sortFefo, daysToExpiry, expiryStatus,
+  allocateFefo, sortFefo, daysToExpiry, expiryStatus, textoVencimiento, cantidadConUnidad,
   expiryAlerts, valueAtRisk, totalLotQuantity, type Lot,
 } from '../src/expiry.js';
 
@@ -112,5 +112,47 @@ describe('alertas de vencimiento', () => {
 describe('totalLotQuantity', () => {
   it('suma el stock de los lotes sin residuo decimal', () => {
     expect(totalLotQuantity([lote('a', '2026-10-01', 0.1), lote('b', '2026-10-02', 0.2)])).toBe(0.3);
+  });
+});
+
+describe('textoVencimiento', () => {
+  it('lo vencido se dice en pasado', () => {
+    expect(textoVencimiento(-5)).toBe('venció hace 5 días');
+  });
+
+  it('un día de atraso es "ayer", no "hace 1 días"', () => {
+    expect(textoVencimiento(-1)).toBe('venció ayer');
+  });
+
+  it('hoy es hoy', () => {
+    expect(textoVencimiento(0)).toBe('vence hoy');
+  });
+
+  it('un día por delante es "mañana", no "en 1 días"', () => {
+    expect(textoVencimiento(1)).toBe('vence mañana');
+  });
+
+  it('de dos días en adelante va el número', () => {
+    expect(textoVencimiento(12)).toBe('vence en 12 días');
+  });
+});
+
+describe('cantidadConUnidad', () => {
+  it('sin unidad dice unidades', () => {
+    expect(cantidadConUnidad(3, null)).toBe('3 unidades');
+  });
+
+  it('una sola no va en plural', () => {
+    expect(cantidadConUnidad(1, 'unidad')).toBe('1 unidad');
+  });
+
+  // El caso que motivó esto: el queso se vende por kilo y el panel decía "u".
+  it('respeta la unidad real del producto', () => {
+    expect(cantidadConUnidad(2.5, 'kg')).toBe('2.5 kg');
+    expect(cantidadConUnidad(1.5, 'litro')).toBe('1.5 litro');
+  });
+
+  it('una unidad con espacios de más no ensucia el texto', () => {
+    expect(cantidadConUnidad(4, '  kg  ')).toBe('4 kg');
   });
 });
