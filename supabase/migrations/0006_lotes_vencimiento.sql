@@ -239,7 +239,7 @@ begin
     select quantity into v_stock from stock_levels
      where tenant_id = v_tenant and store_id = v_store and product_id = v_product.id;
     if coalesce(v_stock,0) < v_qty and not p_force
-       and v_role not in ('admin','supervisor') then
+       and coalesce(v_role::text, '') not in ('admin','supervisor') then
       raise exception 'STOCK_INSUFICIENTE: %', v_product.name using errcode = 'P0001';
     end if;
 
@@ -331,7 +331,7 @@ begin
   if v_sale.status = 'anulada' then
     raise exception 'VENTA_YA_ANULADA' using errcode = 'P0001';
   end if;
-  if v_role not in ('admin','supervisor') then
+  if coalesce(v_role::text, '') not in ('admin','supervisor') then
     raise exception 'SIN_PERMISO_ANULAR' using errcode = '42501';
   end if;
   if v_role = 'supervisor'

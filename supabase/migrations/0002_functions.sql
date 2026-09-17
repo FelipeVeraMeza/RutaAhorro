@@ -210,7 +210,7 @@ begin
      where tenant_id = v_tenant and store_id = v_store and product_id = v_product.id;
     if coalesce(v_stock,0) < v_qty
        and not p_force
-       and v_role not in ('admin','supervisor') then
+       and coalesce(v_role::text, '') not in ('admin','supervisor') then
       raise exception 'STOCK_INSUFICIENTE: %', v_product.name using errcode = 'P0001';
     end if;
 
@@ -280,7 +280,7 @@ begin
   end if;
 
   -- Supervisor solo anula ventas del día; días anteriores requieren admin
-  if v_role not in ('admin','supervisor') then
+  if coalesce(v_role::text, '') not in ('admin','supervisor') then
     raise exception 'SIN_PERMISO_ANULAR' using errcode = '42501';
   end if;
   if v_role = 'supervisor' and v_sale.sold_at::date <> (now() at time zone 'America/Santiago')::date then
@@ -626,7 +626,7 @@ begin
   if v_s.status = 'cerrada' then
     raise exception 'CAJA_YA_CERRADA' using errcode = 'P0001';
   end if;
-  if v_s.user_id <> v_user and v_role not in ('admin','supervisor') then
+  if v_s.user_id <> v_user and coalesce(v_role::text, '') not in ('admin','supervisor') then
     raise exception 'SIN_PERMISO' using errcode = '42501';
   end if;
 

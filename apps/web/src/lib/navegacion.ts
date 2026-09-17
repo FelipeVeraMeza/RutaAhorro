@@ -54,6 +54,10 @@ export const NAVEGACION: ItemNav[] = [
     roles: ['admin', 'supervisor', 'bodega'], enMovil: false,
   },
   {
+    href: '/ventas', label: 'Ventas', labelCorto: 'Ventas', icono: '🧾',
+    roles: ['admin', 'supervisor'], enMovil: false,
+  },
+  {
     href: '/reportes', label: 'Reportes', labelCorto: 'Reportes', icono: '📊',
     roles: ['admin', 'supervisor'], enMovil: false,
   },
