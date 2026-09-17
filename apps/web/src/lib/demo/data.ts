@@ -161,6 +161,7 @@ export const DEMO_INVENTARIO_VALORIZADO = DEMO_PRODUCTOS
     avg_cost: p.avg_cost,
     sale_price: p.sale_price,
     cost_value: Math.round(p.stock * p.avg_cost),
+    sale_value: Math.round(p.stock * p.sale_price),
   }))
   .sort((a, b) => b.cost_value - a.cost_value);
 
