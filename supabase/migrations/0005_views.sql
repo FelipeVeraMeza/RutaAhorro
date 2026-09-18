@@ -72,6 +72,9 @@ left join categories c on c.id = p.category_id
 where p.is_active;
 
 -- Productos bajo stock mínimo
+-- Se borra antes de crear porque 0010 le agrega columnas, y al reinstalar
+-- `create or replace` no puede quitárselas: la segunda ejecución fallaba.
+drop view if exists v_low_stock;
 create or replace view v_low_stock
 with (security_invoker = true) as
 select

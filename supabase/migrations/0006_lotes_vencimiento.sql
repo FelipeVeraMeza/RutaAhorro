@@ -523,6 +523,9 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- Vistas de vencimiento
 -- ---------------------------------------------------------------------------
+-- Se borra antes de crear porque 0010 le agrega columnas, y al reinstalar
+-- `create or replace` no puede quitárselas: la segunda ejecución fallaba.
+drop view if exists v_expiring_lots;
 create or replace view v_expiring_lots
 with (security_invoker = true) as
 select
@@ -557,15 +560,19 @@ group by 1, 2, 3;
 alter table product_lots   enable row level security;
 alter table sale_item_lots enable row level security;
 
+drop policy if exists lots_read on product_lots;
 create policy lots_read on product_lots for select to authenticated
   using (tenant_id = current_tenant_id());
+drop policy if exists lots_write on product_lots;
 create policy lots_write on product_lots for all to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor','bodega'))
   with check (tenant_id = current_tenant_id());
 
+drop policy if exists sale_item_lots_read on sale_item_lots;
 create policy sale_item_lots_read on sale_item_lots for select to authenticated
   using (tenant_id = current_tenant_id());
+drop policy if exists sale_item_lots_insert on sale_item_lots;
 create policy sale_item_lots_insert on sale_item_lots for insert to authenticated
   with check (tenant_id = current_tenant_id());
 

@@ -34,14 +34,18 @@ alter table job_runs               enable row level security;
 -- ---------------------------------------------------------------------------
 -- Tenants y tiendas
 -- ---------------------------------------------------------------------------
+drop policy if exists tenant_read on tenants;
 create policy tenant_read on tenants for select to authenticated
   using (id = current_tenant_id());
+drop policy if exists tenant_update on tenants;
 create policy tenant_update on tenants for update to authenticated
   using (id = current_tenant_id() and current_user_role() = 'admin')
   with check (id = current_tenant_id());
 
+drop policy if exists stores_read on stores;
 create policy stores_read on stores for select to authenticated
   using (tenant_id = current_tenant_id());
+drop policy if exists stores_write on stores;
 create policy stores_write on stores for all to authenticated
   using (tenant_id = current_tenant_id() and current_user_role() = 'admin')
   with check (tenant_id = current_tenant_id());
@@ -49,10 +53,13 @@ create policy stores_write on stores for all to authenticated
 -- ---------------------------------------------------------------------------
 -- Perfiles
 -- ---------------------------------------------------------------------------
+drop policy if exists profiles_read on profiles;
 create policy profiles_read on profiles for select to authenticated
   using (tenant_id = current_tenant_id());
+drop policy if exists profiles_insert on profiles;
 create policy profiles_insert on profiles for insert to authenticated
   with check (tenant_id = current_tenant_id() and current_user_role() = 'admin');
+drop policy if exists profiles_update on profiles;
 create policy profiles_update on profiles for update to authenticated
   using (tenant_id = current_tenant_id()
          and (current_user_role() = 'admin' or id = auth.uid()))
@@ -62,63 +69,81 @@ create policy profiles_update on profiles for update to authenticated
 -- ---------------------------------------------------------------------------
 -- Catálogo
 -- ---------------------------------------------------------------------------
+drop policy if exists categories_read on categories;
 create policy categories_read on categories for select to authenticated
   using (tenant_id = current_tenant_id());
+drop policy if exists categories_write on categories;
 create policy categories_write on categories for all to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor'))
   with check (tenant_id = current_tenant_id());
 
+drop policy if exists products_read on products;
 create policy products_read on products for select to authenticated
   using (tenant_id = current_tenant_id());
+drop policy if exists products_insert on products;
 create policy products_insert on products for insert to authenticated
   with check (tenant_id = current_tenant_id()
               and current_user_role() in ('admin','supervisor','bodega'));
+drop policy if exists products_update on products;
 create policy products_update on products for update to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor','bodega'))
   with check (tenant_id = current_tenant_id());
+drop policy if exists products_delete on products;
 create policy products_delete on products for delete to authenticated
   using (tenant_id = current_tenant_id() and current_user_role() = 'admin');
 
+drop policy if exists barcodes_read on product_barcodes;
 create policy barcodes_read on product_barcodes for select to authenticated
   using (tenant_id = current_tenant_id());
+drop policy if exists barcodes_write on product_barcodes;
 create policy barcodes_write on product_barcodes for all to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor','bodega'))
   with check (tenant_id = current_tenant_id());
 
+drop policy if exists price_history_read on price_history;
 create policy price_history_read on price_history for select to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor'));
+drop policy if exists price_history_insert on price_history;
 create policy price_history_insert on price_history for insert to authenticated
   with check (tenant_id = current_tenant_id());
 
 -- ---------------------------------------------------------------------------
 -- Proveedores y compras
 -- ---------------------------------------------------------------------------
+drop policy if exists suppliers_read on suppliers;
 create policy suppliers_read on suppliers for select to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor','bodega'));
+drop policy if exists suppliers_write on suppliers;
 create policy suppliers_write on suppliers for all to authenticated
   using (tenant_id = current_tenant_id() and current_user_role() = 'admin')
   with check (tenant_id = current_tenant_id());
 
+drop policy if exists receipts_read on purchase_receipts;
 create policy receipts_read on purchase_receipts for select to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor','bodega'));
+drop policy if exists receipts_insert on purchase_receipts;
 create policy receipts_insert on purchase_receipts for insert to authenticated
   with check (tenant_id = current_tenant_id()
               and current_user_role() in ('admin','supervisor','bodega'));
 
+drop policy if exists receipt_items_read on purchase_receipt_items;
 create policy receipt_items_read on purchase_receipt_items for select to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor','bodega'));
+drop policy if exists receipt_items_insert on purchase_receipt_items;
 create policy receipt_items_insert on purchase_receipt_items for insert to authenticated
   with check (tenant_id = current_tenant_id());
 
+drop policy if exists prod_sup_read on product_suppliers;
 create policy prod_sup_read on product_suppliers for select to authenticated
   using (tenant_id = current_tenant_id());
+drop policy if exists prod_sup_write on product_suppliers;
 create policy prod_sup_write on product_suppliers for all to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor'))
@@ -127,26 +152,32 @@ create policy prod_sup_write on product_suppliers for all to authenticated
 -- ---------------------------------------------------------------------------
 -- Inventario
 -- ---------------------------------------------------------------------------
+drop policy if exists stock_read on stock_levels;
 create policy stock_read on stock_levels for select to authenticated
   using (tenant_id = current_tenant_id());
 -- stock_levels solo lo escribe fn_post_movement (SECURITY DEFINER).
 -- Sin política de escritura: nadie lo toca directamente.
 
+drop policy if exists movements_read on inventory_movements;
 create policy movements_read on inventory_movements for select to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor','bodega'));
 -- Sin políticas de INSERT/UPDATE/DELETE: el kardex solo se escribe vía
 -- fn_post_movement. La inmutabilidad además está reforzada por trigger.
 
+drop policy if exists counts_read on stock_counts;
 create policy counts_read on stock_counts for select to authenticated
   using (tenant_id = current_tenant_id());
+drop policy if exists counts_write on stock_counts;
 create policy counts_write on stock_counts for all to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor','bodega'))
   with check (tenant_id = current_tenant_id());
 
+drop policy if exists count_items_read on stock_count_items;
 create policy count_items_read on stock_count_items for select to authenticated
   using (tenant_id = current_tenant_id());
+drop policy if exists count_items_write on stock_count_items;
 create policy count_items_write on stock_count_items for all to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor','bodega'))
@@ -155,18 +186,23 @@ create policy count_items_write on stock_count_items for all to authenticated
 -- ---------------------------------------------------------------------------
 -- Caja
 -- ---------------------------------------------------------------------------
+drop policy if exists cash_sessions_read on cash_sessions;
 create policy cash_sessions_read on cash_sessions for select to authenticated
   using (tenant_id = current_tenant_id()
          and (current_user_role() in ('admin','supervisor') or user_id = auth.uid()));
+drop policy if exists cash_sessions_insert on cash_sessions;
 create policy cash_sessions_insert on cash_sessions for insert to authenticated
   with check (tenant_id = current_tenant_id() and user_id = auth.uid());
+drop policy if exists cash_sessions_update on cash_sessions;
 create policy cash_sessions_update on cash_sessions for update to authenticated
   using (tenant_id = current_tenant_id()
          and (current_user_role() in ('admin','supervisor') or user_id = auth.uid()))
   with check (tenant_id = current_tenant_id());
 
+drop policy if exists cash_mov_read on cash_movements;
 create policy cash_mov_read on cash_movements for select to authenticated
   using (tenant_id = current_tenant_id());
+drop policy if exists cash_mov_insert on cash_movements;
 create policy cash_mov_insert on cash_movements for insert to authenticated
   with check (tenant_id = current_tenant_id());
 
@@ -174,45 +210,58 @@ create policy cash_mov_insert on cash_movements for insert to authenticated
 -- Ventas
 -- El vendedor solo ve las suyas (RF-M7-12)
 -- ---------------------------------------------------------------------------
+drop policy if exists sales_read on sales;
 create policy sales_read on sales for select to authenticated
   using (tenant_id = current_tenant_id()
          and (current_user_role() in ('admin','supervisor') or sold_by = auth.uid()));
+drop policy if exists sales_insert on sales;
 create policy sales_insert on sales for insert to authenticated
   with check (tenant_id = current_tenant_id());
+drop policy if exists sales_update on sales;
 create policy sales_update on sales for update to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor'))
   with check (tenant_id = current_tenant_id());
 
+drop policy if exists sale_items_read on sale_items;
 create policy sale_items_read on sale_items for select to authenticated
   using (tenant_id = current_tenant_id());
+drop policy if exists sale_items_insert on sale_items;
 create policy sale_items_insert on sale_items for insert to authenticated
   with check (tenant_id = current_tenant_id());
 
+drop policy if exists sale_payments_read on sale_payments;
 create policy sale_payments_read on sale_payments for select to authenticated
   using (tenant_id = current_tenant_id());
+drop policy if exists sale_payments_insert on sale_payments;
 create policy sale_payments_insert on sale_payments for insert to authenticated
   with check (tenant_id = current_tenant_id());
 
+drop policy if exists folio_read on folio_counters;
 create policy folio_read on folio_counters for select to authenticated
   using (tenant_id = current_tenant_id());
 
 -- ---------------------------------------------------------------------------
 -- Transversales
 -- ---------------------------------------------------------------------------
+drop policy if exists audit_read on audit_log;
 create policy audit_read on audit_log for select to authenticated
   using (tenant_id = current_tenant_id() and current_user_role() = 'admin');
+drop policy if exists audit_insert on audit_log;
 create policy audit_insert on audit_log for insert to authenticated
   with check (tenant_id = current_tenant_id());
 -- Sin UPDATE ni DELETE: inmutable por política Y por trigger.
 
+drop policy if exists alerts_read on alerts;
 create policy alerts_read on alerts for select to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor'));
+drop policy if exists alerts_update on alerts;
 create policy alerts_update on alerts for update to authenticated
   using (tenant_id = current_tenant_id()
          and current_user_role() in ('admin','supervisor'))
   with check (tenant_id = current_tenant_id());
+drop policy if exists alerts_insert on alerts;
 create policy alerts_insert on alerts for insert to authenticated
   with check (tenant_id = current_tenant_id());
 
