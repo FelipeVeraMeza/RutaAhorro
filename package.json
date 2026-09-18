@@ -20,12 +20,15 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "db:check": "node tools/sql-check/parse.js && node tools/sql-check/plpgsql.js",
+    "db:test": "node --test --test-timeout=60000 \"tools/pg-test/*.test.mjs\"",
     "db:bundle": "node tools/sql-check/bundle.js",
     "db:instalar": "node tools/sql-check/instalar.js",
     "db:admin": "node tools/crear-admin.mjs",
     "build:web": "npm run build -w @rutaahorro/core && npm run build -w @rutaahorro/web"
   },
   "devDependencies": {
+    "embedded-postgres": "^18.4.0-beta.17",
+    "pg": "^8.23.0",
     "pg-query-emscripten": "^5.1.0",
     "typescript": "^5.7.2"
   }
