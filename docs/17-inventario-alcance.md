@@ -310,16 +310,16 @@ base y solo se ven parcialmente en Inicio.
 
 | RF | Ítem | Estado | Falta |
 |---|---|:--:|---|
-| M10-01 | Varios usuarios vendiendo a la vez | ✅ | Por diseño |
-| M10-02 | Descuento de stock atómico | ✅ | `INSERT … ON CONFLICT … RETURNING` |
+| M10-01 | Varios usuarios vendiendo a la vez | ✅ | Probado: CP-02, 50 ventas desde 5 cajas (`db:test`) |
+| M10-02 | Descuento de stock atómico | ✅ | Probado: CP-01. Ajustes, anulaciones y bajas **no lo eran** hasta 0012 |
 | M10-03 | Aviso al editar en simultáneo | ⬜ | **Hueco conocido.** Hoy el segundo sobrescribe sin avisar |
-| M10-04 | Folio sin saltos ni repetidos | ✅ | — |
-| M10-05 | Advertir cierre de caja ajena | ⬜ | — |
+| M10-04 | Folio sin saltos ni repetidos | ✅ | Probado: CP-02, con ventas fallidas intercaladas |
+| M10-05 | Advertir cierre de caja ajena | 🟡 | La base ya no pierde la venta en curso (CP-07, 0012). Falta la advertencia en pantalla |
 | M10-06 | Stock actualizado en otras pantallas | ⬜ | Requiere Realtime |
-| M10-07 | Vendedor ve solo sus ventas | ✅ | Política RLS |
-| M10-08 | Toma de inventario no se aplica dos veces | ✅ | — |
-| M10-09 | Sincronización sin duplicar | ✅ | — |
-| M10-10 | FEFO sin doble descuento | ✅ | `SELECT … FOR UPDATE` |
+| M10-07 | Vendedor ve solo sus ventas | ✅ | Probado: CP-09 |
+| M10-08 | Toma de inventario no se aplica dos veces | ✅ | **Figuraba hecho y no lo estaba**: se aplicaba dos veces. Corregido en 0012, probado: CP-05 |
+| M10-09 | Sincronización sin duplicar | ✅ | Probado: CP-03. Un reintento con el primer envío en curso devolvía error hasta 0012 |
+| M10-10 | FEFO sin doble descuento | ✅ | Probado: CP-04 |
 | M10-11 | Ver quién modificó por última vez | ⬜ | Prioridad *Could* |
 
 **Estado del módulo: 7 ✅ · 0 🔵 · 0 🟡 · 4 ⬜**

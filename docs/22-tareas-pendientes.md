@@ -1,6 +1,6 @@
 # 22 — Tareas pendientes
 
-**Fecha:** 2026-09-17 · **Fuente:** auditado sobre el código, no sobre los documentos.
+**Fecha:** 2026-09-18 · **Fuente:** auditado sobre el código, no sobre los documentos.
 
 Este documento consolida en una sola lista lo que queda por hacer: los hallazgos
 abiertos de la [auditoría de pantallas](21-qa-pantallas.md), las fases del
@@ -90,11 +90,22 @@ semana que se suma al final del proyecto.
 Y cuatro que no estaban en esta lista porque nadie los había visto: **S-1** a
 **S-4** en [21](21-qa-pantallas.md) §0, dos de ellos críticos.
 
+### Cerrados el 2026-09-18
+
+| # | Qué era | Dónde quedó |
+|---|---|---|
+| **T-40** | CP-01 a CP-08 nunca ejecutados | Ejecutados contra PostgreSQL real (`npm run db:test`). **Ocho defectos confirmados y corregidos** en 0012; solo queda CP-06, que nunca se implementó (P-24). Ver [21](21-qa-pantallas.md) §0c |
+| — | **S-5** · las tablas que se escriben con funciones se podían escribir a mano. **Un cajero podía escribir su propio arqueo** | 0012. Ver [21](21-qa-pantallas.md) §0b |
+| — | **S-6** · `anon` ejecutaba las funciones de negocio | 0012 |
+| — | `instalar.sql` decía ser idempotente y la segunda ejecución fallaba sin aplicar nada | Corregido y probado |
+| — | Vender en negativo no alertaba si el producto no tenía mínimo (ADR-005) | 0012 |
+
 ### Abiertos
 
 | # | Tarea | Dónde | Por qué importa |
 |---|---|---|---|
-| **T-14** | **`unit_price` llega del cliente sin compararlo con el catálogo.** Es lo que queda abierto de S-4: el tope de descuento se puede rodear vendiendo a precio 1 en vez de aplicando un descuento | `fn_register_sale` | Es deliberado que el precio viaje —una venta sin conexión se sincroniza con el precio que tenía al venderse— pero eso abre un camino que el tope no cubre. Cerrarlo bien pide comparar contra `price_history` con la fecha de la venta |
+| **T-45** | **Cualquier rol lee costos (S-7, CP-10).** `products.avg_cost` y `sale_items.unit_cost` se entregan a un vendedor que los pida por la API. La pantalla no los pide, pero eso es ocultar, no impedir | Base + Reportes + formulario de producto | El costo es la información que el dueño menos quiere que circule. Arreglarlo bien cambia cómo leen costos tres pantallas y `v_inventory_valued`; por eso no se hizo a medias. La prueba ya existe, marcada pendiente |
+| **T-14** | **`unit_price` llega del cliente sin compararlo con el catálogo.** Es lo que queda abierto de S-4: el tope de descuento se puede rodear vendiendo a precio 1 en vez de aplicando un descuento | `fn_register_sale` | Es deliberado que el precio viaje —una venta sin conexión se sincroniza con el precio que tenía al venderse— pero eso abre un camino que el tope no cubre. Cerrarlo bien pide comparar contra `price_history` con la fecha de la venta. **Desde 0012 `price_history` ya no se puede escribir a mano**, que era condición para que esa comparación valiera algo |
 | **T-04** | **Recuperar contraseña (RF-M1-05)** | Login | Hoy el dueño entra al panel de Supabase cada vez que un vendedor olvida su clave |
 | **T-06** | **Corregir un movimiento de caja (M-1).** Un egreso de 50.000 en vez de 5.000 no se puede enmendar | Caja | Descuadra el arqueo sin forma de explicarlo |
 | **T-09** | Kardex con filtros y paginación. Hoy trae 80 movimientos fijos | Inventario | Con tres meses de operación deja de servir para investigar nada |
@@ -147,26 +158,26 @@ del cliente; las de F6 no.
 
 | # | Tarea | Por qué |
 |---|---|---|
-| **T-40** | **Ejecutar CP-01 a CP-08** del [plan de pruebas](16-plan-pruebas.md) | **Siete requerimientos de concurrencia están marcados como hechos y descansan en diseño, no en pruebas.** Dos cajeros vendiendo el último producto al mismo tiempo no se ha probado nunca. Es el riesgo más grande del proyecto y el más fácil de seguir postergando |
+| ~~T-40~~ | ~~Ejecutar CP-01 a CP-08~~ | **Hecho el 2026-09-18.** Cinco de ocho casos fallaban, más cinco carreras que el plan no tenía. Queda CP-06 (P-24) |
+| **T-46** | **Pruebas de integración contra el Supabase real** | `tools/pg-test` replica Supabase con cuidado, pero es una réplica. Cuando B-01 esté hecho, correr los ataques de `seguridad.test.mjs` contra el proyecto real con supabase-js confirmaría que la réplica no esconde nada |
 | **T-41** | Revisar precio y plazo del proyecto | El módulo tributario entró al alcance el 2026-09-15 (P-03) y ni la propuesta comercial ni el plan de trabajo lo contemplaban |
 | **T-42** | Decidir el nombre del producto | Las maquetas dicen "SimplePyme", el repositorio dice "RutaAhorro". Lo razonable: SimplePyme el producto, RutaAhorro el primer cliente |
 | **T-43** | Avisarle al cliente que se desplegará solo en Railway | Había pedido Vercel + Railway; se decidió lo otro en ADR-008 y todavía no se le dice (P-26) |
-| **T-44** | Auditar Inicio y Usuarios línea por línea | Son las dos pantallas que quedaron en revisión parcial |
 
 ---
 
 ## 5. Orden recomendado
 
 1. **B-01, B-02, B-03** — sin esto nada de lo demás es verificable de verdad.
-   Y ahora hay una razón más: las correcciones de seguridad S-1 a S-4 viajan en
+   Y ahora hay una razón más: las correcciones de seguridad S-1 a S-6 viajan en
    el esquema, así que **la base tiene que instalarse con `instalar.sql` al
-   día**. Si alguna vez se aplicó una versión anterior en algún lado, hay que
-   reinstalar o aplicar 0009 y 0011 a mano.
+   día**. Si alguna vez se aplicó una versión anterior en algún lado, basta con
+   volver a pegar `instalar.sql` completo: desde 2026-09-18 se puede ejecutar
+   dos veces, y está probado. Antes de esa fecha la segunda ejecución fallaba
+   sin aplicar nada.
 2. **B-04, B-05** en paralelo, el mismo día. Son trámites con plazos ajenos.
-3. **T-40** — la concurrencia. Subió al tercer lugar porque es lo único grande
-   que sigue descansando en diseño y no en pruebas, y porque conviene hacerlo
-   antes de que haya datos reales que perder.
-4. **T-14** — cerrar lo que queda del tope de descuento.
+3. **T-14** — cerrar lo que queda del tope de descuento. Ya no depende de nada.
+4. **T-45** — los costos. Es el último hallazgo de seguridad abierto.
 5. **T-15** — revisar los datos de demo. Es barato y puede destapar otros
    requerimientos que figuran cumplidos y solo funcionan en la maqueta.
 6. **T-04, T-06** — lo que falta para cerrar el día a día.

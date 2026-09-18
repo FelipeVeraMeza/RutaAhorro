@@ -4,7 +4,7 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-09-17.**
+> **Corte: 2026-09-18.**
 
 ---
 
@@ -55,7 +55,8 @@ datos de ejemplo en IndexedDB y un banner amarillo con selector de rol.
 |---|---|
 | `npm run dev` | Frontend en :3000 |
 | `npm run dev:worker` | Worker en :8080 (no se levanta con `npm run dev`) |
-| `npm test` | 206 pruebas de lógica de negocio |
+| `npm test` | 291 pruebas de lógica de negocio |
+| `npm run db:test` | 33 pruebas contra un **PostgreSQL real**: concurrencia, ataques por rol, instalador (~30 s, sin Docker) |
 | `npm run typecheck` | Tipos en los tres paquetes |
 | `npm run db:check` | Valida el SQL con el parser de PostgreSQL |
 | `npm run db:instalar` | Genera `supabase/instalar.sql`: esquema + arranque, un solo archivo |
@@ -69,10 +70,35 @@ Si tocas `packages/core`, recompílalo antes de compilar la web:
 
 ---
 
-## ESTADO AL 2026-09-17
+## ESTADO AL 2026-09-18
 
-**291 pruebas · typecheck limpio · SQL validado · build de producción verificado
-con demo apagado · 13 rutas.**
+**291 pruebas de lógica · 33 contra PostgreSQL real · typecheck limpio · SQL
+validado · 13 rutas.**
+
+### Lo que se hizo el 2026-09-18
+
+**Por primera vez se ejecutó el esquema.** Hasta ayer `db:check` solo lo
+parseaba. `tools/pg-test/` levanta un PostgreSQL embebido con lo mínimo de
+Supabase encima —incluidos los privilegios por omisión, que son los que hacen
+que una política permisiva sea una puerta abierta— y ataca con la sesión de
+cada rol. Lo que salió, en `docs/21` §0b y §0c:
+
+- **Un cajero podía escribir su propio arqueo** (`update cash_sessions set
+  expected_amount = …`), insertar egresos firmados por el supervisor, ventas en
+  la caja de otro, y entradas falsas en la bitácora inmutable. Un supervisor
+  podía cambiar el total de una venta. Bodega podía reabrir una toma aplicada.
+  Nada de eso lo hace la aplicación: eran políticas de escritura sobre tablas
+  que solo escriben las funciones. **0012** las quita.
+- **T-40: cinco de los ocho casos de concurrencia fallaban**, más cinco
+  carreras que el plan no tenía. La toma aplicada dos veces dejaba 4 donde el
+  conteo decía 7. Una venta cobrada durante un cierre forzado quedaba fuera del
+  arqueo. Todo corregido en 0012 y probado forzando el peor intercalado.
+- **`instalar.sql` no se podía ejecutar dos veces**, aunque decía que sí, y
+  "reinstalar" era el consejo para llevar los arreglos a una base vieja.
+  Corregido y probado.
+- **S-1 y S-2 quedaron verificados** ejecutando el ataque, no leyendo el SQL.
+
+Queda abierto **T-45 / S-7**: cualquier rol puede leer `avg_cost` por la API.
 
 ### Funcionando
 
@@ -156,9 +182,11 @@ Preguntarme si ya apliqué el esquema en Supabase y desplegué en Railway.
 visto corre contra IndexedDB.
 
 > **Ahora hay una razón más para hacerlo cuanto antes.** Las correcciones de
-> seguridad del 2026-09-17 viajan en el esquema. Si en algún momento se aplicó
-> una versión anterior en alguna parte, esa base tiene las dos puertas abiertas
-> y hay que reinstalar, o aplicarle a mano `0009` y `0011`, que son idempotentes.
+> seguridad del 2026-09-17 y 2026-09-18 viajan en el esquema. Si en algún
+> momento se aplicó una versión anterior en alguna parte, esa base tiene las
+> puertas abiertas: volver a pegar `instalar.sql` completo. Desde 2026-09-18 eso
+> funciona (está probado en `tools/pg-test/instalacion.test.mjs`); antes, la
+> segunda ejecución fallaba sin aplicar nada.
 
 ```bash
 npm run db:instalar
@@ -193,12 +221,16 @@ Detalle completo con IDs en `docs/22-tareas-pendientes.md`. Resumen:
 
 ### Defectos abiertos, por daño
 
+0. **T-45 · cualquier rol lee costos por la API** (S-7, CP-10). La pantalla no
+   los pide, pero la base los entrega. Arreglarlo cambia cómo leen costos
+   Reportes, el formulario de producto y `v_inventory_valued`.
 1. **T-14 · `unit_price` llega del cliente sin compararlo con el catálogo.** Es
    lo que queda abierto del tope de descuento: se puede rodear vendiendo a
    precio 1 en vez de aplicando un descuento. Que el precio viaje es
    deliberado —una venta hecha sin conexión se sincroniza con el precio que
    tenía al venderse— pero eso abre un camino que el tope no cubre. Cerrarlo
-   bien pide comparar contra `price_history` con la fecha de la venta.
+   bien pide comparar contra `price_history` con la fecha de la venta. Desde
+   0012 `price_history` ya no se puede escribir a mano, que era condición.
 2. **T-15 · revisar el resto de los datos de demo.** ¿Qué otros campos rellena
    la maqueta que en producción no escribe nadie? `last_seen_at` hizo que un
    requerimiento figurara cumplido durante semanas.
@@ -209,10 +241,10 @@ Detalle completo con IDs en `docs/22-tareas-pendientes.md`. Resumen:
 
 ### La deuda silenciosa
 
-**T-40 · los casos CP-01 a CP-08 de `docs/16-plan-pruebas.md` nunca se han
-ejecutado.** Siete requerimientos de concurrencia están marcados como hechos y
-descansan en diseño, no en pruebas. Dos cajeros vendiendo el último producto al
-mismo tiempo no se ha probado jamás. Es el riesgo más grande del proyecto.
+**T-40 se cerró el 2026-09-18** (queda CP-06, que nunca se implementó). Lo que
+sigue sin probarse contra el Supabase real es **T-46**: `tools/pg-test` es una
+réplica cuidadosa, pero es una réplica. Cuando B-01 esté hecho, correr los
+ataques de `seguridad.test.mjs` contra el proyecto real con supabase-js.
 
 ---
 
@@ -280,6 +312,18 @@ esperar ningún trámite.
 13. **Los valores del negocio se leen de `tenants.settings`**, con
     `lib/datos/configuracion.ts`. Nada de escribir el IVA, el umbral de
     variación de costo o el tope de descuento en el código.
+14. **Una tabla que se escribe con una función no tiene política de escritura.**
+    Supabase le concede ALL sobre cada tabla a `authenticated`: una política de
+    INSERT o UPDATE es una puerta, no un detalle. Si una función `security
+    definer` escribe la tabla, la función no necesita la política y nadie más
+    debería tenerla. `db:test` lo verifica atacando.
+15. **Leer, decidir y escribir se hace con la fila bloqueada.** `select … for
+    update` antes de mirar el estado (`status`, `quantity`, `avg_cost`). Varias
+    filas de stock se bloquean todas juntas con `fn_lock_stock`, ordenadas por
+    producto, para que dos operaciones no se traben entre sí. Ocho funciones
+    fallaban por esto.
+16. **Una prueba que nunca se vio fallar no prueba nada.** Antes de dar por
+    buena una prueba de un arreglo, correrla sin el arreglo.
 
 ---
 

@@ -1,6 +1,6 @@
 # 21 — Auditoría de pantallas (QA)
 
-**Primera pasada:** 2026-09-15 · **Segunda:** 2026-09-16 · **Tercera:** 2026-09-17
+**Primera pasada:** 2026-09-15 · **Segunda:** 2026-09-16 · **Tercera:** 2026-09-17 · **Cuarta (esquema ejecutado):** 2026-09-18
 **Método:** lectura del código de cada pantalla, contrastada contra
 [17](17-inventario-alcance.md) y [03](03-requerimientos-funcionales.md).
 
@@ -142,6 +142,128 @@ Corregido: se valida en la base, con la misma tolerancia de redondeo que core.
 > venderse, no con el de ahora—, pero significa que el tope de descuento se
 > puede rodear vendiendo a precio 1 en vez de aplicando un descuento. Cerrarlo
 > bien pide comparar contra `price_history` con la fecha de la venta. Es T-14.
+
+---
+
+## 0b. Cuarta pasada · el esquema ejecutado — 2026-09-18
+
+S-1 a S-4 salieron de **leer** el SQL. Esta pasada lo **ejecutó**: un
+PostgreSQL real con lo mínimo de Supabase encima (`auth.uid()`, roles y los
+privilegios por omisión que Supabase concede), las migraciones aplicadas en
+orden, y cada ataque escrito como lo escribiría alguien con la consola del
+navegador y la sesión de un empleado. Está en `tools/pg-test/` y corre con
+`npm run db:test`.
+
+Primera consecuencia: **S-1 y S-2 quedan verificados**, no solo leídos. Las
+dos correcciones resisten el ataque.
+
+### S-5 · Las tablas que se escriben con funciones también se podían escribir a mano — **crítica** · ✅ corregido
+
+Supabase le concede ALL sobre cada tabla de `public` a `authenticated`. Una
+política de INSERT o UPDATE no es un detalle: es la puerta. Y 0004 dejó puertas
+que solo comprobaban el tenant, en tablas que el diseño dice que solo se
+escriben desde funciones. Con la sesión de un **cajero**:
+
+```sql
+update cash_sessions
+   set status = 'cerrada', expected_amount = 5000, counted_amount = 5000
+ where id = '<mi caja>';
+```
+
+**El cajero escribía su propio arqueo.** El control contra el faltante de caja
+lo llenaba la persona a la que controla. Y había más, todos confirmados
+ejecutándolos:
+
+| Quién | Qué podía hacer |
+|---|---|
+| Cajero | Insertar un **egreso** en su caja **firmado por el supervisor** (`created_by` es libre): baja el esperado y esconde un faltante |
+| Cajero | Insertar ventas, pagos o líneas en la caja de **otro** cajero |
+| Cajero | Escribir en `audit_log` a nombre de cualquiera. La bitácora es inmutable: lo inventado no se puede borrar |
+| Cajero | Escribir en `price_history`, que es justo contra lo que T-14 iba a comparar |
+| Supervisor | `update sales set total = 1`, o `status = 'anulada'` sin devolver stock y saltándose la regla de "solo ventas del día" |
+| Bodega | Cambiar la cantidad de un lote sin kardex; **reabrir una toma aplicada** para aplicarla otra vez; crear recepciones sin mercadería; cambiar `avg_cost` a mano |
+
+Ninguna de esas escrituras la hace la aplicación (verificado en `apps/web` y
+`apps/worker`): todas pasan por funciones `security definer`, que no necesitan
+esas políticas. Corregido en **0012**: se quitan las políticas y además se
+revoca el privilegio (dos candados, no uno), y un disparador impide cambiar el
+costo fuera de una función.
+
+### S-6 · `anon` podía ejecutar las funciones de negocio — **baja** · ✅ corregido
+
+0009 les quitó `public`, pero Supabase además concede EXECUTE directo a `anon`
+sobre toda función nueva. No era explotable —todas fallan con `NO_AUTENTICADO`—
+pero eso es depender de que cada función lo compruebe bien. 0012 lo revoca, y
+una prueba compara la lista de lo que `authenticated` puede ejecutar contra una
+lista escrita a mano: si alguien crea una función `security definer` y olvida
+cerrarla, la prueba falla.
+
+### S-7 · Cualquier rol lee costos — **media** · ⬜ abierto (T-45)
+
+`repoSupabase.ts` pide `avg_cost` solo cuando el usuario puede ver costos, y el
+comentario dice que así "el costo no viaja por la red hacia un dispositivo que
+no debe tenerlo". Es cierto mientras el cliente coopere: la base se lo entrega a
+cualquiera que lo pida.
+
+```js
+supabase.from('products').select('name, avg_cost')        // un vendedor
+supabase.from('sale_items').select('unit_cost')           // también
+```
+
+Es CP-10 del plan de pruebas, que nunca se había ejecutado. No se corrigió en
+esta tanda porque arreglarlo bien cambia cómo leen costos Reportes, el
+formulario de producto y `v_inventory_valued` (que es `security_invoker` y
+heredaría la restricción). La prueba existe y está marcada como pendiente.
+
+### El instalador no era idempotente
+
+`instalar.sql` decía "se puede ejecutar más de una vez sin romper nada", y
+HANDOFF recomendaba **reinstalar** para llevarle los arreglos de seguridad a una
+base con una versión anterior. La segunda ejecución fallaba en la primera
+política (`policy "tenant_read" already exists`) y, como va en una transacción,
+**no aplicaba nada**. Quien siguiera el consejo recibía un error y la base
+quedaba igual, con las puertas abiertas. Corregido (`drop policy if exists`
+antes de cada política, y de las dos vistas que 0010 amplía) y probado.
+
+---
+
+## 0c. Concurrencia (T-40) — 2026-09-18
+
+CP-01 a CP-08 nunca se habían ejecutado. Siete requerimientos figuraban hechos
+**por diseño**. Cada carrera se fuerza ahora en su peor intercalado: la sesión 1
+hace su operación en una transacción abierta, la sesión 2 lanza la suya, se
+espera a que quede bloqueada, y recién entonces se confirma la 1.
+
+**Ocho defectos confirmados**, todos con la misma forma: leer un estado sin
+bloquearlo, decidir con lo leído y escribir. Entre la lectura y la escritura
+otra transacción cambia el estado y la decisión ya no vale.
+
+| # | Caso | Qué pasaba |
+|---|---|---|
+| C-1 | **CP-05** · aplicar la misma toma dos veces | El ajuste se aplicaba dos veces. La toma decía 7; el sistema quedaba en **4** |
+| C-2 | Dos ajustes "dejar en 7" a la vez | Quedaba en **4** |
+| C-3 | Anular la misma venta desde dos pantallas | El stock volvía dos veces |
+| C-4 | Anular la misma recepción dos veces | El stock se descontaba dos veces |
+| C-5 | Dar de baja el mismo lote dos veces | Se descontaba dos veces |
+| C-6 | Dos recepciones del mismo producto | La segunda promediaba contra el costo de antes de la primera y lo pisaba (250 en vez de 233) |
+| C-7 | **CP-07** · cierre forzado mientras el cajero cobra | La venta quedaba dentro de la caja cerrada y **fuera del arqueo**: $5.000 en el cajón que el esperado no incluye |
+| C-8 | **CP-08** y **CP-03b** · abrir caja en dos dispositivos; reintento offline con el primer envío en curso | La regla se cumplía, pero llegaba `duplicate key value violates unique constraint`. En el reintento es peor: la cola lo marcaba fallido y alguien volvía a cobrar |
+
+Corregido en 0012 con `for update` / `for share` en el punto exacto, y con
+todos los bloqueos de stock tomados de una vez y ordenados por producto, para
+que dos operaciones no se traben entre sí.
+
+Y una que no era de concurrencia pero apareció al probar CP-01: **ADR-005 dice
+que vender sin stock "se permite y se alerta"**, y el disparador solo alertaba
+si el producto tenía `min_stock > 0`. Un producto sin mínimo —la mayoría, con el
+catálogo recién cargado— podía quedar en −5 sin que nadie se enterara.
+
+> **CP-01 no se comporta como dice el plan, y está bien.** El plan esperaba que
+> las dos ventas de la última unidad quedaran registradas y el stock en −1. Lo
+> que pasa es que las ventas de un mismo local quedan **en fila** por el
+> contador de folios, así que la segunda ve stock 0: si la hace un vendedor,
+> recibe `STOCK_INSUFICIENTE`; si la hace un supervisor, pasa, queda en −1 y
+> ahora sí alerta. Ninguna venta se pierde en ningún caso.
 
 ---
 

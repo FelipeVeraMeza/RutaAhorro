@@ -18,8 +18,24 @@
 | **Concurrencia** | Varios usuarios simultáneos | Script de carga | Antes de cada release |
 | **Manual / exploratoria** | Escaneo en celulares reales, usabilidad | Persona | Antes de cada release |
 
-**Estado actual:** las unitarias están implementadas (88 pruebas, `packages/core`).
-El resto está especificado aquí y pendiente de implementar.
+**Estado al 2026-09-18:**
+
+- **Unitarias:** 291 pruebas en `packages/core` (`npm test`).
+- **Base de datos y concurrencia:** 33 pruebas contra un PostgreSQL real, en
+  `tools/pg-test/` (`npm run db:test`, ~30 s). Levanta un PostgreSQL embebido,
+  le pone encima lo mínimo de Supabase —`auth.uid()`, los roles y **los
+  privilegios por omisión que Supabase concede**, sin los cuales una política
+  permisiva pasaría las pruebas y fallaría en producción— y aplica las
+  migraciones. Tres archivos: `concurrencia` (CP-01 a CP-08 y cinco carreras
+  más), `seguridad` (ataques con la sesión de cada rol, CP-09, CP-10) e
+  `instalacion` (el `instalar.sql` que se pega en Supabase).
+- **Integración, end-to-end:** pendientes. Necesitan el proyecto de Supabase
+  instalado (B-01).
+
+> Las carreras no se lanzan "a la vez" esperando que choquen: se fuerza el
+> peor intercalado. La sesión 1 hace su operación en una transacción abierta,
+> la 2 lanza la suya, se espera a que quede bloqueada, y recién entonces se
+> confirma la 1. El resultado no depende de la suerte.
 
 ---
 
@@ -27,6 +43,30 @@ El resto está especificado aquí y pendiente de implementar.
 
 Son los que corresponden al módulo **M10**. Cada uno describe el escenario, lo
 que debe pasar y **cómo se rompe si está mal implementado**.
+
+### Resultado de la primera ejecución — 2026-09-18
+
+| Caso | Antes de 0012 | Hoy |
+|---|---|---|
+| CP-01 · última unidad | ✅ (ver nota) | ✅ |
+| CP-02 · folios | ✅ | ✅ |
+| CP-03 · reenvío | ✅ secuencial · ❌ con el primer envío en curso | ✅ |
+| CP-04 · FEFO | ✅ | ✅ |
+| CP-05 · toma dos veces | ❌ la toma decía 7, quedó en 4 | ✅ |
+| CP-06 · edición simultánea | ⬜ no implementado (P-24) | ⬜ |
+| CP-07 · cierre ajeno | ❌ la venta quedaba fuera del arqueo | ✅ |
+| CP-08 · dos cajas | ❌ error de la base en vez de `CAJA_YA_ABIERTA` | ✅ |
+
+Además, cinco carreras que el plan no tenía y que fallaban igual: anular la
+misma venta, anular la misma recepción y dar de baja el mismo lote dos veces;
+dos recepciones del mismo producto (costo promedio pisado); dos ajustes al
+mismo producto. Detalle en [21](21-qa-pantallas.md) §0c.
+
+> **Nota sobre CP-01.** El resultado esperado de abajo (stock −1) supone que las
+> dos ventas pasan. No pasan: las ventas de un local quedan en fila por el
+> contador de folios, y la segunda ve stock 0. Un vendedor recibe
+> `STOCK_INSUFICIENTE`; un supervisor sí vende, queda en −1 y se alerta. Lo que
+> el caso protege —que ninguna venta se pierda— se cumple en los dos.
 
 ### CP-01 · Dos cajeros venden la última unidad — `RF-M10-02`
 | | |
