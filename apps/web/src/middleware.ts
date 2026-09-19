@@ -40,7 +40,12 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // getClaims y no getUser: la sesión se firma con ES256, así que se verifica
+  // acá mismo con la llave pública, que queda en memoria. getUser era un viaje
+  // a Supabase (en Canadá) en cada clic, ~250 ms antes de empezar a armar la
+  // pantalla. Si el token venció, getClaims lo refresca igual que antes.
+  const { data: claims } = await supabase.auth.getClaims();
+  const user = claims?.claims?.sub ? claims.claims : null;
   const path = request.nextUrl.pathname;
   const isAuthRoute = path.startsWith('/login') || path.startsWith('/recuperar');
 

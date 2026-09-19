@@ -100,8 +100,12 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 
   const client = await createClient();
 
-  const { data: { user } } = await client.auth.getUser();
-  if (!user) return null;
+  // Verificación local de la firma (ES256), sin viaje a Supabase. Ver middleware.ts.
+  // Quien fue desactivado se sigue bloqueando: eso lo decide el perfil.
+  const { data: claims } = await client.auth.getClaims();
+  const sub = claims?.claims?.sub;
+  if (!sub) return null;
+  const user = { id: sub, email: (claims.claims.email as string | undefined) ?? null };
 
   const { data: profile } = await client
     .from('profiles')

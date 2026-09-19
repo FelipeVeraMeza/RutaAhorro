@@ -65,7 +65,15 @@ export function CajaClient({
   async function accion(fn: () => PromiseLike<{ error: { message: string } | null }>) {
     setCargando(true);
     setError(null);
-    const { error: e } = await fn();
+    // Un corte de red lanza en vez de devolver `error`: sin el catch la
+    // pantalla se quedaba en "Abriendo…" para siempre, sin decir nada, y la
+    // caja no se había abierto.
+    let e: { message: string } | null;
+    try {
+      ({ error: e } = await fn());
+    } catch (err) {
+      e = { message: err instanceof Error ? err.message : String(err) };
+    }
     setCargando(false);
     if (e) { setError(toUserMessage(e)); return false; }
     router.refresh();

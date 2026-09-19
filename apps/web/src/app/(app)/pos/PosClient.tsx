@@ -7,7 +7,7 @@ import {
   formatCLP, toUserMessage, construirComprobante,
   type CartLine, type Comprobante as DatosComprobante,
 } from '@rutaahorro/core';
-import { findByBarcode, searchProducts, localProductCount, syncCatalog } from '@/lib/offline/catalog';
+import { findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO } from '@/lib/offline/catalog';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { sembrarCatalogoDemo } from '@/lib/demo/seed';
 import { enqueueSale, newClientUuid, syncQueue } from '@/lib/offline/sync';
@@ -77,9 +77,20 @@ export function PosClient({
         }
       } else {
         setCatalogReady(count > 0);
+        // Al entrar a vender se trae lo que cambió desde la última vez: un
+        // producto creado recién tiene que poder venderse ya, no en 10 minutos.
+        if (navigator.onLine) void syncCatalog().then(async () => setCatalogReady((await localProductCount()) > 0)).catch(() => {});
       }
     })();
   }, [notificar]);
+
+  // Si el catálogo cambia mientras hay algo escrito en la búsqueda, se repite.
+  const [versionCatalogo, setVersionCatalogo] = useState(0);
+  useEffect(() => {
+    const alCambiar = () => setVersionCatalogo((v) => v + 1);
+    window.addEventListener(EVENTO_CATALOGO, alCambiar);
+    return () => window.removeEventListener(EVENTO_CATALOGO, alCambiar);
+  }, []);
 
   const agregar = useCallback((p: LocalProduct, qty = 1) => {
     setLines((prev) =>
@@ -113,7 +124,7 @@ export function PosClient({
     let active = true;
     void searchProducts(query).then((r) => { if (active) setResults(r); });
     return () => { active = false; };
-  }, [query]);
+  }, [query, versionCatalogo]);
 
   async function confirmarVenta(payments: Array<{ method: string; amount: number; received_amount?: number }>) {
     const clientUuid = newClientUuid();
@@ -222,6 +233,11 @@ export function PosClient({
         {catalogReady === false && (
           <p className="text-xs text-[var(--color-aviso)] mt-1.5">
             El catálogo no está descargado en este dispositivo. Conéctate a internet una vez para bajarlo.
+          </p>
+        )}
+        {query.trim().length >= 2 && results.length === 0 && catalogReady !== false && (
+          <p className="text-sm text-[var(--texto-suave)] mt-2 px-1">
+            No hay productos activos que coincidan con «{query.trim()}».
           </p>
         )}
         {results.length > 0 && (
