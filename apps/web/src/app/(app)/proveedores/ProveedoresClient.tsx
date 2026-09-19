@@ -6,15 +6,15 @@ import { formatCLP, isValidRut, formatRut, toUserMessage } from '@rutaahorro/cor
 import { repoProveedores, type Proveedor, type Recepcion } from '@/lib/datos/proveedores';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
+import { useFormatoFecha } from '@/lib/formatoFecha';
 
 const TIPO_DOC: Record<string, string> = {
   guia: 'Guía', factura: 'Factura', boleta: 'Boleta', sin_documento: 'Sin documento',
 };
 
-const fecha = (iso: string) =>
-  new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'America/Santiago' });
 
 export function ProveedoresClient({ puedeAnular }: { puedeAnular: boolean }) {
+  const { fecha } = useFormatoFecha();
   const [pestana, setPestana] = useState<'proveedores' | 'recepciones'>('proveedores');
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [recepciones, setRecepciones] = useState<Recepcion[]>([]);

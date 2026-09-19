@@ -5,11 +5,12 @@ import {
   formatCLP, toUserMessage, aCSV, nombreArchivoReporte, type ColumnaCSV,
 } from '@rutaahorro/core';
 import {
-  repoReportes, hoyChile, hace,
+  repoReportes, hoyLocal, hace,
   type RangoFechas, type VentaPorDia, type VentaPorProducto, type VentaPorUsuario,
   type FilaInventarioValorizado, type ProductoSinMovimiento, type Ajuste,
 } from '@/lib/datos/reportes';
 import { ETIQUETA_MOVIMIENTO, type TipoMovimiento } from '@/lib/datos/inventario';
+import { useConfiguracion } from '@/lib/datos/configuracion';
 
 type Vista = 'ventas' | 'productos' | 'usuarios' | 'inventario' | 'dormido' | 'ajustes';
 
@@ -28,9 +29,13 @@ type Vista = 'ventas' | 'productos' | 'usuarios' | 'inventario' | 'dormido' | 'a
  * mal después.
  */
 export function ReportesClient({ verCostos }: { verCostos: boolean }) {
+  const { zonaHoraria: zona } = useConfiguracion();
   const [vista, setVista] = useState<Vista>('ventas');
-  const [desde, setDesde] = useState(hace(29));
-  const [hasta, setHasta] = useState(hoyChile());
+  const [desde, setDesde] = useState(hace(29, zona));
+  const [hasta, setHasta] = useState(hoyLocal(zona));
+  // Los valores de arriba se calculan con la zona por omisión; cuando llega
+  // la del local se recalculan. Pasa una vez, al entrar.
+  useEffect(() => { setDesde(hace(29, zona)); setHasta(hoyLocal(zona)); }, [zona]);
   const [diasDormido, setDiasDormido] = useState(30);
 
   const [ventas, setVentas] = useState<VentaPorDia[]>([]);
@@ -144,7 +149,7 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
           <label className="text-xs text-[var(--texto-suave)]">
             Hasta
             <input
-              type="date" value={hasta} min={desde} max={hoyChile()}
+              type="date" value={hasta} min={desde} max={hoyLocal(zona)}
               onChange={(e) => setHasta(e.target.value)}
               className="tap w-full mt-1 px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white text-sm num"
             />

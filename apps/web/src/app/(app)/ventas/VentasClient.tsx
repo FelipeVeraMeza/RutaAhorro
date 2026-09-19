@@ -6,9 +6,10 @@ import {
   repoVentas, ETIQUETA_PAGO,
   type Venta, type VentaDetallada,
 } from '@/lib/datos/ventas';
-import { hoyChile, hace } from '@/lib/datos/reportes';
+import { hoyLocal, hace } from '@/lib/datos/reportes';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
+import { useFormatoFecha } from '@/lib/formatoFecha';
 
 /**
  * Historial de ventas y anulación (RF-M5-15).
@@ -30,9 +31,12 @@ const MOTIVOS_SUGERIDOS = [
 ];
 
 export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
+  const { fechaHora, zona } = useFormatoFecha();
   const [ventas, setVentas] = useState<Venta[]>([]);
-  const [desde, setDesde] = useState(hoyChile());
-  const [hasta, setHasta] = useState(hoyChile());
+  const [desde, setDesde] = useState(hoyLocal(zona));
+  const [hasta, setHasta] = useState(hoyLocal(zona));
+  // Recalculado cuando llega la zona del local (una vez, al entrar).
+  useEffect(() => { setDesde(hoyLocal(zona)); setHasta(hoyLocal(zona)); }, [zona]);
   const [folio, setFolio] = useState('');
   const [incluirAnuladas, setIncluirAnuladas] = useState(true);
 
@@ -105,7 +109,7 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
         <label className="text-xs text-[var(--texto-suave)]">
           Hasta
           <input
-            type="date" value={hasta} min={desde} max={hoyChile()}
+            type="date" value={hasta} min={desde} max={hoyLocal(zona)}
             onChange={(e) => setHasta(e.target.value)}
             disabled={folio.trim() !== ''}
             className="tap w-full mt-1 px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white text-sm num disabled:opacity-50"
@@ -122,7 +126,7 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
           className="tap flex-1 px-4 py-3 rounded-xl border border-[var(--borde)] bg-white num"
         />
         <button
-          onClick={() => { setDesde(hace(6)); setHasta(hoyChile()); setFolio(''); }}
+          onClick={() => { setDesde(hace(6, zona)); setHasta(hoyLocal(zona)); setFolio(''); }}
           className="tap px-3 py-3 rounded-xl border border-[var(--borde)] text-xs shrink-0"
         >
           7 días
@@ -340,8 +344,3 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
   );
 }
 
-const fechaHora = (iso: string) =>
-  new Date(iso).toLocaleString('es-CL', {
-    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-    timeZone: 'America/Santiago',
-  });

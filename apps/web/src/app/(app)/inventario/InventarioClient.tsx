@@ -11,6 +11,7 @@ import {
 } from '@/lib/datos/inventario';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
+import { useFormatoFecha } from '@/lib/formatoFecha';
 
 type Vista = 'stock' | 'lotes' | 'kardex' | 'toma';
 
@@ -20,11 +21,6 @@ const fecha = (iso: string) =>
   });
 
 
-const fechaHora = (iso: string) =>
-  new Date(iso).toLocaleString('es-CL', {
-    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-    timeZone: 'America/Santiago',
-  });
 
 export function InventarioClient({
   puedeAjustar, verCostos,
@@ -32,6 +28,7 @@ export function InventarioClient({
   puedeAjustar: boolean;
   verCostos: boolean;
 }) {
+  const { fechaHora } = useFormatoFecha();
   const [vista, setVista] = useState<Vista>('stock');
   const [productos, setProductos] = useState<Producto[]>([]);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);

@@ -2,7 +2,10 @@ import Link from 'next/link';
 import { createClient, getCurrentUser } from '@/lib/supabase/server';
 import { formatCLP, textoVencimiento, cantidadConUnidad } from '@rutaahorro/core';
 import { DEMO_ACTIVO } from '@/lib/demo';
-import { DEMO_VENTAS_HOY, DEMO_BAJO_STOCK, DEMO_LOTES } from '@/lib/demo/data';
+import { DEMO_BAJO_STOCK, DEMO_LOTES } from '@/lib/demo/data';
+import { diaLocal } from '@rutaahorro/core';
+import { desdeSettings } from '@/lib/datos/configuracionBase';
+import { VentasHoyDemo } from './VentasHoyDemo';
 
 export const metadata = { title: 'Resumen' };
 
@@ -43,9 +46,6 @@ export default async function DashboardPage() {
   const fallaron: string[] = [];
 
   if (DEMO_ACTIVO) {
-    total = DEMO_VENTAS_HOY.total;
-    cantidadVentas = DEMO_VENTAS_HOY.cantidad;
-    ticket = DEMO_VENTAS_HOY.ticket_promedio;
     const todosBajos = DEMO_BAJO_STOCK;
     const todosPorVencer = DEMO_LOTES
       .filter((l) => l.expiry_status !== 'vigente')
@@ -56,9 +56,13 @@ export default async function DashboardPage() {
     masPorVencer = todosPorVencer.length - porVencer.length;
   } else {
     const client = await createClient();
-    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+    // El día del local, con la zona de su configuración: la misma con que
+    // v_sales_daily agrupa desde 0013. Si no se pudiera leer, se usa la de
+    // omisión y la vista hace lo mismo, así que los dos lados coinciden.
+    const { data: local } = await client.from('tenants').select('settings').eq('id', user!.tenantId).maybeSingle();
+    const hoy = diaLocal(new Date(), desdeSettings(local?.settings).zonaHoraria);
 
-    // v_sales_daily agrupa con `at time zone 'America/Santiago'`. Antes esta
+    // Antes esta
     // pantalla armaba el rango a mano con el desfase -03:00 escrito fijo, y
     // Chile está en -04:00 medio año: en invierno el "día de hoy" empezaba a
     // las 23:00 de ayer y terminaba a las 22:59, así que lo vendido después de
@@ -117,11 +121,14 @@ export default async function DashboardPage() {
         </p>
       )}
 
-      <div className="grid grid-cols-3 gap-2">
-        <Tarjeta label="Vendido hoy" value={formatCLP(total)} />
-        <Tarjeta label="Ventas" value={String(cantidadVentas)} />
-        <Tarjeta label="Ticket prom." value={formatCLP(ticket)} />
-      </div>
+      {/* En la maqueta las ventas viven en el navegador y el servidor no las ve */}
+      {DEMO_ACTIVO ? <VentasHoyDemo /> : (
+        <div className="grid grid-cols-3 gap-2">
+          <Tarjeta label="Vendido hoy" value={formatCLP(total)} />
+          <Tarjeta label="Ventas" value={String(cantidadVentas)} />
+          <Tarjeta label="Ticket prom." value={formatCLP(ticket)} />
+        </div>
+      )}
 
       {porVencer.length > 0 && (
         <section className="tarjeta p-4">

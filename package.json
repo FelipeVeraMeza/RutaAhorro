@@ -20,7 +20,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "db:check": "node tools/sql-check/parse.js && node tools/sql-check/plpgsql.js",
-    "db:test": "node --test --test-timeout=60000 \"tools/pg-test/*.test.mjs\"",
+    "db:test": "node --test --test-concurrency=1 --test-timeout=60000 \"tools/pg-test/*.test.mjs\"",
     "db:bundle": "node tools/sql-check/bundle.js",
     "db:instalar": "node tools/sql-check/instalar.js",
     "db:admin": "node tools/crear-admin.mjs",

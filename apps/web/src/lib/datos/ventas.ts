@@ -1,8 +1,10 @@
 'use client';
 
+import { diaLocal, rangoDeDias } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
+import { configuracionLocal } from './configuracion';
 import { DEMO_ACTIVO } from '../demo';
-import { db } from '../offline/db';
+import { db, type QueuedSale } from '../offline/db';
 import { DEMO_PRODUCTOS } from '../demo/data';
 
 /**
@@ -124,6 +126,39 @@ async function leerVentasDemo(): Promise<VentaDemo[]> {
   return semilla;
 }
 
+/**
+ * Lo que en producción hace `fn_register_sale`, para la maqueta: la venta
+ * queda en el historial y el stock baja. Antes la cola de la maqueta borraba
+ * la venta al "sincronizarla" y no quedaba en ninguna parte: se cobraba en el
+ * POS y no aparecía ni en Ventas ni en Inicio.
+ */
+export async function registrarVentaDemo(v: QueuedSale): Promise<void> {
+  const ventas = await leerVentasDemo();
+  if (ventas.some((x) => x.id === `venta-${v.clientUuid}`)) return;
+  ventas.push({
+    id: `venta-${v.clientUuid}`,
+    folio: Math.max(0, ...ventas.map((x) => x.folio)) + 1,
+    fecha: v.soldAt,
+    lineas: v.items.map((i) => ({
+      productoNombre: i.name,
+      cantidad: i.quantity,
+      precioUnitario: i.unit_price,
+      descuento: i.discount_amount,
+      subtotal: Math.max(0, Math.round(i.quantity * i.unit_price) - i.discount_amount),
+    })),
+    pagos: v.payments.map((p) => ({ metodo: p.method, monto: p.amount })),
+    total: v.total,
+    anulada: false,
+    motivoAnulacion: null,
+    anuladaEn: null,
+  });
+  for (const i of v.items) {
+    const p = await db().products.get(i.product_id);
+    if (p) await db().products.put({ ...p, stock: p.stock - i.quantity, updatedAt: new Date().toISOString() });
+  }
+  await db().meta.put({ key: KEY_VENTAS, value: JSON.stringify(ventas) });
+}
+
 function aVenta(v: VentaDemo): Venta {
   const iva = Math.round(v.total - v.total / 1.19);
   return {
@@ -147,8 +182,11 @@ const repoLocal: RepositorioVentas = {
     let ventas = await leerVentasDemo();
     if (filtro.folio) ventas = ventas.filter((v) => v.folio === filtro.folio);
     if (filtro.incluirAnuladas === false) ventas = ventas.filter((v) => !v.anulada);
-    if (filtro.desde) ventas = ventas.filter((v) => v.fecha.slice(0, 10) >= filtro.desde!);
-    if (filtro.hasta) ventas = ventas.filter((v) => v.fecha.slice(0, 10) <= filtro.hasta!);
+    // El día de la venta en la zona del local, no el de UTC: con `slice(0, 10)`
+    // una venta de las 21:30 caía en el día siguiente.
+    const { zonaHoraria } = await configuracionLocal();
+    if (filtro.desde) ventas = ventas.filter((v) => diaLocal(v.fecha, zonaHoraria) >= filtro.desde!);
+    if (filtro.hasta) ventas = ventas.filter((v) => diaLocal(v.fecha, zonaHoraria) <= filtro.hasta!);
     return ventas
       .sort((a, b) => b.fecha.localeCompare(a.fecha))
       .slice(0, filtro.limite ?? 50)
@@ -232,8 +270,14 @@ const repoSupabase: RepositorioVentas = {
       // una forma rebuscada de no encontrar nada.
       q = q.eq('folio', filtro.folio);
     } else {
-      if (filtro.desde) q = q.gte('sold_at', `${filtro.desde}T00:00:00`);
-      if (filtro.hasta) q = q.lte('sold_at', `${filtro.hasta}T23:59:59.999`);
+      // Los bordes del día se calculan en la zona del local. Antes se mandaba
+      // '2026-09-18T00:00:00' sin zona, que la base lee en UTC: "hoy" iba de
+      // las 20:00 o 21:00 de ayer a la misma hora de hoy, y lo vendido en la
+      // tarde-noche aparecía en el día siguiente.
+      const { zonaHoraria } = await configuracionLocal();
+      const r = rangoDeDias(filtro.desde ?? filtro.hasta!, filtro.hasta ?? filtro.desde!, zonaHoraria);
+      if (filtro.desde) q = q.gte('sold_at', r.desde);
+      if (filtro.hasta) q = q.lt('sold_at', r.hasta);
     }
     if (filtro.incluirAnuladas === false) q = q.eq('status', 'completada');
 

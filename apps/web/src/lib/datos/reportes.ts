@@ -1,5 +1,6 @@
 'use client';
 
+import { diaLocal, sumarDias } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import {
@@ -90,16 +91,14 @@ export interface RepositorioReportes {
   ajustes(rango: RangoFechas): Promise<Ajuste[]>;
 }
 
-/** Hoy en Chile, como 'YYYY-MM-DD'. */
-export function hoyChile(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+/** Hoy en la zona del local, como 'YYYY-MM-DD'. */
+export function hoyLocal(zona: string): string {
+  return diaLocal(new Date(), zona);
 }
 
-/** Una fecha ISO N días antes de hoy. */
-export function hace(dias: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - dias);
-  return d.toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+/** El día N días antes de hoy, en la zona del local. */
+export function hace(dias: number, zona: string): string {
+  return sumarDias(hoyLocal(zona), -dias);
 }
 
 // ---------------------------------------------------------------------------

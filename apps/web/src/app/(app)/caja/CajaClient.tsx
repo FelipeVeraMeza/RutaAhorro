@@ -6,6 +6,7 @@ import { formatCLP, validarMonto, toUserMessage } from '@rutaahorro/core';
 import { supabase } from '@/lib/supabase/client';
 import { Campo } from '@/components/Campo';
 import { Modal } from '@/components/Modal';
+import { useFormatoFecha } from '@/lib/formatoFecha';
 
 interface Session { id: string; opened_at: string; opening_amount: number }
 interface Movimiento { id: string; type: string; amount: number; reason: string; created_at: string }
@@ -20,10 +21,6 @@ interface CajaAjena {
   sales_total: number | null; expected_amount: number | null;
 }
 
-const hora = (iso: string) =>
-  new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' });
-const fecha = (iso: string) =>
-  new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: 'America/Santiago' });
 
 export function CajaClient({
   session, resumen, movimientos, historial, cajasAjenas = [],
@@ -35,6 +32,7 @@ export function CajaClient({
   /** Cajas abiertas de otras personas. Vacío si quien mira no puede cerrarlas. */
   cajasAjenas?: CajaAjena[];
 }) {
+  const { hora, fecha } = useFormatoFecha();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -475,6 +473,7 @@ function CajasAjenas({
   cajas: CajaAjena[];
   onCerrar: (c: CajaAjena) => void;
 }) {
+  const { hora, fecha } = useFormatoFecha();
   return (
     <section className="tarjeta p-4 mt-4 border-[var(--color-aviso)]">
       <h2 className="font-semibold text-sm mb-1">
@@ -525,6 +524,7 @@ function Metrica({ label, value }: { label: string; value: string }) {
 }
 
 function Historial({ cierres }: { cierres: Cierre[] }) {
+  const { fecha } = useFormatoFecha();
   return (
     <div className="tarjeta p-4 mt-4">
       <h2 className="font-semibold text-sm mb-3">Últimos cierres</h2>

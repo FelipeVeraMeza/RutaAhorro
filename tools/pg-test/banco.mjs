@@ -27,6 +27,12 @@ const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const migraciones = path.join(raiz, 'supabase', 'migrations');
 
 const SUPABASE = `
+-- Supabase corre en UTC. Esta máquina está en Chile, y con la hora local el
+-- banco tapaba los errores de zona horaria: un ::date sin zona da el mismo día
+-- en los dos lados y la comparación pasa por accidente.
+alter database postgres set timezone to 'UTC';
+set timezone to 'UTC';
+
 create role anon nologin noinherit;
 create role authenticated nologin noinherit;
 create role service_role nologin noinherit bypassrls;
