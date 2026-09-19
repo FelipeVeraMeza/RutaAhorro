@@ -36,6 +36,12 @@ export interface Producto {
   activo: boolean;
   codigos: string[];
   stock: number;
+  /**
+   * Dónde está ese stock (0014). La venta descuenta de la sala; lo que llega
+   * del proveedor entra a la bodega. `stock` sigue siendo el total del local.
+   */
+  stockSala: number;
+  stockBodega: number;
   actualizadoEn: string;
 }
 

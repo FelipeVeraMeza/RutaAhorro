@@ -26,6 +26,9 @@ export interface LocalProduct {
   categoryId: string | null;
   tracksExpiry: boolean;
   stock: number;
+  /** Lo que hay en la sala de ventas (0014). Opcional: catálogos viejos no lo traen. */
+  stockSala?: number;
+  stockBodega?: number;
   minStock: number;
   isActive: boolean;
   updatedAt: string;

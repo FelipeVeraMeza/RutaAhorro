@@ -75,6 +75,19 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
   const stockByProduct = new Map<string, number>(
     (levels ?? []).map((l) => [l.product_id as string, Number(l.quantity ?? 0)]),
   );
+  // Sala y bodega por separado: el POS avisa cuando la sala no alcanza.
+  const { data: ubic } = await client.from('stock_ubicaciones').select('product_id, ubicacion, quantity');
+  const porUbicacion = new Map<string, { sala: number; bodega: number }>();
+  for (const u of ubic ?? []) {
+    const r = porUbicacion.get(u.product_id as string) ?? { sala: 0, bodega: 0 };
+    r[u.ubicacion as 'sala' | 'bodega'] = Number(u.quantity ?? 0);
+    porUbicacion.set(u.product_id as string, r);
+  }
+  const conUbicacion = <T extends LocalProduct>(p: T): T => ({
+    ...p,
+    stockSala: porUbicacion.get(p.id)?.sala ?? 0,
+    stockBodega: porUbicacion.get(p.id)?.bodega ?? 0,
+  });
 
   // --- Códigos de barras ---
   const { data: codes } = await client.from('product_barcodes').select('barcode, product_id');
@@ -83,7 +96,7 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
   await database.transaction('rw', database.products, database.barcodes, async () => {
     if (products.length > 0) {
       for (const p of products) p.stock = stockByProduct.get(p.id) ?? 0;
-      await database.products.bulkPut(products);
+      await database.products.bulkPut(products.map(conUbicacion));
     }
     // Una bajada completa es la verdad entera: lo que está en el celular y no
     // en la base (un producto eliminado, un resto de otra sesión) sale.
@@ -95,8 +108,8 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
     if (!since || products.length === 0) {
       const existing = await database.products.toArray();
       const updates = existing
-        .filter((p) => stockByProduct.has(p.id) && p.stock !== stockByProduct.get(p.id))
-        .map((p) => ({ ...p, stock: stockByProduct.get(p.id)! }));
+        .filter((p) => stockByProduct.has(p.id))
+        .map((p) => conUbicacion({ ...p, stock: stockByProduct.get(p.id)! }));
       if (updates.length > 0) await database.products.bulkPut(updates);
     }
     // Se reemplazan aunque la base no tenga ninguno. Antes solo se limpiaban si

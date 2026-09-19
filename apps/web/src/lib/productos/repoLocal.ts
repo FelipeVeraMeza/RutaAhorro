@@ -62,6 +62,9 @@ async function asegurarSembrado() {
     categoryId: normalizeSearch(p.categoria).replace(/\s+/g, '-'),
     tracksExpiry: p.tracks_expiry,
     stock: p.stock,
+    // La maqueta no distingue ubicaciones: todo está a la vista.
+    stockSala: p.stock,
+    stockBodega: 0,
     minStock: p.min_stock,
     isActive: true,
     updatedAt: new Date().toISOString(),
@@ -112,6 +115,9 @@ async function aProducto(p: LocalProduct, verCostos: boolean, cats: Categoria[],
     activo: p.isActive,
     codigos,
     stock: p.stock,
+    // La maqueta no distingue ubicaciones: todo está a la vista.
+    stockSala: p.stock,
+    stockBodega: 0,
     actualizadoEn: p.updatedAt,
   };
 }
@@ -166,6 +172,8 @@ export const repoLocal: RepositorioProductos = {
       categoryId: datos.categoriaId,
       tracksExpiry: datos.perecible,
       stock: datos.stockInicial,
+      stockSala: datos.stockInicial,
+      stockBodega: 0,
       minStock: datos.stockMinimo,
       isActive: true,
       updatedAt: new Date().toISOString(),

@@ -22,6 +22,9 @@ export const ERROR_MESSAGES: Record<string, string> = {
   CAJA_YA_ABIERTA: 'Ya tienes una caja abierta',
   CAJA_YA_CERRADA: 'Esta caja ya fue cerrada',
   STOCK_INSUFICIENTE: 'No hay stock suficiente de este producto',
+  STOCK_INSUFICIENTE_EN_UBICACION: 'No hay tanto en ese lugar para traspasar',
+  TRASPASO_MISMA_UBICACION: 'El origen y el destino del traspaso son el mismo lugar',
+  NO_DISPONIBLE_EN_DEMO: 'Esto no está disponible en el modo demo',
   PRODUCTO_NO_ENCONTRADO: 'No encontramos ese producto',
   PRODUCTO_INACTIVO: 'Ese producto está desactivado',
   CODIGO_DUPLICADO: 'Ese código ya pertenece a otro producto',
@@ -66,6 +69,7 @@ export function toUserMessage(error: unknown): string {
     const base = ERROR_MESSAGES[code];
     if (base) {
       if (detail && code === 'STOCK_INSUFICIENTE') return `No hay stock suficiente de ${detail}`;
+      if (detail && code === 'STOCK_INSUFICIENTE_EN_UBICACION') return `No hay tanto de ${detail} en ese lugar para traspasar`;
       if (detail && code === 'CODIGO_EN_USO') {
         // El detalle viene como "<codigo>:<nombre del producto que lo tiene>".
         // Decir cuál producto lo ocupa evita que el usuario busque a ciegas.

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { formatCLP, marginPct, toUserMessage } from '@rutaahorro/core';
+import { formatCLP, marginPct, toUserMessage, cantidadConUnidad } from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
 import { Modal } from '@/components/Modal';
 import { FormularioProducto } from './FormularioProducto';
@@ -253,8 +253,9 @@ export function ProductosClient({
 
                 <div className="flex items-center justify-between gap-2 mt-1.5">
                   <p className={`text-xs num ${est.clase}`}>
-                    {est.icono} {est.texto} · {p.stock} {p.unidad}
+                    {est.icono} {est.texto} · {cantidadConUnidad(p.stock, p.unidad)}
                     {p.stockMinimo > 0 && ` (mín. ${p.stockMinimo})`}
+                    {` · sala ${p.stockSala} · bodega ${p.stockBodega}`}
                   </p>
 
                   {puedeEditar && (

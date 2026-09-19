@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { levantarBanco, listarMigraciones, leerMigracion } from './banco.mjs';
+import { levantarBanco, listarMigraciones, leerMigracion, nuevoLocal, rpc, venta } from './banco.mjs';
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 let banco;
@@ -55,4 +55,23 @@ test('instalar.sql se puede ejecutar dos veces sin error ni duplicar el local', 
   await assert.doesNotReject(banco.su.query(instalador()));
   const { rows: [t] } = await banco.su.query(`select count(*)::int as n from tenants`);
   assert.equal(t.n, 1);
+});
+
+test('Reinstalar sobre una base con ventas no cambia ningún saldo', async () => {
+  // Es lo que se hace para llevar una migración nueva a la base real, que ya
+  // tiene ventas, recepciones y traspasos.
+  const L = await nuevoLocal(banco, 'Con datos');
+  const p = await L.producto({ stock: 20 });
+  const adm = await banco.como(L.admin);
+  await rpc(adm, 'fn_transfer_stock', { p_product_id: p, p_cantidad: 5 });
+  await rpc(adm, 'fn_open_cash_session', { p_opening_amount: 1000 });
+  await rpc(adm, 'fn_register_sale', venta(p, 2, 1000));
+  const foto = async () => (await banco.su.query(`
+    select (select json_agg(t order by product_id) from (select product_id, quantity from stock_levels) t) as total,
+           (select json_agg(u order by product_id, ubicacion) from (select product_id, ubicacion, quantity from stock_ubicaciones) u) as ubic,
+           (select count(*) from sales) as ventas, (select count(*) from inventory_movements) as kardex`)).rows[0];
+  const antes = await foto();
+  await adm.end();
+  await banco.su.query(instalador());
+  assert.deepEqual(await foto(), antes);
 });

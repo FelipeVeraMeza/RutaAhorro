@@ -6,8 +6,8 @@ import {
 } from '@rutaahorro/core';
 import { repoProductos, type Producto } from '@/lib/productos';
 import {
-  repoInventario, ETIQUETA_MOVIMIENTO, ETIQUETA_ESTADO_LOTE, MOTIVOS_SUGERIDOS,
-  type Movimiento, type Lote,
+  repoInventario, ETIQUETA_MOVIMIENTO, ETIQUETA_ESTADO_LOTE, MOTIVOS_SUGERIDOS, ETIQUETA_UBICACION,
+  type Movimiento, type Lote, type Ubicacion,
 } from '@/lib/datos/inventario';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
@@ -43,6 +43,10 @@ export function InventarioClient({
   const [bajaEnCurso, setBajaEnCurso] = useState(false);
 
   const [ajustando, setAjustando] = useState<Producto | null>(null);
+  const [reponiendo, setReponiendo] = useState<Producto | null>(null);
+  // La toma se hace por ubicación: se cuenta la sala o la bodega, no el total.
+  const [ubicacionToma, setUbicacionToma] = useState<Ubicacion>('sala');
+  const enUbicacion = (p: Producto, u: Ubicacion) => (u === 'sala' ? p.stockSala : p.stockBodega);
   const [conteo, setConteo] = useState<Record<string, string>>({});
   const [aplicandoToma, setAplicandoToma] = useState(false);
   const [revisandoToma, setRevisandoToma] = useState(false);
@@ -102,7 +106,7 @@ export function InventarioClient({
     setAplicandoToma(true);
     setError(null);
     try {
-      const r = await repoInventario().aplicarToma(items);
+      const r = await repoInventario().aplicarToma(items, ubicacionToma);
       setExito(
         r.diferencias === 0
           ? 'El conteo cuadró con el sistema: no hubo diferencias'
@@ -196,20 +200,39 @@ export function InventarioClient({
                         : 'text-[var(--texto-suave)]'
                       }`}>
                         {agotado ? '🔴 Agotado' : bajo ? '🟠 Bajo' : '🟢 Normal'}
-                        {' · '}{p.stock} {p.unidad}
+                        {' · '}Total {cantidadConUnidad(p.stock, p.unidad)}
                         {p.stockMinimo > 0 && ` (mín. ${p.stockMinimo})`}
                         {verCostos && typeof p.costoPromedio === 'number' &&
                           ` · ${formatCLP(Math.round(p.stock * p.costoPromedio))}`}
                       </p>
+                      <p className="text-xs num mt-0.5">
+                        <span className={p.stockSala <= 0 ? 'text-[var(--color-alerta)] font-medium' : ''}>
+                          Sala {p.stockSala}
+                        </span>
+                        <span className="text-[var(--texto-suave)]"> · Bodega {p.stockBodega}</span>
+                        {p.stockSala <= 0 && p.stockBodega > 0 && (
+                          <span className="text-[var(--color-aviso)]"> · reponer</span>
+                        )}
+                      </p>
                     </div>
-                    {puedeAjustar && (
-                      <button
-                        onClick={() => setAjustando(p)}
-                        className="tap px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)] shrink-0"
-                      >
-                        Ajustar
-                      </button>
-                    )}
+                    <div className="flex gap-1.5 shrink-0">
+                      {(p.stockBodega > 0 || p.stockSala > 0) && (
+                        <button
+                          onClick={() => setReponiendo(p)}
+                          className="tap px-3 py-1.5 text-xs rounded-lg border border-marca-500 text-marca-700"
+                        >
+                          Reponer
+                        </button>
+                      )}
+                      {puedeAjustar && (
+                        <button
+                          onClick={() => setAjustando(p)}
+                          className="tap px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)]"
+                        >
+                          Ajustar
+                        </button>
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -343,6 +366,21 @@ export function InventarioClient({
             blanco no se tocan, así que puedes contar por partes.
           </p>
 
+          <div className="flex gap-2 mb-3" role="radiogroup" aria-label="Dónde estás contando">
+            {(['sala', 'bodega'] as const).map((u) => (
+              <button
+                key={u} role="radio" aria-checked={ubicacionToma === u}
+                disabled={validos.length > 0}
+                onClick={() => setUbicacionToma(u)}
+                className={`tap flex-1 py-2.5 rounded-xl text-sm border disabled:opacity-60 ${
+                  ubicacionToma === u ? 'border-marca-500 bg-marca-50 font-medium' : 'border-[var(--borde)] bg-white'
+                }`}
+              >
+                Contando: {ETIQUETA_UBICACION[u]}
+              </button>
+            ))}
+          </div>
+
           <input
             type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Filtrar productos a contar…"
@@ -353,13 +391,14 @@ export function InventarioClient({
             {productos.map((p) => {
               const valor = conteo[p.id] ?? '';
               const v = validarCantidad(valor, { permiteVacio: true });
-              const dif = valor.trim() === '' || !v.valido ? null : v.valor - p.stock;
+              const sistema = enUbicacion(p, ubicacionToma);
+              const dif = valor.trim() === '' || !v.valido ? null : v.valor - sistema;
               return (
                 <li key={p.id} className="px-4 py-2.5 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm truncate">{p.nombre}</p>
                     <p className="text-xs text-[var(--texto-suave)] num">
-                      Sistema: {p.stock} {p.unidad}
+                      Sistema ({ubicacionToma}): {cantidadConUnidad(sistema, p.unidad)}
                       {dif !== null && dif !== 0 && (
                         <span className={dif < 0 ? 'text-[var(--color-alerta)]' : 'text-[var(--color-aviso)]'}>
                           {' · '}{dif > 0 ? '+' : ''}{dif}
@@ -406,12 +445,25 @@ export function InventarioClient({
           filas={validos.map((x) => ({
             nombre: x.producto?.nombre ?? 'Producto',
             unidad: x.producto?.unidad ?? '',
-            sistema: x.producto?.stock ?? 0,
+            sistema: x.producto ? enUbicacion(x.producto, ubicacionToma) : 0,
             contado: x.v.valor,
           }))}
           aplicando={aplicandoToma}
           onConfirmar={() => void aplicarToma()}
           onCancelar={() => setRevisandoToma(false)}
+        />
+      )}
+
+      {reponiendo && (
+        <DialogoReponer
+          producto={reponiendo}
+          onListo={(texto) => {
+            setReponiendo(null);
+            setExito(texto);
+            void cargar();
+            setTimeout(() => setExito(null), 6000);
+          }}
+          onCancelar={() => setReponiendo(null)}
         />
       )}
 
@@ -506,14 +558,16 @@ function DialogoAjuste({
   onListo: () => void;
   onCancelar: () => void;
 }) {
-  const [cantidad, setCantidad] = useState(String(producto.stock));
+  const [ubicacion, setUbicacion] = useState<Ubicacion>('sala');
+  const actual = ubicacion === 'sala' ? producto.stockSala : producto.stockBodega;
+  const [cantidad, setCantidad] = useState(String(producto.stockSala));
   const [motivo, setMotivo] = useState('');
   const [esMerma, setEsMerma] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const v = validarCantidad(cantidad, { maximo: 1_000_000 });
-  const delta = v.valido ? v.valor - producto.stock : 0;
+  const delta = v.valido ? v.valor - actual : 0;
 
   async function guardar() {
     setError(null);
@@ -528,6 +582,7 @@ function DialogoAjuste({
         nuevaCantidad: v.valor,
         tipo: esMerma ? 'merma' : delta > 0 ? 'ajuste_positivo' : 'ajuste_negativo',
         motivo: motivo.trim(),
+        ubicacion,
       });
       onListo();
     } catch (e) {
@@ -545,11 +600,26 @@ function DialogoAjuste({
       bloqueado={guardando}
     >
       <div className="p-5 space-y-3">
-        <p className="text-sm">{producto.nombre}</p>
+        <div className="flex gap-2" role="radiogroup" aria-label="Dónde contaste">
+          {(['sala', 'bodega'] as const).map((u) => (
+            <button
+              key={u} role="radio" aria-checked={ubicacion === u}
+              onClick={() => {
+                setUbicacion(u);
+                setCantidad(String(u === 'sala' ? producto.stockSala : producto.stockBodega));
+              }}
+              className={`tap flex-1 py-2.5 rounded-xl text-sm border ${
+                ubicacion === u ? 'border-marca-500 bg-marca-50 font-medium' : 'border-[var(--borde)]'
+              }`}
+            >
+              {ETIQUETA_UBICACION[u]}
+            </button>
+          ))}
+        </div>
 
         <Campo
           etiqueta="Cantidad real"
-          ayuda={`El sistema tiene ${producto.stock} ${producto.unidad}.`}
+          ayuda={`En ${ETIQUETA_UBICACION[ubicacion].toLowerCase()} el sistema tiene ${cantidadConUnidad(actual, producto.unidad)}. Total del local: ${cantidadConUnidad(producto.stock, producto.unidad)}.`}
           error={cantidad.trim() !== '' && !v.valido ? v.error : null}
         >
           {(p) => (
@@ -710,6 +780,106 @@ function RevisionToma({
             Seguir contando
           </button>
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Reponer la sala desde la bodega, o devolver a la bodega. Es un traspaso: no
+ * cambia el total del local ni el costo, y queda en el historial.
+ */
+function DialogoReponer({
+  producto, onListo, onCancelar,
+}: {
+  producto: Producto;
+  onListo: (texto: string) => void;
+  onCancelar: () => void;
+}) {
+  const [hacia, setHacia] = useState<Ubicacion>(producto.stockBodega > 0 ? 'sala' : 'bodega');
+  const desde: Ubicacion = hacia === 'sala' ? 'bodega' : 'sala';
+  const disponible = desde === 'bodega' ? producto.stockBodega : producto.stockSala;
+  const [cantidad, setCantidad] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const v = validarCantidad(cantidad, { maximo: 1_000_000 });
+
+  async function guardar() {
+    setError(null);
+    if (!v.valido) { setError(v.error); return; }
+    if (v.valor <= 0) { setError('Indica cuántas unidades vas a mover'); return; }
+    if (v.valor > disponible) {
+      setError(`En ${ETIQUETA_UBICACION[desde].toLowerCase()} hay ${cantidadConUnidad(disponible, producto.unidad)}`);
+      return;
+    }
+    setGuardando(true);
+    try {
+      await repoInventario().reponer({ productoId: producto.id, cantidad: v.valor, desde, hacia });
+      onListo(`${cantidadConUnidad(v.valor, producto.unidad)} de ${producto.nombre} pasaron a ${ETIQUETA_UBICACION[hacia].toLowerCase()}`);
+    } catch (e) {
+      setError(toUserMessage(e));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <Modal titulo={`Reponer ${producto.nombre}`} encabezado="visible" onCerrar={onCancelar} bloqueado={guardando}>
+      <div className="p-5 space-y-3">
+        <div className="grid grid-cols-2 gap-2 text-center">
+          <div className="tarjeta p-3">
+            <p className="text-[11px] text-[var(--texto-suave)]">Bodega</p>
+            <p className="num text-lg font-bold">{producto.stockBodega}</p>
+          </div>
+          <div className="tarjeta p-3">
+            <p className="text-[11px] text-[var(--texto-suave)]">Sala de ventas</p>
+            <p className="num text-lg font-bold">{producto.stockSala}</p>
+          </div>
+        </div>
+
+        <div className="flex gap-2" role="radiogroup" aria-label="Hacia dónde">
+          {(['sala', 'bodega'] as const).map((u) => (
+            <button
+              key={u} role="radio" aria-checked={hacia === u}
+              onClick={() => { setHacia(u); setError(null); }}
+              className={`tap flex-1 py-2.5 rounded-xl text-sm border ${
+                hacia === u ? 'border-marca-500 bg-marca-50 font-medium' : 'border-[var(--borde)]'
+              }`}
+            >
+              {u === 'sala' ? 'Bodega → Sala' : 'Sala → Bodega'}
+            </button>
+          ))}
+        </div>
+
+        <Campo
+          etiqueta="Cantidad a mover"
+          ayuda={`Disponible en ${ETIQUETA_UBICACION[desde].toLowerCase()}: ${cantidadConUnidad(disponible, producto.unidad)}.`}
+          error={cantidad.trim() !== '' && !v.valido ? v.error : null}
+        >
+          {(p) => (
+            <input
+              {...p}
+              inputMode="decimal" value={cantidad} onChange={(e) => setCantidad(e.target.value)}
+              placeholder="0"
+              className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] num text-right text-lg"
+              autoFocus
+            />
+          )}
+        </Campo>
+
+        {error && (
+          <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+        )}
+
+        <button
+          onClick={() => void guardar()} disabled={guardando || cantidad.trim() === '' || !v.valido}
+          className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50"
+        >
+          {guardando ? 'Moviendo…' : 'Registrar traspaso'}
+        </button>
+        <p className="text-[11px] text-[var(--texto-suave)]">
+          No cambia el total del local ni el costo. Queda en el historial con tu nombre.
+        </p>
       </div>
     </Modal>
   );

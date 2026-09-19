@@ -3,6 +3,7 @@
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import { db } from '../offline/db';
+import { syncCatalog } from '../offline/catalog';
 import { DEMO_LOTES } from '../demo/data';
 
 /**
@@ -16,7 +17,7 @@ import { DEMO_LOTES } from '../demo/data';
 export type TipoMovimiento =
   | 'inventario_inicial' | 'venta' | 'anulacion_venta' | 'recepcion'
   | 'anulacion_recepcion' | 'ajuste_positivo' | 'ajuste_negativo'
-  | 'merma' | 'toma_inventario';
+  | 'merma' | 'toma_inventario' | 'traslado';
 
 export const ETIQUETA_MOVIMIENTO: Record<TipoMovimiento, string> = {
   inventario_inicial: 'Inventario inicial',
@@ -28,6 +29,7 @@ export const ETIQUETA_MOVIMIENTO: Record<TipoMovimiento, string> = {
   ajuste_negativo: 'Ajuste (resta)',
   merma: 'Merma',
   toma_inventario: 'Toma de inventario',
+  traslado: 'Traspaso',
 };
 
 /** Motivos frecuentes: escribirlos a mano cada vez genera datos inconsistentes. */
@@ -82,6 +84,9 @@ export const ETIQUETA_ESTADO_LOTE: Record<Lote['estado'], string> = {
   vigente: 'Vigente',
 };
 
+export type Ubicacion = 'sala' | 'bodega';
+export const ETIQUETA_UBICACION: Record<Ubicacion, string> = { sala: 'Sala de ventas', bodega: 'Bodega' };
+
 export interface RepositorioInventario {
   kardex(productoId: string | null, limite?: number): Promise<Movimiento[]>;
   /** Lotes con existencia, del que vence antes al que vence después (FEFO). */
@@ -99,8 +104,12 @@ export interface RepositorioInventario {
     nuevaCantidad: number;
     tipo: 'ajuste_positivo' | 'ajuste_negativo' | 'merma';
     motivo: string;
+    /** La cantidad real es la de ESTA ubicación, no la del total del local. */
+    ubicacion: Ubicacion;
   }): Promise<void>;
-  aplicarToma(items: Array<{ productoId: string; contado: number }>): Promise<{
+  /** Traspaso entre bodega y sala (0014). No cambia el total ni el costo. */
+  reponer(datos: { productoId: string; cantidad: number; desde: Ubicacion; hacia: Ubicacion; motivo?: string }): Promise<void>;
+  aplicarToma(items: Array<{ productoId: string; contado: number }>, ubicacion: Ubicacion): Promise<{
     diferencias: number;
     valorDiferencia: number;
   }>;
@@ -189,6 +198,11 @@ const repoLocal: RepositorioInventario = {
     });
   },
 
+  async reponer() {
+    // La maqueta no distingue ubicaciones.
+    throw new Error('NO_DISPONIBLE_EN_DEMO');
+  },
+
   async aplicarToma(items) {
     const costos = JSON.parse((await db().meta.get('demo:costos'))?.value ?? '{}') as Record<string, number>;
     let diferencias = 0;
@@ -270,17 +284,26 @@ const repoSupabase: RepositorioInventario = {
     }));
   },
 
-  async ajustar({ productoId, nuevaCantidad, tipo, motivo }) {
+  async ajustar({ productoId, nuevaCantidad, tipo, motivo, ubicacion }) {
     const { error } = await supabase().rpc('fn_adjust_stock', {
       p_product_id: productoId,
       p_new_quantity: nuevaCantidad,
       p_movement_type: tipo,
       p_reason: motivo,
+      p_ubicacion: ubicacion,
     });
     if (error) throw error;
   },
 
-  async aplicarToma(items) {
+  async reponer({ productoId, cantidad, desde, hacia, motivo }) {
+    const { error } = await supabase().rpc('fn_transfer_stock', {
+      p_product_id: productoId, p_cantidad: cantidad,
+      p_desde: desde, p_hacia: hacia, p_reason: motivo ?? null,
+    });
+    if (error) throw error;
+  },
+
+  async aplicarToma(items, ubicacion) {
     const client = supabase();
     const { data: { user } } = await client.auth.getUser();
     const { data: perfil } = await client.from('profiles').select('tenant_id, store_id').eq('id', user!.id).single();
@@ -294,6 +317,7 @@ const repoSupabase: RepositorioInventario = {
     const { data, error } = await client.rpc('fn_apply_stock_count', {
       p_count_id: conteo.id,
       p_items: items.map((i) => ({ product_id: i.productoId, counted_qty: i.contado })),
+      p_ubicacion: ubicacion,
     });
     if (error) throw error;
 
@@ -302,6 +326,25 @@ const repoSupabase: RepositorioInventario = {
   },
 };
 
+/**
+ * Lo que mueve stock. Después de cada una se sincroniza el catálogo del
+ * navegador: el POS mostraba el stock de antes de reponer (Sala 0 cuando ya
+ * había 5) hasta la sincronización periódica.
+ */
+const MUEVEN_STOCK = new Set(['ajustar', 'reponer', 'aplicarToma', 'darDeBajaLote']);
+
+const repoSupabaseSincronizado = new Proxy(repoSupabase, {
+  get(objetivo, clave, receptor) {
+    const valor = Reflect.get(objetivo, clave, receptor);
+    if (typeof valor !== 'function' || !MUEVEN_STOCK.has(String(clave))) return valor;
+    return async (...args: unknown[]) => {
+      const r = await (valor as (...a: unknown[]) => Promise<unknown>).apply(objetivo, args);
+      void syncCatalog().catch(() => {});
+      return r;
+    };
+  },
+});
+
 export function repoInventario(): RepositorioInventario {
-  return DEMO_ACTIVO ? repoLocal : repoSupabase;
+  return DEMO_ACTIVO ? repoLocal : repoSupabaseSincronizado;
 }

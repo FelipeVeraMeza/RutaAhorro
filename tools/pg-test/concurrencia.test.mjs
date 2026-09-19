@@ -158,8 +158,8 @@ test('CP-05 · la misma toma de inventario no se aplica dos veces', async () => 
   const u1 = await banco.como(local.supervisor);
   const u2 = await banco.como(local.bodega);
   await u1.query('begin');
-  await rpc(u1, 'fn_apply_stock_count', { p_count_id: toma, p_items: items });
-  const segunda = intentar(rpc(u2, 'fn_apply_stock_count', { p_count_id: toma, p_items: items }));
+  await rpc(u1, 'fn_apply_stock_count', { p_count_id: toma, p_items: items, p_ubicacion: 'bodega' });
+  const segunda = intentar(rpc(u2, 'fn_apply_stock_count', { p_count_id: toma, p_items: items, p_ubicacion: 'bodega' }));
   await esperarBloqueo(banco, u2.pid);
   await u1.query('commit');
   const r2 = await segunda;
@@ -329,7 +329,7 @@ test('Dos ajustes "dejar en 7" al mismo tiempo dejan 7, no 4', async () => {
   const local = await nuevoLocal(banco);
   const p = await local.producto({ stock: 10 });
   const [r1, r2] = await dosVeces(await banco.como(local.supervisor), await banco.como(local.bodega),
-    'fn_adjust_stock', { p_product_id: p, p_new_quantity: 7, p_movement_type: 'ajuste_negativo', p_reason: 'conteo' });
+    'fn_adjust_stock', { p_product_id: p, p_new_quantity: 7, p_movement_type: 'ajuste_negativo', p_reason: 'conteo', p_ubicacion: 'bodega' });
   assert.ok(r1.ok && r2.ok, r1.error ?? r2.error);
   assert.equal(await local.stock(p), 7);
 });

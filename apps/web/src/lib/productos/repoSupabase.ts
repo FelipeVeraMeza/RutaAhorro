@@ -33,12 +33,13 @@ interface FilaBD {
   categories?: { name: string } | null;
   product_barcodes?: Array<{ barcode: string }>;
   stock_levels?: Array<{ quantity: number }>;
+  stock_ubicaciones?: Array<{ ubicacion: 'sala' | 'bodega'; quantity: number }>;
 }
 
 const SELECT_BASE =
   'id, name, description, sku, category_id, unit, sale_price, min_stock, tracks_expiry, ' +
   'expiry_alert_days, is_active, updated_at, ' +
-  'categories(name), product_barcodes(barcode), stock_levels(quantity)';
+  'categories(name), product_barcodes(barcode), stock_levels(quantity), stock_ubicaciones(ubicacion, quantity)';
 
 const SELECT_CON_COSTO = SELECT_BASE.replace('sale_price,', 'sale_price, avg_cost,');
 
@@ -59,6 +60,8 @@ function aProducto(f: FilaBD): Producto {
     activo: Boolean(f.is_active),
     codigos: (f.product_barcodes ?? []).map((b) => b.barcode),
     stock: Number(f.stock_levels?.[0]?.quantity ?? 0),
+    stockSala: Number(f.stock_ubicaciones?.find((u) => u.ubicacion === 'sala')?.quantity ?? 0),
+    stockBodega: Number(f.stock_ubicaciones?.find((u) => u.ubicacion === 'bodega')?.quantity ?? 0),
     actualizadoEn: f.updated_at,
   };
 }

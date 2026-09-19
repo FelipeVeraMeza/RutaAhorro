@@ -42,7 +42,7 @@ const RPC_PERMITIDAS = [
   'fn_add_cash_movement', 'fn_adjust_stock', 'fn_apply_stock_count',
   'fn_cash_session_summary', 'fn_close_cash_session', 'fn_confirm_receipt',
   'fn_create_product', 'fn_open_cash_session', 'fn_register_sale',
-  'fn_update_product', 'fn_void_receipt', 'fn_void_sale', 'fn_write_off_lot',
+  'fn_transfer_stock', 'fn_update_product', 'fn_void_receipt', 'fn_void_sale', 'fn_write_off_lot',
 ].sort();
 
 test('authenticated solo ejecuta las funciones de negocio, ninguna interna', async () => {

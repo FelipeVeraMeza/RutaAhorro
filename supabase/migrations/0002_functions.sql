@@ -444,6 +444,10 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- fn_adjust_stock — ajuste con motivo obligatorio (RF-M4-04)
 -- ---------------------------------------------------------------------------
+-- Al reinstalar, 0014 ya dejó la versión con ubicación; si queda junto a esta,
+-- los grant sin firma de 0004 no saben a cuál aplicar. En una base nueva el
+-- tipo no existe todavía y esto solo avisa.
+drop function if exists public.fn_adjust_stock(uuid, numeric, movement_type, text, ubicacion_stock);
 create or replace function public.fn_adjust_stock(
   p_product_id uuid, p_new_quantity numeric,
   p_movement_type movement_type, p_reason text
@@ -656,6 +660,10 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- fn_apply_stock_count — toma de inventario (RF-M4-05)
 -- ---------------------------------------------------------------------------
+-- Al reinstalar, 0014 ya dejó la versión con ubicación; si queda junto a esta,
+-- los grant sin firma de 0004 no saben a cuál aplicar. En una base nueva el
+-- tipo no existe todavía y esto solo avisa.
+drop function if exists public.fn_apply_stock_count(uuid, jsonb, ubicacion_stock);
 create or replace function public.fn_apply_stock_count(p_count_id uuid, p_items jsonb)
 returns jsonb
 language plpgsql security definer set search_path = public
