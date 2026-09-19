@@ -327,6 +327,82 @@ Lo que encontró. **Todo figuraba ✅ en la documentación**, salvo lo marcado:
 > hora. Para empleados reales hay que conectar un SMTP (hay llave de Resend en
 > `.env.local`). Es configuración del panel de Supabase.
 
+## 0f. Séptima pasada · la lista del cliente — reunión 2026-09-19
+
+El cliente entregó diez puntos en una reunión. No son defectos de una pantalla:
+son **alcance nuevo**, y tres de ellos cambian cómo se cobra. Acá quedan
+traducidos a requerimiento, con lo que se hizo y lo que falta, en sus mismas
+palabras entre comillas.
+
+| # | Lo que pidió | Qué es en realidad | Estado |
+|---|---|---|---|
+| 1 | «Al ingresar producto a sala de ventas sale producto inicial, no sale específico» | **Sin confirmar.** Puede ser el kardex —un traspaso son dos filas "Traspaso" que no dicen de dónde a dónde— o la carga inicial, que entra a bodega por diseño (0014) | ⬜ **T-53** · falta que Felipe muestre la pantalla |
+| 2 | «Agregar [el] bien que se agrega cuando se crea un producto» | **Sin confirmar.** Probablemente: al crear un producto, poder dejarlo directo en la sala y no solo en bodega | ⬜ **T-54** |
+| 3 | «Agregar productos llegados de una factura» | Crear el producto desde la recepción, sin salir a Productos y volver | ⬜ **T-55** |
+| 4 | «Boletas solo con transferencia y efectivo; con tarjeta es con máquina» | Qué documento corresponde según el medio de pago | ✅ **0015** |
+| 5 | «Consultador de precio» | Pantalla de solo lectura para responder "¿cuánto vale esto?" sin tocar la venta en curso | ✅ `/precio` |
+| 6 | «Con tarjeta se entrega voucher; con transferencia o efectivo, boleta y ticket» | Lo mismo que el 4, visto desde el papel | ✅ **0015** |
+| 7 | «Notas de crédito para ventas» | El documento que respalda una anulación o devolución | ⬜ **T-56** |
+| 8 | «Descuentos por unidades: 1 a 1.000 y desde 3 a 700» | Precio por volumen, por tramos de cantidad | ⬜ **T-57** |
+| 9 | «Por predeterminado boleta, pero puedo hacer factura; con RUT, clave y firma» | Dos cosas distintas: elegir el documento con los datos del receptor (hecho), y el **certificado digital** con su clave para firmar el DTE (trámite, B-04) | 🟡 mitad ✅, mitad bloqueada |
+| 10 | «Prioridad boletas y facturas» · «en el celu veo solo hasta inventario» | Prioridad, y un defecto real de navegación | ✅ los dos |
+
+### Lo que se hizo
+
+**Migración 0015 · el documento de cada venta.** `sales` guarda qué documento
+corresponde y, si es factura, los datos del receptor. La regla la aplica
+`fn_register_sale`, no la pantalla: una venta también llega desde la cola sin
+conexión, y esconder un botón no es seguridad (regla 6).
+
+- Efectivo o transferencia → **boleta**. Tarjeta → **voucher**, porque el
+  documento lo emite la máquina. Factura → siempre elección explícita del
+  cajero, con cualquier medio de pago, y exige RUT válido y razón social.
+- Que la tarjeta emita el documento **no es una ley, es su terminal**. Un local
+  con máquina no integrada sí tiene que emitir la boleta, así que es
+  `tenants.settings.tarjeta_emite_documento` y no una constante (regla 13).
+- El RUT se valida en la base (`fn_rut_formateado`, módulo 11) además de en
+  `core`. Está repetido a propósito: un RUT inválido en una factura lo rechaza
+  el SII, no nosotros.
+- 13 pruebas nuevas contra PostgreSQL real y 18 en `core`.
+
+**`/precio` · el consultador.** Lee el mismo catálogo replicado del POS, así que
+responde **sin internet**. No tiene carrito: hasta ahora, para ver un precio
+había que agregar el producto a la venta en curso y después vaciarla.
+
+**La barra inferior del celular.** `navMovil` cortaba la lista en 5 y lo que
+sobraba **no existía en el celular**: Proveedores, Ventas, Reportes y Usuarios
+no tenían ningún camino, porque la barra lateral que los lista está oculta bajo
+1024 px. Ahora el quinto lugar es "Más" y abre el resto.
+
+**Un defecto que salió de paso.** `instalar.sql` dejaba de ser idempotente al
+agregarle un parámetro a `fn_register_sale`: al reinstalar quedaban las dos
+firmas y los `grant` sin lista de argumentos de 0004 fallaban con *function name
+is not unique*. Lo encontró `db:test`, no la revisión. Corregido con el mismo
+recurso que 0014 usó para `fn_adjust_stock`: 0002 borra antes la firma nueva.
+
+### Lo que hay que decir, aunque no guste
+
+**Esto no emite boletas ni facturas ante el SII, y 0015 no cambia eso.** Emitir
+necesita el certificado digital del contribuyente y folios CAF autorizados
+(B-04 y B-05), que son trámites con plazos ajenos. Lo que hay ahora es el
+sistema sabiendo **qué documento corresponde** por cada venta, con el receptor
+validado y guardado. Cuando lleguen los trámites, el timbre se le agrega encima
+y ninguna de estas reglas cambia.
+
+Mientras tanto el papel sigue diciendo `COMPROBANTE INTERNO` y
+`NO ES DOCUMENTO TRIBUTARIO`, y ahora además en qué se convertirá. Un ticket que
+se parece a una boleta sin serlo es un problema del contribuyente ante el SII, y
+se lo habríamos causado nosotros.
+
+**El punto 9 es dos pedidos en uno.** «RUT, clave y firma» no es la firma del
+cliente en un papel: es el **certificado digital** (un archivo `.pfx` con su
+clave) con el que se firma el DTE. Eso es B-04, y hoy no está.
+
+**La app y la base se actualizan juntas.** 0015 le cambia la firma a
+`fn_register_sale`. Si se despliega el código sin aplicar la migración,
+**ninguna venta se registra**. Y al revés, una base con 0015 y el código viejo
+manda la llamada antigua, que ya no existe.
+
 ## 1. Hallazgos transversales
 
 Antes de las pantallas, dos problemas que aparecieron en casi todas y que se

@@ -109,6 +109,17 @@ export async function syncQueue(): Promise<SyncResult> {
         p_payments: sale.payments,
         p_sold_at: sale.soldAt,
         p_discount_total: sale.discountTotal,
+        // La base lo valida de nuevo y decide si viene null: la pantalla no es
+        // la única forma de registrar una venta (regla 6).
+        p_document: sale.documento
+          ? {
+              tipo: sale.documento.tipo,
+              rut: sale.documento.receptor?.rut ?? null,
+              razon_social: sale.documento.receptor?.razonSocial ?? null,
+              giro: sale.documento.receptor?.giro ?? null,
+              direccion: sale.documento.receptor?.direccion ?? null,
+            }
+          : null,
       });
 
       if (error) {

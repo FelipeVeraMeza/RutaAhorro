@@ -119,6 +119,10 @@ end $$;
 -- ---------------------------------------------------------------------------
 -- fn_register_sale — registro transaccional de una venta (RF-M5-12)
 -- ---------------------------------------------------------------------------
+-- Al reinstalar, 0015 ya dejó la versión con el documento; si queda junto a
+-- esta, los grant sin firma de 0004 no saben a cuál aplicar. Mismo caso que
+-- fn_adjust_stock más arriba. En una base nueva no hay nada que borrar.
+drop function if exists public.fn_register_sale(uuid, jsonb, jsonb, timestamptz, integer, text, boolean, jsonb);
 create or replace function public.fn_register_sale(
   p_client_uuid    uuid,
   p_items          jsonb,     -- [{product_id, quantity, unit_price, discount_amount}]

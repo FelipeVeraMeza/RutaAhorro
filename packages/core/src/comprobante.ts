@@ -14,6 +14,10 @@
  * impresa y se le agrega el timbre. El trabajo no se bota.
  */
 import { clp, formatCLP, taxIncluded } from './money.js';
+import {
+  documentoPorOmision, NOMBRE_DOCUMENTO,
+  type DocumentoVenta, type OpcionesDocumento,
+} from './documento.js';
 import type { CartLine } from './cart.js';
 import { lineSubtotal } from './cart.js';
 
@@ -57,6 +61,12 @@ export interface Comprobante {
   pagos: PagoComprobante[];
   vuelto: number;
   /**
+   * Qué documento corresponde por esta venta: boleta, factura, o el voucher
+   * que emite la máquina de tarjetas (reunión 2026-09-19). Determina qué dice
+   * el papel; no lo emite ante el SII.
+   */
+  documento: DocumentoVenta;
+  /**
    * Discriminante deliberado. Cuando exista la boleta electrónica se agrega
    * otro tipo con `esDocumentoTributario: true`, y el compilador va a obligar
    * a revisar cada lugar que asuma lo contrario.
@@ -73,6 +83,9 @@ export interface DatosComprobante {
   cajero?: string;
   descuentoGlobal?: number;
   ivaPct?: number;
+  /** Si no se entrega, se deduce del medio de pago con `documentoPorOmision`. */
+  documento?: DocumentoVenta;
+  opcionesDocumento?: OpcionesDocumento;
 }
 
 /**
@@ -104,6 +117,9 @@ export function construirComprobante(datos: DatosComprobante): Comprobante {
   const iva = taxIncluded(total, ivaPct);
   const neto = total - iva;
 
+  const documento: DocumentoVenta =
+    datos.documento ?? { tipo: documentoPorOmision(datos.pagos, datos.opcionesDocumento) };
+
   const efectivo = datos.pagos.find((p) => p.metodo === 'efectivo');
   const vuelto = efectivo?.recibido != null
     ? Math.max(clp(efectivo.recibido) - total, 0)
@@ -123,6 +139,7 @@ export function construirComprobante(datos: DatosComprobante): Comprobante {
     ivaPct,
     pagos: datos.pagos,
     vuelto,
+    documento,
     esDocumentoTributario: false,
   };
 }
@@ -161,8 +178,7 @@ export function comprobanteATexto(c: Comprobante, ancho = 32): string {
 
   const out: string[] = [];
   if (c.local) out.push(c.local);
-  out.push('Comprobante interno');
-  out.push('NO ES DOCUMENTO TRIBUTARIO');
+  for (const linea of encabezadoDocumento(c)) out.push(linea);
   out.push(fechaComprobante(c.fecha) + (c.folio != null ? `  N° ${c.folio}` : ''));
   if (c.cajero) out.push(`Atendió: ${c.cajero}`);
   out.push(separador);
@@ -186,6 +202,38 @@ export function comprobanteATexto(c: Comprobante, ancho = 32): string {
     out.push(fila(nombreMetodo(p.metodo), formatCLP(p.recibido ?? p.monto)));
   }
   if (c.vuelto > 0) out.push(fila('Vuelto', formatCLP(c.vuelto)));
+  for (const linea of pieDocumento(c)) { out.push(separador); out.push(linea); }
 
   return out.join('\n');
+}
+
+/**
+ * Las dos o tres líneas que encabezan el papel.
+ *
+ * Mientras no haya timbre del SII (B-04, B-05), **ningún papel que salga de
+ * acá puede llamarse boleta ni factura**: dice qué documento corresponde y
+ * deja claro que el que se está imprimiendo no lo es. Un ticket que se parece
+ * a una boleta sin serlo es un problema del contribuyente, y se lo habríamos
+ * causado nosotros. Cuando exista el DTE, acá va el nombre del documento y
+ * el timbre debajo.
+ */
+export function encabezadoDocumento(c: Comprobante): string[] {
+  if (c.documento.tipo === 'voucher') {
+    return ['COMPROBANTE INTERNO', 'EL DOCUMENTO LO EMITE LA MÁQUINA'];
+  }
+  return [
+    'COMPROBANTE INTERNO',
+    'NO ES DOCUMENTO TRIBUTARIO',
+    'Corresponde ' + NOMBRE_DOCUMENTO[c.documento.tipo].toLowerCase(),
+  ];
+}
+
+/** Los datos del receptor, cuando la venta va con factura. */
+export function pieDocumento(c: Comprobante): string[] {
+  const r = c.documento.receptor;
+  if (c.documento.tipo !== 'factura' || !r) return [];
+  const lineas = ['Factura a: ' + r.razonSocial, 'RUT: ' + r.rut];
+  if (r.giro) lineas.push('Giro: ' + r.giro);
+  if (r.direccion) lineas.push('Dirección: ' + r.direccion);
+  return lineas;
 }

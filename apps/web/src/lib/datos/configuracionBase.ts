@@ -18,6 +18,12 @@ export interface ConfiguracionLocal {
   moneda: string;
   /** Tope de descuento por rol, si el local configuró alguno. */
   topeDescuento: Partial<Record<Rol, number>>;
+  /**
+   * `true` si el terminal de tarjetas de este local emite el documento. Con
+   * una máquina integrada el voucher ES la boleta, y emitir otra declararía la
+   * venta dos veces. Un local con máquina no integrada lo pone en false.
+   */
+  tarjetaEmiteDocumento: boolean;
 }
 
 /**
@@ -33,6 +39,7 @@ export const CONFIGURACION_POR_OMISION: ConfiguracionLocal = {
   zonaHoraria: 'America/Santiago',
   moneda: 'CLP',
   topeDescuento: {},
+  tarjetaEmiteDocumento: true,
 };
 
 interface SettingsBD {
@@ -42,6 +49,7 @@ interface SettingsBD {
   timezone?: string;
   currency?: string;
   max_discount_pct?: Partial<Record<Rol, number>>;
+  tarjeta_emite_documento?: boolean;
 }
 
 function numero(valor: unknown, porOmision: number): number {
@@ -73,5 +81,7 @@ export function desdeSettings(settings: unknown): ConfiguracionLocal {
     zonaHoraria: zonaValida(s.timezone),
     moneda: s.currency || CONFIGURACION_POR_OMISION.moneda,
     topeDescuento: s.max_discount_pct ?? {},
+    tarjetaEmiteDocumento:
+      s.tarjeta_emite_documento ?? CONFIGURACION_POR_OMISION.tarjetaEmiteDocumento,
   };
 }

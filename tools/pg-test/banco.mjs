@@ -240,5 +240,6 @@ export async function esperarBloqueo(banco, pid, ms = 3000) {
 export const venta = (producto, cantidad, precio, extra = {}) => ({
   p_client_uuid: extra.uuid ?? crypto.randomUUID(),
   p_items: [{ product_id: producto, quantity: cantidad, unit_price: precio, discount_amount: extra.descuento ?? 0 }],
-  p_payments: [{ method: 'efectivo', amount: Math.round(cantidad * precio) - (extra.descuento ?? 0) }],
+  p_payments: [{ method: extra.metodo ?? 'efectivo', amount: Math.round(cantidad * precio) - (extra.descuento ?? 0) }],
+  ...(extra.documento !== undefined ? { p_document: extra.documento } : {}),
 });

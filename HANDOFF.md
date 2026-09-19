@@ -55,8 +55,8 @@ datos de ejemplo en IndexedDB y un banner amarillo con selector de rol.
 |---|---|
 | `npm run dev` | Frontend en :3000 |
 | `npm run dev:worker` | Worker en :8080 (no se levanta con `npm run dev`) |
-| `npm test` | 300 pruebas de lógica de negocio |
-| `npm run db:test` | 36 pruebas contra un **PostgreSQL real** en UTC, como Supabase: concurrencia, ataques por rol, zona horaria, instalador (~40 s, sin Docker) |
+| `npm test` | 318 pruebas de lógica de negocio |
+| `npm run db:test` | 58 pruebas contra un **PostgreSQL real** en UTC, como Supabase: concurrencia, ataques por rol, zona horaria, instalador (~40 s, sin Docker) |
 | `npm run db:aplicar` | Diagnostica la base real. Con `-- --aplicar` instala `instalar.sql` y **verifica** RLS, funciones expuestas y políticas. Necesita la contraseña real en `DATABASE_URL` |
 | `npm run db:limpiar` | Respalda y dice qué borraría. Con `-- --si-borrar-todo` deja la base **de cero** y reinstala: es lo que hay que correr antes de mostrarle el sistema al cliente, porque los recorridos de QA dejan datos |
 | `npm run db:e2e` | **La primera venta real**, de punta a punta contra Supabase, como la hace la app: producto, recepción, caja, venta con vuelto, reenvío, anulación, cierre que cuadra. Más los ataques de seguridad contra la base real (T-46). Corre en un local aparte, "QA · pruebas internas" |
@@ -75,8 +75,8 @@ Si tocas `packages/core`, recompílalo antes de compilar la web:
 
 ## ESTADO AL 2026-09-19
 
-**300 pruebas de lógica · 36 contra PostgreSQL real · typecheck limpio · SQL
-validado · build de producción con demo apagado · 13 rutas.**
+**318 pruebas de lógica · 58 contra PostgreSQL real · typecheck limpio · SQL
+validado · build de producción con demo apagado · 14 rutas.**
 
 ### La base real está instalada y la primera venta se hizo — 2026-09-19
 
@@ -124,6 +124,45 @@ productos, ventas, cajas y movimientos. El respaldo de lo anterior (244 filas y
 > `db:limpiar` y luego `db:admin`. Lo correcto a futuro es un proyecto de
 > Supabase aparte para QA: es **T-51**.
 
+### La lista del cliente — reunión 2026-09-19 (noche)
+
+Diez puntos de la reunión. **No son defectos de una pantalla: son alcance
+nuevo**, y tres cambian cómo se cobra. La traducción a requerimiento, punto por
+punto, está en `docs/21` §0f; las tareas nuevas son **T-53 a T-57**.
+
+**Hechos: 4, 5, 6 y 10.**
+
+- **Migración 0015 · el documento de cada venta.** Efectivo o transferencia →
+  **boleta**. Tarjeta → **voucher**, porque el documento lo emite la máquina.
+  **Factura** → siempre elección explícita del cajero, con cualquier medio de
+  pago, y exige RUT válido y razón social. La regla la aplica
+  `fn_register_sale`, no la pantalla: una venta también llega desde la cola sin
+  conexión. Que la tarjeta emita el documento es su terminal y no una ley, así
+  que vive en `tenants.settings.tarjeta_emite_documento`.
+- **`/precio` · el consultador.** Lee el catálogo replicado del POS, así que
+  responde **sin internet**, y no tiene carrito: hasta hoy, para ver un precio
+  había que agregar el producto a la venta en curso y después vaciarla.
+- **La barra inferior del celular llegaba hasta Inventario y ahí terminaba la
+  app.** Proveedores, Ventas, Reportes y Usuarios no tenían ningún camino en el
+  teléfono. Ahora el quinto lugar es "Más".
+
+> **Esto no emite boletas ni facturas ante el SII, y 0015 no cambia eso.**
+> Emitir necesita el certificado digital y folios CAF (B-04, B-05): trámites.
+> Lo que hay es el sistema sabiendo **qué documento corresponde**, con el
+> receptor validado. El papel sigue diciendo `NO ES DOCUMENTO TRIBUTARIO`.
+> El punto 9 del cliente —«RUT, clave y firma»— son dos pedidos: elegir el
+> documento (hecho) y el certificado digital con su clave (B-04).
+
+> **⚠ La app y la base se actualizan juntas.** 0015 le cambia la firma a
+> `fn_register_sale`. Código nuevo con base vieja: **ninguna venta se
+> registra**. Aplicarla con `npm run db:instalar` y pegar
+> `supabase/instalar.sql`, o `npm run db:aplicar -- --aplicar`.
+
+**Falta el recorrido en el navegador (regla 20).** El guion está escrito
+—`node tools/ui/documento-venta.mjs`— pero **no se ha corrido**: necesita 0015
+aplicada en Supabase y la app levantada en :3001. Hasta que pase, esto está
+probado en `core` (18 pruebas) y contra PostgreSQL real (13), no en pantalla.
+
 ### Recorridos en navegador, por requerimiento — 2026-09-19 (tarde)
 
 Con la base real, cada módulo se prueba en Edge como lo usaría la persona. Los
@@ -137,6 +176,7 @@ node tools/ui/m1-usuarios.mjs              # 20/20
 node tools/ui/bodega-sala.mjs              # 7/7
 node tools/ui/m5-vender.mjs                # 17/17
 node tools/ui/m6-caja.mjs                  # 13/13
+node tools/ui/documento-venta.mjs          # escrito, sin correr todavía
 ```
 
 Encontraron diez defectos (G-1 a G-10 en `docs/21` §0e), casi todos en

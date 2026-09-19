@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   addToCart, cartTotals, setQuantity, removeFromCart,
   formatCLP, toUserMessage, construirComprobante,
-  type CartLine, type Comprobante as DatosComprobante,
+  type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta,
 } from '@rutaahorro/core';
 import { findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO } from '@/lib/offline/catalog';
 import { DEMO_ACTIVO } from '@/lib/demo';
@@ -152,7 +152,10 @@ export function PosClient({
    * quedaba como un error en la cola del celular. El arqueo no cuadraba y nada
    * lo explicaba. Sin conexión sigue como siempre (ADR-005).
    */
-  async function confirmarVenta(payments: Array<{ method: string; amount: number; received_amount?: number }>): Promise<boolean> {
+  async function confirmarVenta(
+    payments: Array<{ method: string; amount: number; received_amount?: number }>,
+    documento: DocumentoVenta,
+  ): Promise<boolean> {
     if (!puedeForzarStock) {
       const falta = lines.find((l) => typeof l.stockAvailable === 'number' && l.quantity > l.stockAvailable);
       if (falta) {
@@ -174,6 +177,7 @@ export function PosClient({
         name: l.name,
       })),
       payments,
+      documento,
       discountTotal: totals.discountTotal,
       total: totals.total,
     });
@@ -205,6 +209,7 @@ export function PosClient({
       local,
       cajero,
       ivaPct: config.ivaPct,
+      documento,
     }));
 
     // La venta se confirma de inmediato en pantalla: el cajero no espera a la
@@ -396,9 +401,10 @@ export function PosClient({
       {cobrando && (
         <Cobro
           total={totals.total}
+          tarjetaEmiteDocumento={config.tarjetaEmiteDocumento}
           onCancel={() => setCobrando(false)}
-          onConfirm={(payments) =>
-            confirmarVenta(payments).catch((e) => { notificar('error', toUserMessage(e)); return false; })
+          onConfirm={(payments, documento) =>
+            confirmarVenta(payments, documento).catch((e) => { notificar('error', toUserMessage(e)); return false; })
           }
         />
       )}

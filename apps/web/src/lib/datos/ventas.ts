@@ -1,6 +1,6 @@
 'use client';
 
-import { diaLocal, rangoDeDias } from '@rutaahorro/core';
+import { diaLocal, rangoDeDias, type DocumentoVenta, type TipoDocumento } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { configuracionLocal } from './configuracion';
 import { DEMO_ACTIVO } from '../demo';
@@ -45,6 +45,8 @@ export interface Venta {
   anuladaPor: string | null;
   anuladaEn: string | null;
   motivoAnulacion: string | null;
+  /** Qué documento correspondía por esta venta (0015). */
+  documento: DocumentoVenta;
 }
 
 export interface VentaDetallada extends Venta {
@@ -92,6 +94,7 @@ interface VentaDemo {
   anulada: boolean;
   motivoAnulacion: string | null;
   anuladaEn: string | null;
+  documento?: DocumentoVenta;
 }
 
 async function leerVentasDemo(): Promise<VentaDemo[]> {
@@ -148,6 +151,7 @@ export async function registrarVentaDemo(v: QueuedSale): Promise<void> {
     })),
     pagos: v.payments.map((p) => ({ metodo: p.method, monto: p.amount })),
     total: v.total,
+    documento: v.documento,
     anulada: false,
     motivoAnulacion: null,
     anuladaEn: null,
@@ -174,6 +178,10 @@ function aVenta(v: VentaDemo): Venta {
     anuladaPor: v.anulada ? 'Modo demo' : null,
     anuladaEn: v.anuladaEn,
     motivoAnulacion: v.motivoAnulacion,
+    documento: v.documento ?? {
+      tipo: v.pagos.some((p) => p.metodo === 'debito' || p.metodo === 'credito')
+        ? 'voucher' : 'boleta',
+    },
   };
 }
 
@@ -227,7 +235,8 @@ const repoLocal: RepositorioVentas = {
 
 const SELECT_VENTA =
   'id, folio, sold_at, total, subtotal, discount_total, tax_amount, status, ' +
-  'voided_at, void_reason, profiles!sales_sold_by_fkey(full_name)';
+  'voided_at, void_reason, document_type, receptor_rut, receptor_razon_social, ' +
+  'receptor_giro, receptor_direccion, profiles!sales_sold_by_fkey(full_name)';
 
 interface FilaVenta {
   id: string;
@@ -240,6 +249,11 @@ interface FilaVenta {
   status: string;
   voided_at: string | null;
   void_reason: string | null;
+  document_type?: TipoDocumento | null;
+  receptor_rut?: string | null;
+  receptor_razon_social?: string | null;
+  receptor_giro?: string | null;
+  receptor_direccion?: string | null;
   profiles?: { full_name: string } | null;
 }
 
@@ -257,6 +271,18 @@ function aVentaBD(f: FilaVenta): Venta {
     anuladaPor: null,
     anuladaEn: f.voided_at,
     motivoAnulacion: f.void_reason,
+    // Las ventas anteriores a 0015 no traen columna: eran todas boleta.
+    documento: {
+      tipo: f.document_type ?? 'boleta',
+      receptor: f.receptor_rut && f.receptor_razon_social
+        ? {
+            rut: f.receptor_rut,
+            razonSocial: f.receptor_razon_social,
+            giro: f.receptor_giro ?? undefined,
+            direccion: f.receptor_direccion ?? undefined,
+          }
+        : null,
+    },
   };
 }
 

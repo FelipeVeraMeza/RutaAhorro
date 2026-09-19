@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { formatCLP, toUserMessage } from '@rutaahorro/core';
+import { formatCLP, toUserMessage, NOMBRE_DOCUMENTO } from '@rutaahorro/core';
 import {
   repoVentas, ETIQUETA_PAGO,
   type Venta, type VentaDetallada,
@@ -199,7 +199,8 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
                     )}
                   </p>
                   <p className="text-xs text-[var(--texto-suave)]">
-                    {fechaHora(v.fecha)}
+                    {NOMBRE_DOCUMENTO[v.documento.tipo]}
+                    {' · '}{fechaHora(v.fecha)}
                     {v.vendedor && ` · ${v.vendedor}`}
                   </p>
                   {v.anulada && v.motivoAnulacion && (
@@ -226,9 +227,17 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
         >
           <div className="p-5 space-y-3">
             <p className="text-xs text-[var(--texto-suave)]">
-              {fechaHora(detalle.fecha)}
+              {NOMBRE_DOCUMENTO[detalle.documento.tipo]}
+              {' · '}{fechaHora(detalle.fecha)}
               {detalle.vendedor && ` · ${detalle.vendedor}`}
             </p>
+
+            {detalle.documento.receptor && (
+              <p className="text-sm bg-[var(--fondo)] px-3 py-2 rounded-lg">
+                Factura a <strong>{detalle.documento.receptor.razonSocial}</strong>
+                {' · '}<span className="num">{detalle.documento.receptor.rut}</span>
+              </p>
+            )}
 
             {detalle.anulada && (
               <p className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">

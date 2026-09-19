@@ -1,6 +1,7 @@
 'use client';
 
 import Dexie, { type Table } from 'dexie';
+import type { DocumentoVenta } from '@rutaahorro/core';
 
 /**
  * Base local del dispositivo (IndexedDB).
@@ -61,6 +62,13 @@ export interface QueuedSale {
    * Opcional porque las ventas encoladas antes de este campo no lo traen.
    */
   userId?: string;
+  /**
+   * Qué documento corresponde por esta venta (0015). Viaja con ella porque se
+   * decide en el mostrador, con el cliente delante, y una venta encolada sin
+   * conexión se sincroniza horas después. Opcional: las ventas encoladas antes
+   * de este campo no lo traen y la base las resuelve por el medio de pago.
+   */
+  documento?: DocumentoVenta;
   status: QueuedSaleStatus;
   attempts: number;
   lastError?: string;

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import {
   formatCLP, comprobanteATexto, fechaComprobante, nombreMetodo,
+  encabezadoDocumento, pieDocumento,
   type Comprobante as DatosComprobante,
 } from '@rutaahorro/core';
 
@@ -62,10 +63,14 @@ export function Comprobante({
         {/* El ticket. Es lo único que se imprime. */}
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <div id="ticket" className="font-mono text-[12px] leading-5 text-black">
+            {/* Qué documento corresponde, y que este papel no lo es. Ver
+                `encabezadoDocumento` en core: hasta que haya timbre del SII
+                ningún ticket puede llamarse boleta ni factura. */}
             <div className="text-center mb-2">
               {datos.local && <p className="font-bold text-[13px]">{datos.local}</p>}
-              <p className="font-bold">COMPROBANTE INTERNO</p>
-              <p className="text-[11px]">NO ES DOCUMENTO TRIBUTARIO</p>
+              {encabezadoDocumento(datos).map((linea, i) => (
+                <p key={linea} className={i === 0 ? 'font-bold' : 'text-[11px]'}>{linea}</p>
+              ))}
             </div>
 
             <p>{fechaComprobante(datos.fecha)}</p>
@@ -114,6 +119,13 @@ export function Comprobante({
               <Fila key={i} izq={nombreMetodo(p.metodo)} der={formatCLP(p.recibido ?? p.monto)} />
             ))}
             {datos.vuelto > 0 && <Fila izq="Vuelto" der={formatCLP(datos.vuelto)} />}
+
+            {pieDocumento(datos).length > 0 && (
+              <>
+                <div className="border-t border-dashed border-black my-2" />
+                {pieDocumento(datos).map((linea) => <p key={linea}>{linea}</p>)}
+              </>
+            )}
 
             <p className="text-center text-[10px] mt-3">¡Gracias por su compra!</p>
           </div>
