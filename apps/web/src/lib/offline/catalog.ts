@@ -2,7 +2,7 @@
 
 import { normalizeBarcode } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
-import { db, normalizeSearch, getMeta, setMeta, type LocalProduct } from './db';
+import { db, normalizeSearch, getMeta, setMeta, asegurarDueno, type LocalProduct } from './db';
 
 /**
  * Replicación del catálogo al dispositivo.
@@ -17,7 +17,18 @@ const PAGE = 1000;
 
 export async function syncCatalog(force = false): Promise<{ products: number; barcodes: number }> {
   const client = supabase();
-  const since = force ? null : await getMeta(LAST_SYNC_KEY);
+
+  // El catálogo local tiene que ser de este local y de nadie más. Si el
+  // navegador tenía el de la maqueta o el de otro local, se borra y se baja
+  // completo.
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return { products: 0, barcodes: 0 };
+  const { data: perfil, error: ePerfil } = await client
+    .from('profiles').select('tenant_id').eq('id', user.id).single();
+  if (ePerfil || !perfil) throw ePerfil ?? new Error('SIN_PERFIL');
+  const cambioDeDueno = await asegurarDueno(`tenant:${perfil.tenant_id as string}`);
+
+  const since = force || cambioDeDueno ? null : await getMeta(LAST_SYNC_KEY);
   const startedAt = new Date().toISOString();
 
   // --- Productos ---
@@ -71,6 +82,12 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
       for (const p of products) p.stock = stockByProduct.get(p.id) ?? 0;
       await database.products.bulkPut(products);
     }
+    // Una bajada completa es la verdad entera: lo que está en el celular y no
+    // en la base (un producto eliminado, un resto de otra sesión) sale.
+    if (!since) {
+      const vigentes = new Set(products.map((p) => p.id));
+      await database.products.filter((p) => !vigentes.has(p.id)).delete();
+    }
     // Actualizar el stock de los productos que ya estaban en local
     if (!since || products.length === 0) {
       const existing = await database.products.toArray();
@@ -79,7 +96,10 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
         .map((p) => ({ ...p, stock: stockByProduct.get(p.id)! }));
       if (updates.length > 0) await database.products.bulkPut(updates);
     }
-    if (codes && codes.length > 0) {
+    // Se reemplazan aunque la base no tenga ninguno. Antes solo se limpiaban si
+    // llegaba al menos uno: con un catálogo sin códigos, los viejos seguían
+    // escaneándose.
+    if (codes) {
       await database.barcodes.clear();
       await database.barcodes.bulkPut(
         codes.map((c) => ({

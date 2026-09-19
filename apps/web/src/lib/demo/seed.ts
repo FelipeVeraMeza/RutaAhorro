@@ -1,6 +1,6 @@
 'use client';
 
-import { db, normalizeSearch, type LocalProduct } from '../offline/db';
+import { db, normalizeSearch, asegurarDueno, type LocalProduct } from '../offline/db';
 import { DEMO_PRODUCTOS } from './data';
 
 /**
@@ -13,6 +13,9 @@ import { DEMO_PRODUCTOS } from './data';
  */
 export async function sembrarCatalogoDemo(): Promise<number> {
   const database = db();
+  // Marca el navegador como de la maqueta: al pasar a producción, lo primero
+  // que hace la sincronización es notar el cambio y borrar todo esto.
+  await asegurarDueno('demo');
 
   const productos: LocalProduct[] = DEMO_PRODUCTOS.map((p) => ({
     id: p.id,

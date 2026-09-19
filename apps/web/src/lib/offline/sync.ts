@@ -3,6 +3,8 @@
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import { db, type QueuedSale } from './db';
+import { syncCatalog } from './catalog';
+import { registrarVentaDemo } from '../datos/ventas';
 
 /**
  * Cola de ventas offline (US-15, ADR-005).
@@ -25,9 +27,20 @@ export function newClientUuid(): string {
   });
 }
 
-export async function enqueueSale(sale: Omit<QueuedSale, 'status' | 'attempts' | 'createdAt'>) {
+/**
+ * Usuario de la sesión, leído del almacenamiento local y no del servidor:
+ * tiene que funcionar sin conexión, que es cuando más se encola.
+ */
+async function usuarioActual(): Promise<string | null> {
+  if (DEMO_ACTIVO) return 'demo';
+  const { data } = await supabase().auth.getSession();
+  return data.session?.user.id ?? null;
+}
+
+export async function enqueueSale(sale: Omit<QueuedSale, 'status' | 'attempts' | 'createdAt' | 'userId'>) {
   await db().saleQueue.put({
     ...sale,
+    userId: (await usuarioActual()) ?? undefined,
     status: 'pendiente',
     attempts: 0,
     createdAt: new Date().toISOString(),
@@ -35,12 +48,20 @@ export async function enqueueSale(sale: Omit<QueuedSale, 'status' | 'attempts' |
 }
 
 export async function pendingCount(): Promise<number> {
-  return db().saleQueue.where('status').anyOf('pendiente', 'error').count();
+  return (await pendingSales()).length;
 }
 
+/**
+ * Las ventas por enviar de quien tiene la sesión abierta. Las de otro usuario
+ * del mismo celular esperan a que esa persona vuelva a entrar: enviarlas con
+ * esta sesión las dejaría en otra caja.
+ */
 export async function pendingSales(): Promise<QueuedSale[]> {
+  const yo = await usuarioActual();
   const rows = await db().saleQueue.where('status').anyOf('pendiente', 'error').toArray();
-  return rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return rows
+    .filter((s) => !s.userId || s.userId === yo)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 export interface SyncResult {
@@ -69,6 +90,7 @@ export async function syncQueue(): Promise<SyncResult> {
     // ver el indicador de "por sincronizar" y cómo se vacía.
     if (DEMO_ACTIVO) {
       for (const sale of queue) {
+        await registrarVentaDemo(sale);
         await db().saleQueue.delete(sale.clientUuid);
         result.sent++;
       }
@@ -107,6 +129,9 @@ export async function syncQueue(): Promise<SyncResult> {
       // Solo aquí se borra de la cola: cuando el servidor confirmó.
       await db().saleQueue.delete(sale.clientUuid);
     }
+    // El stock que muestra el POS es el del celular. Sin esto quedaba el de
+    // antes de vender hasta la sincronización periódica, 10 minutos después.
+    if (result.sent > 0) void syncCatalog().catch(() => {});
   } finally {
     syncing = false;
   }

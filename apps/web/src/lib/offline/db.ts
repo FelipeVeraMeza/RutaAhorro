@@ -51,6 +51,13 @@ export interface QueuedSale {
   payments: Array<{ method: string; amount: number; received_amount?: number }>;
   discountTotal: number;
   total: number;
+  /**
+   * Quién hizo la venta. Se envía solo con la sesión de esa persona: si no,
+   * una venta sin conexión del cajero A que se sincroniza cuando ya entró el
+   * cajero B queda en la caja de B, y el arqueo de B tiene plata que no cobró.
+   * Opcional porque las ventas encoladas antes de este campo no lo traen.
+   */
+  userId?: string;
   status: QueuedSaleStatus;
   attempts: number;
   lastError?: string;
@@ -102,6 +109,36 @@ export async function getMeta(key: string): Promise<string | null> {
 
 export async function setMeta(key: string, value: string): Promise<void> {
   await db().meta.put({ key, value });
+}
+
+const DUENO_KEY = 'dispositivo:dueno';
+
+/**
+ * De quién es lo que está guardado en este navegador: `demo` o `tenant:<id>`.
+ *
+ * La maqueta y producción comparten esta base local. La sincronización real
+ * solo agrega y actualiza, así que sin esto los 14 productos de ejemplo
+ * seguían apareciendo en el POS de producción después de apagar el demo, con
+ * códigos de barra que se podían escanear. Y un celular donde entraba alguien
+ * de otro local le mostraba el catálogo del local anterior.
+ *
+ * Si el dueño cambió, se borra el catálogo y devuelve true: quien llama tiene
+ * que bajarlo completo. Las ventas en cola no se tocan —pueden ser plata real
+ * de otra persona, y `syncQueue` solo envía las del usuario que las hizo—,
+ * salvo las de la maqueta, que nunca fueron plata.
+ */
+export async function asegurarDueno(dueno: string): Promise<boolean> {
+  const database = db();
+  const actual = await getMeta(DUENO_KEY);
+  if (actual === dueno) return false;
+  await database.transaction('rw', [database.products, database.barcodes, database.meta, database.saleQueue], async () => {
+    await database.products.clear();
+    await database.barcodes.clear();
+    await database.meta.clear();
+    if (actual === 'demo') await database.saleQueue.filter((s) => s.userId === 'demo').delete();
+    await database.meta.put({ key: DUENO_KEY, value: dueno });
+  });
+  return true;
 }
 
 /** Al cerrar sesión se borra todo: el siguiente turno puede ser de otra persona. */

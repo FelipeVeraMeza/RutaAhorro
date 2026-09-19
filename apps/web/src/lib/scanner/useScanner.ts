@@ -29,6 +29,19 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
+  const zxingRef = useRef<{ stop(): void } | null>(null);
+  /**
+   * Cada `start` y cada `stop` suben este número. Un `start` que al volver de
+   * un `await` encuentra otro número sabe que ya no le corresponde, y apaga lo
+   * que abrió. Sin esto, la cámara que llegaba tarde (se pidió, se cerró antes
+   * de que el navegador la entregara, se volvió a pedir) quedaba encendida sin
+   * que nadie la controlara: dos cámaras y dos lectores sobre el mismo video.
+   * Es lo que dejaba el escáner pegado hasta apagarlo y prenderlo.
+   */
+  const intentoRef = useRef(0);
+  const audioRef = useRef<AudioContext | null>(null);
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
   const lastScanRef = useRef<{ code: string; at: number }>({ code: '', at: 0 });
   const onScanRef = useRef(onScan);
   onScanRef.current = onScan;
@@ -45,7 +58,11 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
     try {
       const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctx) return;
-      const ctx = new Ctx();
+      // Uno solo para toda la sesión: el navegador limita cuántos puede haber,
+      // y crear uno por lectura los agotaba en un turno largo.
+      audioRef.current ??= new Ctx();
+      const ctx = audioRef.current;
+      if (ctx.state === 'suspended') void ctx.resume();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.frequency.value = 1180;
@@ -54,7 +71,6 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
       osc.connect(gain).connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.11);
-      osc.onended = () => void ctx.close();
     } catch { /* audio bloqueado hasta la primera interacción del usuario */ }
   }, []);
 
@@ -68,6 +84,9 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
   }, [feedback]);
 
   const stop = useCallback(() => {
+    intentoRef.current++;
+    zxingRef.current?.stop();
+    zxingRef.current = null;
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -80,6 +99,11 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
 
   const start = useCallback(async () => {
     if (!videoRef.current) return;
+    // Un segundo `start` sin `stop` en medio (doble toque, efecto que corre dos
+    // veces) cierra lo anterior antes de abrir otra cámara.
+    stop();
+    const intento = intentoRef.current;
+    const vigente = () => intento === intentoRef.current;
     setState('iniciando');
     setError(null);
 
@@ -92,9 +116,22 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
         },
         audio: false,
       });
+      if (!vigente() || !videoRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       streamRef.current = stream;
+      // Si la cámara se corta sola (pantalla bloqueada, otra app la tomó), se
+      // dice, en vez de dejar la última imagen congelada como si leyera.
+      stream.getVideoTracks()[0]?.addEventListener('ended', () => {
+        if (!vigente()) return;
+        stop();
+        setError('La cámara se detuvo. Tócala de nuevo para seguir escaneando.');
+        setState('error');
+      });
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
+      if (!vigente()) return;
 
       const Detector = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => { detect(s: CanvasImageSource): Promise<Array<{ rawValue: string }>> } }).BarcodeDetector;
 
@@ -102,22 +139,27 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
         setEngine('nativo');
         const detector = new Detector({ formats: FORMATS });
         const tick = async () => {
-          if (!videoRef.current || !streamRef.current) return;
+          if (!vigente() || !videoRef.current || !streamRef.current) return;
           try {
             const found = await detector.detect(videoRef.current);
             if (found.length > 0 && found[0].rawValue) emit(found[0].rawValue);
           } catch { /* un frame ilegible no es un error del sistema */ }
-          rafRef.current = requestAnimationFrame(() => void tick());
+          if (vigente()) rafRef.current = requestAnimationFrame(() => void tick());
         };
         void tick();
       } else {
         // Safari iOS y Firefox: respaldo con ZXing, cargado solo aquí.
         setEngine('zxing');
         const { BrowserMultiFormatReader } = await import('@zxing/browser');
+        if (!vigente() || !videoRef.current) return;
         const reader = new BrowserMultiFormatReader();
-        await reader.decodeFromVideoElement(videoRef.current, (result) => {
-          if (result) emit(result.getText());
+        // Antes no se guardaba el control: `stop` apagaba la cámara pero el
+        // lector seguía corriendo, y cada vez que se prendía se sumaba otro.
+        const controles = await reader.decodeFromVideoElement(videoRef.current, (result) => {
+          if (result && vigente()) emit(result.getText());
         });
+        if (!vigente()) { controles.stop(); return; }
+        zxingRef.current = controles;
       }
 
       setState('escaneando');
@@ -130,10 +172,26 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
             : !window.isSecureContext
               ? 'La cámara necesita una conexión segura (https).'
               : 'No pudimos abrir la cámara. Usa la búsqueda por nombre.';
+      if (!vigente()) return;
+      stop();
       setError(message);
       setState('error');
     }
-  }, [emit]);
+  }, [emit, stop]);
+
+  // Al bloquear la pantalla o cambiar de app, el celular corta la cámara. Al
+  // volver se reabre sola si el cajero la tenía encendida.
+  useEffect(() => {
+    const alCambiar = () => {
+      if (document.hidden) {
+        if (streamRef.current) stop();
+      } else if (enabledRef.current && !streamRef.current) {
+        void start();
+      }
+    };
+    document.addEventListener('visibilitychange', alCambiar);
+    return () => document.removeEventListener('visibilitychange', alCambiar);
+  }, [start, stop]);
 
   useEffect(() => {
     if (!enabled) stop();
