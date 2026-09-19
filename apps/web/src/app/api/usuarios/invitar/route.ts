@@ -55,7 +55,9 @@ export async function POST(request: Request) {
       role: rol,
       max_discount_pct: descuento,
     },
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/login`,
+    // A la pantalla donde el invitado crea su contraseña. Antes iba a /login,
+    // y el empleado quedaba frente a un ingreso sin clave con que entrar.
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/recuperar`,
   });
 
   if (error) {

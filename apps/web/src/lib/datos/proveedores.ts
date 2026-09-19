@@ -4,6 +4,7 @@ import { weightedAverageCost } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import { db } from '../offline/db';
+import { syncCatalog } from '../offline/catalog';
 import { repoProductos } from '../productos';
 
 /**
@@ -260,6 +261,8 @@ const repoSupabase: RepositorioProveedores = {
       })),
     });
     if (error) throw error;
+    // Lo recibido tiene que aparecer en el POS ahora, no en 10 minutos.
+    void syncCatalog().catch(() => {});
     const r = data as { receipt_id: string; total_amount: number };
     return { id: r.receipt_id, total: r.total_amount };
   },
@@ -269,6 +272,7 @@ const repoSupabase: RepositorioProveedores = {
       p_receipt_id: id, p_reason: motivo,
     });
     if (error) throw error;
+    void syncCatalog().catch(() => {});
   },
 };
 

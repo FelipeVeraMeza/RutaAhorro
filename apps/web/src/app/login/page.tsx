@@ -119,9 +119,8 @@ function LoginForm() {
           tiene cuenta falla en Supabase Auth. Una promesa que el sistema no
           cumple deja al usuario esperando un correo que nunca llega.
         */}
-        <p className="text-center text-xs text-[var(--texto-suave)] mt-6">
-          ¿Olvidaste tu contraseña? Todavía no se puede recuperar desde aquí.
-          Avísale a quien administra el sistema.
+        <p className="text-center text-sm mt-6">
+          <a href="/recuperar" className="text-marca-700 font-medium">¿Olvidaste tu contraseña?</a>
         </p>
       </div>
     </main>

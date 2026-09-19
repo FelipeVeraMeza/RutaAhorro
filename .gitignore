@@ -56,3 +56,6 @@ supabase/instalar.sql
 
 # PDF generado desde docs/cliente/resumen-sistema.html
 *.pdf
+
+# Resultados locales de los recorridos en navegador
+tools/ui/.resultado-*.json

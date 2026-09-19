@@ -13,6 +13,8 @@ import { sembrarCatalogoDemo } from '@/lib/demo/seed';
 import { enqueueSale, newClientUuid, syncQueue } from '@/lib/offline/sync';
 import type { LocalProduct } from '@/lib/offline/db';
 import { configuracionLocal, CONFIGURACION_POR_OMISION, type ConfiguracionLocal } from '@/lib/datos/configuracion';
+import { Modal } from '@/components/Modal';
+import { db } from '@/lib/offline/db';
 import { Escaner } from './Escaner';
 import { Cobro } from './Cobro';
 import { Comprobante } from './Comprobante';
@@ -23,15 +25,21 @@ type Aviso = { tipo: 'ok' | 'error' | 'info'; texto: string } | null;
 // se agregue, vuelven a entrar `role` y `maxDiscountPct` para aplicar el tope
 // por rol con `isDiscountAllowed` de @rutaahorro/core.
 export function PosClient({
-  hasOpenSession, local = '', cajero = '',
+  hasOpenSession, local = '', cajero = '', puedeForzarStock = false,
 }: {
   hasOpenSession: boolean;
+  /** Admin y supervisor pueden vender sin stock; el resto no (fn_register_sale). */
+  puedeForzarStock?: boolean;
   /** Nombre del local, para encabezar el comprobante. */
   local?: string;
   /** Quien atendió: va impreso en el comprobante. */
   cajero?: string;
 }) {
   const [lines, setLines] = useState<CartLine[]>([]);
+  const [confirmandoVaciar, setConfirmandoVaciar] = useState(false);
+  // Para leer el carrito dentro de callbacks sin volver a crearlos en cada cambio.
+  const linesRef = useRef(lines);
+  linesRef.current = lines;
   // Se arranca con los valores por omisión para no bloquear la venta mientras
   // llega la configuración: en el mostrador nadie espera a una consulta.
   const [config, setConfig] = useState<ConfiguracionLocal>(CONFIGURACION_POR_OMISION);
@@ -104,7 +112,15 @@ export function PosClient({
         stockAvailable: p.stock,
       }),
     );
-    notificar('ok', `${p.name} · ${formatCLP(p.salePrice)}`);
+    // La venta descuenta de la sala. Si lo que hay a la vista no alcanza pero
+    // queda en bodega, se avisa y se vende igual (decisión 2026-09-19).
+    const enCarro = (linesRef.current.find((l) => l.productId === p.id)?.quantity ?? 0) + qty;
+    const sala = p.stockSala ?? p.stock;
+    if (enCarro > sala && (p.stockBodega ?? 0) > 0) {
+      notificar('info', `${p.name}: en sala quedan ${Math.max(0, sala)} · hay ${p.stockBodega} en bodega, conviene reponer`);
+    } else {
+      notificar('ok', `${p.name} · ${formatCLP(p.salePrice)}`);
+    }
   }, [notificar]);
 
   const onScan = useCallback(async (code: string) => {
@@ -126,7 +142,24 @@ export function PosClient({
     return () => { active = false; };
   }, [query, versionCatalogo]);
 
-  async function confirmarVenta(payments: Array<{ method: string; amount: number; received_amount?: number }>) {
+  /**
+   * Resuelve true si la venta quedó registrada (o encolada sin conexión).
+   *
+   * Con conexión se espera la respuesta de la base ANTES de entregar el
+   * comprobante. Antes se mostraba de inmediato y se sincronizaba después: si
+   * la base la rechazaba (un vendedor que cobra algo sin stock), el cliente ya
+   * se había ido con el producto, la plata estaba en el cajón y la venta
+   * quedaba como un error en la cola del celular. El arqueo no cuadraba y nada
+   * lo explicaba. Sin conexión sigue como siempre (ADR-005).
+   */
+  async function confirmarVenta(payments: Array<{ method: string; amount: number; received_amount?: number }>): Promise<boolean> {
+    if (!puedeForzarStock) {
+      const falta = lines.find((l) => typeof l.stockAvailable === 'number' && l.quantity > l.stockAvailable);
+      if (falta) {
+        notificar('error', `No hay stock suficiente de ${falta.name}: en el local quedan ${Math.max(0, falta.stockAvailable ?? 0)}. Un supervisor puede autorizar la venta.`);
+        return false;
+      }
+    }
     const clientUuid = newClientUuid();
     const soldAt = new Date().toISOString();
 
@@ -144,6 +177,18 @@ export function PosClient({
       discountTotal: totals.discountTotal,
       total: totals.total,
     });
+
+    if (navigator.onLine) {
+      await syncQueue();
+      const fila = await db().saleQueue.get(clientUuid);
+      if (fila?.status === 'error') {
+        // No quedó registrada: se saca de la cola y el carrito se conserva
+        // para corregir y volver a cobrar.
+        await db().saleQueue.delete(clientUuid);
+        notificar('error', toUserMessage(fila.lastError ?? ''));
+        return false;
+      }
+    }
 
     // El comprobante se arma con las líneas ANTES de vaciar el carrito
     // (RF-M5-14). El folio queda en null a propósito: lo asigna la base al
@@ -167,12 +212,7 @@ export function PosClient({
     // acaba de aparecer ya es el aviso; un toast encima sería ruido.
     setLines([]);
     setCobrando(false);
-
-    if (navigator.onLine) {
-      void syncQueue().then((r) => {
-        if (r.failed > 0) notificar('error', 'Una venta no pudo sincronizarse. Revisa el indicador.');
-      });
-    }
+    return true;
   }
 
   if (!hasOpenSession) {
@@ -256,7 +296,7 @@ export function PosClient({
                       </span>
                     )}
                     <span className="block text-xs text-[var(--texto-suave)] num">
-                      Stock: {p.stock}
+                      Sala {p.stockSala ?? p.stock}{typeof p.stockBodega === 'number' && ` · Bodega ${p.stockBodega}`}
                       {p.tracksExpiry && ' · perecible'}
                     </span>
                   </span>
@@ -338,7 +378,7 @@ export function PosClient({
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => setLines([])}
+              onClick={() => setConfirmandoVaciar(true)}
               className="tap px-4 py-3.5 rounded-xl border border-[var(--borde)] text-sm font-medium"
             >
               Vaciar
@@ -358,9 +398,32 @@ export function PosClient({
           total={totals.total}
           onCancel={() => setCobrando(false)}
           onConfirm={(payments) =>
-            confirmarVenta(payments).catch((e) => notificar('error', toUserMessage(e)))
+            confirmarVenta(payments).catch((e) => { notificar('error', toUserMessage(e)); return false; })
           }
         />
+      )}
+
+      {/* Vaciar pide confirmación (RNF-19): un toque de más borraba la venta armada. */}
+      {confirmandoVaciar && (
+        <Modal titulo="¿Vaciar la venta?" encabezado="visible" onCerrar={() => setConfirmandoVaciar(false)}>
+          <div className="p-5 space-y-3">
+            <p className="text-sm">
+              Se quitan {lines.length} {lines.length === 1 ? 'producto' : 'productos'} del carrito ({formatCLP(totals.total)}).
+            </p>
+            <button
+              onClick={() => { setLines([]); setConfirmandoVaciar(false); }}
+              className="tap w-full py-3.5 rounded-xl bg-[var(--color-alerta)] text-white font-bold"
+            >
+              Sí, vaciar
+            </button>
+            <button
+              onClick={() => setConfirmandoVaciar(false)}
+              className="tap w-full py-3 rounded-xl border border-[var(--borde)]"
+            >
+              No, seguir vendiendo
+            </button>
+          </div>
+        </Modal>
       )}
 
       {comprobante && (

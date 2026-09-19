@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { formatCLP, change, parseCLP } from '@rutaahorro/core';
+import { Modal } from '@/components/Modal';
 
 type Metodo = 'efectivo' | 'debito' | 'credito' | 'transferencia';
 
@@ -28,7 +29,8 @@ export function Cobro({
 }: {
   total: number;
   onCancel: () => void;
-  onConfirm: (payments: Array<{ method: string; amount: number; received_amount?: number }>) => void;
+  /** Resuelve false si la venta no se pudo registrar: el cobro vuelve a quedar disponible. */
+  onConfirm: (payments: Array<{ method: string; amount: number; received_amount?: number }>) => Promise<boolean>;
 }) {
   const [metodo, setMetodo] = useState<Metodo>('efectivo');
   const [recibido, setRecibido] = useState('');
@@ -39,25 +41,23 @@ export function Cobro({
   const faltante = Math.max(total - montoRecibido, 0);
   const puedeConfirmar = metodo !== 'efectivo' || montoRecibido >= total;
 
-  function confirmar() {
+  async function confirmar() {
     if (!puedeConfirmar || enviando) return;
     setEnviando(true);
-    onConfirm([
+    const registrada = await onConfirm([
       metodo === 'efectivo'
         ? { method: 'efectivo', amount: total, received_amount: montoRecibido }
         : { method: metodo, amount: total },
-    ]);
+    ]).catch(() => false);
+    if (!registrada) setEnviando(false);
   }
 
+  // Con <Modal> y no un diálogo hecho a mano: Escape cierra, el foco queda
+  // adentro y vuelve al salir (regla 10). Mientras se registra, no se cierra:
+  // cancelar a medias no cancela la venta en la base.
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end" role="dialog" aria-modal="true" aria-label="Cobrar">
-      <div className="w-full bg-white rounded-t-2xl p-4 pb-6" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold">Cobrar</h2>
-          <button onClick={onCancel} className="tap px-3 text-sm text-[var(--texto-suave)]">
-            Cancelar
-          </button>
-        </div>
+    <Modal titulo="Cobrar" encabezado="visible" onCerrar={onCancel} bloqueado={enviando}>
+      <div className="p-4 pb-6">
 
         <p className="text-center num text-3xl font-bold mb-4">{formatCLP(total)}</p>
 
@@ -133,6 +133,6 @@ export function Cobro({
           {enviando ? 'Registrando…' : 'Confirmar venta'}
         </button>
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -57,7 +57,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthRoute) {
+  // Solo /login devuelve al POS a quien ya tiene sesión. /recuperar no: el
+  // enlace de una invitación o de recuperación trae una sesión nueva en la
+  // URL, y redirigir la perdería.
+  if (user && path.startsWith('/login')) {
     const url = request.nextUrl.clone();
     url.pathname = '/pos';
     url.search = '';

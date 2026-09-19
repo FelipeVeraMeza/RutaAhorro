@@ -37,6 +37,7 @@ export default async function PosPage() {
       hasOpenSession={Boolean(session)}
       local={tenant?.name ?? ''}
       cajero={user!.fullName}
+      puedeForzarStock={user!.role === 'admin' || user!.role === 'supervisor'}
     />
   );
 }

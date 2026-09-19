@@ -80,6 +80,86 @@ export function CajaClient({
     return true;
   }
 
+  // El diálogo de cierre forzado se arma una vez y se muestra en las dos vistas.
+  // Antes solo existía en la vista de "caja abierta": un administrador sin su
+  // propia caja abierta —el caso normal cuando viene a cerrar la de otro— veía
+  // el botón "Cerrarla" y no pasaba nada. Encontrado con tools/ui/m6-caja.mjs.
+  const dialogoForzar = forzando && (
+    <Modal
+      titulo={`Cerrar la caja de ${forzando.full_name ?? 'otro usuario'}`}
+      encabezado="visible"
+      onCerrar={() => setForzando(null)}
+      bloqueado={cargando}
+    >
+      <div className="p-5 space-y-3">
+        <p className="text-sm">
+          Abierta el {fecha(forzando.opened_at)} a las {hora(forzando.opened_at)}
+          {/* sin punto: la hora ya termina en "p. m." y quedaba "p. m.." */}
+          {typeof forzando.expected_amount === 'number' && (
+            <> Debería haber <strong className="num">{formatCLP(forzando.expected_amount)}</strong> en
+            efectivo.</>
+          )}
+        </p>
+        <p className="text-xs text-[var(--texto-suave)]">
+          Cuenta el efectivo que hay ahora. El cierre queda a tu nombre y con tu
+          explicación: quien abrió la caja no está para contarla, así que la diferencia
+          tiene que poder justificarse después.
+        </p>
+
+        <Campo
+          etiqueta="Efectivo contado"
+          error={contadoAjeno.trim() !== '' && !contAjeno.valido ? contAjeno.error : null}
+        >
+          {(props) => (
+            <input
+              {...props}
+              inputMode="numeric" value={contadoAjeno}
+              onChange={(e) => setContadoAjeno(e.target.value)}
+              className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] num text-right text-lg"
+              autoFocus
+            />
+          )}
+        </Campo>
+
+        <Campo etiqueta="Por qué la cierras tú" ayuda="Queda en el cierre.">
+          {(props) => (
+            <input
+              {...props}
+              value={notaAjena} onChange={(e) => setNotaAjena(e.target.value)}
+              placeholder="Quedó abierta de ayer"
+              className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)]"
+            />
+          )}
+        </Campo>
+
+        <div className="space-y-2 pt-1">
+          <button
+            disabled={cargando || !contAjeno.valido || notaAjena.trim() === ''}
+            onClick={async () => {
+              const ok = await accion(() =>
+                supabase().rpc('fn_close_cash_session', {
+                  p_session_id: forzando.session_id,
+                  p_counted_amount: contAjeno.valor,
+                  p_notes: notaAjena.trim(),
+                }),
+              );
+              if (ok) setForzando(null);
+            }}
+            className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50"
+          >
+            {cargando ? 'Cerrando…' : 'Cerrar esa caja'}
+          </button>
+          <button
+            onClick={() => setForzando(null)} disabled={cargando}
+            className="tap w-full py-3 rounded-xl border border-[var(--borde)] disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+
   // ---------------------------------------------------------------- abrir
   if (!session) {
     return (
@@ -127,6 +207,7 @@ export function CajaClient({
           }} />
         )}
         {historial.length > 0 && <Historial cierres={historial} />}
+        {dialogoForzar}
       </div>
     );
   }
@@ -389,80 +470,7 @@ export function CajaClient({
       )}
       {historial.length > 0 && <Historial cierres={historial} />}
 
-      {forzando && (
-        <Modal
-          titulo={`Cerrar la caja de ${forzando.full_name ?? 'otro usuario'}`}
-          encabezado="visible"
-          onCerrar={() => setForzando(null)}
-          bloqueado={cargando}
-        >
-          <div className="p-5 space-y-3">
-            <p className="text-sm">
-              Abierta el {fecha(forzando.opened_at)} a las {hora(forzando.opened_at)}.
-              {typeof forzando.expected_amount === 'number' && (
-                <> Debería haber <strong className="num">{formatCLP(forzando.expected_amount)}</strong> en
-                efectivo.</>
-              )}
-            </p>
-            <p className="text-xs text-[var(--texto-suave)]">
-              Cuenta el efectivo que hay ahora. El cierre queda a tu nombre y con tu
-              explicación: quien abrió la caja no está para contarla, así que la diferencia
-              tiene que poder justificarse después.
-            </p>
-
-            <Campo
-              etiqueta="Efectivo contado"
-              error={contadoAjeno.trim() !== '' && !contAjeno.valido ? contAjeno.error : null}
-            >
-              {(props) => (
-                <input
-                  {...props}
-                  inputMode="numeric" value={contadoAjeno}
-                  onChange={(e) => setContadoAjeno(e.target.value)}
-                  className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] num text-right text-lg"
-                  autoFocus
-                />
-              )}
-            </Campo>
-
-            <Campo etiqueta="Por qué la cierras tú" ayuda="Queda en el cierre.">
-              {(props) => (
-                <input
-                  {...props}
-                  value={notaAjena} onChange={(e) => setNotaAjena(e.target.value)}
-                  placeholder="Quedó abierta de ayer"
-                  className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)]"
-                />
-              )}
-            </Campo>
-
-            <div className="space-y-2 pt-1">
-              <button
-                disabled={cargando || !contAjeno.valido || notaAjena.trim() === ''}
-                onClick={async () => {
-                  const ok = await accion(() =>
-                    supabase().rpc('fn_close_cash_session', {
-                      p_session_id: forzando.session_id,
-                      p_counted_amount: contAjeno.valor,
-                      p_notes: notaAjena.trim(),
-                    }),
-                  );
-                  if (ok) setForzando(null);
-                }}
-                className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50"
-              >
-                {cargando ? 'Cerrando…' : 'Cerrar esa caja'}
-              </button>
-              <button
-                onClick={() => setForzando(null)} disabled={cargando}
-                className="tap w-full py-3 rounded-xl border border-[var(--borde)] disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {dialogoForzar}
     </div>
   );
 }
