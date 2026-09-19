@@ -77,23 +77,26 @@ Si tocas `packages/core`, recompílalo antes de compilar la web:
 **300 pruebas de lógica · 36 contra PostgreSQL real · typecheck limpio · SQL
 validado · build de producción con demo apagado · 13 rutas.**
 
-### Dónde quedó la primera venta real — BLOQUEADA en una contraseña
+### La base real está instalada y la primera venta se hizo — 2026-09-19
 
-La meta del 2026-09-19 era hacer la primera venta contra la base real. **No se
-pudo**, y no por código: el proyecto de Supabase (`amlvspbmnhtvzuqiteqe`)
-**no tiene ninguna tabla** (verificado), y `DATABASE_URL` en `.env.local`
-tiene la contraseña de ejemplo. La llave de servicio no sirve para crear
-tablas. Todo lo demás está listo y probado contra PostgreSQL local:
+- **Esquema instalado** en Supabase (`amlvspbmnhtvzuqiteqe`) con
+  `npm run db:aplicar -- --aplicar`, y verificado: RLS en todo, 17 funciones
+  expuestas, anon sin acceso.
+- **`npm run db:e2e`: 24/24 contra la base real.** Primera venta (folio 1,
+  $3.000, vuelto $2.000, IVA $479), reenvío sin duplicar, anulación con stock
+  devuelto, cierre de caja que cuadra, y todos los ataques rechazados salvo
+  T-45 (un vendedor lee costos). Corre en un local aparte, **"QA · pruebas
+  internas"**, que no se mezcla con el del cliente.
+- **Administrador creado** en el local "RutaAhorro" (el correo de Felipe).
+- **`NEXT_PUBLIC_DEMO=false`** en `.env.local`: la app ya lee la base real.
+- **Puerto 3001 en local**: el 3000 lo ocupa otro proyecto de Felipe (VSV).
+  Levantar con `cd apps/web && npx next dev -p 3001`. `NEXT_PUBLIC_APP_URL`
+  apunta ahí porque las invitaciones de usuario arman el enlace con esa URL.
+- **Pendiente B-09:** la contraseña de la base y la llave secreta pasaron por un
+  chat para poder instalar. Rotarlas.
 
-```bash
-# 1. Felipe pone la contraseña real de la base en DATABASE_URL (.env.local).
-#    Supabase > Project Settings > Database > Connection string. No pegarla en un chat.
-npm run db:aplicar -- --aplicar      # instala y verifica
-npm run db:e2e                       # primera venta de punta a punta + ataques
-npm run db:admin -- --correo=… --nombre="…"   # el dueño
-# 2. NEXT_PUBLIC_DEMO=false en .env.local, npm run dev, entrar como el dueño,
-#    cargar productos reales y vender desde la pantalla.
-```
+Lo siguiente es que Felipe entre, cargue productos reales y venda desde la
+pantalla, y B-03 (desplegar en Railway).
 
 ### ¿Queda algo escrito a mano? — la respuesta honesta
 

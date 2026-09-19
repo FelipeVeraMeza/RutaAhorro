@@ -57,14 +57,15 @@ semana que se suma al final del proyecto.
 
 | # | Tarea | Quién | Bloquea a |
 |---|---|---|---|
-| **B-01** | **Aplicar el esquema en Supabase.** Poner la contraseña real de la base en `DATABASE_URL` de `.env.local` y correr `npm run db:aplicar -- --aplicar`: instala y verifica. Después `npm run db:e2e` hace la primera venta de punta a punta contra la base real | Felipe (la contraseña) | **Todo.** Hoy el sistema corre contra IndexedDB. Verificado el 2026-09-18: el proyecto de Supabase no tiene ninguna tabla |
-| **B-02** | Crear el primer administrador: `npm run db:admin -- --correo=… --nombre="…"` | Felipe | Entrar al sistema real |
+| ~~B-01~~ | ~~Aplicar el esquema en Supabase~~ | — | **Hecho el 2026-09-19** con `npm run db:aplicar -- --aplicar`: RLS en todas las tablas, 17 funciones expuestas (las esperadas), anon sin acceso. `npm run db:e2e` pasó **24/24** contra la base real: primera venta (folio 1), anulación, cierre que cuadra y todos los ataques rechazados salvo T-45 |
+| ~~B-02~~ | ~~Crear el primer administrador~~ | — | **Hecho el 2026-09-19** en el local "RutaAhorro" |
 | **B-03** | Desplegar en Railway con `NEXT_PUBLIC_DEMO=false` y `PORT=8080` | Felipe | Que el cliente vea algo |
 | **B-04** | **Certificado digital de firma electrónica** | Cliente | F6 completa. Es la ruta crítica |
 | **B-05** | **Enrolamiento como emisor electrónico en sii.cl** | Cliente | F6 completa |
 | **B-06** | Elegir proveedor de DTE (P-27) | Felipe + cliente | Todo el diseño de F6 |
 | **B-07** | Probar una etiqueta EAN-13 impresa contra el lector real | Felipe | Cerrar RF-M2-13 con evidencia |
 | **B-08** | Decidir si el repositorio es público o privado (P-13) | Felipe | Si es público, rotar las llaves de Supabase |
+| **B-09** | **Rotar la contraseña de la base y la llave secreta de Supabase** | Felipe | El 2026-09-19 se escribieron en un chat para poder instalar. No están en el repositorio (`.env.local` está en `.gitignore`), pero una credencial que pasó por un chat se da por expuesta |
 
 > **Sobre B-04 y B-05:** son trámites con plazos que no controlamos. Conviene
 > empezarlos **ahora**, en paralelo al desarrollo de F5, y no cuando el código
