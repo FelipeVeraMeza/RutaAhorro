@@ -110,6 +110,10 @@ quien las hizo, cámara que no se pega, y la maqueta que ya no descarta ventas.
 
 ### Cerrados el 2026-09-19 (tarde)
 
+La base quedó **limpia y lista para mostrar** (`npm run db:limpiar`): un local,
+una tienda, un usuario y nada más. El respaldo de lo borrado queda en la
+carpeta del usuario.
+
 G-1 a G-10 de [21](21-qa-pantallas.md) §0e, encontrados recorriendo cada
 requerimiento en el navegador. Además **T-04** (recuperar contraseña) queda
 hecho, y el **stock en bodega y sala** (M4-13) que pidió el cliente.

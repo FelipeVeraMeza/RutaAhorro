@@ -25,6 +25,7 @@
     "db:instalar": "node tools/sql-check/instalar.js",
     "db:admin": "node tools/crear-admin.mjs",
     "db:aplicar": "node tools/aplicar-esquema.mjs",
+    "db:limpiar": "node tools/limpiar-base.mjs",
     "db:e2e": "node tools/venta-real.mjs",
     "build:web": "npm run build -w @rutaahorro/core && npm run build -w @rutaahorro/web"
   },
