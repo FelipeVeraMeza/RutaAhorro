@@ -32,8 +32,10 @@ function morir(mensaje) {
 
 const url = process.env.DATABASE_URL;
 if (!url) morir('Falta DATABASE_URL en .env.local');
-const clave = decodeURIComponent(url.replace(/^[^:]+:\/\/[^:]+:/, '').split('@')[0] ?? '');
-if (!clave || /YOUR|PASSWORD|\[|\]|<|>/i.test(clave)) {
+const clave = url.replace(/^[^:]+:\/\/[^:]+:/, '').replace(/@[^@]*$/, '');
+// Solo el texto de ejemplo literal: una contraseña real puede tener cualquier
+// símbolo, y la primera versión rechazaba algunas válidas.
+if (!clave || /^\[?YOUR[-_ ]?PASSWORD\]?$/i.test(clave)) {
   morir('DATABASE_URL todavía tiene la contraseña de ejemplo.\n' +
     '  Supabase > Project Settings > Database > Connection string, y reemplázala en .env.local.\n' +
     '  No la pegues en un chat: basta con que esté en el archivo.');
@@ -49,14 +51,27 @@ const RPC_PERMITIDAS = [
   'fn_update_product', 'fn_void_receipt', 'fn_void_sale', 'fn_write_off_lot',
 ].sort();
 
-const local = ['localhost', '127.0.0.1'].includes(new URL(url).hostname);
-const db = new pg.Client({ connectionString: url, ssl: local ? false : { rejectUnauthorized: false } });
+// Se arma por partes y no con `connectionString`: una contraseña con `#`, `@`,
+// `/` o `%` sin codificar rompe el análisis de la URL y la base recibe otra
+// contraseña. Supabase las genera con símbolos, y pegarlas tal cual es lo
+// natural. La contraseña es todo lo que hay entre el primer `:` después del
+// usuario y el último `@`.
+const partes = url.match(/^\w+:\/\/([^:]+):(.*)@([^@:/]+)(?::(\d+))?\/([^?]*)/);
+if (!partes) morir('DATABASE_URL no tiene la forma postgresql://usuario:clave@servidor:puerto/base');
+const [, usuario, claveCruda, host, puerto, base] = partes;
+let password = claveCruda;
+try { if (/%[0-9a-f]{2}/i.test(claveCruda)) password = decodeURIComponent(claveCruda); } catch { /* se usa tal cual */ }
+const local = ['localhost', '127.0.0.1'].includes(host);
+const db = new pg.Client({
+  user: usuario, password, host, port: Number(puerto ?? 5432), database: base || 'postgres',
+  ssl: local ? false : { rejectUnauthorized: false },
+});
 await db.connect().catch((e) => morir(`No se pudo conectar: ${e.message}`));
 
 const existe = async (tabla) =>
   (await db.query(`select to_regclass($1) is not null as ok`, [`public.${tabla}`])).rows[0].ok;
 
-console.log(`\nBase: ${new URL(url).host}`);
+console.log(`\nBase: ${host}`);
 console.log(`Esquema instalado: ${(await existe('tenants')) ? 'sí' : 'no'}`);
 
 if (aplicar) {
