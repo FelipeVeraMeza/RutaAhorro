@@ -59,38 +59,14 @@ export default async function DashboardPage() {
     // El día del local, con la zona de su configuración: la misma con que
     // v_sales_daily agrupa desde 0013. Si no se pudiera leer, se usa la de
     // omisión y la vista hace lo mismo, así que los dos lados coinciden.
-    const { data: local } = await client.from('tenants').select('settings').eq('id', user!.tenantId).maybeSingle();
-    const hoy = diaLocal(new Date(), desdeSettings(local?.settings).zonaHoraria);
-
-    // Antes esta
-    // pantalla armaba el rango a mano con el desfase -03:00 escrito fijo, y
-    // Chile está en -04:00 medio año: en invierno el "día de hoy" empezaba a
-    // las 23:00 de ayer y terminaba a las 22:59, así que lo vendido después de
-    // las 23:00 aparecía al día siguiente. Además traía todas las ventas del
-    // día para sumarlas acá, anuladas incluidas.
-    const { data: dia, error: eVentas } = await client
-      .from('v_sales_daily')
-      .select('sales_count, total_amount, average_ticket')
-      .eq('sale_date', hoy)
-      .maybeSingle();
-    if (eVentas) fallaron.push('las ventas del día');
-    total = Number(dia?.total_amount ?? 0);
-    cantidadVentas = Number(dia?.sales_count ?? 0);
-    ticket = Number(dia?.average_ticket ?? 0);
-
-    // Ordenado por lo que más falta. Sin `order by`, PostgreSQL devuelve las
-    // ocho filas que quiera: el dueño veía ocho productos bajo mínimo que no
-    // eran los ocho más urgentes, y cambiaban de una recarga a otra.
-    const { data: low, error: eLow, count: totalLow } = await client
+    // Bajo mínimo y vencimientos no dependen del día: salen en paralelo con
+    // la configuración, y las ventas del día apenas se sabe qué día es.
+    const pBajos = client
       .from('v_low_stock')
       .select('product_id, name, quantity, min_stock, unit', { count: 'exact' })
       .order('shortfall', { ascending: false })
       .limit(TOPE_PANEL);
-    if (eLow) fallaron.push('los productos bajo mínimo');
-    bajoStock = (low ?? []) as unknown as FilaBajoStock[];
-    masBajoStock = Math.max(0, (totalLow ?? bajoStock.length) - bajoStock.length);
-
-    const { data: exp, error: eExp, count: totalExp } = await client
+    const pVence = client
       .from('v_expiring_lots')
       .select(
         'lot_id, product_name, quantity, value_at_risk, expiry_status, days_to_expiry, unit',
@@ -99,6 +75,38 @@ export default async function DashboardPage() {
       .in('expiry_status', ['vencido', 'por_vencer'])
       .order('days_to_expiry', { ascending: true })
       .limit(TOPE_PANEL);
+    const pVentas = (async () => {
+      const { data: local } = await client.from('tenants').select('settings').eq('id', user!.tenantId).maybeSingle();
+      const hoy = diaLocal(new Date(), desdeSettings(local?.settings).zonaHoraria);
+      return client
+        .from('v_sales_daily')
+        .select('sales_count, total_amount, average_ticket')
+        .eq('sale_date', hoy)
+        .maybeSingle();
+    })();
+    const [rVentas, rBajos, rVence] = await Promise.all([pVentas, pBajos, pVence]);
+
+    // Antes esta
+    // pantalla armaba el rango a mano con el desfase -03:00 escrito fijo, y
+    // Chile está en -04:00 medio año: en invierno el "día de hoy" empezaba a
+    // las 23:00 de ayer y terminaba a las 22:59, así que lo vendido después de
+    // las 23:00 aparecía al día siguiente. Además traía todas las ventas del
+    // día para sumarlas acá, anuladas incluidas.
+    const { data: dia, error: eVentas } = rVentas;
+    if (eVentas) fallaron.push('las ventas del día');
+    total = Number(dia?.total_amount ?? 0);
+    cantidadVentas = Number(dia?.sales_count ?? 0);
+    ticket = Number(dia?.average_ticket ?? 0);
+
+    // Ordenado por lo que más falta. Sin `order by`, PostgreSQL devuelve las
+    // ocho filas que quiera: el dueño veía ocho productos bajo mínimo que no
+    // eran los ocho más urgentes, y cambiaban de una recarga a otra.
+    const { data: low, error: eLow, count: totalLow } = rBajos;
+    if (eLow) fallaron.push('los productos bajo mínimo');
+    bajoStock = (low ?? []) as unknown as FilaBajoStock[];
+    masBajoStock = Math.max(0, (totalLow ?? bajoStock.length) - bajoStock.length);
+
+    const { data: exp, error: eExp, count: totalExp } = rVence;
     if (eExp) fallaron.push('los vencimientos');
     porVencer = (exp ?? []) as unknown as FilaVencimiento[];
     masPorVencer = Math.max(0, (totalExp ?? porVencer.length) - porVencer.length);

@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { cache } from 'react';
 import { DEMO_ACTIVO, DEMO_COOKIE, esRolValido, usuarioDemo } from '../demo';
 
 /**
@@ -82,8 +83,14 @@ async function marcarActividad(
   }
 }
 
-/** Perfil del usuario autenticado, o null si no hay sesión o está desactivado. */
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+/**
+ * Perfil del usuario autenticado, o null si no hay sesión o está desactivado.
+ *
+ * Memorizado por petición con `cache`: el layout y la página lo pedían cada
+ * uno por su lado, y cada llamada son dos viajes a Supabase (sesión y perfil).
+ * Con la base en Canadá eran ~1,2 s de espera en cada pantalla solo en esto.
+ */
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   // MODO DEMO: devuelve un usuario ficticio sin consultar Supabase.
   // Ver src/lib/demo/index.ts — solo se activa con NEXT_PUBLIC_DEMO=true.
   if (DEMO_ACTIVO) {
@@ -106,7 +113,8 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   // Ver supabase/seed.sql para el procedimiento de vinculación.
   if (!profile) return null;
 
-  await marcarActividad(client, user.id, profile.last_seen_at as string | null);
+  // Sin await: anotar la hora no debe hacer esperar a la pantalla.
+  void marcarActividad(client, user.id, profile.last_seen_at as string | null);
 
   return {
     id: user.id,
@@ -118,4 +126,4 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     maxDiscountPct: Number(profile.max_discount_pct ?? 0),
     isActive: profile.is_active,
   };
-}
+});

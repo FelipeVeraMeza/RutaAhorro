@@ -90,7 +90,13 @@ validado · build de producción con demo apagado · 13 rutas.**
 - **Administrador creado** en el local "RutaAhorro" (el correo de Felipe).
 - **`NEXT_PUBLIC_DEMO=false`** en `.env.local`: la app ya lee la base real.
 - **Puerto 3001 en local**: el 3000 lo ocupa otro proyecto de Felipe (VSV).
-  Levantar con `cd apps/web && npx next dev -p 3001`. `NEXT_PUBLIC_APP_URL`
+  **Para usar la app, compilada** (`npm run build:web`, después
+  `cd apps/web && npx next start -p 3001`): en modo desarrollo cada pantalla
+  se compila la primera vez que se abre y tardaba 5 a 12 s. Compilada, 0,8 a
+  1,5 s. Lo que queda es distancia: el servidor en Chile hace ~4 consultas en
+  fila a Supabase en Canadá (~250 ms c/u). En Railway (EE. UU.) serán ~20 ms
+  c/u. **No cambiar la región de la base**: São Paulo mejora el local pero
+  empeora producción, porque Railway no tiene región en Sudamérica. `NEXT_PUBLIC_APP_URL`
   apunta ahí porque las invitaciones de usuario arman el enlace con esa URL.
 - **Pendiente B-09:** la contraseña de la base y la llave secreta pasaron por un
   chat para poder instalar. Rotarlas.

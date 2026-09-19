@@ -45,41 +45,44 @@ export default async function CajaPage() {
   let resumen: Record<string, unknown> | null = null;
   let movimientos: Array<{ id: string; type: string; amount: number; reason: string; created_at: string }> = [];
 
-  if (session) {
-    const { data } = await client.rpc('fn_cash_session_summary', { p_session_id: session.id });
-    resumen = (data as Record<string, unknown>) ?? null;
-
-    const { data: movs } = await client
-      .from('cash_movements')
-      .select('id, type, amount, reason, created_at')
-      .eq('cash_session_id', session.id)
-      .order('created_at', { ascending: false });
-    movimientos = movs ?? [];
-  }
-
-  // Historial de cierres: solo para quien puede verlo (matriz de permisos)
+  // Todo lo que sigue depende solo de la sesión y del rol: va en paralelo.
+  // En fila eran cuatro viajes a Supabase uno tras otro.
   const puedeVerHistorial = user!.role === 'admin' || user!.role === 'supervisor';
-  const { data: historial } = puedeVerHistorial
-    ? await client
+  const sinFilas = Promise.resolve({ data: [] as never[] });
+  const [rResumen, rMovs, { data: historial }, { data: ajenas }] = await Promise.all([
+    session ? client.rpc('fn_cash_session_summary', { p_session_id: session.id }) : Promise.resolve({ data: null }),
+    session
+      ? client
+          .from('cash_movements')
+          .select('id, type, amount, reason, created_at')
+          .eq('cash_session_id', session.id)
+          .order('created_at', { ascending: false })
+      : sinFilas,
+    // Historial de cierres: solo para quien puede verlo (matriz de permisos)
+    puedeVerHistorial
+    ? client
         .from('v_cash_sessions_summary')
         .select('session_id, full_name, opened_at, closed_at, difference, sales_total, status')
         .eq('status', 'cerrada')
         .order('closed_at', { ascending: false })
         .limit(10)
-    : { data: [] };
+    : sinFilas,
 
   // Cajas que otro dejó abiertas (RF-M6-10). fn_close_cash_session ya deja que
   // un admin o supervisor las cierre; lo que faltaba era poder verlas. Una
   // caja abierta de ayer impide que su dueño abra la de hoy, y la única salida
   // era el panel de Supabase.
-  const { data: ajenas } = puedeVerHistorial
-    ? await client
+    puedeVerHistorial
+    ? client
         .from('v_cash_sessions_summary')
         .select('session_id, full_name, opened_at, sales_total, expected_amount, user_id, status')
         .eq('status', 'abierta')
         .neq('user_id', user!.id)
         .order('opened_at')
-    : { data: [] };
+    : sinFilas,
+  ]);
+  resumen = (rResumen.data as Record<string, unknown>) ?? null;
+  movimientos = (rMovs.data ?? []) as typeof movimientos;
 
   return (
     <CajaClient

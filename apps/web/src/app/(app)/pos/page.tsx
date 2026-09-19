@@ -15,21 +15,22 @@ export default async function PosPage() {
   const client = await createClient();
 
   // ¿Tiene caja abierta? Sin caja no se puede vender (RF-M5-16).
-  const { data: session } = await client
+  // Las dos consultas no dependen una de la otra: van en paralelo.
+  const [{ data: session }, { data: tenant }] = await Promise.all([client
     .from('cash_sessions')
     .select('id, opened_at, opening_amount')
     .eq('user_id', user!.id)
     .eq('status', 'abierta')
-    .maybeSingle();
+    .maybeSingle(),
 
   // Nombre del local para encabezar el comprobante (RF-M5-14). Si la consulta
   // falla, el comprobante sale sin encabezado: no vale la pena impedir una
   // venta por un nombre.
-  const { data: tenant } = await client
+  client
     .from('tenants')
     .select('name')
     .eq('id', user!.tenantId)
-    .maybeSingle();
+    .maybeSingle()]);
 
   return (
     <PosClient
