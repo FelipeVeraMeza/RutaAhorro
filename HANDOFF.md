@@ -58,6 +58,7 @@ datos de ejemplo en IndexedDB y un banner amarillo con selector de rol.
 | `npm test` | 300 pruebas de lógica de negocio |
 | `npm run db:test` | 36 pruebas contra un **PostgreSQL real** en UTC, como Supabase: concurrencia, ataques por rol, zona horaria, instalador (~40 s, sin Docker) |
 | `npm run db:aplicar` | Diagnostica la base real. Con `-- --aplicar` instala `instalar.sql` y **verifica** RLS, funciones expuestas y políticas. Necesita la contraseña real en `DATABASE_URL` |
+| `npm run db:limpiar` | Respalda y dice qué borraría. Con `-- --si-borrar-todo` deja la base **de cero** y reinstala: es lo que hay que correr antes de mostrarle el sistema al cliente, porque los recorridos de QA dejan datos |
 | `npm run db:e2e` | **La primera venta real**, de punta a punta contra Supabase, como la hace la app: producto, recepción, caja, venta con vuelto, reenvío, anulación, cierre que cuadra. Más los ataques de seguridad contra la base real (T-46). Corre en un local aparte, "QA · pruebas internas" |
 | `npm run typecheck` | Tipos en los tres paquetes |
 | `npm run db:check` | Valida el SQL con el parser de PostgreSQL |
@@ -103,6 +104,25 @@ validado · build de producción con demo apagado · 13 rutas.**
 
 Lo siguiente es que Felipe entre, cargue productos reales y venda desde la
 pantalla, y B-03 (desplegar en Railway).
+
+### La base está limpia y lista para mostrar — 2026-09-19, última acción
+
+`npm run db:limpiar -- --si-borrar-todo` dejó la base de cero y la reinstaló.
+Hoy tiene **un local (RutaAhorro), una tienda, un usuario y nada más**: cero
+productos, ventas, cajas y movimientos. El respaldo de lo anterior (244 filas y
+7 usuarios) quedó en la carpeta del usuario, `respaldo-rutaahorro-2026-09-19`.
+
+| | |
+|---|---|
+| Entrar | http://localhost:3001 (el 3000 lo ocupa otro proyecto de Felipe) |
+| Usuario | `admin@gmail.com` con `admin123` — **cambiar antes de que la use el cliente** |
+| Levantar | `npm run build:web`, después `cd apps/web && npx next start -p 3001` |
+
+> **Ojo:** los recorridos de `tools/ui/` crean el local "QA · pruebas internas"
+> con productos y ventas de prueba en esta misma base. Están aislados por RLS y
+> el cliente no los ve, pero antes de una demostración conviene volver a correr
+> `db:limpiar` y luego `db:admin`. Lo correcto a futuro es un proyecto de
+> Supabase aparte para QA: es **T-51**.
 
 ### Recorridos en navegador, por requerimiento — 2026-09-19 (tarde)
 
