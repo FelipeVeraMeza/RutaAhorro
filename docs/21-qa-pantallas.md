@@ -1,6 +1,6 @@
 # 21 — Auditoría de pantallas (QA)
 
-**Primera pasada:** 2026-09-15 · **Segunda:** 2026-09-16 · **Tercera:** 2026-09-17 · **Cuarta (esquema ejecutado):** 2026-09-18 · **Quinta (primera venta y fechas):** 2026-09-19
+**Primera pasada:** 2026-09-15 · **Segunda:** 2026-09-16 · **Tercera:** 2026-09-17 · **Cuarta (esquema ejecutado):** 2026-09-18 · **Quinta (primera venta y fechas):** 2026-09-19 · **Sexta (navegador, por requerimiento):** 2026-09-19
 **Método:** lectura del código de cada pantalla, contrastada contra
 [17](17-inventario-alcance.md) y [03](03-requerimientos-funcionales.md).
 
@@ -289,6 +289,43 @@ y la cámara que se pegaba hasta apagarla y prenderla.
 > (IndexedDB, cámara), y la web no tiene pruebas de ese tipo. Pasan typecheck y
 > el build de producción, pero no hay una prueba que falle si se rompen. Es
 > T-48.
+
+## 0e. Sexta pasada · cada requerimiento en el navegador — 2026-09-19
+
+Con la base real instalada, cada módulo se recorre en Edge como lo usaría la
+persona (vendedor en pantalla de celular, administrador en escritorio), contra
+Supabase, en un local aparte "QA · pruebas internas". Los recorridos quedan en
+`tools/ui/` y se vuelven a correr con `node tools/ui/<modulo>.mjs`.
+
+| Recorrido | Resultado |
+|---|---|
+| `m1-usuarios.mjs` | 20/20 |
+| `bodega-sala.mjs` | 7/7 |
+| `m5-vender.mjs` | 17/17 |
+| `m6-caja.mjs` | 13/13 |
+
+Lo que encontró. **Todo figuraba ✅ en la documentación**, salvo lo marcado:
+
+| # | Hallazgo | Daño | Estado |
+|---|---|---|---|
+| **G-1** | **La búsqueda por nombre del POS nunca funcionó.** Filtraba con `where('isActive').equals(1)`; `isActive` se guarda como `true` e IndexedDB no indexa booleanos. Devolvía vacío sin error | Solo se podía vender escaneando | ✅ |
+| **G-2** | **Un empleado invitado nunca podía crear su contraseña.** La invitación llevaba a `/login` y no existía pantalla para crearla | Nadie invitado podía entrar | ✅ `/recuperar` |
+| **G-3** | **Cerrar sesión sacaba a todos los dispositivos** del usuario (`signOut()` es global por omisión) | El dueño salía en el computador y el celular de la caja quedaba fuera | ✅ `scope: 'local'` |
+| **G-4** | **Recuperar contraseña no existía** (M1-05 figuraba ⬜) | El dueño tenía que entrar a Supabase | ✅ |
+| **G-5** | **Se cobraba y la venta no quedaba registrada.** El POS entregaba el comprobante antes de que la base respondiera; si la rechazaba (vendedor sin stock), la venta quedaba como error en el celular | Plata en el cajón sin venta que la explique | ✅ Con conexión se espera a la base; el vendedor se entera antes de cobrar |
+| **G-6** | **Un administrador sin caja propia no podía cerrar la caja de otro.** El diálogo solo existía en la vista de caja abierta; "Cerrarla" no hacía nada | T-08 figuraba hecho | ✅ |
+| **G-7** | **"Vaciar" borraba la venta armada sin preguntar** (RNF-19) | Un toque de más | ✅ |
+| **G-8** | **El cobro era un diálogo hecho a mano**: sin Escape, sin foco atrapado (regla 10) | | ✅ `<Modal>` |
+| **G-9** | **El catálogo del POS se actualizaba cada 10 minutos**: un producto recién creado, una recepción o una reposición no se veían al vender | | ✅ Se sincroniza al entrar a Vender y tras cada cambio |
+| **G-10** | **Stock por ubicación (M4-13, figuraba ⬜)**: no había forma de saber cuánto quedaba en la sala | | ✅ Bodega y sala, migración 0014 |
+
+> **Pendiente de confirmar en un celular real:** la cámara (F-6). Todo lo demás
+> se probó en Edge con pantalla de celular y modo táctil.
+>
+> **Correos de invitación y recuperación:** el servicio de correo gratuito de
+> Supabase solo envía a los miembros del equipo del proyecto y pocas veces por
+> hora. Para empleados reales hay que conectar un SMTP (hay llave de Resend en
+> `.env.local`). Es configuración del panel de Supabase.
 
 ## 1. Hallazgos transversales
 

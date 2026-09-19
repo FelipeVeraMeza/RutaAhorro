@@ -104,6 +104,34 @@ validado · build de producción con demo apagado · 13 rutas.**
 Lo siguiente es que Felipe entre, cargue productos reales y venda desde la
 pantalla, y B-03 (desplegar en Railway).
 
+### Recorridos en navegador, por requerimiento — 2026-09-19 (tarde)
+
+Con la base real, cada módulo se prueba en Edge como lo usaría la persona. Los
+scripts están en `tools/ui/` (usan el Edge instalado con `playwright-core`, sin
+descargar navegadores) y corren contra `http://localhost:3001` y el local
+"QA · pruebas internas":
+
+```bash
+cd apps/web && npx next start -p 3001      # la app compilada, en otra terminal
+node tools/ui/m1-usuarios.mjs              # 20/20
+node tools/ui/bodega-sala.mjs              # 7/7
+node tools/ui/m5-vender.mjs                # 17/17
+node tools/ui/m6-caja.mjs                  # 13/13
+```
+
+Encontraron diez defectos (G-1 a G-10 en `docs/21` §0e), casi todos en
+requerimientos marcados ✅. Los peores: la búsqueda del POS nunca funcionó, un
+empleado invitado no podía crear contraseña, cerrar sesión sacaba a todos los
+dispositivos, y **se podía cobrar sin que la venta quedara registrada**.
+
+**Bodega y sala** (pedido del cliente, M4-13): lo que llega del proveedor entra
+a la bodega, "Reponer" pasa a la sala, la venta descuenta de la sala y el POS
+avisa si la sala no alcanza. Migración 0014.
+
+**Tablero de requerimientos:** https://claude.ai/artifact/Eme759S2ZbjZU4UJrQG6vP
+— los 190 requerimientos con su evidencia real y la decisión de Felipe en cada
+uno (se guardan en la colección `decisiones`; leerlas antes de priorizar).
+
 ### ¿Queda algo escrito a mano? — la respuesta honesta
 
 - **Fecha y zona horaria: no.** Web y base leen `tenants.settings.timezone`.
@@ -402,6 +430,13 @@ esperar ningún trámite.
 18. **La base del navegador tiene dueño.** La comparten la maqueta, producción
     y cualquier local que entre en ese celular. Lo que se guarda ahí se marca
     (`asegurarDueno`) y lo que se envía al servidor lleva quién lo hizo.
+19. **Con conexión, una venta no se da por hecha hasta que la base responde.**
+    El comprobante se entrega después de la confirmación. Sin conexión se
+    encola (ADR-005), pero nunca se le entrega al cliente un papel de una
+    venta que la base ya rechazó.
+20. **Un requerimiento no está hecho hasta que se recorrió en el navegador.**
+    El documento 17 marcaba ✅ la búsqueda del POS, las invitaciones y el
+    cierre forzado, y ninguno funcionaba. `tools/ui/` es la evidencia.
 
 ---
 

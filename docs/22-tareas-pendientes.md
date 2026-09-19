@@ -108,10 +108,19 @@ F-1 a F-9 de [21](21-qa-pantallas.md) §0d: fechas en la zona del local
 maqueta con producción ni locales entre sí, ventas sin conexión atribuidas a
 quien las hizo, cámara que no se pega, y la maqueta que ya no descarta ventas.
 
+### Cerrados el 2026-09-19 (tarde)
+
+G-1 a G-10 de [21](21-qa-pantallas.md) §0e, encontrados recorriendo cada
+requerimiento en el navegador. Además **T-04** (recuperar contraseña) queda
+hecho, y el **stock en bodega y sala** (M4-13) que pidió el cliente.
+
 ### Abiertos
 
 | # | Tarea | Dónde | Por qué importa |
 |---|---|---|---|
+| **T-50** | **Conectar un SMTP propio en Supabase** (Resend) | Felipe | Sin esto, las invitaciones y la recuperación de contraseña no le llegan a los empleados: el servicio gratuito solo envía al equipo del proyecto |
+| **T-51** | **Separar la base de QA de la de producción** | Felipe | Los recorridos de `tools/ui/` escriben en el local "QA · pruebas internas" de la misma base del cliente. Aislado por RLS, pero lo correcto es un proyecto de Supabase aparte |
+| **T-52** | Seguir el recorrido por requerimiento: M2 Productos, M3 Proveedores, M4 Inventario, M7 Reportes, M9 | — | Hechos M1, M5, M6 y bodega/sala. Ver el tablero |
 | **T-47** | **El worker todavía tiene `America/Santiago` escrito a mano** (`daily-summary.ts`, `mailer.ts`, `env.ts`) | Worker | El resumen diario de un local en otra zona se calcula con el día equivocado. La web y la base ya leen la configuración |
 | **T-48** | **Pruebas de la capa del navegador**: catálogo local, cola de ventas, escáner | Web | F-4 a F-8 se corrigieron sin una prueba que falle si se vuelven a romper. Hace falta vitest + fake-indexeddb en `apps/web` |
 | **T-49** | **Probar el escáner corregido en los celulares del local** | Felipe | F-6 está corregido en código; la cámara real es otra cosa (junto con B-07) |

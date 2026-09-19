@@ -97,15 +97,15 @@ De los **101 requerimientos funcionales**:
 | M1-01 | Inicio de sesión con correo y contraseña | ✅ | — |
 | M1-02 | Sesión independiente por trabajador | ✅ | — |
 | M1-03 | Crear / editar / desactivar usuarios | ✅ | Desactivar y reactivar; nadie puede desactivarse a sí mismo |
-| M1-04 | Asignación de rol | 🔵 | Existe el trigger `handle_new_user`; hoy el rol se pone a mano en Supabase |
-| M1-05 | Recuperar contraseña por correo | ⬜ | Pantalla + plantilla de correo en español |
+| M1-04 | Asignación de rol | ✅ | Pantalla Usuarios cambia el rol; probado en navegador (m1-usuarios) |
+| M1-05 | Recuperar contraseña por correo | ✅ | Nuevo 2026-09-19: "¿Olvidaste tu contraseña?" y /recuperar. Probado con el enlace real |
 | M1-06 | Sesión persistente entre turnos | ✅ | — |
 | M1-07 | Cerrar sesión | ✅ | — |
-| M1-08 | Contraseña mínima de 8 caracteres | 🟡 | Depende de la configuración de Supabase Auth, sin fijar |
+| M1-08 | Contraseña mínima de 8 caracteres | ✅ | Al crear o cambiar la contraseña, mínimo 8. Probado |
 | M1-09 | Cierre de sesión remoto | ⬜ | — |
 | M1-10 | Segundo factor para admin | ⬜ | Prioridad *Could* |
 | M1-11 | Bloqueo tras 5 intentos fallidos | 🟡 | Supabase lo hace por defecto; falta verificar el umbral |
-| M1-12 | Invitar empleado por correo | ✅ | Route handler + pantalla. Exige `SUPABASE_SECRET_KEY` en el servidor |
+| M1-12 | Invitar empleado por correo | ✅ | **No funcionaba**: el invitado no podía crear contraseña (G-2). Corregido y probado de punta a punta |
 | M1-13 | Mismo usuario en varios dispositivos | ✅ | Por diseño de Supabase Auth |
 | M1-14 | Ver quién está conectado | ✅ | **Corregido 2026-09-17:** figuraba cumplido y no funcionaba en producción. `last_seen_at` no la escribía nadie; todos aparecían como "Nunca ha entrado". Se veía bien solo en demo, porque los datos de ejemplo traen la hora puesta |
 | M1-15 | Registrar inicio/cierre de sesión en bitácora | ⬜ | — |
@@ -177,7 +177,7 @@ De los **101 requerimientos funcionales**:
 | M4-10 | Merma como ajuste diferenciado | 🔵 | — |
 | M4-11 | Kardex inmutable | ✅ | Trigger que rechaza UPDATE/DELETE |
 | M4-12 | Consultar kardex con filtros | 🟡 | Hay pantalla, pero **sin filtros**: 80 movimientos fijos, sin filtrar por producto, fecha ni tipo |
-| M4-13 | Stock por ubicación | ⬜ | Prioridad *Could* |
+| M4-13 | Stock por ubicación | ✅ | Bodega y sala (0014). Probado en base y navegador |
 | M4-14 | Marcar producto como perecible | ✅ | Desde el formulario de producto |
 | M4-15 | Exigir vencimiento al recepcionar | ✅ | Validado en base y pedido en la pantalla |
 | M4-16 | Stock por lote | ✅ | **Corregido 2026-09-17:** figuraba como visible en Stock y no lo estaba. La base sí lo mantenía; ninguna pantalla leía `v_stock_by_lot` ni `v_expiring_lots`. Hoy hay pestaña Lotes |
@@ -200,7 +200,7 @@ De los **101 requerimientos funcionales**:
 | M5-02 | Escaneo continuo | ✅ | Antirrebote de 1.200 ms |
 | M5-03 | Sonido y vibración al leer | ✅ | — |
 | M5-04 | Ofrecer crear producto si no existe | 🟡 | Avisa y pone el código en la búsqueda; no abre el formulario |
-| M5-05 | Buscar por nombre | ✅ | — |
+| M5-05 | Buscar por nombre | ✅ | **Nunca funcionó** hasta 2026-09-19 (G-1). Probado en navegador |
 | M5-06 | Modificar cantidad y eliminar líneas | ✅ | — |
 | M5-07 | Total en tiempo real sin decimales | ✅ | — |
 | M5-08 | Descuento por línea o total | 🔵 | La base ya lo valida (0011); falta el control en el POS. T-16 |
