@@ -4,7 +4,7 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-09-18.**
+> **Corte: 2026-09-19.**
 
 ---
 
@@ -55,8 +55,10 @@ datos de ejemplo en IndexedDB y un banner amarillo con selector de rol.
 |---|---|
 | `npm run dev` | Frontend en :3000 |
 | `npm run dev:worker` | Worker en :8080 (no se levanta con `npm run dev`) |
-| `npm test` | 291 pruebas de lógica de negocio |
-| `npm run db:test` | 33 pruebas contra un **PostgreSQL real**: concurrencia, ataques por rol, instalador (~30 s, sin Docker) |
+| `npm test` | 300 pruebas de lógica de negocio |
+| `npm run db:test` | 36 pruebas contra un **PostgreSQL real** en UTC, como Supabase: concurrencia, ataques por rol, zona horaria, instalador (~40 s, sin Docker) |
+| `npm run db:aplicar` | Diagnostica la base real. Con `-- --aplicar` instala `instalar.sql` y **verifica** RLS, funciones expuestas y políticas. Necesita la contraseña real en `DATABASE_URL` |
+| `npm run db:e2e` | **La primera venta real**, de punta a punta contra Supabase, como la hace la app: producto, recepción, caja, venta con vuelto, reenvío, anulación, cierre que cuadra. Más los ataques de seguridad contra la base real (T-46). Corre en un local aparte, "QA · pruebas internas" |
 | `npm run typecheck` | Tipos en los tres paquetes |
 | `npm run db:check` | Valida el SQL con el parser de PostgreSQL |
 | `npm run db:instalar` | Genera `supabase/instalar.sql`: esquema + arranque, un solo archivo |
@@ -70,10 +72,69 @@ Si tocas `packages/core`, recompílalo antes de compilar la web:
 
 ---
 
-## ESTADO AL 2026-09-18
+## ESTADO AL 2026-09-19
 
-**291 pruebas de lógica · 33 contra PostgreSQL real · typecheck limpio · SQL
-validado · 13 rutas.**
+**300 pruebas de lógica · 36 contra PostgreSQL real · typecheck limpio · SQL
+validado · build de producción con demo apagado · 13 rutas.**
+
+### Dónde quedó la primera venta real — BLOQUEADA en una contraseña
+
+La meta del 2026-09-19 era hacer la primera venta contra la base real. **No se
+pudo**, y no por código: el proyecto de Supabase (`amlvspbmnhtvzuqiteqe`)
+**no tiene ninguna tabla** (verificado), y `DATABASE_URL` en `.env.local`
+tiene la contraseña de ejemplo. La llave de servicio no sirve para crear
+tablas. Todo lo demás está listo y probado contra PostgreSQL local:
+
+```bash
+# 1. Felipe pone la contraseña real de la base en DATABASE_URL (.env.local).
+#    Supabase > Project Settings > Database > Connection string. No pegarla en un chat.
+npm run db:aplicar -- --aplicar      # instala y verifica
+npm run db:e2e                       # primera venta de punta a punta + ataques
+npm run db:admin -- --correo=… --nombre="…"   # el dueño
+# 2. NEXT_PUBLIC_DEMO=false en .env.local, npm run dev, entrar como el dueño,
+#    cargar productos reales y vender desde la pantalla.
+```
+
+### ¿Queda algo escrito a mano? — la respuesta honesta
+
+- **Fecha y zona horaria: no.** Web y base leen `tenants.settings.timezone`.
+  Queda un solo valor por omisión (`configuracionBase.ts` y
+  `fn_tenant_timezone`), el mismo que la columna trae desde 0001.
+- **IVA, tope de descuento, variación de costo, horas de caja: no**, desde el
+  2026-09-17.
+- **Sí queda:** el worker (`America/Santiago` en el resumen diario y el correo,
+  T-47), y el nombre "RutaAhorro" como marca en el título, el menú y el login
+  —eso espera la decisión de T-42 (¿SimplePyme o RutaAhorro?).
+- **La maqueta es escrita a mano por definición.** Mientras `NEXT_PUBLIC_DEMO`
+  sea `true`, los productos, usuarios y ventas de ejemplo son inventados.
+  **Los productos que se carguen en demo no llegan a la base**: viven en el
+  navegador, y desde el 2026-09-19 se borran solos al pasar a producción
+  (antes quedaban mezclados con los reales).
+
+### Lo que se hizo el 2026-09-19
+
+Salió de lo que Felipe vio probando el POS en la maqueta. Detalle en
+`docs/21` §0d:
+
+- **Ventas mostraba "hoy" en UTC** (F-1): lo vendido después de las 20:00–21:00
+  aparecía en el día siguiente. En producción, no solo en demo.
+- **Un supervisor no podía anular en la noche una venta de esa noche** (F-2,
+  migración 0013). El banco de pruebas lo tapaba porque corría en la hora de
+  esta máquina; ahora corre en UTC como Supabase.
+- **`America/Santiago` escrito a mano** en 8 lugares de la web y 4 vistas (F-3).
+  Funciones de fecha nuevas en core (`fechas.ts`, con los dos cambios de
+  horario de Chile probados).
+- **Los productos de la maqueta sobrevivían en producción**, y un celular
+  compartido entre locales mostraba el catálogo del anterior (F-4).
+- **Una venta sin conexión quedaba en la caja de quien sincronizara**, no de
+  quien la hizo (F-5).
+- **La cámara se pegaba** (F-6): cámaras huérfanas cuando se cerraba mientras
+  el navegador la entregaba, y lectores ZXing que se acumulaban. **Falta
+  probarlo en un celular real** (T-49).
+- **La maqueta descartaba las ventas** y "Vendido hoy" era un número fijo (F-7).
+  **El stock del POS quedaba viejo** 10 minutos después de vender (F-8).
+
+F-4 a F-8 viven en el navegador y **no tienen prueba automática** (T-48).
 
 ### Lo que se hizo el 2026-09-18
 
@@ -324,6 +385,14 @@ esperar ningún trámite.
     fallaban por esto.
 16. **Una prueba que nunca se vio fallar no prueba nada.** Antes de dar por
     buena una prueba de un arreglo, correrla sin el arreglo.
+17. **Un día es del local, no de UTC.** Nunca `'YYYY-MM-DDT00:00:00'` sin zona,
+    nunca `iso.slice(0, 10)`, nunca `::date` sobre un `timestamptz` en SQL.
+    Siempre `rangoDeDias`/`diaLocal` de core con la zona de la configuración, y
+    en SQL `at time zone fn_tenant_timezone(tenant)`. Tres defectos salieron de
+    esto.
+18. **La base del navegador tiene dueño.** La comparten la maqueta, producción
+    y cualquier local que entre en ese celular. Lo que se guarda ahí se marca
+    (`asegurarDueno`) y lo que se envía al servidor lleva quién lo hizo.
 
 ---
 

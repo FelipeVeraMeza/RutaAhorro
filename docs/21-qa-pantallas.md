@@ -1,6 +1,6 @@
 # 21 — Auditoría de pantallas (QA)
 
-**Primera pasada:** 2026-09-15 · **Segunda:** 2026-09-16 · **Tercera:** 2026-09-17 · **Cuarta (esquema ejecutado):** 2026-09-18
+**Primera pasada:** 2026-09-15 · **Segunda:** 2026-09-16 · **Tercera:** 2026-09-17 · **Cuarta (esquema ejecutado):** 2026-09-18 · **Quinta (primera venta y fechas):** 2026-09-19
 **Método:** lectura del código de cada pantalla, contrastada contra
 [17](17-inventario-alcance.md) y [03](03-requerimientos-funcionales.md).
 
@@ -266,6 +266,29 @@ catálogo recién cargado— podía quedar en −5 sin que nadie se enterara.
 > ahora sí alerta. Ninguna venta se pierde en ningún caso.
 
 ---
+
+## 0d. Quinta pasada · la primera venta y las fechas — 2026-09-19
+
+Salió de preparar la primera venta real y de lo que Felipe vio probando el POS
+en la maqueta: una venta en efectivo que no quedó registrada en ninguna parte,
+y la cámara que se pegaba hasta apagarla y prenderla.
+
+| # | Hallazgo | Daño | Estado |
+|---|---|---|---|
+| **F-1** | **Ventas filtraba "hoy" en UTC.** Mandaba `sold_at >= '2026-09-18T00:00:00'` sin zona, que la base lee en UTC: el día iba de las 20:00 o 21:00 de ayer a la misma hora de hoy | Lo vendido en la tarde-noche —la hora punta de un almacén— aparecía en el día siguiente. Era el mismo error que ya se había corregido en Inicio, repetido en otra pantalla | ✅ `rangoDeDias` en core |
+| **F-2** | **Un supervisor no podía anular en la noche una venta de esa noche.** `fn_void_sale` comparaba `sold_at::date` (zona de la sesión, UTC en Supabase) con la fecha de Chile | Después de las 20:00–21:00 respondía `SIN_PERMISO_ANULAR` a una venta del mismo día | ✅ 0013, probado |
+| **F-3** | **`America/Santiago` escrito a mano** en 8 lugares de la web y 4 vistas de reportes, aunque `tenants.settings.timezone` existe desde 0001 | Un local en otra zona (Isla de Pascua, u otro cliente) vería sus ventas en el día equivocado sin dónde corregirlo | ✅ Todo lee la configuración. Queda un solo valor por omisión |
+| **F-4** | **Los productos de la maqueta sobrevivían en producción.** La maqueta y producción comparten la base del navegador, y la sincronización real solo agrega | Los 14 productos de ejemplo seguían en el POS después de apagar el demo, con códigos de barra escaneables. Y un celular donde entraba alguien de otro local le mostraba el catálogo del anterior | ✅ El navegador sabe de quién es su catálogo y lo rehace si cambia |
+| **F-5** | **Una venta sin conexión se registraba a nombre de quien sincronizara**, no de quien la hizo | Cajero A vende sin red, cierra sesión, entra B: la venta queda en la caja de B, y el arqueo de B tiene plata que no cobró | ✅ La venta guarda su usuario y solo él la envía |
+| **F-6** | **La cámara se pegaba.** Si se cerraba mientras el navegador todavía la estaba entregando, la cámara que llegaba tarde quedaba encendida sin control; con el lector ZXing (iPhone, Firefox) cada apagar/prender sumaba un lector más; al bloquear la pantalla la imagen quedaba congelada sin aviso | Lo que Felipe vio: había que apagar y prender la cámara | ✅ En código. **Falta probarlo en un celular real** |
+| **F-7** | **La maqueta descartaba las ventas.** Al "sincronizar", borraba la venta de la cola sin guardarla; "Vendido hoy" era un número fijo ($187.450) | Se cobraba en el POS y no aparecía ni en Ventas ni en Inicio. Mostraba algo que no es cierto (T-15) | ✅ La venta queda en el historial local, el stock baja, Inicio suma lo real |
+| **F-8** | **El stock del POS quedaba viejo después de vender**, hasta la sincronización periódica 10 minutos después | El cajero veía unidades que ya se habían vendido | ✅ Se resincroniza al confirmar |
+| **F-9** | **El banco de pruebas corría en la hora de esta máquina**, no en UTC como Supabase | Tapaba F-2: un `::date` sin zona daba el mismo día en los dos lados | ✅ Corre en UTC |
+
+> **Lo que no está probado automáticamente:** F-4 a F-8 viven en el navegador
+> (IndexedDB, cámara), y la web no tiene pruebas de ese tipo. Pasan typecheck y
+> el build de producción, pero no hay una prueba que falle si se rompen. Es
+> T-48.
 
 ## 1. Hallazgos transversales
 

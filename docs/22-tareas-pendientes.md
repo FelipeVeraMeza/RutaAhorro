@@ -1,6 +1,6 @@
 # 22 — Tareas pendientes
 
-**Fecha:** 2026-09-18 · **Fuente:** auditado sobre el código, no sobre los documentos.
+**Fecha:** 2026-09-19 · **Fuente:** auditado sobre el código, no sobre los documentos.
 
 Este documento consolida en una sola lista lo que queda por hacer: los hallazgos
 abiertos de la [auditoría de pantallas](21-qa-pantallas.md), las fases del
@@ -57,7 +57,7 @@ semana que se suma al final del proyecto.
 
 | # | Tarea | Quién | Bloquea a |
 |---|---|---|---|
-| **B-01** | **Aplicar el esquema en Supabase.** `npm run db:instalar` → pegar `supabase/instalar.sql` | Felipe | **Todo.** Hoy el sistema corre contra IndexedDB |
+| **B-01** | **Aplicar el esquema en Supabase.** Poner la contraseña real de la base en `DATABASE_URL` de `.env.local` y correr `npm run db:aplicar -- --aplicar`: instala y verifica. Después `npm run db:e2e` hace la primera venta de punta a punta contra la base real | Felipe (la contraseña) | **Todo.** Hoy el sistema corre contra IndexedDB. Verificado el 2026-09-18: el proyecto de Supabase no tiene ninguna tabla |
 | **B-02** | Crear el primer administrador: `npm run db:admin -- --correo=… --nombre="…"` | Felipe | Entrar al sistema real |
 | **B-03** | Desplegar en Railway con `NEXT_PUBLIC_DEMO=false` y `PORT=8080` | Felipe | Que el cliente vea algo |
 | **B-04** | **Certificado digital de firma electrónica** | Cliente | F6 completa. Es la ruta crítica |
@@ -100,10 +100,20 @@ Y cuatro que no estaban en esta lista porque nadie los había visto: **S-1** a
 | — | `instalar.sql` decía ser idempotente y la segunda ejecución fallaba sin aplicar nada | Corregido y probado |
 | — | Vender en negativo no alertaba si el producto no tenía mínimo (ADR-005) | 0012 |
 
+### Cerrados el 2026-09-19
+
+F-1 a F-9 de [21](21-qa-pantallas.md) §0d: fechas en la zona del local
+(Ventas, anulación, reportes, Inicio), catálogo del navegador que ya no mezcla
+maqueta con producción ni locales entre sí, ventas sin conexión atribuidas a
+quien las hizo, cámara que no se pega, y la maqueta que ya no descarta ventas.
+
 ### Abiertos
 
 | # | Tarea | Dónde | Por qué importa |
 |---|---|---|---|
+| **T-47** | **El worker todavía tiene `America/Santiago` escrito a mano** (`daily-summary.ts`, `mailer.ts`, `env.ts`) | Worker | El resumen diario de un local en otra zona se calcula con el día equivocado. La web y la base ya leen la configuración |
+| **T-48** | **Pruebas de la capa del navegador**: catálogo local, cola de ventas, escáner | Web | F-4 a F-8 se corrigieron sin una prueba que falle si se vuelven a romper. Hace falta vitest + fake-indexeddb en `apps/web` |
+| **T-49** | **Probar el escáner corregido en los celulares del local** | Felipe | F-6 está corregido en código; la cámara real es otra cosa (junto con B-07) |
 | **T-45** | **Cualquier rol lee costos (S-7, CP-10).** `products.avg_cost` y `sale_items.unit_cost` se entregan a un vendedor que los pida por la API. La pantalla no los pide, pero eso es ocultar, no impedir | Base + Reportes + formulario de producto | El costo es la información que el dueño menos quiere que circule. Arreglarlo bien cambia cómo leen costos tres pantallas y `v_inventory_valued`; por eso no se hizo a medias. La prueba ya existe, marcada pendiente |
 | **T-14** | **`unit_price` llega del cliente sin compararlo con el catálogo.** Es lo que queda abierto de S-4: el tope de descuento se puede rodear vendiendo a precio 1 en vez de aplicando un descuento | `fn_register_sale` | Es deliberado que el precio viaje —una venta sin conexión se sincroniza con el precio que tenía al venderse— pero eso abre un camino que el tope no cubre. Cerrarlo bien pide comparar contra `price_history` con la fecha de la venta. **Desde 0012 `price_history` ya no se puede escribir a mano**, que era condición para que esa comparación valiera algo |
 | **T-04** | **Recuperar contraseña (RF-M1-05)** | Login | Hoy el dueño entra al panel de Supabase cada vez que un vendedor olvida su clave |
