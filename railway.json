@@ -1,0 +1,19 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "npm run build:web",
+    "watchPatterns": [
+      "apps/web/**",
+      "packages/core/**",
+      "package.json",
+      "package-lock.json",
+      "railway.json"
+    ]
+  },
+  "deploy": {
+    "startCommand": "npm run start -w @rutaahorro/web",
+    "healthcheckPath": "/login",
+    "healthcheckTimeout": 120,
+    "restartPolicyType": "ON_FAILURE"
+  }
+}

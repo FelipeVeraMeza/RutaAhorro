@@ -14,6 +14,27 @@ import type { NextConfig } from 'next';
 loadEnv({ path: resolve(process.cwd(), '../../.env.local') });
 loadEnv({ path: resolve(process.cwd(), '../../.env') });
 
+/**
+ * En Railway la compilación falla con un mensaje claro si falta algo, en vez
+ * de publicar algo que no sirve. Pasó el 2026-09-19: el servicio no tenía
+ * ninguna variable y la URL pública servía la maqueta, "MODO DEMO · sin
+ * sesión", abierta a cualquiera. Las NEXT_PUBLIC_* quedan fijas al compilar,
+ * así que tienen que estar antes del build, no solo al arrancar.
+ */
+if (process.env.RAILWAY_ENVIRONMENT && process.env.npm_lifecycle_event === 'build') {
+  const faltan = ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY', 'NEXT_PUBLIC_APP_URL']
+    .filter((k) => !process.env[k]);
+  if (!process.env.SUPABASE_SECRET_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    faltan.push('SUPABASE_SECRET_KEY (o SUPABASE_SERVICE_ROLE_KEY)');
+  }
+  if (faltan.length) {
+    throw new Error(`Faltan variables en Railway: ${faltan.join(', ')}. Ver docs/09-despliegue.md`);
+  }
+  if (process.env.NEXT_PUBLIC_DEMO === 'true') {
+    throw new Error('NEXT_PUBLIC_DEMO=true en Railway: la maqueta no se publica. Ponerla en false.');
+  }
+}
+
 const config: NextConfig = {
   reactStrictMode: true,
   // Quita el botón flotante "N" de Next.js en desarrollo. Solo aparecía en
