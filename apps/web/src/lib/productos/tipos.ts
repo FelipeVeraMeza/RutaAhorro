@@ -57,7 +57,13 @@ export interface ProductoNuevo {
   perecible: boolean;
   diasAlerta: number;
   codigos: string[];
-  stockInicial: number;
+  /**
+   * Cuánto hay al crearlo, y **dónde**. Antes era un solo número que caía
+   * entero en la bodega sin decírselo a nadie: quien cargaba el catálogo creía
+   * dejarlo listo para vender, iba al POS y la sala estaba en cero (0016).
+   */
+  stockInicialSala: number;
+  stockInicialBodega: number;
 }
 
 /**
@@ -75,7 +81,7 @@ export interface ProductoNuevo {
  *   columna de código, y eso dejaba invisibles al escáner a todos los
  *   productos que la planilla tocara.
  */
-export type ProductoEditable = Omit<ProductoNuevo, 'stockInicial' | 'costo' | 'codigos'> &
+export type ProductoEditable = Omit<ProductoNuevo, 'stockInicialSala' | 'stockInicialBodega' | 'costo' | 'codigos'> &
   Partial<Pick<ProductoNuevo, 'costo' | 'codigos'>>;
 
 export interface Categoria {

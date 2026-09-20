@@ -132,7 +132,7 @@ export function PrecioClient() {
               ? <span className="text-[var(--color-alerta)]">🔴 Sin stock</span>
               : <>🟢 Quedan {cantidadConUnidad(elegido.stock, elegido.unit)}</>}
             {typeof elegido.stockSala === 'number' &&
-              ` · en sala ${elegido.stockSala}`}
+              ` · a la vista ${elegido.stockSala}`}
           </p>
         </div>
       )}

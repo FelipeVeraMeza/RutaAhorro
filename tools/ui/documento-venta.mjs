@@ -15,7 +15,9 @@ import fs from 'node:fs';
 import { randomBytes } from 'node:crypto';
 
 const env = dotenv.parse(fs.readFileSync('.env.local'));
-const BASE = 'http://localhost:3001';
+// El 3000 lo ocupa otro proyecto y el 3001 suele tener una instancia abierta:
+// `RA_BASE=http://localhost:3005 node tools/ui/documento-venta.mjs`.
+const BASE = process.env.RA_BASE ?? 'http://localhost:3001';
 const opc = { auth: { persistSession: false, autoRefreshToken: false } };
 const servicio = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY, opc);
 const ref = new URL(env.NEXT_PUBLIC_SUPABASE_URL).hostname.split('.')[0];
@@ -169,14 +171,6 @@ ok('M5-22', v?.document_type === 'factura' && v?.receptor_rut === RUT_OK,
   'la factura queda en la base con su receptor', `${v?.document_type} · ${v?.receptor_rut} · ${v?.receptor_razon_social}`);
 await cerrarComprobante();
 
-console.log('M5-23 · El historial de ventas dice qué documento fue cada una');
-await p.goto(`${BASE}/ventas`);
-await p.waitForTimeout(2500);
-const historial = await p.locator('main').innerText();
-ok('M5-23', /Factura/.test(historial) && /Voucher/.test(historial) && /Boleta/.test(historial),
-  'Ventas muestra boleta, factura y voucher',
-  (historial.match(/Folio[^\n]*\n[^\n]*/) ?? [''])[0].replace(/\n/g, ' · '));
-
 // -------------------------------------------------------- CONSULTAR PRECIO
 console.log('M5-24 · Consultador de precios');
 await p.goto(`${BASE}/precio`);
@@ -188,21 +182,47 @@ ok('M5-24', /\$1\.000/.test(precio), 'muestra el precio del producto buscado',
   (precio.match(/[^\n]*\$1\.000[^\n]*/) ?? [''])[0]);
 ok('M5-24', /IVA incluido/.test(precio), 'dice que el precio incluye IVA');
 
-// ------------------------------------------------------ BARRA DEL CELULAR
-console.log('RNF-16 · En el celular se llega más allá de Inventario');
-const barra = await p.locator('nav[aria-label="Navegación principal"]').last().innerText();
-const masCelular = p.locator('nav[aria-label="Navegación principal"]').last().getByRole('button', { name: 'Más' });
-if (await masCelular.count()) {
-  await masCelular.click();
-  await p.getByRole('dialog').waitFor({ timeout: 5000 });
-  const menu = await p.getByRole('dialog').innerText();
-  ok('RNF-16', /Proveedores/.test(menu) && /Ventas/.test(menu) && /Reportes/.test(menu),
-    'el menú "Más" lleva a lo que no cabe en la barra', menu.replace(/\n+/g, ' · '));
-  await p.keyboard.press('Escape');
-} else {
-  // Un vendedor ve pocas secciones y le caben todas: no necesita "Más".
-  ok('RNF-16', /Precio/.test(barra), 'a este rol le caben todas las secciones en la barra',
-    barra.replace(/\n+/g, ' · '));
+console.log('RNF-16 · Al vendedor le caben todas sus secciones en la barra');
+const barraVendedor = await p.locator('nav[aria-label="Navegación principal"]').last().innerText();
+ok('RNF-16', /Precio/.test(barraVendedor) && !/Más/.test(barraVendedor),
+  'el vendedor ve sus cuatro secciones, sin menú "Más"', barraVendedor.replace(/\n+/g, ' · '));
+
+// ---------------------------------------------------------------- ADMINISTRADOR
+// El historial de ventas y el menú completo son del administrador: un vendedor
+// no entra a /ventas, y le caben todas sus secciones en la barra. El defecto
+// que reportó el cliente —"en el celu veo solo hasta inventario"— es de este
+// lado, así que hay que mirarlo con esta sesión y no con la del cajero.
+const ctxAdmin = await nav.newContext({ viewport: { width: 420, height: 860 }, isMobile: true, hasTouch: true });
+const a = await ctxAdmin.newPage();
+a.on('pageerror', (e) => errores.push(e.message));
+await a.goto(`${BASE}/login`);
+await a.fill('#email', admin.correo);
+await a.fill('#password', admin.clave);
+await Promise.all([a.waitForURL((x) => !x.pathname.startsWith('/login')), a.click('button[type=submit]')]);
+
+console.log('M5-23 · El historial de ventas dice qué documento fue cada una');
+await a.goto(`${BASE}/ventas`);
+await a.waitForTimeout(3000);
+const historial = await a.locator('main').innerText();
+ok('M5-23', /Factura/.test(historial) && /Voucher/.test(historial) && /Boleta/.test(historial),
+  'Ventas muestra boleta, factura y voucher',
+  (historial.match(/Folio[^\n]*\n[^\n]*/) ?? [''])[0].replace(/\n/g, ' · '));
+
+console.log('RNF-16 · En el celular el administrador llega más allá de Inventario');
+const barraAdmin = a.locator('nav[aria-label="Navegación principal"]').last();
+const mas = barraAdmin.getByRole('button', { name: 'Más' });
+ok('RNF-16', (await mas.count()) > 0, 'la barra del administrador ofrece "Más"',
+  (await barraAdmin.innerText()).replace(/\n+/g, ' · '));
+if (await mas.count()) {
+  await mas.click();
+  await a.getByRole('dialog').waitFor({ timeout: 5000 });
+  const menu = await a.getByRole('dialog').innerText();
+  ok('RNF-16', /Proveedores/.test(menu) && /Ventas/.test(menu) && /Reportes/.test(menu) && /Usuarios/.test(menu),
+    'lleva a Proveedores, Ventas, Reportes y Usuarios', menu.replace(/\n+/g, ' · '));
+  await a.getByRole('dialog').getByRole('link', { name: /Reportes/ }).click();
+  await a.waitForURL((u) => u.pathname === '/reportes', { timeout: 20000 })
+    .then(() => ok('RNF-16', true, 'tocar una sección del menú navega de verdad'),
+          () => ok('RNF-16', false, 'tocar una sección del menú navega de verdad'));
 }
 
 console.log(`\nErrores de JavaScript: ${errores.length ? errores.join(' | ') : 'ninguno'}`);

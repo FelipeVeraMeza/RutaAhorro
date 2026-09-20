@@ -138,7 +138,8 @@ export const repoSupabase: RepositorioProductos = {
       p_tracks_expiry: datos.perecible,
       p_expiry_alert_days: datos.diasAlerta,
       p_barcodes: datos.codigos.filter(Boolean),
-      p_initial_stock: datos.stockInicial,
+      p_initial_stock: datos.stockInicialBodega,
+      p_initial_stock_sala: datos.stockInicialSala,
     });
     if (error) throw error;
     return { id: (data as { product_id: string }).product_id };
@@ -290,7 +291,10 @@ export const repoSupabase: RepositorioProductos = {
             stockMinimo: fila.stock_minimo, perecible: fila.perecible,
             diasAlerta: fila.dias_alerta,
             codigos: fila.codigo_barras ? [fila.codigo_barras] : [],
-            stockInicial: fila.stock_inicial,
+            // La carga masiva trae una sola columna de cantidad: entra a la
+            // bodega, que es donde llega la mercadería (0014).
+            stockInicialSala: 0,
+            stockInicialBodega: fila.stock_inicial,
           });
           resultado.creados++;
         }

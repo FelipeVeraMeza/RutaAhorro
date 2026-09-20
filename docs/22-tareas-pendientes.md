@@ -120,9 +120,10 @@ hecho, y el **stock en bodega y sala** (M4-13) que pidió el cliente.
 
 ### Cerrados el 2026-09-19 (noche) — lista del cliente
 
-De los diez puntos de la reunión, cuatro quedan hechos: **4, 6 y 10** (qué
-documento corresponde a cada venta y la barra del celular) y **5** (el
-consultador de precios). Detalle en [21](21-qa-pantallas.md) §0f.
+De los diez puntos de la reunión quedan hechos **seis**: 4, 6 y 10 (qué
+documento corresponde a cada venta y la barra del celular), 5 (el consultador
+de precios) y **1 y 2** (a dónde va cada unidad al ingresar un producto,
+migración **0016**). Detalle en [21](21-qa-pantallas.md) §0f.
 
 Migración **0015**: `sales` guarda el documento —boleta, factura o el voucher
 que emite la máquina— y, si es factura, el receptor con su RUT validado en la
@@ -135,8 +136,6 @@ código y la base se actualizan juntos o no se registra ninguna venta.
 
 | # | Tarea | Dónde | Por qué importa |
 |---|---|---|---|
-| **T-53** | **«Al ingresar producto a sala de ventas sale producto inicial»** (punto 1 del cliente) | Inventario | Sin reproducir. El kardex muestra un traspaso como dos filas "Traspaso" que no dicen de dónde a dónde, y la carga inicial entra a bodega por diseño (0014). Falta que Felipe muestre en qué pantalla lo vio |
-| **T-54** | **«Agregar el bien que se agrega cuando se crea un producto»** (punto 2) | Formulario de producto | Sin confirmar. La lectura más probable: al crear un producto con stock inicial, poder dejarlo en la sala y no solo en bodega |
 | **T-55** | **Crear productos desde una factura de proveedor** (punto 3) | Recepción | Hoy hay que salir a Productos, crearlo y volver a empezar la recepción. Con una factura de 30 líneas es inviable |
 | **T-56** | **Notas de crédito** (punto 7) | Ventas + base | `fn_void_sale` ya anula y devuelve el stock, pero no emite el documento que respalda la devolución. Es hermano de la boleta: sin B-04/B-05 tampoco se emite ante el SII, pero sí se puede registrar y numerar |
 | **T-57** | **Precio por tramos de cantidad** (punto 8: «1 a 1.000 y desde 3 a 700») | Productos + POS + base | Tabla de tramos por producto, y el POS recalculando la línea al cambiar la cantidad. Toca `fn_register_sale`, que hoy confía en el `unit_price` que manda el cliente (ver T-14: las dos se deberían hacer juntas) |

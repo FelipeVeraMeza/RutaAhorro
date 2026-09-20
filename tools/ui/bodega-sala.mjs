@@ -12,7 +12,8 @@ import fs from 'node:fs';
 import { randomBytes } from 'node:crypto';
 
 const env = dotenv.parse(fs.readFileSync('.env.local'));
-const BASE = 'http://localhost:3001';
+// `RA_BASE=http://localhost:3005 node tools/ui/bodega-sala.mjs` si el 3001 esta ocupado.
+const BASE = process.env.RA_BASE ?? 'http://localhost:3001';
 const opc = { auth: { persistSession: false } };
 const servicio = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY, opc);
 const ref = new URL(env.NEXT_PUBLIC_SUPABASE_URL).hostname.split('.')[0];
@@ -33,7 +34,7 @@ const nombre = 'QA Bodega ' + Date.now().toString().slice(-6);
 const { data: prod } = await adm.rpc('fn_create_product', {
   p_name: nombre, p_sku: null, p_description: null, p_category_id: null, p_unit: 'unidad',
   p_sale_price: 1000, p_avg_cost: 600, p_min_stock: 0, p_tracks_expiry: false,
-  p_expiry_alert_days: 30, p_barcodes: null, p_initial_stock: 0 });
+  p_expiry_alert_days: 30, p_barcodes: null, p_initial_stock: 0, p_initial_stock_sala: 0 });
 let { data: prov } = await adm.from('suppliers').select('id').eq('name', 'Proveedor QA').maybeSingle();
 await adm.rpc('fn_confirm_receipt', { p_supplier_id: prov.id,
   p_items: [{ product_id: prod.product_id, quantity: 20, unit_cost: 600 }] });
@@ -56,18 +57,18 @@ const fila = p.locator('li', { hasText: nombre }).first();
 await fila.waitFor({ timeout: 15000 });
 await p.waitForTimeout(800);
 let texto = await fila.innerText();
-ok(/Sala 0/.test(texto) && /Bodega 20/.test(texto), 'recibido del proveedor: Sala 0 · Bodega 20', texto.replace(/\n+/g, ' · '));
-ok(/reponer/i.test(texto), 'avisa que hay que reponer la sala');
+ok(/A la vista 0/.test(texto) && /guardado en bodega 20/.test(texto), 'recibido del proveedor: a la vista 0 · guardado en bodega 20', texto.replace(/\n+/g, ' · '));
+ok(/hay que reponer/i.test(texto), 'avisa que hay que reponer la sala');
 
 console.log('2. Reponer 5 a la sala desde la pantalla');
 await fila.getByRole('button', { name: 'Reponer' }).click();
 await p.getByLabel('Cantidad a mover').fill('5');
 await p.getByRole('button', { name: 'Registrar traspaso' }).click();
-await p.getByText('pasaron a sala de ventas').waitFor({ timeout: 15000 }).then(
+await p.getByText('pasaron a la sala de ventas').waitFor({ timeout: 15000 }).then(
   () => ok(true, 'mensaje de confirmación'), () => ok(false, 'mensaje de confirmación'));
 await p.waitForTimeout(1500);
 texto = await p.locator('li', { hasText: nombre }).first().innerText();
-ok(/Sala 5/.test(texto) && /Bodega 15/.test(texto), 'queda Sala 5 · Bodega 15', texto.replace(/\n+/g, ' · '));
+ok(/A la vista 5/.test(texto) && /guardado en bodega 15/.test(texto), 'queda a la vista 5 · guardado en bodega 15', texto.replace(/\n+/g, ' · '));
 
 console.log('3. No deja mover más de lo que hay');
 await p.locator('li', { hasText: nombre }).first().getByRole('button', { name: 'Reponer' }).click();
@@ -85,14 +86,47 @@ await resultado.waitFor({ timeout: 15000 });
 // El catálogo local se sincroniza al entrar; la búsqueda se repite sola al llegar.
 await p.waitForTimeout(2500);
 texto = await p.locator('main li button', { hasText: nombre }).first().innerText();
-ok(/Sala 5/.test(texto) && /Bodega 15/.test(texto), 'resultado de búsqueda: Sala 5 · Bodega 15', texto.replace(/\n+/g, ' · '));
+ok(/A la vista 5/.test(texto) && /en bodega 15/.test(texto), 'resultado de búsqueda: a la vista 5 · en bodega 15', texto.replace(/\n+/g, ' · '));
 for (let i = 0; i < 6; i++) {
   await p.fill('input[type=search]', nombre);
   await p.locator('main li button', { hasText: nombre }).first().click();
   await p.waitForTimeout(250);
 }
 const aviso = await p.getByText(/conviene reponer/).first().innerText().catch(() => '');
-ok(/en sala quedan 5/.test(aviso), 'al pasar de 5 en el carrito avisa y deja seguir', aviso);
+ok(/a la vista quedan 5/.test(aviso), 'al pasar de 5 en el carrito avisa y deja seguir', aviso);
+
+console.log('5. El kardex dice a dónde fue cada movimiento (0016)');
+await p.goto(`${BASE}/inventario`);
+await p.getByRole('tab', { name: 'Movimientos' }).click();
+await p.waitForTimeout(2000);
+const kardex = await p.locator('main').innerText();
+ok(/entra a la sala de ventas/.test(kardex) && /sale de la bodega/.test(kardex),
+  'el traspaso dice "sale de la bodega" y "entra a la sala de ventas"');
+
+console.log('6. Al crear un producto se dice dónde queda el stock (0016)');
+await p.goto(`${BASE}/productos`);
+await p.getByRole('button', { name: /Producto|Crear el primero/ }).first().click();
+const dialogo = p.getByRole('dialog');
+await dialogo.waitFor({ timeout: 10000 });
+const formulario = await dialogo.innerText();
+ok(/Cuántos tienes hoy/.test(formulario), 'el formulario pregunta cuántos hay');
+ok(/En la sala de ventas/.test(formulario) && /En la bodega/.test(formulario),
+  'con una casilla para cada lugar');
+const nombreNuevo = 'QA Reparto ' + Date.now().toString().slice(-6);
+await dialogo.getByRole('textbox', { name: 'Nombre (obligatorio)' }).fill(nombreNuevo);
+await dialogo.getByRole('textbox', { name: /Precio de venta/ }).first().fill('2000');
+await dialogo.getByLabel('En la sala de ventas').fill('6');
+await dialogo.getByLabel('En la bodega').fill('4');
+ok(/Total en el local:\s*10/.test(await dialogo.innerText()), 'suma el total de los dos lugares');
+await dialogo.getByRole('button', { name: /Crear|Guardar/ }).first().click();
+await dialogo.waitFor({ state: 'detached', timeout: 20000 }).catch(() => {});
+await p.waitForTimeout(2000);
+const { data: repartido } = await adm.from('products').select('id').eq('name', nombreNuevo).maybeSingle();
+const { data: ubic } = await adm.from('stock_ubicaciones').select('ubicacion, quantity').eq('product_id', repartido?.id ?? '');
+const mapa = Object.fromEntries((ubic ?? []).map((x) => [x.ubicacion, Number(x.quantity)]));
+ok(mapa.sala === 6 && mapa.bodega === 4, 'queda 6 a la vista y 4 en bodega, como se pidió',
+  `sala ${mapa.sala} · bodega ${mapa.bodega}`);
+if (repartido?.id) await adm.from('products').update({ is_active: false }).eq('id', repartido.id);
 
 console.log(`\nErrores de JavaScript: ${errores.length ? errores.join(' | ') : 'ninguno'}`);
 await nav.close();

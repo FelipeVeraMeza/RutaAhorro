@@ -336,8 +336,8 @@ palabras entre comillas.
 
 | # | Lo que pidió | Qué es en realidad | Estado |
 |---|---|---|---|
-| 1 | «Al ingresar producto a sala de ventas sale producto inicial, no sale específico» | **Sin confirmar.** Puede ser el kardex —un traspaso son dos filas "Traspaso" que no dicen de dónde a dónde— o la carga inicial, que entra a bodega por diseño (0014) | ⬜ **T-53** · falta que Felipe muestre la pantalla |
-| 2 | «Agregar [el] bien que se agrega cuando se crea un producto» | **Sin confirmar.** Probablemente: al crear un producto, poder dejarlo directo en la sala y no solo en bodega | ⬜ **T-54** |
+| 1 | «Al ingresar producto a sala de ventas sale producto inicial, no sale específico» | Felipe lo aclaró: **no se dice a dónde va cada unidad** cuando se ingresa, y hay que decirlo más simple | ✅ **0016** |
+| 2 | «Agregar [el] bien que se agrega cuando se crea un producto» | Lo mismo por el otro lado: que se entienda **cuánto queda a la vista y cuánto en bodega** al crearlo | ✅ **0016** |
 | 3 | «Agregar productos llegados de una factura» | Crear el producto desde la recepción, sin salir a Productos y volver | ⬜ **T-55** |
 | 4 | «Boletas solo con transferencia y efectivo; con tarjeta es con máquina» | Qué documento corresponde según el medio de pago | ✅ **0015** |
 | 5 | «Consultador de precio» | Pantalla de solo lectura para responder "¿cuánto vale esto?" sin tocar la venta en curso | ✅ `/precio` |
@@ -402,6 +402,22 @@ clave) con el que se firma el DTE. Eso es B-04, y hoy no está.
 `fn_register_sale`. Si se despliega el código sin aplicar la migración,
 **ninguna venta se registra**. Y al revés, una base con 0015 y el código viejo
 manda la llamada antigua, que ya no existe.
+
+
+### Puntos 1 y 2 · a dónde va cada unidad — 2026-09-20
+
+Eran el mismo problema por dos lados. Desde 0014 el local tiene bodega y sala,
+el sistema los lleva bien, y **en ninguna parte se decía a cuál entra lo que se
+ingresa**: el formulario pedía "Stock inicial" a secas y todo caía en la
+bodega, porque así lo decide `fn_ubicacion_por_tipo`. Quien cargaba el catálogo
+creía dejarlo listo para vender, iba al POS y la sala estaba en cero.
+
+| # | Hallazgo | Estado |
+|---|---|---|
+| **H-1** | **Crear un producto no preguntaba dónde queda el stock** y lo dejaba todo en bodega en silencio | ✅ 0016 · dos casillas, un movimiento por lugar |
+| **H-2** | **El kardex no decía a qué lugar entró un movimiento.** Un traspaso son dos filas y las dos decían "Traspaso" | ✅ "sale de la bodega" / "entra a la sala de ventas" |
+| **H-3** | **La lista de stock hablaba en jerga:** "Sala 4 · Bodega 6 · reponer" | ✅ "A la vista 4 · guardado en bodega 6 · hay que reponer" |
+| **H-4** | **La maqueta repartía al revés que producción:** en demo el stock inicial quedaba todo en la **sala**, en producción todo en la **bodega**. Enseñaba lo contrario de lo que pasa | ✅ Es exactamente la pregunta de **T-15**, y confirma que `last_seen_at` no era el único |
 
 ## 1. Hallazgos transversales
 

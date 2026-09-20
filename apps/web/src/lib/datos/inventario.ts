@@ -53,6 +53,13 @@ export interface Movimiento {
   saldo: number;
   motivo: string | null;
   usuario: string | null;
+  /**
+   * En qué lugar del local ocurrió. La columna existe desde 0014 y no la
+   * mostraba nadie: un traspaso eran dos filas "Traspaso" —una en −4 y otra en
+   * +4— sin decir de dónde a dónde, y la carga inicial no decía que entraba a
+   * la bodega. Era el punto 1 de la reunión del 2026-09-19.
+   */
+  ubicacion: Ubicacion | null;
 }
 
 /**
@@ -86,6 +93,10 @@ export const ETIQUETA_ESTADO_LOTE: Record<Lote['estado'], string> = {
 
 export type Ubicacion = 'sala' | 'bodega';
 export const ETIQUETA_UBICACION: Record<Ubicacion, string> = { sala: 'Sala de ventas', bodega: 'Bodega' };
+/** El mismo lugar, para meterlo dentro de una frase. */
+export const UBICACION_EN_FRASE: Record<Ubicacion, string> = {
+  sala: 'la sala de ventas', bodega: 'la bodega',
+};
 
 export interface RepositorioInventario {
   kardex(productoId: string | null, limite?: number): Promise<Movimiento[]>;
@@ -122,9 +133,16 @@ async function leerMovs(): Promise<Movimiento[]> {
   return raw?.value ? (JSON.parse(raw.value) as Movimiento[]) : [];
 }
 
-async function registrarMov(m: Omit<Movimiento, 'id' | 'fecha'>) {
+async function registrarMov(m: Omit<Movimiento, 'id' | 'fecha' | 'ubicacion'> & { ubicacion?: Ubicacion }) {
   const movs = await leerMovs();
-  movs.unshift({ ...m, id: `mv${Date.now()}${Math.random().toString(16).slice(2, 6)}`, fecha: new Date().toISOString() });
+  movs.unshift({
+    // La maqueta no lleva ubicaciones, y decir "sala" sin que lo sea sería
+    // inventar (la pregunta de T-15). Sin ubicación, la pantalla no la muestra.
+    ubicacion: null,
+    ...m,
+    id: `mv${Date.now()}${Math.random().toString(16).slice(2, 6)}`,
+    fecha: new Date().toISOString(),
+  });
   await db().meta.put({ key: KEY, value: JSON.stringify(movs.slice(0, 500)) });
 }
 
@@ -264,7 +282,7 @@ const repoSupabase: RepositorioInventario = {
   async kardex(productoId, limite = 100) {
     let q = supabase()
       .from('inventory_movements')
-      .select('id, created_at, product_id, movement_type, quantity, balance_after, reason, products(name), profiles(full_name)')
+      .select('id, created_at, product_id, movement_type, quantity, balance_after, reason, ubicacion, products(name), profiles(full_name)')
       .order('created_at', { ascending: false })
       .limit(limite);
     if (productoId) q = q.eq('product_id', productoId);
@@ -280,6 +298,7 @@ const repoSupabase: RepositorioInventario = {
       cantidad: Number(m.quantity ?? 0),
       saldo: Number(m.balance_after ?? 0),
       motivo: m.reason as string | null,
+      ubicacion: (m.ubicacion as Ubicacion | null) ?? null,
       usuario: (m.profiles as unknown as { full_name: string } | null)?.full_name ?? null,
     }));
   },
@@ -347,4 +366,17 @@ const repoSupabaseSincronizado = new Proxy(repoSupabase, {
 
 export function repoInventario(): RepositorioInventario {
   return DEMO_ACTIVO ? repoLocal : repoSupabaseSincronizado;
+}
+
+/**
+ * "Traspaso · sale de la bodega", "Carga inicial · entra a la sala de ventas".
+ *
+ * Se arma con el signo de la cantidad y no con el tipo: el mismo tipo puede
+ * sumar o restar —un traspaso es las dos cosas, una vez en cada lugar— y lo
+ * que se quiere responder es siempre la misma pregunta, "¿a dónde fue?".
+ */
+export function dondeOcurrio(m: Pick<Movimiento, 'cantidad' | 'ubicacion'>): string {
+  if (!m.ubicacion) return '';
+  const lugar = UBICACION_EN_FRASE[m.ubicacion];
+  return m.cantidad < 0 ? `sale de ${lugar}` : `entra a ${lugar}`;
 }

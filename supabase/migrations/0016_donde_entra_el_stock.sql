@@ -1,28 +1,32 @@
 -- ============================================================================
--- 0007 · Alta de producto en una sola transacción
+-- 0016 · A dónde va cada unidad cuando se ingresa un producto
 --
--- Crear un producto son tres escrituras: la fila del producto, sus códigos de
--- barra y el movimiento de stock inicial. El cliente las hacía encadenadas,
--- una llamada por cada una, sin transacción.
+-- Puntos 1 y 2 de la reunión del 2026-09-19, en palabras de Felipe:
 --
--- El modo de falla es feo y silencioso: si la segunda falla —por ejemplo
--- porque otro usuario acaba de registrar ese mismo código de barra— el
--- producto ya quedó creado, el usuario ve un error, y al reintentar crea un
--- duplicado. El catálogo queda con dos filas del mismo artículo y una de
--- ellas sin códigos, que es justo la que no aparecerá al escanear.
+--   «no sale a dónde va cada producto cuando lo ingreso»
+--   «que se entienda cuánta cantidad agrego en punto de venta y cuántos hay
+--    en bodega, y mejorar qué es cada cosa, más simple»
 --
--- Una función plpgsql es atómica: o entran las tres cosas o no entra ninguna.
--- Es el mismo criterio que ya se aplica a la venta (fn_register_sale) y a la
--- recepción (fn_confirm_receipt).
+-- Son el mismo problema por dos lados. Desde 0014 el local tiene dos lugares
+-- —la bodega y la sala— y el sistema los lleva bien, pero **en ninguna parte
+-- se dice a cuál entra lo que se está ingresando**. Al crear un producto, el
+-- formulario pide "Stock inicial" a secas y las unidades caen todas en la
+-- bodega, porque así lo decide `fn_ubicacion_por_tipo`. Quien lo carga cree
+-- que las dejó listas para vender, va al POS y la sala está en cero.
 --
--- Ver docs/21-qa-pantallas.md, hallazgo A-4.
+-- El arreglo es dejar de adivinar: se pregunta cuántas quedan a la vista y
+-- cuántas en bodega, y cada una entra donde dice.
+--
+-- No cambia nada de lo anterior: siguen siendo movimientos 'inventario_inicial'
+-- por el kardex (ADR-006), sala + bodega sigue sumando el total, y quien llame
+-- sin el parámetro nuevo obtiene exactamente lo de antes (todo a bodega).
 -- ============================================================================
 
--- Al reinstalar, 0016 ya dejó la versión que reparte entre bodega y sala; si
--- queda junto a esta, los grant sin lista de argumentos de 0004 no saben a
--- cuál aplicar. Mismo caso que fn_adjust_stock (0002) y fn_register_sale.
+-- `create or replace` con un parámetro nuevo crearía una sobrecarga, no un
+-- reemplazo. Misma razón y mismo recurso que 0014 con fn_adjust_stock y 0015
+-- con fn_register_sale.
 drop function if exists public.fn_create_product(
-  text, text, text, uuid, text, integer, integer, numeric, boolean, integer, text[], numeric, numeric);
+  text, text, text, uuid, text, integer, integer, numeric, boolean, integer, text[], numeric);
 create or replace function public.fn_create_product(
   p_name              text,
   p_sku               text,
@@ -35,7 +39,12 @@ create or replace function public.fn_create_product(
   p_tracks_expiry     boolean,
   p_expiry_alert_days integer,
   p_barcodes          text[],
-  p_initial_stock     numeric
+  -- Cuántas unidades quedan guardadas en la bodega. Se llama así desde 0007 y
+  -- se conserva el nombre para no romper a quien ya llama a la función.
+  p_initial_stock     numeric,
+  -- Cuántas quedan a la vista, en la sala de ventas (0016). Omitirlo es lo de
+  -- antes: todo a la bodega.
+  p_initial_stock_sala numeric default 0
 ) returns jsonb
 language plpgsql security definer set search_path = public
 as $$
@@ -63,7 +72,7 @@ begin
     raise exception 'MONTO_NEGATIVO' using errcode = 'P0001';
   end if;
 
-  if coalesce(p_initial_stock, 0) < 0 then
+  if coalesce(p_initial_stock, 0) < 0 or coalesce(p_initial_stock_sala, 0) < 0 then
     raise exception 'CANTIDAD_NEGATIVA' using errcode = 'P0001';
   end if;
 
@@ -118,7 +127,10 @@ begin
   -- El stock inicial entra por el kardex, nunca escribiendo stock_levels
   -- directamente (ADR-006): así el saldo siempre tiene un movimiento que lo
   -- explica y el inventario se puede reconstruir desde cero.
-  if coalesce(p_initial_stock, 0) > 0 then
+  --
+  -- Un movimiento por lugar, y cada uno dice en cuál (0016). Antes había uno
+  -- solo y caía en la bodega por omisión, sin que nadie lo hubiera pedido.
+  if coalesce(p_initial_stock, 0) > 0 or coalesce(p_initial_stock_sala, 0) > 0 then
     if v_store is null then
       select id into v_store from stores where tenant_id = v_tenant and is_active limit 1;
     end if;
@@ -126,19 +138,46 @@ begin
       raise exception 'SIN_TIENDA' using errcode = 'P0001';
     end if;
 
-    perform fn_post_movement(
-      v_tenant, v_store, v_product, 'inventario_inicial',
-      p_initial_stock, coalesce(p_avg_cost, 0),
-      'product', v_product, 'Stock inicial al crear el producto', v_user
-    );
+    if coalesce(p_initial_stock, 0) > 0 then
+      perform fn_en_ubicacion('bodega');
+      perform fn_post_movement(
+        v_tenant, v_store, v_product, 'inventario_inicial',
+        p_initial_stock, coalesce(p_avg_cost, 0),
+        'product', v_product, 'Carga inicial · a la bodega', v_user
+      );
+    end if;
+
+    if coalesce(p_initial_stock_sala, 0) > 0 then
+      perform fn_en_ubicacion('sala');
+      perform fn_post_movement(
+        v_tenant, v_store, v_product, 'inventario_inicial',
+        p_initial_stock_sala, coalesce(p_avg_cost, 0),
+        'product', v_product, 'Carga inicial · a la sala de ventas', v_user
+      );
+    end if;
+
+    -- Se limpia siempre: es local a la transacción, pero dejarla puesta haría
+    -- que el siguiente movimiento de esta misma transacción la heredara.
+    perform fn_en_ubicacion(null);
   end if;
 
   return jsonb_build_object(
-    'product_id', v_product,
-    'barcodes',   v_i,
-    'stock',      coalesce(p_initial_stock, 0)
+    'product_id',  v_product,
+    'barcodes',    v_i,
+    'stock',       coalesce(p_initial_stock, 0) + coalesce(p_initial_stock_sala, 0),
+    'stock_bodega', coalesce(p_initial_stock, 0),
+    'stock_sala',   coalesce(p_initial_stock_sala, 0)
   );
 end $$;
 
 comment on function public.fn_create_product is
-  'Alta de producto atómica: producto, códigos de barra y stock inicial, o nada. Ver docs/21 A-4.';
+  'Alta de producto atómica: producto, códigos de barra y stock inicial repartido entre bodega y sala (0016). Ver docs/21 A-4 y §0f.';
+
+-- Regla 12: para cerrar una función hay que revocarle a `public`, no a
+-- `authenticated`. La firma nueva empieza desde cero.
+revoke execute on function public.fn_create_product(
+  text, text, text, uuid, text, integer, integer, numeric, boolean, integer, text[], numeric, numeric)
+  from public, anon;
+grant execute on function public.fn_create_product(
+  text, text, text, uuid, text, integer, integer, numeric, boolean, integer, text[], numeric, numeric)
+  to authenticated;

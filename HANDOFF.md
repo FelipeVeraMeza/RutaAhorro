@@ -56,7 +56,7 @@ datos de ejemplo en IndexedDB y un banner amarillo con selector de rol.
 | `npm run dev` | Frontend en :3000 |
 | `npm run dev:worker` | Worker en :8080 (no se levanta con `npm run dev`) |
 | `npm test` | 318 pruebas de lógica de negocio |
-| `npm run db:test` | 58 pruebas contra un **PostgreSQL real** en UTC, como Supabase: concurrencia, ataques por rol, zona horaria, instalador (~40 s, sin Docker) |
+| `npm run db:test` | 66 pruebas contra un **PostgreSQL real** en UTC, como Supabase: concurrencia, ataques por rol, zona horaria, instalador (~40 s, sin Docker) |
 | `npm run db:aplicar` | Diagnostica la base real. Con `-- --aplicar` instala `instalar.sql` y **verifica** RLS, funciones expuestas y políticas. Necesita la contraseña real en `DATABASE_URL` |
 | `npm run db:limpiar` | Respalda y dice qué borraría. Con `-- --si-borrar-todo` deja la base **de cero** y reinstala: es lo que hay que correr antes de mostrarle el sistema al cliente, porque los recorridos de QA dejan datos |
 | `npm run db:e2e` | **La primera venta real**, de punta a punta contra Supabase, como la hace la app: producto, recepción, caja, venta con vuelto, reenvío, anulación, cierre que cuadra. Más los ataques de seguridad contra la base real (T-46). Corre en un local aparte, "QA · pruebas internas" |
@@ -75,7 +75,7 @@ Si tocas `packages/core`, recompílalo antes de compilar la web:
 
 ## ESTADO AL 2026-09-19
 
-**318 pruebas de lógica · 58 contra PostgreSQL real · typecheck limpio · SQL
+**318 pruebas de lógica · 66 contra PostgreSQL real · typecheck limpio · SQL
 validado · build de producción con demo apagado · 14 rutas.**
 
 ### La base real está instalada y la primera venta se hizo — 2026-09-19
@@ -118,11 +118,47 @@ productos, ventas, cajas y movimientos. El respaldo de lo anterior (244 filas y
 | Usuario | `admin@gmail.com` con `admin123` — **cambiar antes de que la use el cliente** |
 | Levantar | `npm run build:web`, después `cd apps/web && npx next start -p 3001` |
 
-> **Ojo:** los recorridos de `tools/ui/` crean el local "QA · pruebas internas"
-> con productos y ventas de prueba en esta misma base. Están aislados por RLS y
-> el cliente no los ve, pero antes de una demostración conviene volver a correr
-> `db:limpiar` y luego `db:admin`. Lo correcto a futuro es un proyecto de
-> Supabase aparte para QA: es **T-51**.
+> **⚠ Al 2026-09-20 la base YA NO está limpia.** Los recorridos de esta sesión
+> volvieron a crear el local "QA · pruebas internas" con productos, ventas
+> (boleta, voucher y factura) y cajas de prueba. Está aislado por RLS y el
+> cliente no lo ve, pero **antes de una demostración hay que correr
+> `npm run db:limpiar -- --si-borrar-todo` y después `npm run db:admin`**.
+> Ojo: `db:limpiar` reinstala `instalar.sql`, así que se lleva 0015 y 0016
+> puestas. Lo correcto a futuro es un proyecto de Supabase aparte para QA:
+> es **T-51**.
+
+### A dónde va cada unidad — 2026-09-20, puntos 1 y 2 del cliente
+
+Los dos puntos eran el mismo problema por dos lados. En palabras de Felipe:
+«no sale a dónde va cada producto cuando lo ingreso» y «que se entienda cuánta
+cantidad agrego en punto de venta y cuántos hay en bodega, más simple».
+
+Desde 0014 el local tiene dos lugares y el sistema los lleva bien, pero **no
+decía a cuál entra lo que se ingresa**. El formulario pedía "Stock inicial" a
+secas y todo caía en la bodega, porque así lo decide `fn_ubicacion_por_tipo`.
+Quien cargaba el catálogo creía dejarlo listo para vender, iba al POS y la sala
+estaba en cero.
+
+- **Migración 0016.** `fn_create_product` recibe cuánto queda a la vista y
+  cuánto en bodega, y deja **un movimiento por lugar**, cada uno diciendo a
+  cuál entró. Omitir el parámetro nuevo es lo de antes: todo a la bodega.
+- **El formulario pregunta "¿Cuántos tienes hoy?"** con dos casillas —"En la
+  sala de ventas (a la vista, listo para vender)" y "En la bodega (guardado, no
+  se vende todavía)"— y el total abajo.
+- **El kardex dice a dónde fue cada movimiento.** Un traspaso son dos filas y
+  las dos decían "Traspaso" a secas; ahora dicen "sale de la bodega" y "entra a
+  la sala de ventas".
+- **La lista de stock habla en castellano:** "A la vista 4 · guardado en bodega
+  6 · hay que reponer", en vez de "Sala 4 · Bodega 6 · reponer".
+
+**Un defecto de la maqueta que salió de paso** (la pregunta de T-15): al crear
+un producto en demo, el stock inicial quedaba **todo en la sala**, y en
+producción **todo en la bodega**. La maqueta enseñaba lo contrario de lo que
+pasa. Ahora reparte igual.
+
+Probado: 6 pruebas nuevas contra PostgreSQL real (vistas fallar antes del
+arreglo, regla 16) y **12/12 en el navegador** con 0016 aplicada en Supabase
+(`node tools/ui/bodega-sala.mjs`), sin errores de JavaScript.
 
 ### La lista del cliente — reunión 2026-09-19 (noche)
 
@@ -158,10 +194,12 @@ punto, está en `docs/21` §0f; las tareas nuevas son **T-53 a T-57**.
 > registra**. Aplicarla con `npm run db:instalar` y pegar
 > `supabase/instalar.sql`, o `npm run db:aplicar -- --aplicar`.
 
-**Falta el recorrido en el navegador (regla 20).** El guion está escrito
-—`node tools/ui/documento-venta.mjs`— pero **no se ha corrido**: necesita 0015
-aplicada en Supabase y la app levantada en :3001. Hasta que pase, esto está
-probado en `core` (18 pruebas) y contra PostgreSQL real (13), no en pantalla.
+**Recorrido en el navegador: 19/19, sin errores de JavaScript**
+(`node tools/ui/documento-venta.mjs`, 2026-09-20, con 0015 aplicada en
+Supabase). Cobro con efectivo, con tarjeta y con factura; el RUT malo avisa y
+bloquea; el ticket lleva al receptor; Ventas muestra los tres documentos; el
+consultador responde; y el menú "Más" del celular lleva a Proveedores, Ventas,
+Reportes y Usuarios.
 
 ### Recorridos en navegador, por requerimiento — 2026-09-19 (tarde)
 
@@ -173,10 +211,10 @@ descargar navegadores) y corren contra `http://localhost:3001` y el local
 ```bash
 cd apps/web && npx next start -p 3001      # la app compilada, en otra terminal
 node tools/ui/m1-usuarios.mjs              # 20/20
-node tools/ui/bodega-sala.mjs              # 7/7
+node tools/ui/bodega-sala.mjs              # 12/12
 node tools/ui/m5-vender.mjs                # 17/17
 node tools/ui/m6-caja.mjs                  # 13/13
-node tools/ui/documento-venta.mjs          # escrito, sin correr todavía
+node tools/ui/documento-venta.mjs          # 19/19  (RA_BASE=http://localhost:3005 si el 3001 está ocupado)
 ```
 
 Encontraron diez defectos (G-1 a G-10 en `docs/21` §0e), casi todos en
@@ -397,6 +435,24 @@ Detalle completo con IDs en `docs/22-tareas-pendientes.md`. Resumen:
    configuración del local e historial de precios. Las cuatro están en la base
    y no en la pantalla.
 
+### Lo que queda de la lista del cliente, en el orden que eligió Felipe
+
+1. **T-57 · descuentos por cantidad** (punto 8: «1 a $1.000, desde 3 a $700»).
+   Tabla de tramos por producto, el POS recalculando la línea al cambiar la
+   cantidad, y `fn_register_sale` validando el precio contra el tramo. **Hacerla
+   junto con T-14**: hoy la base acepta el `unit_price` que manda el cliente sin
+   compararlo con nada, y los tramos son justamente la tabla contra la cual
+   comparar. Separadas, T-57 agranda el agujero de T-14.
+2. **T-55 · crear productos desde la factura del proveedor** (punto 3). Hoy hay
+   que salir a Productos, crear el producto y volver a empezar la recepción.
+   Con una factura de 30 líneas nuevas es inviable.
+3. **T-56 · notas de crédito** (punto 7). `fn_void_sale` ya anula y devuelve el
+   stock; falta el documento que respalda la devolución, con su correlativo.
+   Igual que la boleta: **registrarla se puede hoy, emitirla ante el SII no**
+   (B-04, B-05).
+4. **T-52 · seguir el recorrido por requerimiento** en Productos, Proveedores,
+   Inventario, Reportes y Ventas. Es donde han salido todos los defectos.
+
 ### La deuda silenciosa
 
 **T-40 se cerró el 2026-09-18** (queda CP-06, que nunca se implementó). Lo que
@@ -497,6 +553,15 @@ esperar ningún trámite.
 20. **Un requerimiento no está hecho hasta que se recorrió en el navegador.**
     El documento 17 marcaba ✅ la búsqueda del POS, las invitaciones y el
     cierre forzado, y ninguno funcionaba. `tools/ui/` es la evidencia.
+21. **Agregarle un parámetro a una función de la base crea una SOBRECARGA, no
+    un reemplazo.** `create or replace` con un argumento más deja las dos
+    firmas conviviendo, y entonces cualquier `grant execute on function
+    public.fn_x` sin lista de argumentos falla con *function name is not
+    unique* — que es como `instalar.sql` deja de ser idempotente sin que nadie
+    lo note. Hay que borrar la firma vieja donde se define la nueva, **y**
+    pre-borrar la nueva donde se define la vieja, para que reinstalar funcione.
+    Ya pasó tres veces: `fn_adjust_stock` (0014), `fn_register_sale` (0015) y
+    `fn_create_product` (0016). Lo encuentra `db:test`, no leer el SQL.
 
 ---
 

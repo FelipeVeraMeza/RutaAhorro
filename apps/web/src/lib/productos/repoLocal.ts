@@ -171,9 +171,12 @@ export const repoLocal: RepositorioProductos = {
       unit: datos.unidad,
       categoryId: datos.categoriaId,
       tracksExpiry: datos.perecible,
-      stock: datos.stockInicial,
-      stockSala: datos.stockInicial,
-      stockBodega: 0,
+      // La maqueta reparte igual que producción. Antes dejaba todo en la sala
+      // y producción todo en la bodega: el modo demo enseñaba lo contrario de
+      // lo que pasa (la pregunta de T-15).
+      stock: datos.stockInicialSala + datos.stockInicialBodega,
+      stockSala: datos.stockInicialSala,
+      stockBodega: datos.stockInicialBodega,
       minStock: datos.stockMinimo,
       isActive: true,
       updatedAt: new Date().toISOString(),
@@ -337,7 +340,8 @@ export const repoLocal: RepositorioProductos = {
             perecible: fila.perecible,
             diasAlerta: fila.dias_alerta,
             codigos: fila.codigo_barras ? [fila.codigo_barras] : [],
-            stockInicial: fila.stock_inicial,
+            stockInicialSala: 0,
+            stockInicialBodega: fila.stock_inicial,
           });
           resultado.creados++;
         }

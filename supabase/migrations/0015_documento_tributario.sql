@@ -330,10 +330,15 @@ end $$;
 revoke execute on function public.fn_register_sale(uuid, jsonb, jsonb, timestamptz, integer, text, boolean, jsonb) from public, anon;
 grant  execute on function public.fn_register_sale(uuid, jsonb, jsonb, timestamptz, integer, text, boolean, jsonb) to authenticated;
 
--- fn_rut_formateado no toca datos: es una calculadora. La usa la app para
--- avisar antes de cobrar, así que se expone.
-revoke execute on function public.fn_rut_formateado(text) from public, anon;
-grant  execute on function public.fn_rut_formateado(text) to authenticated;
+-- fn_rut_formateado no se expone. Es una calculadora pura, así que dejarla
+-- abierta no sería un riesgo, pero tampoco tiene a quién servir: la usa
+-- fn_register_sale, que es `security definer` y corre como dueña. La pantalla
+-- valida el RUT con `isValidRut` de core, sin ida y vuelta a la base.
+--
+-- Vale la pena anotar por qué casi se cuela: el verificador de
+-- `tools/aplicar-esquema.mjs` solo mira funciones `security definer`, y esta
+-- no lo es. La lista RPC_PERMITIDAS no la habría delatado.
+revoke execute on function public.fn_rut_formateado(text) from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Valor por omisión del local

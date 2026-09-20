@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
   formatCLP, marginPct, isValidEan, normalizeBarcode, toUserMessage,
-  validarMonto, validarCantidad,
+  validarMonto, validarCantidad, cantidadConUnidad,
 } from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
 import { useScanner } from '@/lib/scanner/useScanner';
@@ -34,7 +34,8 @@ export function FormularioProducto({
   const [precio, setPrecio] = useState(producto ? String(producto.precioVenta) : '');
   const [costo, setCosto] = useState(producto?.costoPromedio ? String(producto.costoPromedio) : '');
   const [stockMinimo, setStockMinimo] = useState(String(producto?.stockMinimo ?? 0));
-  const [stockInicial, setStockInicial] = useState('0');
+  const [stockSala, setStockSala] = useState('0');
+  const [stockBodega, setStockBodega] = useState('0');
   const [perecible, setPerecible] = useState(producto?.perecible ?? false);
   const [diasAlerta, setDiasAlerta] = useState(String(producto?.diasAlerta ?? 30));
   const [codigos, setCodigos] = useState<string[]>(producto?.codigos ?? []);
@@ -61,7 +62,8 @@ export function FormularioProducto({
   const vPrecio = validarMonto(precio, { etiqueta: 'precio de venta', permiteCero: false, maximo: 50_000_000 });
   const vCosto = validarMonto(costo, { etiqueta: 'costo', permiteVacio: true, maximo: 50_000_000 });
   const vStockMinimo = validarCantidad(stockMinimo, { permiteVacio: true, maximo: 1_000_000 });
-  const vStockInicial = validarCantidad(stockInicial, { permiteVacio: true, maximo: 1_000_000 });
+  const vStockSala = validarCantidad(stockSala, { permiteVacio: true, maximo: 1_000_000 });
+  const vStockBodega = validarCantidad(stockBodega, { permiteVacio: true, maximo: 1_000_000 });
   const vDiasAlerta = validarCantidad(diasAlerta, { permiteVacio: true, maximo: 3650 });
 
   const precioNum = vPrecio.valor;
@@ -94,7 +96,7 @@ export function FormularioProducto({
     setError(null);
 
     if (nombre.trim() === '') { setError('El nombre es obligatorio'); return; }
-    for (const v of [vPrecio, vCosto, vStockMinimo, vStockInicial, vDiasAlerta]) {
+    for (const v of [vPrecio, vCosto, vStockMinimo, vStockSala, vStockBodega, vDiasAlerta]) {
       if (!v.valido) { setError(v.error); return; }
     }
     if (perecible && vDiasAlerta.valor <= 0) {
@@ -137,7 +139,8 @@ export function FormularioProducto({
         await repo.crear({
           ...base,
           costo: costoNum,
-          stockInicial: vStockInicial.valor,
+          stockInicialSala: vStockSala.valor,
+          stockInicialBodega: vStockBodega.valor,
         });
       }
       onGuardado();
@@ -355,22 +358,57 @@ export function FormularioProducto({
                   />
                 )}
               </Campo>
-              {!esEdicion && (
-                <Campo
-                  etiqueta="Stock inicial"
-                  error={stockInicial !== '' ? vStockInicial.error : null}
-                >
-                  {(p) => (
-                    <input
-                      {...p}
-                      inputMode="decimal" value={stockInicial}
-                      onChange={(e) => setStockInicial(e.target.value)}
-                      className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
-                    />
-                  )}
-                </Campo>
-              )}
             </div>
+
+            {/* ¿Cuántos hay, y dónde? (0016). Antes era un solo "Stock inicial"
+                que entraba entero a la bodega sin decirlo: se cargaba el
+                catálogo creyendo dejarlo listo para vender y la sala quedaba en
+                cero. */}
+            {!esEdicion && (
+              <div className="rounded-xl border border-[var(--borde)] p-3">
+                <p className="text-sm font-medium mb-0.5">¿Cuántos tienes hoy?</p>
+                <p className="text-xs text-[var(--texto-suave)] mb-3">
+                  Lo que está a la vista se puede vender de inmediato. Lo de la bodega
+                  pasa a la sala cuando tocas “Reponer” en Inventario.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Campo
+                    etiqueta="En la sala de ventas"
+                    ayuda="A la vista, listo para vender"
+                    error={stockSala !== '' ? vStockSala.error : null}
+                  >
+                    {(p) => (
+                      <input
+                        {...p}
+                        inputMode="decimal" value={stockSala}
+                        onChange={(e) => setStockSala(e.target.value)}
+                        className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
+                      />
+                    )}
+                  </Campo>
+                  <Campo
+                    etiqueta="En la bodega"
+                    ayuda="Guardado, no se vende todavía"
+                    error={stockBodega !== '' ? vStockBodega.error : null}
+                  >
+                    {(p) => (
+                      <input
+                        {...p}
+                        inputMode="decimal" value={stockBodega}
+                        onChange={(e) => setStockBodega(e.target.value)}
+                        className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
+                      />
+                    )}
+                  </Campo>
+                </div>
+                <p role="status" className="text-xs text-[var(--texto-suave)] mt-2">
+                  Total en el local:{' '}
+                  <span className="num font-medium text-[var(--texto)]">
+                    {cantidadConUnidad(vStockSala.valor + vStockBodega.valor, unidad)}
+                  </span>
+                </p>
+              </div>
+            )}
 
             {/* Perecible: activa el control por lote y FEFO (ADR-007) */}
             <div className="rounded-xl border border-[var(--borde)] p-3">

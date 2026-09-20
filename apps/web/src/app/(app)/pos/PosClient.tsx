@@ -117,7 +117,7 @@ export function PosClient({
     const enCarro = (linesRef.current.find((l) => l.productId === p.id)?.quantity ?? 0) + qty;
     const sala = p.stockSala ?? p.stock;
     if (enCarro > sala && (p.stockBodega ?? 0) > 0) {
-      notificar('info', `${p.name}: en sala quedan ${Math.max(0, sala)} · hay ${p.stockBodega} en bodega, conviene reponer`);
+      notificar('info', `${p.name}: a la vista quedan ${Math.max(0, sala)} · hay ${p.stockBodega} en bodega, conviene reponer`);
     } else {
       notificar('ok', `${p.name} · ${formatCLP(p.salePrice)}`);
     }
@@ -301,7 +301,7 @@ export function PosClient({
                       </span>
                     )}
                     <span className="block text-xs text-[var(--texto-suave)] num">
-                      Sala {p.stockSala ?? p.stock}{typeof p.stockBodega === 'number' && ` · Bodega ${p.stockBodega}`}
+                      A la vista {p.stockSala ?? p.stock}{typeof p.stockBodega === 'number' && ` · en bodega ${p.stockBodega}`}
                       {p.tracksExpiry && ' · perecible'}
                     </span>
                   </span>

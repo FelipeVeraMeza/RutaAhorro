@@ -138,3 +138,77 @@ test('Nadie escribe las ubicaciones a mano', async () => {
   assert.equal(r.ok, false);
   assert.deepEqual(await ubicaciones(L, p), { sala: 0, bodega: 3 });
 });
+
+// ---------------------------------------------------------------------------
+// 0016 · a dónde entra lo que se ingresa al crear un producto
+// ---------------------------------------------------------------------------
+/** Alta de producto como la hace la pantalla, con lo mínimo. */
+const crear = (extra = {}) => ({
+  p_name: `Producto ${Math.random().toString(16).slice(2, 8)}`,
+  p_sku: null, p_description: null, p_category_id: null, p_unit: 'unidad',
+  p_sale_price: 1000, p_avg_cost: 600, p_min_stock: 0,
+  p_tracks_expiry: false, p_expiry_alert_days: 30, p_barcodes: null,
+  p_initial_stock: 0, ...extra,
+});
+
+test('Al crear un producto se dice cuánto queda a la vista y cuánto en bodega', async () => {
+  const L = await nuevoLocal(banco);
+  const adm = await banco.como(L.admin);
+  const r = await rpc(adm, 'fn_create_product', crear({ p_initial_stock: 7, p_initial_stock_sala: 5 }));
+  assert.equal(Number(r.stock), 12);
+  assert.equal(Number(r.stock_sala), 5);
+  assert.equal(Number(r.stock_bodega), 7);
+  assert.deepEqual(await invariante(L, r.product_id), { sala: 5, bodega: 7 });
+});
+
+test('Se puede crear un producto que queda entero a la vista', async () => {
+  const L = await nuevoLocal(banco);
+  const adm = await banco.como(L.admin);
+  const r = await rpc(adm, 'fn_create_product', crear({ p_initial_stock: 0, p_initial_stock_sala: 9 }));
+  assert.deepEqual(await invariante(L, r.product_id), { sala: 9, bodega: 0 });
+});
+
+test('Quien no manda el parámetro nuevo obtiene lo de antes: todo a bodega', async () => {
+  const L = await nuevoLocal(banco);
+  const adm = await banco.como(L.admin);
+  const r = await rpc(adm, 'fn_create_product', crear({ p_initial_stock: 4 }));
+  assert.deepEqual(await invariante(L, r.product_id), { sala: 0, bodega: 4 });
+});
+
+test('Cada carga inicial deja su propio movimiento, y dice a qué lugar entró', async () => {
+  const L = await nuevoLocal(banco);
+  const adm = await banco.como(L.admin);
+  const r = await rpc(adm, 'fn_create_product', crear({ p_initial_stock: 7, p_initial_stock_sala: 5 }));
+  const { rows } = await banco.su.query(
+    `select ubicacion::text as u, quantity, reason from inventory_movements
+      where product_id = $1 and movement_type = 'inventario_inicial' order by quantity`, [r.product_id]);
+  assert.deepEqual(rows.map((x) => `${x.u}:${Number(x.quantity)}`), ['sala:5', 'bodega:7']);
+  assert.ok(rows.every((x) => /Carga inicial/.test(x.reason)), 'el motivo no dice de qué se trata');
+});
+
+test('Una cantidad negativa en cualquiera de los dos lugares no crea nada', async () => {
+  const L = await nuevoLocal(banco);
+  const adm = await banco.como(L.admin);
+  const antes = (await banco.su.query('select count(*)::int as n from products where tenant_id = $1', [L.tenant])).rows[0].n;
+  for (const extra of [{ p_initial_stock: -1 }, { p_initial_stock_sala: -1 }]) {
+    const r = await intentar(rpc(adm, 'fn_create_product', crear(extra)));
+    assert.match(r.error ?? '', /CANTIDAD_NEGATIVA/, JSON.stringify(extra));
+  }
+  const despues = (await banco.su.query('select count(*)::int as n from products where tenant_id = $1', [L.tenant])).rows[0].n;
+  assert.equal(despues, antes, 'quedó un producto a medio crear');
+});
+
+test('La ubicación forzada no se le pega al movimiento siguiente', async () => {
+  // fn_en_ubicacion es local a la transacción. Si fn_create_product la dejara
+  // puesta, la venta que viniera después en la misma transacción entraría en
+  // el lugar equivocado.
+  const L = await nuevoLocal(banco);
+  const adm = await banco.como(L.admin);
+  await adm.query('begin');
+  const r = await rpc(adm, 'fn_create_product', crear({ p_initial_stock: 0, p_initial_stock_sala: 6 }));
+  await rpc(adm, 'fn_adjust_stock', {
+    p_product_id: r.product_id, p_new_quantity: 3,
+    p_movement_type: 'ajuste_negativo', p_reason: 'conteo' });   // sin ubicación: la sala
+  await adm.query('commit');
+  assert.deepEqual(await invariante(L, r.product_id), { sala: 3, bodega: 0 });
+});

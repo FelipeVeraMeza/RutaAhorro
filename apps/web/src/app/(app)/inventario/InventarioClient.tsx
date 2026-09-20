@@ -7,6 +7,7 @@ import {
 import { repoProductos, type Producto } from '@/lib/productos';
 import {
   repoInventario, ETIQUETA_MOVIMIENTO, ETIQUETA_ESTADO_LOTE, MOTIVOS_SUGERIDOS, ETIQUETA_UBICACION,
+  dondeOcurrio, UBICACION_EN_FRASE,
   type Movimiento, type Lote, type Ubicacion,
 } from '@/lib/datos/inventario';
 import { Modal } from '@/components/Modal';
@@ -205,13 +206,15 @@ export function InventarioClient({
                         {verCostos && typeof p.costoPromedio === 'number' &&
                           ` · ${formatCLP(Math.round(p.stock * p.costoPromedio))}`}
                       </p>
+                      {/* En palabras, no en jerga: lo que importa es si se
+                           puede vender ahora o hay que ir a buscarlo. */}
                       <p className="text-xs num mt-0.5">
                         <span className={p.stockSala <= 0 ? 'text-[var(--color-alerta)] font-medium' : ''}>
-                          Sala {p.stockSala}
+                          A la vista {p.stockSala}
                         </span>
-                        <span className="text-[var(--texto-suave)]"> · Bodega {p.stockBodega}</span>
+                        <span className="text-[var(--texto-suave)]"> · guardado en bodega {p.stockBodega}</span>
                         {p.stockSala <= 0 && p.stockBodega > 0 && (
-                          <span className="text-[var(--color-aviso)]"> · reponer</span>
+                          <span className="text-[var(--color-aviso)]"> · hay que reponer</span>
                         )}
                       </p>
                     </div>
@@ -335,7 +338,11 @@ export function InventarioClient({
                     <div className="min-w-0">
                       <p className="text-sm truncate">{m.productoNombre}</p>
                       <p className="text-xs text-[var(--texto-suave)]">
-                        {ETIQUETA_MOVIMIENTO[m.tipo]} · {fechaHora(m.fecha)}
+                        {ETIQUETA_MOVIMIENTO[m.tipo]}
+                        {/* A dónde fue. Un traspaso son dos filas y sin esto
+                            las dos decían lo mismo (punto 1 del cliente). */}
+                        {dondeOcurrio(m) && ` · ${dondeOcurrio(m)}`}
+                        {' · '}{fechaHora(m.fecha)}
                         {m.usuario && ` · ${m.usuario}`}
                       </p>
                       {m.motivo && (
@@ -815,7 +822,7 @@ function DialogoReponer({
     setGuardando(true);
     try {
       await repoInventario().reponer({ productoId: producto.id, cantidad: v.valor, desde, hacia });
-      onListo(`${cantidadConUnidad(v.valor, producto.unidad)} de ${producto.nombre} pasaron a ${ETIQUETA_UBICACION[hacia].toLowerCase()}`);
+      onListo(`${cantidadConUnidad(v.valor, producto.unidad)} de ${producto.nombre} pasaron a ${UBICACION_EN_FRASE[hacia]}`);
     } catch (e) {
       setError(toUserMessage(e));
     } finally {
@@ -828,11 +835,11 @@ function DialogoReponer({
       <div className="p-5 space-y-3">
         <div className="grid grid-cols-2 gap-2 text-center">
           <div className="tarjeta p-3">
-            <p className="text-[11px] text-[var(--texto-suave)]">Bodega</p>
+            <p className="text-[11px] text-[var(--texto-suave)]">Guardado en bodega</p>
             <p className="num text-lg font-bold">{producto.stockBodega}</p>
           </div>
           <div className="tarjeta p-3">
-            <p className="text-[11px] text-[var(--texto-suave)]">Sala de ventas</p>
+            <p className="text-[11px] text-[var(--texto-suave)]">A la vista</p>
             <p className="num text-lg font-bold">{producto.stockSala}</p>
           </div>
         </div>
@@ -846,14 +853,14 @@ function DialogoReponer({
                 hacia === u ? 'border-marca-500 bg-marca-50 font-medium' : 'border-[var(--borde)]'
               }`}
             >
-              {u === 'sala' ? 'Bodega → Sala' : 'Sala → Bodega'}
+              {u === 'sala' ? 'Dejar a la vista' : 'Guardar en bodega'}
             </button>
           ))}
         </div>
 
         <Campo
           etiqueta="Cantidad a mover"
-          ayuda={`Disponible en ${ETIQUETA_UBICACION[desde].toLowerCase()}: ${cantidadConUnidad(disponible, producto.unidad)}.`}
+          ayuda={`Disponible en ${UBICACION_EN_FRASE[desde]}: ${cantidadConUnidad(disponible, producto.unidad)}.`}
           error={cantidad.trim() !== '' && !v.valido ? v.error : null}
         >
           {(p) => (

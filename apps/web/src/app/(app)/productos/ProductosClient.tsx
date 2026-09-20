@@ -255,7 +255,7 @@ export function ProductosClient({
                   <p className={`text-xs num ${est.clase}`}>
                     {est.icono} {est.texto} · {cantidadConUnidad(p.stock, p.unidad)}
                     {p.stockMinimo > 0 && ` (mín. ${p.stockMinimo})`}
-                    {` · sala ${p.stockSala} · bodega ${p.stockBodega}`}
+                    {` · a la vista ${p.stockSala} · en bodega ${p.stockBodega}`}
                   </p>
 
                   {puedeEditar && (
