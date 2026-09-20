@@ -4,7 +4,64 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-09-19.**
+> **Corte: 2026-09-20.**
+
+---
+
+## LO ÚLTIMO QUE PASÓ — léelo primero
+
+**2026-09-20.** El cliente dejó una lista de diez puntos en una reunión. **Seis
+están hechos y probados en el navegador contra Supabase**; cuatro quedan, en el orden que eligió Felipe. El detalle punto por punto está en
+`docs/21-qa-pantallas.md` §0f, y acá abajo en "La lista del cliente" y "A dónde
+va cada unidad".
+
+| Hecho | Falta |
+|---|---|
+| 4, 6, 9 (mitad), 10 · qué documento corresponde a cada venta, y la barra del celular | **T-57** · descuentos por cantidad (punto 8), junto con T-14 |
+| 5 · el consultador de precios (`/precio`) | **T-55** · crear productos desde la factura del proveedor (punto 3) |
+| 1 y 2 · a dónde va cada unidad al ingresar un producto | **T-56** · notas de crédito (punto 7) |
+| | **T-52** · seguir el recorrido por requerimiento |
+
+**La lista del cliente, textual**, para que no se pierda en la traducción:
+
+> 1. El ingresar producto a sala de ventas sale producto incial no sale especifico
+> 2. Agregar buen que se agrega cuando se crea un producto
+> 3. Agregar productos llegados de una factura
+> 4. Boletas solo con transferencia y efectivo cuando es con tarjeta es con maquina
+> 5. Consultador de precio
+> 6. Si es pago con tarjeta se debe entregar un boucher pero si es transferencia
+>    o efectivo se entrega boleta y ticket
+> 7. Notas de crédito para ventas en caso de un supuesto
+> 8. Ver descuentos por unidades ejemplo 1 a 1000 y desde 3 a 700
+> 9. Queda por predeterminado por boleta pero puedo hacer una factura y además
+>    se debe tener rut clave y firma
+> 10. Prioridad boletas y facturas y desplazamiento de iconos en celular no veo
+>     esas iconos en el celu veo solo hasta inventario
+
+Felipe aclaró el 1 y el 2: **«no sale a dónde va cada producto cuando lo
+ingreso»** y **«que se entienda cuánta cantidad agrego en punto de venta y
+cuántos hay en bodega, y mejorar qué es cada cosa, más simple»**. Eran el mismo
+problema y quedaron resueltos en 0016.
+
+Del punto 9, «rut clave y firma» **no** es la firma del cliente en un papel: es
+el **certificado digital** (un `.pfx` con su clave) con el que se firma el DTE.
+Eso es B-04 y hoy no existe.
+
+**Tres cosas que hay que tener presentes antes de tocar nada:**
+
+1. **Migraciones 0015 y 0016 ya están aplicadas en el Supabase real**
+   (2026-09-20). Las dos le cambian la firma a una función. **Código nuevo con
+   base vieja significa que ninguna venta se registra.** Si levantas esto en
+   otra máquina, la base ya está al día; si vuelves a instalar, usa
+   `npm run db:instalar` y pega `supabase/instalar.sql` completo.
+2. **La base ya NO está limpia.** Los recorridos de QA volvieron a crear el
+   local "QA · pruebas internas" con productos y ventas de prueba. Antes de una
+   demostración: `npm run db:limpiar -- --si-borrar-todo` y después
+   `npm run db:admin`.
+3. **Esto todavía no emite boletas ni facturas ante el SII.** Sabe qué
+   documento corresponde a cada venta y guarda el receptor validado; el timbre
+   necesita el certificado digital y folios CAF, que son trámites (B-04, B-05).
+   El papel sigue diciendo `NO ES DOCUMENTO TRIBUTARIO`.
 
 ---
 
@@ -73,7 +130,7 @@ Si tocas `packages/core`, recompílalo antes de compilar la web:
 
 ---
 
-## ESTADO AL 2026-09-19
+## ESTADO AL 2026-09-20
 
 **318 pruebas de lógica · 66 contra PostgreSQL real · typecheck limpio · SQL
 validado · build de producción con demo apagado · 14 rutas.**
