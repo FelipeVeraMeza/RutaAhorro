@@ -10,6 +10,7 @@ const lote = (id: string, expiry: string, qty: number, cost = 1000, receivedAt?:
   id, expiryDate: expiry, quantity: qty, unitCost: cost, receivedAt,
 });
 
+// Evidencia de RF-M4-17: sale primero el lote que vence antes.
 describe('FEFO', () => {
   it('ordena por fecha de vencimiento ascendente', () => {
     const lots = [lote('c', '2026-12-01', 5), lote('a', '2026-09-20', 5), lote('b', '2026-10-15', 5)];
@@ -88,6 +89,7 @@ describe('estado de vencimiento', () => {
   });
 });
 
+// Evidencia de RF-M4-18.
 describe('alertas de vencimiento', () => {
   it('lista solo lo que requiere atención, lo más urgente primero', () => {
     const lots = [

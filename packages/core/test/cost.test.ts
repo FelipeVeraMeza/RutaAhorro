@@ -4,6 +4,7 @@ import {
   shouldWarnCostVariation, inventoryValue,
 } from '../src/cost.js';
 
+// Evidencia de RF-M3-06.
 describe('costo promedio ponderado', () => {
   it('promedia ponderando por cantidad', () => {
     // 10 u a $1.000 + 10 u a $1.400 => $1.200
@@ -53,6 +54,7 @@ describe('costo promedio ponderado', () => {
   });
 });
 
+// Evidencia de RF-M3-08.
 describe('variación de costo', () => {
   it('calcula el porcentaje de variación', () => {
     expect(costVariationPct(1000, 1400)).toBe(40);
@@ -70,6 +72,7 @@ describe('variación de costo', () => {
   });
 });
 
+// Evidencia de RF-M4-08 (el cálculo).
 describe('valorización', () => {
   it('multiplica stock por costo promedio', () => {
     expect(inventoryValue(12.5, 1200)).toBe(15000);

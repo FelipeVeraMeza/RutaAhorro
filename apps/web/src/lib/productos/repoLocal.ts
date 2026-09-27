@@ -1,6 +1,6 @@
 'use client';
 
-import {
+import { normalizeBarcode,
   codigosDesdeImportacion, planCodigos, toUserMessage, type FilaProducto,
 } from '@rutaahorro/core';
 import { db, normalizeSearch, type LocalProduct } from '../offline/db';
@@ -133,8 +133,10 @@ export const repoLocal: RepositorioProductos = {
 
     if (filtro.busqueda?.trim()) {
       const q = normalizeSearch(filtro.busqueda);
+      // También por código de barras exacto (RF-M2-05), como en producción.
+      const codigo = await db().barcodes.get(normalizeBarcode(filtro.busqueda.trim()));
       todos = todos.filter(
-        (p) => p.nameSearch.includes(q) || (p.sku && normalizeSearch(p.sku).includes(q)),
+        (p) => p.nameSearch.includes(q) || (p.sku && normalizeSearch(p.sku).includes(q)) || p.id === codigo?.productId,
       );
     }
 

@@ -3,6 +3,7 @@ import { isValidRut, formatRut, cleanRut, computeDv } from '../src/rut.js';
 import { isValidEan, detectFormat, normalizeBarcode, generateInternalBarcode } from '../src/barcode.js';
 import { toUserMessage, errorCode } from '../src/errors.js';
 
+// Evidencia de RF-M3-02: formato y dígito verificador del RUT.
 describe('RUT chileno', () => {
   it('valida RUTs correctos', () => {
     expect(isValidRut('11.111.111-1')).toBe(true);

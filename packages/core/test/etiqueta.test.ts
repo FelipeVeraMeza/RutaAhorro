@@ -46,6 +46,7 @@ describe('tablas de codificación', () => {
   });
 });
 
+// Evidencia de RF-M2-13: la etiqueta EAN-13 se genera con el patrón correcto (falta B-07: escanearla impresa).
 describe('modulosEan13', () => {
   it('produce exactamente 95 módulos', () => {
     const m = modulosEan13(CODIGO)!;

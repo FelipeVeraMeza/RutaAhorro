@@ -1,47 +1,48 @@
 -- ============================================================================
--- 0008 · Edición de producto en una sola transacción
+-- 0020 · Productos: quién lo modificó y aviso de edición simultánea
 --
--- La edición tenía el mismo defecto que el alta tuvo hasta 0007, pero peor.
--- El cliente hacía dos llamadas encadenadas, sin transacción:
+-- RF-M10-11: "mostrar quién y cuándo modificó por última vez un producto".
+--   `products.updated_by`, lo pone el mismo disparador que ya ponía
+--   `updated_at` (fn_track_price_change).
 --
---   1. update products set ...
---   2. delete from product_barcodes where product_id = ...
---      insert into product_barcodes (...)
+-- RF-M10-03 (CP-06, P-24 opción a): si dos personas editan el mismo producto,
+--   el segundo en guardar recibe PRODUCTO_CAMBIO_MIENTRAS_EDITABAS con el
+--   nombre de quién lo cambió, en vez de pisarle el trabajo sin aviso.
+--   fn_update_product recibe el `updated_at` que tenía el producto al abrir el
+--   formulario.
 --
--- El borrado y la inserción eran dos viajes distintos a la base. Si el segundo
--- fallaba —porque otro usuario acababa de registrar ese código, porque se cayó
--- la conexión en el mostrador, porque el token expiró entre una llamada y la
--- otra— el producto quedaba **sin ningún código de barra**. Y un producto sin
--- código no aparece al escanear: deja de venderse y nadie entiende por qué.
--- El daño no se ve en la pantalla de productos, donde el artículo sigue ahí,
--- con su nombre y su precio. Se ve en la caja, cuando el lector pita y no pasa
--- nada.
---
--- Dos cosas cambian acá:
---
--- a) **Es atómica.** O entra el producto con sus códigos, o no entra nada.
---
--- b) **`p_barcodes` nulo significa "no tocar los códigos".** No es un detalle
---    de estilo: la carga masiva llamaba a la edición con la lista vacía cuando
---    la planilla no traía columna de código de barra, y eso borraba los
---    códigos de todos los productos que la planilla tocara. Una planilla de
---    actualización de precios —nombre, sku, precio, que es exactamente la que
---    manda un proveedor— dejaba el catálogo entero invisible al escáner.
---    Ahora: nulo = no tocar, arreglo = dejar exactamente esos (y el arreglo
---    vacío sí borra, porque eso es lo que pide quien vacía la lista en el
---    formulario).
---
--- Los códigos se reconcilian por diferencia en vez de borrar y reinsertar:
--- se quitan los que sobran y se agregan los que faltan. Los que no cambiaron
--- nunca dejan de existir, ni siquiera dentro de la transacción.
---
--- Ver docs/21-qa-pantallas.md, hallazgo A-4, y docs/22, T-02.
+-- Regla 21: el parámetro nuevo crea otra firma. La vieja se borra acá, y 0008
+-- borra esta antes de crear la suya, para que reinstalar no deje dos.
 -- ============================================================================
 
--- Regla 21: 0020 le agrega un parámetro. Al reinstalar, la firma nueva ya
--- existe: se borra antes de crear esta, o quedan dos y el `revoke` de 0009
--- (sin lista de argumentos) falla con "function name is not unique".
-drop function if exists public.fn_update_product(uuid, text, text, text, uuid, text, integer, integer, numeric, boolean, integer, text[], timestamptz);
+alter table products add column if not exists updated_by uuid references profiles(id) on delete set null;
+
+-- Igual que 0003, más `updated_by`. Sin sesión (el worker, una migración) se
+-- conserva el anterior.
+create or replace function public.fn_track_price_change()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if new.sale_price is distinct from old.sale_price then
+    insert into price_history (tenant_id, product_id, old_price, new_price, changed_by)
+    values (new.tenant_id, new.id, old.sale_price, new.sale_price, auth.uid());
+
+    insert into audit_log (tenant_id, user_id, action, entity_type, entity_id,
+                           old_values, new_values)
+    values (new.tenant_id, auth.uid(), 'price_change', 'products', new.id,
+            jsonb_build_object('sale_price', old.sale_price),
+            jsonb_build_object('sale_price', new.sale_price));
+  end if;
+  new.updated_at := now();
+  new.updated_by := coalesce(auth.uid(), old.updated_by);
+  return new;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- fn_update_product — igual que 0008, con la comprobación de edición simultánea
+-- ---------------------------------------------------------------------------
+drop function if exists public.fn_update_product(uuid, text, text, text, uuid, text, integer, integer, numeric, boolean, integer, text[]);
 create or replace function public.fn_update_product(
   p_product_id        uuid,
   p_name              text,
@@ -54,7 +55,10 @@ create or replace function public.fn_update_product(
   p_min_stock         numeric,
   p_tracks_expiry     boolean,
   p_expiry_alert_days integer,
-  p_barcodes          text[]
+  p_barcodes          text[],
+  -- 0020 · el `updated_at` que tenía el producto cuando se abrió el
+  -- formulario. Null = no comprobar (la carga masiva).
+  p_expected_updated_at timestamptz default null
 ) returns jsonb
 language plpgsql security definer set search_path = public
 as $$
@@ -65,6 +69,8 @@ declare
   v_codigos  text[] := '{}';
   v_quitados integer := 0;
   v_i        integer := 0;
+  v_actual   products%rowtype;
+  v_quien    text;
 begin
   if coalesce(current_user_role()::text, '') not in ('admin','supervisor','bodega') then
     raise exception 'SIN_PERMISO_CREAR_PRODUCTO' using errcode = '42501';
@@ -74,11 +80,22 @@ begin
   -- cualquier usuario podría editar el producto de otro local pasando su id.
   -- El `for update` además bloquea la fila: dos ediciones simultáneas del
   -- mismo producto se ordenan en vez de pisarse a medias.
-  perform 1 from products
+  select * into v_actual from products
    where id = p_product_id and tenant_id = v_tenant
    for update;
   if not found then
     raise exception 'PRODUCTO_NO_ENCONTRADO' using errcode = 'P0001';
+  end if;
+
+  -- 0020 · RF-M10-03 / CP-06. Si alguien lo guardó mientras este formulario
+  -- estaba abierto, no se pisa: se avisa quién, y la pantalla muestra lo
+  -- actual. Antes el segundo en guardar borraba el cambio del primero sin que
+  -- nadie se enterara (P-24, opción a).
+  if p_expected_updated_at is not null and v_actual.updated_at <> p_expected_updated_at then
+    select coalesce(nullif(full_name, ''), email, 'otra persona') into v_quien
+      from profiles where id = v_actual.updated_by;
+    raise exception 'PRODUCTO_CAMBIO_MIENTRAS_EDITABAS: %', coalesce(v_quien, 'otra persona')
+      using errcode = 'P0001';
   end if;
 
   if coalesce(trim(p_name),'') = '' then
@@ -182,5 +199,5 @@ begin
   );
 end $$;
 
-comment on function public.fn_update_product is
-  'Edición de producto atómica. p_barcodes nulo = no tocar los códigos; arreglo = dejar exactamente esos. Ver docs/22 T-02.';
+revoke execute on function public.fn_update_product(uuid, text, text, text, uuid, text, integer, integer, numeric, boolean, integer, text[], timestamptz) from public, anon;
+grant  execute on function public.fn_update_product(uuid, text, text, text, uuid, text, integer, integer, numeric, boolean, integer, text[], timestamptz) to authenticated;

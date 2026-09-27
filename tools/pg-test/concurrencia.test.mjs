@@ -28,6 +28,7 @@ async function kardex(local, producto) {
   return Number(r.rows[0].q);
 }
 
+// Evidencia de RF-M10-01 y RF-M10-02: dos cajeros venden a la vez y el stock refleja ambas ventas; RF-M4-01 y RF-M4-02: el stock coincide con el kardex.
 test('CP-01 · dos cajeros venden la última unidad: ninguna venta se pierde', async () => {
   const local = await nuevoLocal(banco);
   const p = await local.producto({ stock: 1 });
@@ -52,6 +53,7 @@ test('CP-01 · dos cajeros venden la última unidad: ninguna venta se pierde', a
   }
 });
 
+// Evidencia de RF-M10-04 y RF-M5-13: folio único, correlativo y sin saltos bajo concurrencia.
 test('CP-02 · 50 ventas desde 5 cajas: folios consecutivos, sin repetir ni saltar', async () => {
   const local = await nuevoLocal(banco);
   const p = await local.producto({ stock: 1000 });
@@ -84,6 +86,7 @@ test('CP-02 · 50 ventas desde 5 cajas: folios consecutivos, sin repetir ni salt
   assert.equal(r.primero, 1);
 });
 
+// Evidencia de RF-M10-09: la misma venta sincronizada varias veces no se duplica.
 test('CP-03 · la misma venta enviada tres veces queda una sola vez', async () => {
   const local = await nuevoLocal(banco);
   const p = await local.producto({ stock: 10 });
@@ -124,6 +127,7 @@ test('CP-03b · reintento que llega mientras el primer envío sigue en curso', a
   assert.equal(await local.stock(p), 9);
 });
 
+// Evidencia de RF-M10-10: FEFO bajo concurrencia no descuenta dos veces del mismo lote.
 test('CP-04 · FEFO: dos cajeros no descuentan dos veces del mismo lote', async () => {
   const local = await nuevoLocal(banco);
   const p = await local.producto({ stock: 15, perecible: true });
@@ -147,6 +151,7 @@ test('CP-04 · FEFO: dos cajeros no descuentan dos veces del mismo lote', async 
   assert.equal(await local.stock(p), 7);
 });
 
+// Evidencia de RF-M10-08: la misma toma no se aplica dos veces.
 test('CP-05 · la misma toma de inventario no se aplica dos veces', async () => {
   const local = await nuevoLocal(banco);
   const p = await local.producto({ stock: 10 });
@@ -172,7 +177,33 @@ test('CP-05 · la misma toma de inventario no se aplica dos veces', async () => 
   assert.equal(await local.stock(p), 7);
 });
 
-test.todo('CP-06 · edición simultánea del mismo producto (no implementado: P-24)');
+// Evidencia de RF-M10-03 (el segundo en guardar es advertido) y RF-M10-11
+// (se sabe quién y cuándo lo modificó por última vez). 0020.
+test('CP-06 · edición simultánea del mismo producto: el segundo en guardar es advertido, no pisa', async () => {
+  const local = await nuevoLocal(banco);
+  const p = await local.producto({ nombre: 'Leche', precio: 1000 });
+  const { rows: [{ updated_at: abierto }] } = await banco.su.query(
+    `select updated_at::text from products where id = $1`, [p]);
+  const edicion = (precio, esperado) => ({
+    p_product_id: p, p_name: 'Leche', p_sku: null, p_description: null, p_category_id: null,
+    p_unit: 'unidad', p_sale_price: precio, p_avg_cost: null, p_min_stock: 0,
+    p_tracks_expiry: false, p_expiry_alert_days: 30, p_barcodes: null, p_expected_updated_at: esperado,
+  });
+  // Los dos abrieron el formulario con el mismo `updated_at`.
+  const sup = await banco.como(local.supervisor);
+  const adm = await banco.como(local.admin);
+  await rpc(sup, 'fn_update_product', edicion(1100, abierto));
+  const segundo = await intentar(rpc(adm, 'fn_update_product', edicion(1200, abierto)));
+  assert.equal(segundo.ok, false, 'el segundo pisó el cambio del primero sin aviso');
+  assert.match(segundo.error, /PRODUCTO_CAMBIO_MIENTRAS_EDITABAS: supervisor/);
+  const { rows: [x] } = await banco.su.query(`select sale_price, updated_by from products where id = $1`, [p]);
+  assert.equal(x.sale_price, 1100, 'se perdió el cambio del primero');
+  assert.equal(x.updated_by, local.supervisor.id, 'no quedó quién lo modificó');
+  // Con el valor al día, sí guarda. Sin comprobar (carga masiva), también.
+  const { rows: [{ updated_at: ahora }] } = await banco.su.query(`select updated_at::text from products where id = $1`, [p]);
+  assert.ok((await intentar(rpc(adm, 'fn_update_product', edicion(1200, ahora)))).ok);
+  assert.ok((await intentar(rpc(adm, 'fn_update_product', edicion(1300, null)))).ok);
+});
 
 test('CP-07 · cierre forzado mientras el cajero cobra: el arqueo incluye esa venta', async () => {
   // Si el supervisor calcula el esperado mientras la venta todavía no se
@@ -220,6 +251,7 @@ test('CP-07b · una caja cerrada no recibe ventas ni movimientos', async () => {
   assert.equal(await local.stock(p), 10);
 });
 
+// Evidencia de RF-M6-09: un usuario no puede tener dos cajas abiertas.
 test('CP-08 · el mismo usuario abre caja desde dos dispositivos a la vez', async () => {
   const local = await nuevoLocal(banco);
   const d1 = await banco.como(local.cajero1);
@@ -254,6 +286,7 @@ async function dosVeces(s1, s2, fn, args) {
   return [r1, await segunda];
 }
 
+// Evidencia de RF-M5-15: anular revierte el stock (una sola vez).
 test('Anular la misma venta desde dos pantallas devuelve el stock una sola vez', async () => {
   const local = await nuevoLocal(banco);
   const p = await local.producto({ stock: 10 });
@@ -270,6 +303,7 @@ test('Anular la misma venta desde dos pantallas devuelve el stock una sola vez',
   assert.equal(await local.stock(p), 10, 'el stock se devolvió dos veces');
 });
 
+// Evidencia de RF-M3-09: anular una recepción revierte el stock.
 test('Anular la misma recepción dos veces descuenta el stock una sola vez', async () => {
   const local = await nuevoLocal(banco);
   const p = await local.producto({ stock: 0 });
@@ -289,6 +323,7 @@ test('Anular la misma recepción dos veces descuenta el stock una sola vez', asy
   assert.equal(await local.stock(p), 0, 'la recepción se descontó dos veces');
 });
 
+// Evidencia de RF-M4-19: baja de lote vencido.
 test('Dar de baja el mismo lote dos veces descuenta el lote una sola vez', async () => {
   const local = await nuevoLocal(banco);
   const p = await local.producto({ stock: 5, perecible: true });
@@ -301,6 +336,7 @@ test('Dar de baja el mismo lote dos veces descuenta el lote una sola vez', async
   assert.equal(await local.stock(p), 0, 'el lote se dio de baja dos veces');
 });
 
+// Evidencia de RF-M3-05 y RF-M3-06: la recepción suma stock y recalcula el costo promedio ponderado.
 test('Dos recepciones del mismo producto a la vez: el costo promedio considera ambas', async () => {
   // 10 u a $100 en bodega. Llegan 10 u a $200 y 10 u a $400.
   // En orden: 10@100 + 10@200 = 150 · 20@150 + 10@400 = 233.

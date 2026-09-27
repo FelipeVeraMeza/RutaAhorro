@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { planCodigos, codigosDesdeImportacion } from '../src/codigos.js';
 
+// Evidencia de RF-M2-02: uno o más códigos por producto.
 describe('planCodigos', () => {
   describe('no pedir nada no es pedir nada', () => {
     it('sin definir, no toca los códigos', () => {

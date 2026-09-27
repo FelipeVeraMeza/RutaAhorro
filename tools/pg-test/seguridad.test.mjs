@@ -214,6 +214,7 @@ test('Un local no ve ni toca nada de otro', async () => {
   assert.match(r.error, /VENTA_NO_ENCONTRADA/);
 });
 
+// Evidencia de RF-M10-07: un vendedor ve solo sus ventas, en la base.
 test('CP-09 · un vendedor solo ve sus propias ventas', async () => {
   const L = await nuevoLocal(banco);
   const p = await L.producto({ stock: 20 });
@@ -231,4 +232,35 @@ test('CP-10 · un vendedor no puede leer costos', { todo: 'T-45: products y sale
   const c = await banco.como(A.cajero1);
   rechazado(await intentar(c.query(`select avg_cost from products`)), 'leyó avg_cost');
   rechazado(await intentar(c.query(`select unit_cost from sale_items`)), 'leyó el costo de cada línea vendida');
+});
+
+// Evidencia de RF-M9-07 (la bitácora no se edita ni se borra, ni por admin) y
+// RF-M4-11 (el kardex es inmutable). Se intenta con el administrador y con el
+// dueño de la base: el disparador no distingue roles, a propósito (ADR-006).
+test('La bitácora y el kardex no se editan ni se borran, ni siquiera como dueño de la base', async () => {
+  const p = await A.producto({ stock: 5 });
+  const adm = await banco.como(A.admin);
+  // La entrada de bitácora se crea como dueño: lo que se prueba es que
+  // después nadie la cambia.
+  await banco.su.query(
+    `insert into audit_log (tenant_id, user_id, action, entity_type) values ($1, $2, 'prueba', 'test')`,
+    [A.tenant, A.admin.id]);
+  const { rows: [mov] } = await banco.su.query(
+    `select id from inventory_movements where product_id = $1 limit 1`, [p]);
+  const { rows: [aud] } = await banco.su.query(
+    `select id from audit_log where tenant_id = $1 limit 1`, [A.tenant]);
+  assert.ok(mov, 'no hubo movimiento de kardex para probar');
+  assert.ok(aud, 'no hubo entrada de bitácora para probar');
+  for (const c of [adm, banco.su]) {
+    for (const sql of [
+      [`update inventory_movements set quantity = 999 where id = $1`, mov.id],
+      [`delete from inventory_movements where id = $1`, mov.id],
+      [`update audit_log set action = 'otra' where id = $1`, aud.id],
+      [`delete from audit_log where id = $1`, aud.id],
+    ]) {
+      const r = await intentar(c.query(sql[0], [sql[1]]));
+      const cambio = r.ok && (r.valor.rowCount ?? 0) > 0;
+      assert.equal(cambio, false, `se pudo: ${sql[0]}`);
+    }
+  }
 });

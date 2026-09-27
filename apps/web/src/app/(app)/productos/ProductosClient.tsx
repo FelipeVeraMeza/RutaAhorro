@@ -155,7 +155,7 @@ export function ProductosClient({
           type="search"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por nombre o SKU…"
+          placeholder="Buscar por nombre, SKU o código…"
           className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] bg-white"
         />
         <div className="flex gap-2 overflow-x-auto sin-scrollbar pb-1">

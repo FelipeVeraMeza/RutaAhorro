@@ -8,6 +8,52 @@
 
 ---
 
+## CÓMO SEGUIR — corte 2026-09-27 (noche), léelo antes que todo
+
+**Estado verificado al cortar** (todo en verde, nada a medio aplicar):
+359 pruebas de lógica · 104 contra PostgreSQL (+1 pendiente conocida, T-45) ·
+`db:e2e` 26/26 contra Supabase · recorridos en navegador documentos 19/19,
+ofertas 20/20, M5 23/23, M1 20/20, M6 13/13, documento 19/19, bodega-sala y
+móvil (todas las pantallas a 360 y 1280 px) · build de producción limpio.
+**Migraciones 0017 a 0020 aplicadas en Supabase.**
+
+**Lo que quedó a medio camino (seguro, no rompe nada):** 0020 ya está en la
+base —`products.updated_by` y `fn_update_product(…, p_expected_updated_at)`
+que avisa si otro editó el producto (RF-M10-03, prueba CP-06)— pero **la
+pantalla todavía no lo usa**. Siguiente paso: que `repoSupabase.actualizar`
+mande `p_expected_updated_at: producto.actualizadoEn` (el string tal cual
+viene de la base, sin pasar por `Date`, o se pierden los microsegundos), que el
+formulario muestre "Última modificación: <nombre>, <fecha>" y el historial de
+precios (T-19, `price_history`), y que ante `PRODUCTO_CAMBIO_MIENTRAS_EDITABAS`
+ofrezca recargar. Después, un recorrido `tools/ui/m2-productos.mjs`.
+
+**La matriz de requerimientos** (`docs/24`, se regenera con
+`node tools/matriz.mjs`) es la fuente para decir qué está hecho: ✅ solo si una
+prueba o recorrido lo cita y pasa. Al corte: RF ✅ 62 de 134 · ⚠️ 39 marcados hechos
+sin prueba · 33 incompletos o sin hacer; RNF ✅ 4 de 56. **El trabajo que sigue
+es T-52**: recorridos de M2 Productos, M3 Proveedores, M4 Inventario y M7
+Reportes, que van a convertir ⚠️ en ✅ o destapar defectos (ya destapó uno: la
+búsqueda de Productos solo buscaba por nombre).
+
+**Orden sugerido después:** RQ-15/16/17 descuentos con autorización de John o
+María José + RQ-22 pago mixto (T-16, T-17) → RQ-24 caja compartida (cuando el
+cliente responda la pregunta 1) → RQ-20/21 clientes y precio por cliente →
+RQ-03 cajas y packs → RQ-35 devolución a proveedor → T-55 productos desde la
+factura → T-45 costos → RNF medibles (rendimiento, accesibilidad, seguridad).
+
+**Preguntas para el cliente:** `docs/cliente/preguntas-2026-09-28.md` (17,
+escritas para John y María José).
+
+**Pendiente de Felipe, no de código:** B-03 desplegar en Railway · T-50 SMTP
+propio · B-09 rotar llaves · **cambiar la clave `admin123`, que quedó en el
+grupo de WhatsApp** · antes de mostrarle el sistema al cliente,
+`npm run db:limpiar -- --si-borrar-todo` y `npm run db:admin`.
+
+**Cómo levantar para probar:** `npm run build:web`, luego
+`cd apps/web && npx next start -p 3001`; los recorridos son `node tools/ui/*.mjs`.
+
+---
+
 ## LO ÚLTIMO QUE PASÓ — léelo primero
 
 **2026-09-27 · boletas, facturas y notas de crédito simuladas, y devoluciones
@@ -135,8 +181,8 @@ Eso es B-04 y hoy no existe.
 
 **Tres cosas que hay que tener presentes antes de tocar nada:**
 
-1. **Migraciones 0015 a 0019 ya están aplicadas en el Supabase real**
-   (0019 el 2026-09-27). Las dos le cambian la firma a una función. **Código nuevo con
+1. **Migraciones 0015 a 0020 ya están aplicadas en el Supabase real**
+   (0019 y 0020 el 2026-09-27). Las dos le cambian la firma a una función. **Código nuevo con
    base vieja significa que ninguna venta se registra.** Si levantas esto en
    otra máquina, la base ya está al día; si vuelves a instalar, usa
    `npm run db:instalar` y pega `supabase/instalar.sql` completo.

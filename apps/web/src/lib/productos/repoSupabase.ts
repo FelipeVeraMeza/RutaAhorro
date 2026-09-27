@@ -1,6 +1,6 @@
 'use client';
 
-import { codigosDesdeImportacion, toUserMessage, type FilaProducto } from '@rutaahorro/core';
+import { normalizeBarcode, codigosDesdeImportacion, toUserMessage, type FilaProducto } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import type {
   FiltroProductos, Producto, ProductoEditable, ProductoNuevo,
@@ -85,7 +85,21 @@ export const repoSupabase: RepositorioProductos = {
 
     if (filtro.soloActivos !== false) q = q.eq('is_active', true);
     if (filtro.categoriaId) q = q.eq('category_id', filtro.categoriaId);
-    if (filtro.busqueda?.trim()) q = q.ilike('name', `%${filtro.busqueda.trim()}%`);
+    // RF-M2-05: por nombre, SKU o código de barras. Hasta el 2026-09-27 el
+    // campo decía "Buscar por nombre o SKU" y filtraba solo por nombre: un
+    // SKU o un código escaneado no encontraban nada.
+    if (filtro.busqueda?.trim()) {
+      // Las comas y paréntesis separan condiciones en el filtro `or` de la API.
+      const texto = filtro.busqueda.trim().replace(/[,()]/g, ' ');
+      const { data: porCodigo } = await client.from('product_barcodes')
+        .select('product_id').eq('barcode', normalizeBarcode(texto));
+      const ids = (porCodigo ?? []).map((c) => c.product_id as string);
+      q = q.or([
+        `name.ilike.%${texto}%`,
+        `sku.ilike.%${texto}%`,
+        ...(ids.length ? [`id.in.(${ids.join(',')})`] : []),
+      ].join(','));
+    }
 
     const { data, error } = await q.order('name').limit(filtro.limite ?? 200);
     if (error) throw error;
