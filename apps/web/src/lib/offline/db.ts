@@ -33,6 +33,12 @@ export interface LocalProduct {
   minStock: number;
   isActive: boolean;
   updatedAt: string;
+  /** Ofertas por cantidad (0018). Viajan al celular para cobrar sin conexión. */
+  tramos?: import('@rutaahorro/core').TramoPrecio[];
+  /** El impuesto adicional asignado (0018), y lo que se congela en la venta. */
+  impuestoId?: string | null;
+  tasaAdicional?: number;
+  impuestoNombre?: string | null;
 }
 
 export interface LocalBarcode {

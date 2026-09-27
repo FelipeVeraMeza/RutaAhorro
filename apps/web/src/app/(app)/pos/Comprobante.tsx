@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   formatCLP, comprobanteATexto, fechaComprobante, nombreMetodo,
-  encabezadoDocumento, pieDocumento,
+  encabezadoDocumento, pieDocumento, etiquetaAdicional,
   type Comprobante as DatosComprobante,
 } from '@rutaahorro/core';
 
@@ -89,6 +89,12 @@ export function Comprobante({
                   <span className="truncate">{l.cantidad} x {l.nombre}</span>
                   <span className="shrink-0">{formatCLP(l.subtotal)}</span>
                 </div>
+                {!!l.ahorroOferta && (
+                  <div className="flex justify-between gap-2 text-[11px]">
+                    <span>&nbsp;&nbsp;oferta {formatCLP(l.precioUnitario)} c/u</span>
+                    <span>ahorra {formatCLP(l.ahorroOferta)}</span>
+                  </div>
+                )}
                 {l.descuento > 0 && (
                   <div className="flex justify-between gap-2 text-[11px]">
                     <span>&nbsp;&nbsp;descuento</span>
@@ -108,6 +114,9 @@ export function Comprobante({
             )}
             <Fila izq="Neto" der={formatCLP(datos.neto)} />
             <Fila izq={`IVA (${datos.ivaPct}%)`} der={formatCLP(datos.iva)} />
+            {(datos.adicionales ?? []).map((a) => (
+              <Fila key={`${a.tasa}-${a.nombre}`} izq={etiquetaAdicional(a)} der={formatCLP(a.monto)} />
+            ))}
             <div className="flex justify-between font-bold text-[14px] mt-1">
               <span>TOTAL</span>
               <span>{formatCLP(datos.total)}</span>

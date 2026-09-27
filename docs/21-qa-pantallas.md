@@ -145,6 +145,18 @@ Corregido: se valida en la base, con la misma tolerancia de redondeo que core.
 
 ---
 
+### S-8 · El administrador de un local podía reactivar su suscripción — **alta** · ✅ corregido (0018)
+
+La política `tenant_update` (0004) dejaba al administrador actualizar la fila
+de su local en `tenants`, y RLS trabaja por fila, no por columna: además de
+`settings` (el IVA, la zona horaria), la fila tiene `status` y `plan`, que son
+los de la suscripción de $59.990. `update tenants set status = 'activo'` desde
+el navegador reactivaba un local suspendido por no pagar. La encontró la
+prueba de `fn_guardar_configuracion` (T-18) intentando cambiar el IVA a mano.
+0018 quita la política: la configuración se escribe con
+`fn_guardar_configuracion`, que acepta solo claves conocidas y en rango.
+Prueba: `tools/pg-test/cuestionario.test.mjs`.
+
 ## 0b. Cuarta pasada · el esquema ejecutado — 2026-09-18
 
 S-1 a S-4 salieron de **leer** el SQL. Esta pasada lo **ejecutó**: un

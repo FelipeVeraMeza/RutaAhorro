@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { formatCLP, cantidadConUnidad } from '@rutaahorro/core';
+import { formatCLP, cantidadConUnidad, tramosVigentes, diaLocal } from '@rutaahorro/core';
+import { useConfiguracion } from '@/lib/datos/configuracion';
 import {
   findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO,
 } from '@/lib/offline/catalog';
@@ -27,6 +28,7 @@ export function PrecioClient() {
   const [query, setQuery] = useState('');
   const [resultados, setResultados] = useState<LocalProduct[]>([]);
   const [elegido, setElegido] = useState<LocalProduct | null>(null);
+  const { zonaHoraria } = useConfiguracion();
   const [aviso, setAviso] = useState<string | null>(null);
   const [catalogoListo, setCatalogoListo] = useState<boolean | null>(null);
   const avisoTimer = useRef<number | null>(null);
@@ -133,7 +135,19 @@ export function PrecioClient() {
           </p>
           <p className="text-xs text-[var(--texto-suave)]">
             Precio por {elegido.unit} · IVA incluido
+            {elegido.impuestoNombre && ` · incluye ${elegido.impuestoNombre}`}
           </p>
+          {/* Ofertas vigentes (0018): lo segundo que pregunta el cliente es
+              "¿y si llevo más?". */}
+          {tramosVigentes(elegido.tramos, diaLocal(new Date(), zonaHoraria))
+            .filter((t) => t.precio < elegido.salePrice)
+            .map((t) => (
+              <p key={`${t.desde}-${t.vigenteHasta ?? ''}`}
+                 className="mt-2 inline-block mx-1 px-3 py-1 rounded-full bg-marca-100 text-marca-900 text-sm font-semibold num">
+                🏷️ Desde {t.desde}: {formatCLP(t.precio)} c/u
+                {t.vigenteHasta && <span className="font-normal"> · hasta el {t.vigenteHasta.split('-').reverse().join('-')}</span>}
+              </p>
+            ))}
           {/* Cuánto hay, con texto y no solo con color (RNF-46). Sirve para
               responder la segunda pregunta del mostrador: "¿y queda?". */}
           <p className="text-xs num mt-2">

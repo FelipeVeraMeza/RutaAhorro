@@ -10,6 +10,31 @@
 
 ## LO ÚLTIMO QUE PASÓ — léelo primero
 
+**2026-09-26 (noche) · ofertas, impuestos y configuración — migración 0018,
+aplicada en Supabase.**
+
+- **Ofertas por cantidad** («1 por $2.000 y si llevas 3, los 3 a $1.400») y
+  promociones con fechas. El POS recalcula la línea al cambiar la cantidad.
+- **T-14 cerrada:** la base compara el precio que llega con el que
+  corresponde; cobrar menos es un descuento y pasa por el tope del rol.
+- **Impuestos adicionales editables** (IABA, ILA) en `/configuracion`, y
+  asignación a muchos productos a la vez. La venta congela la tasa.
+- **`/configuracion`** (T-18): la operación del local sin entrar a Supabase.
+- **S-8:** el administrador de un local podía reactivar su propia suscripción
+  escribiendo `tenants` a mano. Cerrado.
+- "Jo" es **María José** (grupo de WhatsApp). **La clave `admin123` quedó
+  escrita en ese grupo: cambiarla antes de que el local venda.**
+
+Pruebas: **345 de lógica · 85 contra PostgreSQL (+2 pendientes) · db:e2e
+24/24 · recorridos ofertas 20/20, M5 23/23, M1 20/20, M6 13/13, documento
+19/19, bodega-sala, móvil (14 pantallas del admin) sin problemas.**
+
+Regla nueva, la 22: **`create or replace view` no puede quitar columnas.** Si
+una migración posterior le agrega columnas a una vista, la que la define
+primero tiene que borrarla antes (`drop view if exists`), o reinstalar falla.
+
+---
+
 **2026-09-26 · el cuestionario del cliente.** Respondió las preguntas 1–42
 (del documento del 15-09). Están traducidas a **41 requerimientos (RQ-01 a
 RQ-41)** en `docs/23-requerimientos-cuestionario.md`, con estado real, los
@@ -87,8 +112,8 @@ Eso es B-04 y hoy no existe.
 
 **Tres cosas que hay que tener presentes antes de tocar nada:**
 
-1. **Migraciones 0015, 0016 y 0017 ya están aplicadas en el Supabase real**
-   (0017 el 2026-09-26). Las dos le cambian la firma a una función. **Código nuevo con
+1. **Migraciones 0015 a 0018 ya están aplicadas en el Supabase real**
+   (0017 y 0018 el 2026-09-26). Las dos le cambian la firma a una función. **Código nuevo con
    base vieja significa que ninguna venta se registra.** Si levantas esto en
    otra máquina, la base ya está al día; si vuelves a instalar, usa
    `npm run db:instalar` y pega `supabase/instalar.sql` completo.
@@ -648,6 +673,10 @@ esperar ningún trámite.
 20. **Un requerimiento no está hecho hasta que se recorrió en el navegador.**
     El documento 17 marcaba ✅ la búsqueda del POS, las invitaciones y el
     cierre forzado, y ninguno funcionaba. `tools/ui/` es la evidencia.
+22. **`create or replace view` no puede quitar columnas.** Si una migración
+    posterior le agrega columnas, la migración que la crea primero tiene que
+    hacer `drop view if exists` antes, o reinstalar falla con "cannot drop
+    columns from view" (0017, `products_public`).
 21. **Agregarle un parámetro a una función de la base crea una SOBRECARGA, no
     un reemplazo.** `create or replace` con un argumento más deja las dos
     firmas conviviendo, y entonces cualquier `grant execute on function

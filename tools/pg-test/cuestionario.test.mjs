@@ -89,3 +89,52 @@ test('reinstalar no le pisa al dueño lo que ya decidió', async () => {
     `select settings->'vender_sin_stock' as v from tenants where id = $1`, [L.tenant]);
   assert.equal(s.v, false);
 });
+
+// ---------------------------------------------------------------------------
+// T-18 · fn_guardar_configuracion (0018)
+// ---------------------------------------------------------------------------
+test('T-18 · el administrador cambia la configuración del local, solo claves conocidas y en rango', async () => {
+  const L = await nuevoLocal(banco);
+  const adm = await banco.como(L.admin);
+  const r = await rpc(adm, 'fn_guardar_configuracion', {
+    p_cambios: { vender_sin_stock: false, efectivo_inicial_sugerido: 30000 } });
+  assert.equal(r.vender_sin_stock, false);
+  assert.equal(r.efectivo_inicial_sugerido, 30000);
+  assert.equal(r.iva_pct, 19, 'se perdió una clave que no se tocó');
+
+  for (const malo of [
+    { iva_pct: 0 },                         // el IVA no se cambia desde acá
+    { timezone: 'UTC' },
+    { vender_sin_stock: 'si' },
+    { efectivo_inicial_sugerido: -1 },
+    { efectivo_inicial_sugerido: 1.5 },
+    { cash_alert_hours: 0 },
+    { cost_variation_alert_pct: 500 },
+  ]) {
+    const x = await intentar(rpc(adm, 'fn_guardar_configuracion', { p_cambios: malo }));
+    assert.equal(x.ok, false, JSON.stringify(malo));
+    assert.match(x.error, /CONFIGURACION_INVALIDA/);
+  }
+  const { rows: [t] } = await banco.su.query(`select settings->'iva_pct' as iva from tenants where id = $1`, [L.tenant]);
+  assert.equal(t.iva, 19);
+});
+
+test('T-18 · nadie más que el administrador cambia la configuración', async () => {
+  const L = await nuevoLocal(banco);
+  for (const u of [L.supervisor, L.cajero1, L.bodega]) {
+    const x = await intentar(rpc(await banco.como(u), 'fn_guardar_configuracion', { p_cambios: { vender_sin_stock: false } }));
+    assert.equal(x.ok, false);
+  }
+  const directo = await intentar((await banco.como(L.admin)).query(
+    `update tenants set settings = settings || '{"iva_pct": 0}'::jsonb where id = $1`, [L.tenant]));
+  const { rows: [t] } = await banco.su.query(`select settings->'iva_pct' as iva from tenants where id = $1`, [L.tenant]);
+  assert.equal(t.iva, 19, 'se cambió el IVA escribiendo la tabla a mano');
+  void directo;
+
+  // S-8 · la suscripción: un local suspendido no se reactiva solo.
+  await banco.su.query(`update tenants set status = 'suspendido' where id = $1`, [L.tenant]);
+  await intentar((await banco.como(L.admin)).query(
+    `update tenants set status = 'activo', plan = 'completo' where id = $1`, [L.tenant]));
+  const { rows: [e] } = await banco.su.query(`select status from tenants where id = $1`, [L.tenant]);
+  assert.equal(e.status, 'suspendido', 'el administrador reactivó su propio local');
+});

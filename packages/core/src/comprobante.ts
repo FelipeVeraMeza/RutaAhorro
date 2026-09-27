@@ -20,6 +20,7 @@ import {
 } from './documento.js';
 import type { CartLine } from './cart.js';
 import { lineSubtotal } from './cart.js';
+import { desglosarImpuestos, type ImpuestoAdicionalDesglosado } from './impuestos.js';
 
 export interface LineaComprobante {
   nombre: string;
@@ -28,6 +29,8 @@ export interface LineaComprobante {
   descuento: number;
   /** Bruto de la línea menos su descuento. Nunca negativo. */
   subtotal: number;
+  /** Lo que se ahorró por una oferta por cantidad (0 si no hubo). */
+  ahorroOferta?: number;
 }
 
 export interface PagoComprobante {
@@ -54,9 +57,15 @@ export interface Comprobante {
   descuento: number;
   /** Lo que efectivamente se cobra. Incluye IVA. */
   total: number;
-  /** Total sin IVA. Siempre se cumple: neto + iva === total. */
+  /**
+   * Total sin impuestos. Siempre se cumple:
+   * neto + iva + totalAdicionales === total.
+   */
   neto: number;
   iva: number;
+  /** Impuestos adicionales (IABA, ILA), uno por impuesto. Vacío si no hay. */
+  adicionales: ImpuestoAdicionalDesglosado[];
+  totalAdicionales: number;
   ivaPct: number;
   pagos: PagoComprobante[];
   vuelto: number;
@@ -103,6 +112,9 @@ export function construirComprobante(datos: DatosComprobante): Comprobante {
     precioUnitario: clp(l.unitPrice),
     descuento: clp(l.discountAmount ?? 0),
     subtotal: lineSubtotal(l),
+    ahorroOferta: l.precioLista != null
+      ? Math.max(clp(l.precioLista * l.quantity) - clp(l.unitPrice * l.quantity), 0)
+      : 0,
   }));
 
   const bruto = datos.lineas.reduce((s, l) => s + clp(l.unitPrice * l.quantity), 0);
@@ -114,8 +126,19 @@ export function construirComprobante(datos: DatosComprobante): Comprobante {
   // dos se redondearan por separado, su suma podría quedar a un peso del
   // total — y un peso de descuadre en un documento de venta es una
   // observación, no un detalle.
-  const iva = taxIncluded(total, ivaPct);
-  const neto = total - iva;
+  // Con impuestos adicionales el neto se despeja por grupo (0018); sin ellos
+  // es exactamente `taxIncluded` sobre el total, como antes.
+  const desglose = desglosarImpuestos(
+    datos.lineas.map((l) => ({
+      subtotal: lineSubtotal(l),
+      tasaAdicional: l.tasaAdicional ?? 0,
+      nombreAdicional: l.nombreAdicional ?? null,
+    })),
+    ivaPct,
+    datos.descuentoGlobal ?? 0,
+  );
+  const iva = desglose.adicionales.length ? desglose.iva : taxIncluded(total, ivaPct);
+  const neto = desglose.adicionales.length ? desglose.neto : total - iva;
 
   const documento: DocumentoVenta =
     datos.documento ?? { tipo: documentoPorOmision(datos.pagos, datos.opcionesDocumento) };
@@ -136,6 +159,8 @@ export function construirComprobante(datos: DatosComprobante): Comprobante {
     total,
     neto,
     iva,
+    adicionales: desglose.adicionales,
+    totalAdicionales: desglose.totalAdicionales,
     ivaPct,
     pagos: datos.pagos,
     vuelto,
@@ -185,6 +210,7 @@ export function comprobanteATexto(c: Comprobante, ancho = 32): string {
 
   for (const l of c.lineas) {
     out.push(fila(`${l.cantidad} x ${l.nombre}`.slice(0, ancho - 9), formatCLP(l.subtotal)));
+    if (l.ahorroOferta) out.push(fila(`   oferta ${formatCLP(l.precioUnitario)} c/u`, 'ahorra ' + formatCLP(l.ahorroOferta)));
     if (l.descuento > 0) out.push(fila('   descuento', '-' + formatCLP(l.descuento)));
   }
 
@@ -195,6 +221,9 @@ export function comprobanteATexto(c: Comprobante, ancho = 32): string {
   }
   out.push(fila('Neto', formatCLP(c.neto)));
   out.push(fila(`IVA (${c.ivaPct}%)`, formatCLP(c.iva)));
+  for (const a of c.adicionales ?? []) {
+    out.push(fila(`${etiquetaAdicional(a)}`.slice(0, ancho - 10), formatCLP(a.monto)));
+  }
   out.push(fila('TOTAL', formatCLP(c.total)));
   out.push(separador);
 
@@ -236,4 +265,10 @@ export function pieDocumento(c: Comprobante): string[] {
   if (r.giro) lineas.push('Giro: ' + r.giro);
   if (r.direccion) lineas.push('Dirección: ' + r.direccion);
   return lineas;
+}
+
+/** "IABA 18%" — cómo se nombra un impuesto adicional en el papel. */
+export function etiquetaAdicional(a: { nombre: string | null; tasa: number }): string {
+  const tasa = `${String(a.tasa).replace('.', ',')}%`;
+  return a.nombre ? `${a.nombre} ${tasa}` : `Imp. adicional ${tasa}`;
 }

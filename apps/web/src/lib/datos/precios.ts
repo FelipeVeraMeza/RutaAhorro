@@ -1,0 +1,202 @@
+'use client';
+
+import type { TramoPrecio } from '@rutaahorro/core';
+import { supabase } from '../supabase/client';
+import { DEMO_ACTIVO } from '../demo';
+import { db, getMeta, setMeta } from '../offline/db';
+import { syncCatalog } from '../offline/catalog';
+
+/**
+ * Ofertas por cantidad e impuestos adicionales (0018).
+ *
+ * Pedido del cliente, 2026-09-26: «ofertas, ejemplo 1 por $2.000 y si llevas 3
+ * te llevas los 3 a $1.400 cada uno» y «poder modificar el impuesto adicional
+ * y las tasas por producto o productos en general».
+ *
+ * En producción todo pasa por funciones de la base (`fn_guardar_impuesto`,
+ * `fn_asignar_impuesto`, `fn_guardar_precios_producto`): las tablas no tienen
+ * política de escritura (regla 14), y la base es la que valida que una
+ * oferta sea más barata que el precio normal. En la maqueta vive en el
+ * navegador, sobre el mismo catálogo que usa el POS.
+ */
+
+export interface ImpuestoAdicional {
+  id: string;
+  nombre: string;
+  /** Código del impuesto en el documento tributario (27, 271, 24, 25, 26). */
+  codigoSii: number | null;
+  /** Porcentaje: 18 = 18 %. */
+  tasa: number;
+  activo: boolean;
+  /** Cuántos productos lo tienen asignado. */
+  productos: number;
+}
+
+export interface PreciosProducto {
+  impuestoId: string | null;
+  tramos: TramoPrecio[];
+}
+
+export interface RepositorioPrecios {
+  impuestos(): Promise<ImpuestoAdicional[]>;
+  /** Crea (sin `id`) o cambia un impuesto. Devuelve su id. Solo administrador. */
+  guardarImpuesto(i: { id?: string | null; nombre: string; codigoSii: number | null; tasa: number; activo: boolean }): Promise<string>;
+  /** Pone el impuesto (o ninguno, con null) a todos esos productos. Devuelve cuántos cambiaron. */
+  asignarImpuesto(productoIds: string[], impuestoId: string | null): Promise<number>;
+  preciosDe(productoId: string): Promise<PreciosProducto>;
+  /** Reemplaza las ofertas del producto. Un arreglo vacío las quita todas. */
+  guardarTramos(productoId: string, tramos: TramoPrecio[]): Promise<void>;
+  /** Qué impuesto tiene cada producto, para la pantalla de asignación masiva. */
+  impuestoPorProducto(): Promise<Map<string, string | null>>;
+}
+
+const aFila = (t: TramoPrecio) => ({
+  desde: t.desde,
+  precio: t.precio,
+  vigente_desde: t.vigenteDesde || null,
+  vigente_hasta: t.vigenteHasta || null,
+});
+
+const supabaseRepo: RepositorioPrecios = {
+  async impuestos() {
+    const [{ data, error }, { data: prods, error: e2 }] = await Promise.all([
+      supabase().from('impuestos_adicionales').select('id, nombre, codigo_sii, tasa, is_active').order('tasa'),
+      supabase().from('products').select('impuesto_adicional_id').not('impuesto_adicional_id', 'is', null).eq('is_active', true),
+    ]);
+    if (error) throw error;
+    if (e2) throw e2;
+    const cuenta = new Map<string, number>();
+    for (const p of prods ?? []) {
+      const id = p.impuesto_adicional_id as string;
+      cuenta.set(id, (cuenta.get(id) ?? 0) + 1);
+    }
+    return (data ?? []).map((r) => ({
+      id: r.id as string,
+      nombre: r.nombre as string,
+      codigoSii: (r.codigo_sii as number) ?? null,
+      tasa: Number(r.tasa),
+      activo: Boolean(r.is_active),
+      productos: cuenta.get(r.id as string) ?? 0,
+    }));
+  },
+
+  async guardarImpuesto(i) {
+    const { data, error } = await supabase().rpc('fn_guardar_impuesto', {
+      p_id: i.id ?? null, p_nombre: i.nombre, p_codigo_sii: i.codigoSii, p_tasa: i.tasa, p_activo: i.activo,
+    });
+    if (error) throw error;
+    void syncCatalog().catch(() => {});
+    return data as string;
+  },
+
+  async asignarImpuesto(productoIds, impuestoId) {
+    const { data, error } = await supabase().rpc('fn_asignar_impuesto', {
+      p_productos: productoIds, p_impuesto: impuestoId,
+    });
+    if (error) throw error;
+    void syncCatalog().catch(() => {});
+    return Number(data ?? 0);
+  },
+
+  async preciosDe(productoId) {
+    const [{ data: p, error }, { data: t, error: e2 }] = await Promise.all([
+      supabase().from('products').select('impuesto_adicional_id').eq('id', productoId).maybeSingle(),
+      supabase().from('product_price_tiers').select('desde, precio, vigente_desde, vigente_hasta')
+        .eq('product_id', productoId).order('desde'),
+    ]);
+    if (error) throw error;
+    if (e2) throw e2;
+    return {
+      impuestoId: (p?.impuesto_adicional_id as string) ?? null,
+      tramos: (t ?? []).map((r) => ({
+        desde: Number(r.desde),
+        precio: Number(r.precio),
+        vigenteDesde: (r.vigente_desde as string) ?? null,
+        vigenteHasta: (r.vigente_hasta as string) ?? null,
+      })),
+    };
+  },
+
+  async guardarTramos(productoId, tramos) {
+    const { error } = await supabase().rpc('fn_guardar_precios_producto', {
+      p_product_id: productoId, p_tramos: tramos.map(aFila),
+    });
+    if (error) throw error;
+    void syncCatalog().catch(() => {});
+  },
+
+  async impuestoPorProducto() {
+    const { data, error } = await supabase().from('products').select('id, impuesto_adicional_id');
+    if (error) throw error;
+    return new Map((data ?? []).map((r) => [r.id as string, (r.impuesto_adicional_id as string) ?? null]));
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Maqueta: el catálogo del navegador y una lista de impuestos en `meta`
+// ---------------------------------------------------------------------------
+const CLAVE_IMPUESTOS = 'demo:impuestos';
+
+async function impuestosDemo(): Promise<Omit<ImpuestoAdicional, 'productos'>[]> {
+  const crudo = await getMeta(CLAVE_IMPUESTOS);
+  return crudo ? JSON.parse(crudo) : [];
+}
+
+/** Lo que el POS lee de cada producto: se recalcula cada vez que algo cambia. */
+async function refrescarCatalogoDemo() {
+  const lista = await impuestosDemo();
+  const porId = new Map(lista.filter((i) => i.activo).map((i) => [i.id, i]));
+  const productos = await db().products.toArray();
+  await db().products.bulkPut(productos.map((p) => {
+    const imp = p.impuestoId ? porId.get(p.impuestoId) : undefined;
+    return { ...p, tasaAdicional: imp?.tasa ?? 0, impuestoNombre: imp?.nombre ?? null };
+  }));
+  window.dispatchEvent(new Event('catalogo-actualizado'));
+}
+
+const demoRepo: RepositorioPrecios = {
+  async impuestos() {
+    const productos = await db().products.toArray();
+    return (await impuestosDemo()).map((i) => ({
+      ...i,
+      productos: productos.filter((p) => p.isActive && p.impuestoId === i.id).length,
+    }));
+  },
+  async guardarImpuesto(i) {
+    const lista = await impuestosDemo();
+    const id = i.id ?? crypto.randomUUID();
+    const fila = { id, nombre: i.nombre.trim(), codigoSii: i.codigoSii, tasa: i.tasa, activo: i.activo };
+    if (lista.some((x) => x.id !== id && x.nombre.toLowerCase() === fila.nombre.toLowerCase())) {
+      throw new Error('IMPUESTO_DUPLICADO');
+    }
+    const siguiente = i.id ? lista.map((x) => (x.id === id ? fila : x)) : [...lista, fila];
+    await setMeta(CLAVE_IMPUESTOS, JSON.stringify(siguiente));
+    await refrescarCatalogoDemo();
+    return id;
+  },
+  async asignarImpuesto(productoIds, impuestoId) {
+    const productos = await db().products.bulkGet(productoIds);
+    const cambian = productos.filter((p): p is NonNullable<typeof p> => !!p && (p.impuestoId ?? null) !== impuestoId);
+    await db().products.bulkPut(cambian.map((p) => ({ ...p, impuestoId })));
+    await refrescarCatalogoDemo();
+    return cambian.length;
+  },
+  async preciosDe(productoId) {
+    const p = await db().products.get(productoId);
+    return { impuestoId: p?.impuestoId ?? null, tramos: p?.tramos ?? [] };
+  },
+  async guardarTramos(productoId, tramos) {
+    const p = await db().products.get(productoId);
+    if (!p) throw new Error('PRODUCTO_NO_ENCONTRADO');
+    await db().products.put({ ...p, tramos });
+    window.dispatchEvent(new Event('catalogo-actualizado'));
+  },
+  async impuestoPorProducto() {
+    const productos = await db().products.toArray();
+    return new Map(productos.map((p) => [p.id, p.impuestoId ?? null]));
+  },
+};
+
+export function repoPrecios(): RepositorioPrecios {
+  return DEMO_ACTIVO ? demoRepo : supabaseRepo;
+}

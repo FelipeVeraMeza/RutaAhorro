@@ -14,6 +14,8 @@ export default async function ProductosPage() {
       puedeVerCostos={rol === 'admin'}
       puedeEditar={rol === 'admin' || rol === 'supervisor' || rol === 'bodega'}
       puedeEliminar={rol === 'admin'}
+      puedeEditarPrecios={rol === 'admin' || rol === 'supervisor'}
+      esAdmin={rol === 'admin'}
     />
   );
 }

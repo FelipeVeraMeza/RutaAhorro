@@ -30,8 +30,14 @@ export { CONFIGURACION_POR_OMISION, type ConfiguracionLocal };
  */
 let cache: Promise<ConfiguracionLocal> | null = null;
 
+const CLAVE_DEMO = 'demo:configuracion';
+
 async function leer(): Promise<ConfiguracionLocal> {
-  if (DEMO_ACTIVO) return CONFIGURACION_POR_OMISION;
+  if (DEMO_ACTIVO) {
+    const { getMeta } = await import('../offline/db');
+    const guardada = await getMeta(CLAVE_DEMO);
+    return guardada ? desdeSettings(JSON.parse(guardada)) : CONFIGURACION_POR_OMISION;
+  }
 
   const { data, error } = await supabase().from('tenants').select('settings').maybeSingle();
   // Si no se puede leer, se sigue con los valores por omisión: quedarse sin
@@ -72,4 +78,32 @@ export function useConfiguracion(): ConfiguracionLocal {
     return () => { vivo = false; };
   }, []);
   return config;
+}
+
+/**
+ * Lo que el administrador puede cambiar desde la pantalla (T-18). Las mismas
+ * claves y rangos que acepta `fn_guardar_configuracion` (0018): el IVA y la
+ * zona horaria no se cambian desde acá.
+ */
+export interface CambiosConfiguracion {
+  vender_sin_stock?: boolean;
+  tarjeta_emite_documento?: boolean;
+  efectivo_inicial_sugerido?: number;
+  cash_alert_hours?: number;
+  cost_variation_alert_pct?: number;
+}
+
+export async function guardarConfiguracion(cambios: CambiosConfiguracion): Promise<ConfiguracionLocal> {
+  if (DEMO_ACTIVO) {
+    const { getMeta, setMeta } = await import('../offline/db');
+    const actual = JSON.parse((await getMeta(CLAVE_DEMO)) ?? '{}');
+    const nueva = { ...actual, ...cambios };
+    await setMeta(CLAVE_DEMO, JSON.stringify(nueva));
+    olvidarConfiguracion();
+    return desdeSettings(nueva);
+  }
+  const { data, error } = await supabase().rpc('fn_guardar_configuracion', { p_cambios: cambios });
+  if (error) throw error;
+  olvidarConfiguracion();
+  return desdeSettings(data);
 }

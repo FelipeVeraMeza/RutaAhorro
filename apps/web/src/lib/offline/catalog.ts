@@ -1,6 +1,6 @@
 'use client';
 
-import { normalizeBarcode } from '@rutaahorro/core';
+import { normalizeBarcode, type TramoPrecio } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { db, normalizeSearch, getMeta, setMeta, asegurarDueno, type LocalProduct } from './db';
 
@@ -39,7 +39,7 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
   for (let from = 0; ; from += PAGE) {
     let query = client
       .from('products')
-      .select('id, name, description, sku, sale_price, unit, category_id, tracks_expiry, min_stock, is_active, updated_at')
+      .select('id, name, description, sku, sale_price, unit, category_id, tracks_expiry, min_stock, is_active, updated_at, impuesto_adicional_id')
       .order('updated_at', { ascending: true })
       .range(from, from + PAGE - 1);
     if (since) query = query.gt('updated_at', since);
@@ -63,6 +63,7 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
         minStock: Number(p.min_stock ?? 0),
         isActive: Boolean(p.is_active),
         updatedAt: p.updated_at as string,
+        impuestoId: (p.impuesto_adicional_id as string) ?? null,
       })),
     );
     if (data.length < PAGE) break;
@@ -89,6 +90,39 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
     stockBodega: porUbicacion.get(p.id)?.bodega ?? 0,
   });
 
+  // --- Ofertas e impuestos adicionales (0018) ---
+  // Completos cada vez, como el stock: cambiar la tasa de un impuesto cambia
+  // lo que se cobra en muchos productos sin tocar su `updated_at`.
+  const [{ data: tiers, error: eTiers }, { data: taxes, error: eTaxes }] = await Promise.all([
+    client.from('product_price_tiers').select('product_id, desde, precio, vigente_desde, vigente_hasta'),
+    client.from('impuestos_adicionales').select('id, nombre, tasa, is_active'),
+  ]);
+  if (eTiers) throw eTiers;
+  if (eTaxes) throw eTaxes;
+  const tramosPorProducto = new Map<string, TramoPrecio[]>();
+  for (const t of tiers ?? []) {
+    const lista = tramosPorProducto.get(t.product_id as string) ?? [];
+    lista.push({
+      desde: Number(t.desde),
+      precio: Number(t.precio),
+      vigenteDesde: (t.vigente_desde as string) ?? null,
+      vigenteHasta: (t.vigente_hasta as string) ?? null,
+    });
+    tramosPorProducto.set(t.product_id as string, lista);
+  }
+  const impuestos = new Map(
+    (taxes ?? []).filter((t) => t.is_active).map((t) => [t.id as string, { nombre: t.nombre as string, tasa: Number(t.tasa) }]),
+  );
+  const conPrecios = <T extends LocalProduct>(p: T): T => {
+    const imp = p.impuestoId ? impuestos.get(p.impuestoId) : undefined;
+    return {
+      ...p,
+      tramos: tramosPorProducto.get(p.id) ?? [],
+      tasaAdicional: imp?.tasa ?? 0,
+      impuestoNombre: imp?.nombre ?? null,
+    };
+  };
+
   // --- Códigos de barras ---
   const { data: codes } = await client.from('product_barcodes').select('barcode, product_id');
 
@@ -96,7 +130,7 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
   await database.transaction('rw', database.products, database.barcodes, async () => {
     if (products.length > 0) {
       for (const p of products) p.stock = stockByProduct.get(p.id) ?? 0;
-      await database.products.bulkPut(products.map(conUbicacion));
+      await database.products.bulkPut(products.map((p) => conPrecios(conUbicacion(p))));
     }
     // Una bajada completa es la verdad entera: lo que está en el celular y no
     // en la base (un producto eliminado, un resto de otra sesión) sale.
@@ -104,14 +138,14 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
       const vigentes = new Set(products.map((p) => p.id));
       await database.products.filter((p) => !vigentes.has(p.id)).delete();
     }
-    // Actualizar el stock de los productos que ya estaban en local
-    if (!since || products.length === 0) {
-      const existing = await database.products.toArray();
-      const updates = existing
-        .filter((p) => stockByProduct.has(p.id))
-        .map((p) => conUbicacion({ ...p, stock: stockByProduct.get(p.id)! }));
-      if (updates.length > 0) await database.products.bulkPut(updates);
-    }
+    // Stock, ofertas e impuestos de TODOS los productos del celular, no solo
+    // de los que cambiaron. Antes esto corría solo si no había cambiado
+    // ningún producto: bastaba con que se editara uno para que el stock de
+    // los demás quedara viejo hasta la siguiente sincronización.
+    const existing = await database.products.toArray();
+    const updates = existing.map((p) =>
+      conPrecios(conUbicacion({ ...p, stock: stockByProduct.get(p.id) ?? p.stock })));
+    if (updates.length > 0) await database.products.bulkPut(updates);
     // Se reemplazan aunque la base no tenga ninguno. Antes solo se limpiaban si
     // llegaba al menos uno: con un catálogo sin códigos, los viejos seguían
     // escaneándose.

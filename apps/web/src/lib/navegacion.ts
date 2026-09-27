@@ -73,6 +73,11 @@ export const NAVEGACION: ItemNav[] = [
     href: '/usuarios', label: 'Usuarios', labelCorto: 'Usuarios', icono: '👥',
     roles: ['admin'], enMovil: false,
   },
+  {
+    // Impuestos adicionales y cómo opera el local (0018, T-18).
+    href: '/configuracion', label: 'Configuración', labelCorto: 'Config.', icono: '⚙️',
+    roles: ['admin'], enMovil: false,
+  },
 ];
 
 export function navPara(rol: Rol): ItemNav[] {

@@ -144,6 +144,22 @@ cargaba para un vendedor** (0017) y las filas de Ventas bajo 44 px.
 en el orden de §4. Los que ya tenían tarea acá: RQ-04 = T-57, RQ-15 = T-16,
 RQ-22 = T-17, RQ-19 = T-56, RQ-37 = T-55.
 
+### Cerrados el 2026-09-26 (noche) — ofertas, impuestos y configuración (0018)
+
+- **T-57 / RQ-04 · ofertas por cantidad**, hecha **junto con T-14** como
+  estaba previsto. Y **RQ-08** (promociones con fechas).
+- **T-14 · el precio que manda el POS.** Cobrar menos de lo que corresponde
+  cuenta como descuento y pasa por el tope del rol. Una venta sin conexión se
+  valida con el precio que tenía cuando se hizo (hasta 7 días).
+- **RQ-06 · impuestos adicionales** con tasas editables y asignación masiva.
+- **T-18 · pantalla de configuración** (parcial: vender sin stock, tarjeta,
+  efectivo sugerido, horas de aviso de caja y variación de costo; el tope de
+  descuento por rol sigue en Usuarios).
+- **S-8 (nuevo, encontrado por la prueba de T-18):** la política
+  `tenant_update` dejaba al administrador de un local escribir su fila de
+  `tenants` a mano: el IVA, la zona horaria, y **`status` y `plan`, los de la
+  suscripción**. Un local suspendido se reactivaba solo. Cerrada en 0018.
+
 ### Abiertos
 
 | # | Tarea | Dónde | Por qué importa |

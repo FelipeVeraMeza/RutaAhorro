@@ -43,6 +43,8 @@ const RPC_PERMITIDAS = [
   'fn_cash_session_summary', 'fn_close_cash_session', 'fn_confirm_receipt',
   'fn_create_product', 'fn_open_cash_session', 'fn_register_sale',
   'fn_transfer_stock', 'fn_update_product', 'fn_void_receipt', 'fn_void_sale', 'fn_write_off_lot',
+  // 0018 · ofertas e impuestos adicionales
+  'fn_asignar_impuesto', 'fn_guardar_configuracion', 'fn_guardar_impuesto', 'fn_guardar_precios_producto',
 ].sort();
 
 test('authenticated solo ejecuta las funciones de negocio, ninguna interna', async () => {

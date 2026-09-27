@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  addToCart, cartTotals, setQuantity, removeFromCart,
+  addToCart, cartTotals, setQuantity, removeFromCart, aplicarOfertas, tramosVigentes, diaLocal,
   formatCLP, toUserMessage, construirComprobante,
   type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta,
 } from '@rutaahorro/core';
@@ -45,6 +45,17 @@ export function PosClient({
   const [config, setConfig] = useState<ConfiguracionLocal>(CONFIGURACION_POR_OMISION);
   const venderSinStockRef = useRef(config.venderSinStock);
   venderSinStockRef.current = config.venderSinStock;
+  const zonaRef = useRef(config.zonaHoraria);
+  zonaRef.current = config.zonaHoraria;
+
+  /**
+   * Todo cambio del carrito pasa por acá: después de agregar, quitar o
+   * cambiar una cantidad, cada línea toma el precio de su tramo (0018). Con 2
+   * jugos la línea va a $2.000; al agregar el tercero, los tres a $1.400.
+   */
+  const cambiarCarro = useCallback((f: (prev: CartLine[]) => CartLine[]) => {
+    setLines((prev) => aplicarOfertas(f(prev), diaLocal(new Date(), zonaRef.current)));
+  }, []);
   const [scannerOn, setScannerOn] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<LocalProduct[]>([]);
@@ -103,12 +114,16 @@ export function PosClient({
   }, []);
 
   const agregar = useCallback((p: LocalProduct, qty = 1) => {
-    setLines((prev) =>
+    cambiarCarro((prev) =>
       addToCart(prev, {
         productId: p.id,
         name: p.name,
         description: p.description ?? null,
         unitPrice: p.salePrice,
+        precioLista: p.salePrice,
+        tramos: p.tramos ?? [],
+        tasaAdicional: p.tasaAdicional ?? 0,
+        nombreAdicional: p.impuestoNombre ?? null,
         quantity: qty,
         tracksExpiry: p.tracksExpiry,
         stockAvailable: p.stock,
@@ -127,7 +142,7 @@ export function PosClient({
     } else {
       notificar('ok', `${p.name} · ${formatCLP(p.salePrice)}`);
     }
-  }, [notificar]);
+  }, [notificar, cambiarCarro]);
 
   const onScan = useCallback(async (code: string) => {
     const product = await findByBarcode(code);
@@ -373,11 +388,15 @@ export function PosClient({
                       <p className="text-xs text-[var(--texto-suave)] truncate">{l.description}</p>
                     )}
                     <p className="text-xs text-[var(--texto-suave)] num">
+                      {l.precioLista != null && l.unitPrice < l.precioLista && (
+                        <s className="mr-1">{formatCLP(l.precioLista)}</s>
+                      )}
                       {formatCLP(l.unitPrice)} c/u
                       {typeof l.stockAvailable === 'number' && l.stockAvailable < l.quantity && (
                         <span className="text-[var(--color-aviso)]"> · stock {l.stockAvailable}</span>
                       )}
                     </p>
+                    <OfertaDeLinea linea={l} zona={config.zonaHoraria} />
                   </div>
                   <p className="num font-semibold whitespace-nowrap">
                     {formatCLP(l.unitPrice * l.quantity)}
@@ -387,7 +406,7 @@ export function PosClient({
                 <div className="flex items-center gap-2 mt-2">
                   <button
                     aria-label={`Quitar una unidad de ${l.name}`}
-                    onClick={() => setLines((p) => setQuantity(p, l.productId, l.quantity - 1))}
+                    onClick={() => cambiarCarro((p) => setQuantity(p, l.productId, l.quantity - 1))}
                     className="tap w-11 h-11 rounded-lg border border-[var(--borde)] text-xl font-bold active:bg-gray-100"
                   >
                     −
@@ -395,13 +414,13 @@ export function PosClient({
                   <span className="num w-10 text-center font-semibold">{l.quantity}</span>
                   <button
                     aria-label={`Agregar una unidad de ${l.name}`}
-                    onClick={() => setLines((p) => setQuantity(p, l.productId, l.quantity + 1))}
+                    onClick={() => cambiarCarro((p) => setQuantity(p, l.productId, l.quantity + 1))}
                     className="tap w-11 h-11 rounded-lg border border-[var(--borde)] text-xl font-bold active:bg-gray-100"
                   >
                     +
                   </button>
                   <button
-                    onClick={() => setLines((p) => removeFromCart(p, l.productId))}
+                    onClick={() => cambiarCarro((p) => removeFromCart(p, l.productId))}
                     className="tap ml-auto px-3 text-sm text-[var(--color-alerta)]"
                   >
                     Quitar
@@ -477,5 +496,30 @@ export function PosClient({
         <Comprobante datos={comprobante} onCerrar={() => setComprobante(null)} />
       )}
     </div>
+  );
+}
+
+/**
+ * Lo que la oferta le dice al cajero. Aplicada: cuánto se ahorra el cliente
+ * (texto y color, RNF-46). Por aplicar: cuántas faltan para el siguiente
+ * tramo, que es lo que el cajero le ofrece al cliente en voz alta.
+ */
+function OfertaDeLinea({ linea, zona }: { linea: CartLine; zona: string }) {
+  if (linea.precioLista == null || !linea.tramos?.length) return null;
+  const vigentes = tramosVigentes(linea.tramos, diaLocal(new Date(), zona))
+    .filter((t) => t.precio < (linea.precioLista ?? 0));
+  const ahorro = Math.round((linea.precioLista - linea.unitPrice) * linea.quantity);
+  const siguiente = vigentes.find((t) => t.desde > linea.quantity && t.precio < linea.unitPrice);
+  return (
+    <>
+      {ahorro > 0 && (
+        <p className="text-xs font-medium text-marca-700 num">🏷️ Oferta aplicada · ahorra {formatCLP(ahorro)}</p>
+      )}
+      {siguiente && (
+        <p className="text-xs text-[var(--texto-suave)] num">
+          Llevando {siguiente.desde - linea.quantity} más: {formatCLP(siguiente.precio)} c/u
+        </p>
+      )}
+    </>
   );
 }

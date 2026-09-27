@@ -9,6 +9,8 @@ import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
 import { useScanner } from '@/lib/scanner/useScanner';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
+import { repoPrecios, type ImpuestoAdicional } from '@/lib/datos/precios';
+import { OfertasEImpuesto, filasDesdeTramos, tramosDesdeFilas, type FilaOferta } from './OfertasEImpuesto';
 
 const UNIDADES = ['unidad', 'kg', 'gramo', 'litro', 'ml', 'paquete', 'caja'];
 
@@ -16,12 +18,15 @@ interface Props {
   producto: Producto | null;   // null = alta
   categorias: Categoria[];
   puedeVerCostos: boolean;
+  /** Ofertas e impuesto adicional: admin y supervisor (fn_guardar_precios_producto, 0018). */
+  puedeEditarPrecios?: boolean;
+  esAdmin?: boolean;
   onGuardado: () => void;
   onCancelar: () => void;
 }
 
 export function FormularioProducto({
-  producto, categorias, puedeVerCostos, onGuardado, onCancelar,
+  producto, categorias, puedeVerCostos, puedeEditarPrecios = false, esAdmin = false, onGuardado, onCancelar,
 }: Props) {
   const esEdicion = producto !== null;
 
@@ -36,10 +41,39 @@ export function FormularioProducto({
   const [stockMinimo, setStockMinimo] = useState(String(producto?.stockMinimo ?? 0));
   const [stockSala, setStockSala] = useState('0');
   const [stockBodega, setStockBodega] = useState('0');
-  const [perecible, setPerecible] = useState(producto?.perecible ?? false);
+  // Respuesta 8 del cuestionario: «todos tienen fecha de vencimiento». Un
+  // producto nuevo nace perecible; quien crea uno que no vence lo desmarca.
+  const [perecible, setPerecible] = useState(producto?.perecible ?? true);
   const [diasAlerta, setDiasAlerta] = useState(String(producto?.diasAlerta ?? 30));
   const [codigos, setCodigos] = useState<string[]>(producto?.codigos ?? []);
   const [codigoNuevo, setCodigoNuevo] = useState('');
+
+  // Ofertas e impuesto (0018). Se cargan aparte porque no son del producto.
+  const [filasOferta, setFilasOferta] = useState<FilaOferta[]>([]);
+  const [impuestoId, setImpuestoId] = useState<string | null>(null);
+  const [preciosIniciales, setPreciosIniciales] = useState<string>('');
+  const [impuestos, setImpuestos] = useState<ImpuestoAdicional[]>([]);
+
+  useEffect(() => {
+    if (!puedeEditarPrecios) return;
+    let vivo = true;
+    void (async () => {
+      try {
+        const lista = await repoPrecios().impuestos();
+        if (vivo) setImpuestos(lista);
+        if (producto) {
+          const p = await repoPrecios().preciosDe(producto.id);
+          if (!vivo) return;
+          setFilasOferta(filasDesdeTramos(p.tramos));
+          setImpuestoId(p.impuestoId);
+          setPreciosIniciales(JSON.stringify(p));
+        }
+      } catch (e) {
+        if (vivo) setError(toUserMessage(e));
+      }
+    })();
+    return () => { vivo = false; };
+  }, [producto, puedeEditarPrecios]);
 
   const [escaneando, setEscaneando] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -103,6 +137,10 @@ export function FormularioProducto({
       setError('Un producto perecible necesita cuántos días antes avisar');
       return;
     }
+    // Las ofertas se revisan ANTES de guardar el producto: si no, quedaría
+    // guardado a medias y con un error sobre algo que ya no se ve.
+    const ofertas = puedeEditarPrecios ? tramosDesdeFilas(filasOferta, precioNum) : { tramos: [], error: null };
+    if (ofertas.error) { setError(ofertas.error); return; }
 
     setGuardando(true);
     try {
@@ -126,6 +164,7 @@ export function FormularioProducto({
         codigos,
       };
 
+      let idGuardado = producto?.id ?? null;
       if (esEdicion) {
         // El costo solo viaja si el usuario escribió algo. Con el campo en
         // blanco se mandaba 0, y `actualizar` lo escribe tal cual: editar el
@@ -136,12 +175,30 @@ export function FormularioProducto({
           ...(puedeVerCostos && costo.trim() !== '' ? { costo: costoNum } : {}),
         });
       } else {
-        await repo.crear({
+        idGuardado = (await repo.crear({
           ...base,
           costo: costoNum,
           stockInicialSala: vStockSala.valor,
           stockInicialBodega: vStockBodega.valor,
-        });
+        })).id;
+      }
+
+      // Ofertas e impuesto: solo si cambiaron. Si fallan, el producto ya
+      // quedó guardado, y el mensaje lo dice para que nadie lo cree dos veces.
+      if (puedeEditarPrecios && idGuardado) {
+        const ahora = { impuestoId, tramos: ofertas.tramos };
+        const antes = preciosIniciales ? JSON.parse(preciosIniciales) : { impuestoId: null, tramos: [] };
+        try {
+          if (JSON.stringify(antes.tramos) !== JSON.stringify(ahora.tramos)) {
+            await repoPrecios().guardarTramos(idGuardado, ahora.tramos);
+          }
+          if ((antes.impuestoId ?? null) !== impuestoId) {
+            await repoPrecios().asignarImpuesto([idGuardado], impuestoId);
+          }
+        } catch (e) {
+          setError(`El producto quedó guardado, pero no las ofertas o el impuesto: ${toUserMessage(e)}`);
+          return;
+        }
       }
       onGuardado();
     } catch (e) {
@@ -445,6 +502,18 @@ export function FormularioProducto({
                 </div>
               )}
             </div>
+
+            {puedeEditarPrecios && (
+              <OfertasEImpuesto
+                filas={filasOferta}
+                onFilas={setFilasOferta}
+                precioLista={precioNum}
+                impuestos={impuestos}
+                impuestoId={impuestoId}
+                onImpuesto={setImpuestoId}
+                esAdmin={esAdmin}
+              />
+            )}
 
             {error && (
               <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">

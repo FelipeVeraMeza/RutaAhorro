@@ -22,3 +22,5 @@ export * from './codigos.js';
 export * from './xlsx.js';
 export * from './csv.js';
 export * from './fechas.js';
+export * from './precios.js';
+export * from './impuestos.js';

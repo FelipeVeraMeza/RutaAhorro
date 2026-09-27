@@ -26,11 +26,13 @@ function estadoStock(p: Producto): { icono: string; texto: string; clase: string
 }
 
 export function ProductosClient({
-  puedeVerCostos, puedeEditar, puedeEliminar,
+  puedeVerCostos, puedeEditar, puedeEliminar, puedeEditarPrecios = false, esAdmin = false,
 }: {
   puedeVerCostos: boolean;
   puedeEditar: boolean;
   puedeEliminar: boolean;
+  puedeEditarPrecios?: boolean;
+  esAdmin?: boolean;
 }) {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -297,6 +299,8 @@ export function ProductosClient({
           producto={editando}
           categorias={categorias}
           puedeVerCostos={puedeVerCostos}
+          puedeEditarPrecios={puedeEditarPrecios}
+          esAdmin={esAdmin}
           onGuardado={() => { setCreando(false); setEditando(null); void cargar(); }}
           onCancelar={() => { setCreando(false); setEditando(null); }}
         />

@@ -6,6 +6,7 @@
  * no para ser la autoridad. Si ambas difieren, manda la base de datos.
  */
 import { clp } from './money.js';
+import { precioPorCantidad, type TramoPrecio } from './precios.js';
 
 export type UserRole = 'admin' | 'supervisor' | 'vendedor' | 'bodega';
 
@@ -26,6 +27,17 @@ export interface CartLine {
   unitCost?: number;
   tracksExpiry?: boolean;
   stockAvailable?: number;
+  /**
+   * Precio normal del producto. Si viene, `unitPrice` se recalcula con los
+   * tramos cada vez que cambia la cantidad (`aplicarOfertas`). Si no, la
+   * línea tiene un precio fijo.
+   */
+  precioLista?: number;
+  /** Ofertas por cantidad del producto (0018). */
+  tramos?: TramoPrecio[];
+  /** Tasa del impuesto adicional, en % (IABA 18 → 18). 0 o ausente si no tiene. */
+  tasaAdicional?: number;
+  nombreAdicional?: string | null;
 }
 
 export interface CartTotals {
@@ -114,4 +126,30 @@ export function estimatedProfit(lines: CartLine[]): number {
     (sum, l) => sum + lineSubtotal(l) - clp((l.unitCost ?? 0) * l.quantity),
     0,
   );
+}
+
+/**
+ * Pone a cada línea el precio que le corresponde por su cantidad (ofertas por
+ * tramo, 0018). Se llama después de cada cambio del carrito: con 2 unidades
+ * la línea va a precio normal, al agregar la tercera baja a precio de oferta
+ * y todas las unidades quedan a ese precio.
+ *
+ * `dia` es el día del local ('AAAA-MM-DD'), para las ofertas con fecha.
+ */
+export function aplicarOfertas(lines: CartLine[], dia?: string | null): CartLine[] {
+  let cambio = false;
+  const next = lines.map((l) => {
+    if (l.precioLista == null) return l;
+    const { precio } = precioPorCantidad(l.precioLista, l.tramos, l.quantity, dia);
+    if (precio === l.unitPrice) return l;
+    cambio = true;
+    return { ...l, unitPrice: precio };
+  });
+  return cambio ? next : lines;
+}
+
+/** Cuánto se ahorra la línea por la oferta, respecto del precio normal. */
+export function ahorroPorOferta(line: CartLine): number {
+  if (line.precioLista == null) return 0;
+  return Math.max(clp(line.precioLista * line.quantity) - clp(line.unitPrice * line.quantity), 0);
 }

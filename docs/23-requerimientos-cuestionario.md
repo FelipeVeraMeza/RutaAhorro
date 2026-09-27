@@ -26,11 +26,11 @@ revés.
 | 1 | Más de 200 productos | **RQ-01** El catálogo completo vive en el celular para vender sin internet | ✅ | — | — |
 | 2 | Sí, en el ERP **Kame** | **RQ-02** Importar el catálogo desde la exportación de Kame | 🟡 La carga masiva lee Excel y CSV, pero **nunca se probó con un archivo de Kame**. Falta el archivo real para mapear sus columnas | — | Importar |
 | 3 | Por unidad, por caja y por mayor | **RQ-03** Vender una **caja o pack** que descuenta N unidades (código de la caja ≠ código de la unidad) | ⬜ | Tabla de presentaciones (código, unidades, precio) | POS, Productos |
-| 3 | ″ | **RQ-04** **Precio por mayor por tramos de cantidad** («1 a $1.000, desde 3 a $700», punto 8 de la lista) | ⬜ **T-57**, junto con **T-14** | Tramos + `fn_register_sale` valida el precio | POS recalcula la línea; Productos edita tramos |
+| 3 | ″ | **RQ-04** **Precio por mayor por tramos de cantidad** («1 a $1.000, desde 3 a $700», punto 8 de la lista; «1 por $2.000 y si llevas 3, los 3 a $1.400», 2026-09-26) | ✅ 2026-09-26, migración 0018, **junto con T-14**. 14 pruebas contra PostgreSQL, recorrido `ofertas.mjs` 20/20 | `product_price_tiers`; `fn_register_sale` pone y valida el precio del tramo | El POS recalcula la línea, muestra el ahorro y cuántas faltan para la oferta; Productos edita las ofertas; el consultador las muestra |
 | 4 | Casi todo tiene código; algunas frutas y verduras congeladas no | **RQ-05** Vender sin código: por nombre, o con etiqueta EAN-13 interna | ✅ búsqueda por nombre y etiquetas imprimibles | — | — |
-| 5 | Sí: bebidas con **impuesto específico** | **RQ-06** **Impuesto adicional por producto** (IABA 10 % / 18 %, ILA 20,5 % / 31,5 %) desglosado en el comprobante y en los reportes | ⬜ Hoy todo es 19 % parejo | Columna por producto, `fn_register_sale` calcula el desglose | Productos, comprobante, reportes |
+| 5 | Sí: bebidas con **impuesto específico** | **RQ-06** **Impuesto adicional por producto** (IABA 10 % / 18 %, ILA 20,5 % / 31,5 %), con **tasas editables** y asignación a muchos productos a la vez | ✅ 2026-09-26, migración 0018. La venta congela la tasa; cambiarla no toca ventas hechas. La base y el POS calculan el mismo desglose al peso (150 ventas al azar). 🟡 Falta mostrarlo en Reportes | `impuestos_adicionales`, `sales.impuestos_detalle` | Configuración (admin), formulario de producto, comprobante |
 | 6 | Sí, **por cliente y por promoción** | **RQ-07** Precio especial por cliente | ⬜ Depende de RQ-21 (clientes) | Lista de precios por cliente | POS al elegir cliente |
-| 6 | ″ | **RQ-08** Promociones con vigencia (fecha desde / hasta) | ⬜ | Tabla de promociones | Productos, POS |
+| 6 | ″ | **RQ-08** Promociones con vigencia (fecha desde / hasta) | ✅ 2026-09-26: una oferta con fechas es una promoción ("desde 1 unidad a $1.800 esta semana"). Rige por el día del local | `product_price_tiers.vigente_desde/hasta` | Formulario de producto |
 | 7 | Más de 10 proveedores | **RQ-09** Proveedores con RUT validado e historial | ✅ | — | — |
 | 8 | Todo tiene vencimiento y hoy **no lo controla** | **RQ-10** Lote y vencimiento en cada recepción de perecibles; **"controla vencimiento" activado por omisión** al crear | 🟡 Lotes, FEFO y baja de vencidos existen; el producto nace sin control y hay que acordarse de activarlo | — | Formulario de producto |
 | 9 | No necesita marcas ni formatos | — | — | — | — |
@@ -120,8 +120,9 @@ desarrollo.
 1. **¿John y Jo venden del mismo cajón?** Si la respuesta es sí, hay que hacer
    la caja compartida (RQ-24) antes de que el cliente venda de verdad, porque si
    no los arqueos no van a cuadrar nunca.
-2. **¿"Jo" es una persona o es "yo"?** Define cuántas cuentas de administrador
-   se crean.
+2. ~~¿"Jo" es una persona o es "yo"?~~ **Respondida (2026-09-26):** es
+   **María José**, que está en el grupo de WhatsApp del proyecto. John y María
+   José son los que autorizan: dos cuentas de administrador.
 3. **¿Los "2 lugares" son la sala y una bodega, o dos bodegas más la sala?**
 4. **¿Con qué emiten hoy boletas y facturas? ¿Kame?** Si es Kame, pedir acceso
    a su API y cambia todo el plan del módulo tributario.
