@@ -107,6 +107,15 @@ export function PrecioClient() {
         type="search"
         value={query}
         onChange={(e) => { setQuery(e.target.value); setElegido(null); }}
+        // Un lector físico escribe el código y presiona Enter (RQ-13).
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          const texto = query.trim();
+          if (/^\d{4,}$/.test(texto)) void onScan(texto);
+          else if (resultados.length === 1) { setElegido(resultados[0]); setQuery(''); }
+        }}
+        enterKeyHint="search"
         placeholder="Buscar por nombre o código…"
         aria-label="Buscar un producto para ver su precio"
         className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] bg-white mt-3"

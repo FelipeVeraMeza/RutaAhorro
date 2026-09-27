@@ -57,7 +57,10 @@ export function BottomNav({ role }: { role: Rol }) {
                 onClick={() => setVerMas(true)}
                 aria-haspopup="dialog"
                 aria-expanded={verMas}
-                className={celda(enResto) + ' w-full'}
+                // `!`: globals.css pone todo <button> en 16 px (para que iOS no
+                // haga zoom) y eso le ganaba a los 11 px de la celda. "Más" es
+                // el único botón de la barra; los demás son enlaces.
+                className={celda(enResto) + ' w-full !text-[11px]'}
               >
                 <span aria-hidden className="text-xl leading-none">☰</span>
                 Más

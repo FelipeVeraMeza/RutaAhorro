@@ -43,6 +43,8 @@ export function PosClient({
   // Se arranca con los valores por omisión para no bloquear la venta mientras
   // llega la configuración: en el mostrador nadie espera a una consulta.
   const [config, setConfig] = useState<ConfiguracionLocal>(CONFIGURACION_POR_OMISION);
+  const venderSinStockRef = useRef(config.venderSinStock);
+  venderSinStockRef.current = config.venderSinStock;
   const [scannerOn, setScannerOn] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<LocalProduct[]>([]);
@@ -118,6 +120,10 @@ export function PosClient({
     const sala = p.stockSala ?? p.stock;
     if (enCarro > sala && (p.stockBodega ?? 0) > 0) {
       notificar('info', `${p.name}: a la vista quedan ${Math.max(0, sala)} · hay ${p.stockBodega} en bodega, conviene reponer`);
+    } else if (enCarro > p.stock && venderSinStockRef.current) {
+      // Se vende igual (respuesta 13), pero quien cobra sabe que el sistema
+      // no lo tenía: es la pista de que falta ingresar una recepción.
+      notificar('info', `${p.name}: el sistema tenía ${Math.max(0, p.stock)}. Se vende igual y se avisa al administrador`);
     } else {
       notificar('ok', `${p.name} · ${formatCLP(p.salePrice)}`);
     }
@@ -133,6 +139,35 @@ export function PosClient({
     notificar('error', `Código ${code} no está en el catálogo`);
     setQuery(code);
   }, [agregar, notificar]);
+
+  /**
+   * Lector de códigos físico (RQ-13). Un lector USB o Bluetooth se comporta
+   * como un teclado: escribe el código y presiona Enter. Sin esto el código
+   * quedaba escrito en el buscador y había que tocar el resultado, producto
+   * por producto. Con 5 a 10 productos por venta (respuesta 12) eso es el
+   * mostrador entero esperando.
+   *
+   * Enter con un código conocido lo agrega; con un solo resultado por nombre,
+   * agrega ese. El campo queda vacío y con el foco, listo para el siguiente.
+   */
+  async function alPresionarEnter() {
+    const texto = query.trim();
+    if (!texto) return;
+    const porCodigo = /^\d{4,}$/.test(texto) ? await findByBarcode(texto) : undefined;
+    if (porCodigo) {
+      agregar(porCodigo);
+      setQuery('');
+      setResults([]);
+      return;
+    }
+    if (results.length === 1) {
+      agregar(results[0]);
+      setQuery('');
+      setResults([]);
+      return;
+    }
+    if (/^\d{4,}$/.test(texto)) await onScan(texto);
+  }
 
   // Búsqueda incremental, 100 % local (RNF-02)
   useEffect(() => {
@@ -156,7 +191,9 @@ export function PosClient({
     payments: Array<{ method: string; amount: number; received_amount?: number }>,
     documento: DocumentoVenta,
   ): Promise<boolean> {
-    if (!puedeForzarStock) {
+    // Con "vender sin stock" (respuesta 13) el local vende lo que está en la
+    // repisa aunque el sistema diga cero; la base deja la alerta.
+    if (!puedeForzarStock && !config.venderSinStock) {
       const falta = lines.find((l) => typeof l.stockAvailable === 'number' && l.quantity > l.stockAvailable);
       if (falta) {
         notificar('error', `No hay stock suficiente de ${falta.name}: en el local quedan ${Math.max(0, falta.stockAvailable ?? 0)}. Un supervisor puede autorizar la venta.`);
@@ -169,6 +206,7 @@ export function PosClient({
     await enqueueSale({
       clientUuid,
       soldAt,
+      sinConexion: !navigator.onLine,
       items: lines.map((l) => ({
         product_id: l.productId,
         quantity: l.quantity,
@@ -272,6 +310,9 @@ export function PosClient({
           inputMode="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void alPresionarEnter(); } }}
+          enterKeyHint="search"
+          aria-label="Buscar por nombre o código"
           placeholder="Buscar por nombre o código…"
           className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] bg-white"
         />

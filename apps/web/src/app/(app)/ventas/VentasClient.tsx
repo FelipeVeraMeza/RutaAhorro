@@ -179,14 +179,16 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
       ) : (
         <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden">
           {ventas.map((v) => (
-            <li key={v.id} className={`px-4 py-3 ${v.anulada ? 'opacity-60' : ''}`}>
+            <li key={v.id} className={v.anulada ? 'opacity-60' : ''}>
               <button
                 onClick={async () => {
                   setError(null);
                   try { setDetalle(await repoVentas().detalle(v.id)); }
                   catch (e) { setError(toUserMessage(e)); }
                 }}
-                className="w-full text-left flex items-center justify-between gap-3"
+                // El relleno va en el botón y no en la fila: toda la fila se
+                // toca, y mide lo que pide RNF-16 (44 px) también en celular.
+                className="tap w-full px-4 py-3 text-left flex items-center justify-between gap-3 active:bg-marca-50"
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium">

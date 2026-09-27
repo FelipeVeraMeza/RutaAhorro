@@ -69,6 +69,14 @@ export interface QueuedSale {
    * de este campo no lo traen y la base las resuelve por el medio de pago.
    */
   documento?: DocumentoVenta;
+  /**
+   * Se cobró sin conexión: el cliente ya se fue con el producto y un papel en
+   * la mano. La base no puede rechazarla por stock (el del celular podía estar
+   * viejo), porque entonces la venta quedaba en error para siempre y el arqueo
+   * tenía plata que ninguna venta explicaba (ADR-005). Se envía forzada y la
+   * base deja la alerta de stock negativo.
+   */
+  sinConexion?: boolean;
   status: QueuedSaleStatus;
   attempts: number;
   lastError?: string;

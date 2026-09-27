@@ -271,6 +271,10 @@ create policy alerts_insert on alerts for insert to authenticated
 -- ---------------------------------------------------------------------------
 -- Vista sin costos para roles que no deben verlos (§6.2)
 -- ---------------------------------------------------------------------------
+-- Se borra antes de crearla: 0017 le agrega columnas, y al reinstalar
+-- `create or replace` con menos columnas falla con "cannot drop columns from
+-- view". Es la regla 21 aplicada a una vista.
+drop view if exists products_public;
 create or replace view products_public
 with (security_invoker = true) as
   select id, tenant_id, sku, name, description, category_id, unit,

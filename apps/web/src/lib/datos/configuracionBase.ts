@@ -24,6 +24,13 @@ export interface ConfiguracionLocal {
    * venta dos veces. Un local con máquina no integrada lo pone en false.
    */
   tarjetaEmiteDocumento: boolean;
+  /**
+   * Si cualquier cajero puede vender lo que el sistema tiene en cero (0017,
+   * respuesta 13 del cuestionario). Con `false`, solo admin y supervisor.
+   */
+  venderSinStock: boolean;
+  /** Lo que la pantalla de Caja propone al abrir (respuesta 23: $20.000). */
+  efectivoInicialSugerido: number;
 }
 
 /**
@@ -40,6 +47,10 @@ export const CONFIGURACION_POR_OMISION: ConfiguracionLocal = {
   moneda: 'CLP',
   topeDescuento: {},
   tarjetaEmiteDocumento: true,
+  // `false` por omisión: lo prudente para un local que no lo configuró. La
+  // base usa el mismo criterio (`fn_register_sale`, 0017).
+  venderSinStock: false,
+  efectivoInicialSugerido: 0,
 };
 
 interface SettingsBD {
@@ -50,6 +61,8 @@ interface SettingsBD {
   currency?: string;
   max_discount_pct?: Partial<Record<Rol, number>>;
   tarjeta_emite_documento?: boolean;
+  vender_sin_stock?: boolean;
+  efectivo_inicial_sugerido?: number | string;
 }
 
 function numero(valor: unknown, porOmision: number): number {
@@ -83,5 +96,7 @@ export function desdeSettings(settings: unknown): ConfiguracionLocal {
     topeDescuento: s.max_discount_pct ?? {},
     tarjetaEmiteDocumento:
       s.tarjeta_emite_documento ?? CONFIGURACION_POR_OMISION.tarjetaEmiteDocumento,
+    venderSinStock: s.vender_sin_stock === true,
+    efectivoInicialSugerido: numero(s.efectivo_inicial_sugerido, CONFIGURACION_POR_OMISION.efectivoInicialSugerido),
   };
 }

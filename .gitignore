@@ -59,3 +59,4 @@ supabase/instalar.sql
 
 # Resultados locales de los recorridos en navegador
 tools/ui/.resultado-*.json
+tools/ui/.capturas/

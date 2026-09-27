@@ -35,11 +35,11 @@ async function usuario(alias) {
 const admin = await usuario('admin');
 const cajero = await usuario('cajero');
 const sufijo = Date.now().toString().slice(-5);
-async function producto(nombre, precio, stockSala) {
+async function producto(nombre, precio, stockSala, codigo = null) {
   const { data } = await admin.cli.rpc('fn_create_product', {
     p_name: nombre, p_sku: null, p_description: 'Producto de prueba QA', p_category_id: null, p_unit: 'unidad',
     p_sale_price: precio, p_avg_cost: Math.round(precio * 0.6), p_min_stock: 0, p_tracks_expiry: false,
-    p_expiry_alert_days: 30, p_barcodes: null, p_initial_stock: 0 });
+    p_expiry_alert_days: 30, p_barcodes: codigo ? [codigo] : null, p_initial_stock: 0 });
   if (stockSala) {
     const { data: prov } = await admin.cli.from('suppliers').select('id').eq('name', 'Proveedor QA').single();
     await admin.cli.rpc('fn_confirm_receipt', { p_supplier_id: prov.id, p_items: [{ product_id: data.product_id, quantity: stockSala, unit_cost: 500 }] });
@@ -47,7 +47,9 @@ async function producto(nombre, precio, stockSala) {
   }
   return data.product_id;
 }
-const pA = await producto(`QA Galletas ${sufijo}`, 1500, 10);
+// Código de 13 dígitos que no choca con otras corridas: lo usa el lector (RQ-13).
+const codigoA = `78${Date.now().toString().slice(-11)}`;
+const pA = await producto(`QA Galletas ${sufijo}`, 1500, 10, codigoA);
 const pB = await producto(`QA Agotado ${sufijo}`, 700, 0);
 const nA = `QA Galletas ${sufijo}`, nB = `QA Agotado ${sufijo}`;
 // Caja del cajero: si quedó una abierta de otra corrida, se cierra.
@@ -59,6 +61,14 @@ if (abierta) {
 const stockSala = async (id) => Number((await servicio.from('stock_ubicaciones').select('quantity').eq('product_id', id).eq('ubicacion', 'sala').maybeSingle()).data?.quantity ?? 0);
 const ventasDe = async () => (await servicio.from('sales').select('folio, total, status, sold_by').eq('sold_by', cajero.id).order('folio')).data ?? [];
 const antes = (await ventasDe()).length;
+// Respuesta 13 (0017): el local decide si un vendedor vende sin stock. Se
+// parte con "no" para probar el bloqueo, y al final se prueba el "sí".
+const { data: perfilCajero } = await servicio.from('profiles').select('tenant_id').eq('id', cajero.id).single();
+async function venderSinStock(valor) {
+  const { data: t } = await servicio.from('tenants').select('settings').eq('id', perfilCajero.tenant_id).single();
+  await servicio.from('tenants').update({ settings: { ...t.settings, vender_sin_stock: valor } }).eq('id', perfilCajero.tenant_id);
+}
+await venderSinStock(false);
 
 // ---------------------------------------------------------------- navegador
 const nav = await chromium.launch({ channel: 'msedge', headless: true });
@@ -139,6 +149,21 @@ ok('M4-13', (await stockSala(pA)) === 8, 'la sala bajó de 10 a 8', `sala ${awai
 const nueva = p.getByRole('button', { name: 'Nueva venta' });
 if (await nueva.count()) await nueva.click();
 
+console.log('RQ-13 · Lector de códigos físico (escribe el código y un Enter)');
+await p.locator('input[type=search]').click();
+await p.keyboard.type(codigoA);
+await p.keyboard.press('Enter');
+await p.waitForTimeout(600);
+const trasLector = await p.locator('main').innerText();
+const campo = await p.locator('input[type=search]').inputValue();
+ok('RQ-13', trasLector.includes(nA) && campo === '', 'el código + Enter agrega el producto y deja el buscador vacío',
+  `campo «${campo}»`);
+ok('RQ-13', await p.evaluate(() => document.activeElement?.getAttribute('type') === 'search'),
+  'el buscador sigue con el foco, listo para el siguiente código');
+await p.getByRole('button', { name: 'Vaciar' }).click();
+await p.getByRole('dialog').getByRole('button', { name: /Sí|Vaciar/ }).first().click().catch(() => {});
+await p.waitForTimeout(300);
+
 console.log('M5-17 / M5-18 / M5-19 · Vender sin internet');
 await ctx.setOffline(true);
 await buscarYAgregar(nA);
@@ -172,6 +197,24 @@ await p.waitForTimeout(2500);
 const cuerpo = await p.locator('body').innerText();
 ok('M4-09', !/NO ES DOCUMENTO TRIBUTARIO/.test(cuerpo), 'no entrega comprobante de una venta que no se puede registrar');
 ok('M4-09', /QA Agotado/.test(await p.locator('main').innerText()), 'el carrito se conserva para corregir');
+
+console.log('RQ-14 · Con "vender sin stock" el vendedor vende igual (respuesta 13)');
+await venderSinStock(true);
+await p.reload();   // la configuración se lee una vez por carga de página
+await p.locator('input[type=search]').waitFor();
+const ventasAntesRq14 = (await ventasDe()).length;
+await buscarYAgregar(nB);
+const avisoSinStock = await p.getByText(/el sistema tenía/).first().innerText({ timeout: 4000 }).catch(() => '');
+ok('RQ-14', /Se vende igual/.test(avisoSinStock), 'avisa que el sistema no lo tenía', avisoSinStock);
+await p.getByRole('button', { name: 'Cobrar' }).click();
+await p.getByRole('button', { name: /Débito/ }).click();
+await p.getByRole('button', { name: 'Confirmar venta' }).click();
+await p.getByText('COMPROBANTE INTERNO').first().waitFor({ timeout: 15000 }).then(
+  () => ok('RQ-14', true, 'entrega el comprobante'), () => ok('RQ-14', false, 'entrega el comprobante'));
+await p.waitForTimeout(2000);
+ok('RQ-14', (await ventasDe()).length === ventasAntesRq14 + 1, 'la venta quedó en la base');
+const { data: stockB } = await servicio.from('stock_levels').select('quantity').eq('product_id', pB).maybeSingle();
+ok('RQ-14', Number(stockB?.quantity) === -1, 'el stock queda en negativo, a la vista del administrador', `stock ${stockB?.quantity}`);
 
 console.log(`\nErrores de JavaScript: ${errores.length ? errores.join(' | ') : 'ninguno'}`);
 await nav.close();

@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Campo } from '@/components/Campo';
 import { Modal } from '@/components/Modal';
 import { useFormatoFecha } from '@/lib/formatoFecha';
+import { useConfiguracion } from '@/lib/datos/configuracion';
 
 interface Session { id: string; opened_at: string; opening_amount: number }
 interface Movimiento { id: string; type: string; amount: number; reason: string; created_at: string }
@@ -38,6 +39,7 @@ export function CajaClient({
   const [cargando, setCargando] = useState(false);
 
   const [montoInicial, setMontoInicial] = useState('');
+  const { efectivoInicialSugerido } = useConfiguracion();
   const [vistaMovimiento, setVistaMovimiento] = useState<'ingreso' | 'egreso' | null>(null);
   const [movMonto, setMovMonto] = useState('');
   const [movMotivo, setMovMotivo] = useState('');
@@ -182,6 +184,18 @@ export function CajaClient({
             placeholder="0"
             className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] text-xl num text-right"
           />
+          {/* Respuesta 23: el local parte con $20.000. No se escribe solo en el
+              campo: el cajero tiene que contar, y un monto ya puesto se
+              declara sin contar. Un toque, pero un toque consciente. */}
+          {efectivoInicialSugerido > 0 && montoInicial === '' && (
+            <button
+              type="button"
+              onClick={() => setMontoInicial(efectivoInicialSugerido.toLocaleString('es-CL'))}
+              className="tap mt-2 w-full px-4 py-2.5 rounded-xl border border-[var(--borde)] text-sm text-left"
+            >
+              Lo habitual: <span className="font-semibold num">{formatCLP(efectivoInicialSugerido)}</span> · tocar si contaste eso
+            </button>
+          )}
           {montoInicial !== '' && inicial.error && (
             <p role="alert" className="text-sm text-[var(--color-alerta)] mt-2">{inicial.error}</p>
           )}
