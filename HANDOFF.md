@@ -10,6 +10,21 @@
 
 ## CÓMO SEGUIR — corte 2026-09-27 (noche), léelo antes que todo
 
+**2026-09-27 (tarde) · 0021 aplicada en Supabase: ofertas a muchos productos,
+por porcentaje, e interruptor del local** (RQ-42, RQ-43, RQ-44 en `docs/23`).
+Pedido de Felipe sobre lo que 0018 no cubría. `/productos/ofertas` (admin y
+supervisor) aplica "desde N, X % menos" o "a $P c/u" a los productos elegidos,
+con vista previa y los que se saltan; Configuración tiene "Rigen las ofertas y
+promociones". Apagadas, el catálogo del celular llega sin ofertas y la base no
+acepta el precio de oferta, salvo lo vendido sin conexión antes de apagarlas
+(`ofertas_pausadas_desde`) y 15 min de gracia. Pruebas: 364 lógica · 115
+PostgreSQL (+1 T-45) · db:e2e 26/26 · recorridos `ofertas-masivas` 21/21,
+`ofertas` 20/20, móvil sin problemas. **Siguen, en este orden: RQ-20/21/07
+clientes y precio por cliente (0022), y combos entre productos (0023).**
+**Ojo, sin arreglar:** la barra "Confirmar" de Recepción es `fixed bottom-0 z-30`,
+y en el celular la barra de navegación (`z-40`) la tapa. Hay que medirlo con
+`elementFromPoint` como en `ofertas-masivas.mjs`.
+
 **Estado verificado al cortar** (todo en verde, nada a medio aplicar):
 359 pruebas de lógica · 104 contra PostgreSQL (+1 pendiente conocida, T-45) ·
 `db:e2e` 26/26 contra Supabase · recorridos en navegador documentos 19/19,

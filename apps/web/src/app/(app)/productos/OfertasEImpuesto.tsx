@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import {
-  formatCLP, validarMonto, validarCantidad, validarTramos, etiquetaAdicional,
+  formatCLP, validarMonto, validarCantidad, validarTramos, etiquetaAdicional, precioDelTramo,
   type TramoPrecio,
 } from '@rutaahorro/core';
 import type { ImpuestoAdicional } from '@/lib/datos/precios';
@@ -17,10 +17,16 @@ import type { ImpuestoAdicional } from '@/lib/datos/precios';
  * Las filas se editan como texto (lo que la persona escribe) y se convierten
  * a tramos al guardar, con los mismos validadores que el resto del formulario:
  * "1.400" es mil cuatrocientos, no uno coma cuatro.
+ *
+ * Desde 0021 una oferta también puede ser un porcentaje ("10 % menos"), que
+ * sigue al precio normal cuando cambia. Es lo que deja la pantalla de ofertas
+ * a varios productos, y acá se ve y se edita igual.
  */
 export interface FilaOferta {
   clave: string;
   desde: string;
+  /** 'precio': `precio` es el monto c/u. 'pct': `precio` es el porcentaje de rebaja. */
+  modo: 'precio' | 'pct';
   precio: string;
   conFechas: boolean;
   vigenteDesde: string;
@@ -31,7 +37,10 @@ export function filasDesdeTramos(tramos: TramoPrecio[]): FilaOferta[] {
   return tramos.map((t, i) => ({
     clave: `t${i}-${t.desde}`,
     desde: String(t.desde).replace('.', ','),
-    precio: t.precio.toLocaleString('es-CL'),
+    modo: t.descuentoPct != null ? 'pct' : 'precio',
+    precio: t.descuentoPct != null
+      ? String(t.descuentoPct).replace('.', ',')
+      : (t.precio ?? 0).toLocaleString('es-CL'),
     conFechas: Boolean(t.vigenteDesde || t.vigenteHasta),
     vigenteDesde: t.vigenteDesde ?? '',
     vigenteHasta: t.vigenteHasta ?? '',
@@ -47,11 +56,19 @@ export function tramosDesdeFilas(
     const n = `Oferta ${i + 1}: `;
     const vDesde = validarCantidad(f.desde, { maximo: 1_000_000 });
     if (!vDesde.valido) return { tramos: [], error: n + vDesde.error };
-    const vPrecio = validarMonto(f.precio, { etiqueta: 'precio de la oferta', permiteCero: false, maximo: 50_000_000 });
-    if (!vPrecio.valido) return { tramos: [], error: n + vPrecio.error };
+    let monto: Pick<TramoPrecio, 'precio' | 'descuentoPct'>;
+    if (f.modo === 'pct') {
+      const vPct = validarCantidad(f.precio, { maximo: 99.99 });
+      if (!vPct.valido) return { tramos: [], error: n + vPct.error };
+      monto = { descuentoPct: vPct.valor };
+    } else {
+      const vPrecio = validarMonto(f.precio, { etiqueta: 'precio de la oferta', permiteCero: false, maximo: 50_000_000 });
+      if (!vPrecio.valido) return { tramos: [], error: n + vPrecio.error };
+      monto = { precio: vPrecio.valor };
+    }
     tramos.push({
       desde: vDesde.valor,
-      precio: vPrecio.valor,
+      ...monto,
       vigenteDesde: f.conFechas ? f.vigenteDesde || null : null,
       vigenteHasta: f.conFechas ? f.vigenteHasta || null : null,
     });
@@ -88,9 +105,14 @@ export function OfertasEImpuesto({
         <ul className="space-y-3">
           {filas.map((f, i) => {
             const vD = validarCantidad(f.desde, { maximo: 1_000_000 });
-            const vP = validarMonto(f.precio, { permiteCero: false, maximo: 50_000_000 });
-            const ejemplo = vD.valido && vP.valido && vD.valor >= 1 && precioLista > vP.valor
-              ? `${f.desde} ${vD.valor === 1 ? 'unidad' : 'unidades'} = ${formatCLP(vD.valor * vP.valor)} · ahorra ${formatCLP(vD.valor * (precioLista - vP.valor))}`
+            const vP = f.modo === 'pct'
+              ? validarCantidad(f.precio, { maximo: 99.99 })
+              : validarMonto(f.precio, { permiteCero: false, maximo: 50_000_000 });
+            const cu = vP.valido && vP.valor > 0
+              ? precioDelTramo(f.modo === 'pct' ? { desde: 1, descuentoPct: vP.valor } : { desde: 1, precio: vP.valor }, precioLista)
+              : null;
+            const ejemplo = vD.valido && vD.valor >= 1 && cu != null && precioLista > cu
+              ? `${f.desde} ${vD.valor === 1 ? 'unidad' : 'unidades'} = ${formatCLP(vD.valor * cu)}${f.modo === 'pct' ? ` (${formatCLP(cu)} c/u)` : ''} · ahorra ${formatCLP(vD.valor * (precioLista - cu))}`
               : null;
             return (
               <li key={f.clave} className="rounded-lg bg-[var(--fondo)] p-2.5">
@@ -105,11 +127,11 @@ export function OfertasEImpuesto({
                     />
                   </label>
                   <label className="flex-1 min-w-0">
-                    <span className="block text-xs mb-1">Precio c/u</span>
+                    <span className="block text-xs mb-1">{f.modo === 'pct' ? '% menos' : 'Precio c/u'}</span>
                     <input
-                      inputMode="numeric" value={f.precio}
+                      inputMode={f.modo === 'pct' ? 'decimal' : 'numeric'} value={f.precio}
                       onChange={(e) => cambiar(f.clave, { precio: e.target.value })}
-                      aria-label={`Oferta ${i + 1}: precio de cada unidad`}
+                      aria-label={f.modo === 'pct' ? `Oferta ${i + 1}: porcentaje de rebaja` : `Oferta ${i + 1}: precio de cada unidad`}
                       className="tap w-full px-3 py-2 rounded-lg border border-[var(--borde)] bg-white num text-right"
                     />
                   </label>
@@ -123,6 +145,13 @@ export function OfertasEImpuesto({
                   </button>
                 </div>
                 {ejemplo && <p className="text-xs text-marca-700 mt-1.5 num">{ejemplo}</p>}
+                <button
+                  type="button"
+                  onClick={() => cambiar(f.clave, { modo: f.modo === 'pct' ? 'precio' : 'pct', precio: '' })}
+                  className="tap mt-1 text-sm underline text-[var(--texto-suave)]"
+                >
+                  {f.modo === 'pct' ? 'Usar un precio fijo en vez de %' : 'Usar un % de rebaja en vez de precio'}
+                </button>
 
                 <label className="flex items-center gap-2 mt-2 text-sm cursor-pointer min-h-[44px]">
                   <input
@@ -160,7 +189,7 @@ export function OfertasEImpuesto({
         <button
           type="button"
           onClick={() => onFilas([...filas, {
-            clave: `n${Date.now()}`, desde: filas.length ? '' : '3', precio: '',
+            clave: `n${Date.now()}`, desde: filas.length ? '' : '3', modo: 'precio', precio: '',
             conFechas: false, vigenteDesde: '', vigenteHasta: '',
           }])}
           className="tap w-full mt-3 rounded-lg border border-dashed border-[var(--borde)] text-sm font-medium"

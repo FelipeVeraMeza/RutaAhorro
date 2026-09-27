@@ -53,6 +53,8 @@ const RPC_PERMITIDAS = [
   'fn_asignar_impuesto', 'fn_guardar_configuracion', 'fn_guardar_impuesto', 'fn_guardar_precios_producto',
   // 0019 · documentos tributarios y devoluciones
   'fn_devolver_venta', 'fn_guardar_emisor',
+  // 0021 · ofertas a muchos productos
+  'fn_aplicar_oferta_masiva', 'fn_quitar_ofertas',
 ].sort();
 
 // Se arma por partes y no con `connectionString`: una contraseña con `#`, `@`,

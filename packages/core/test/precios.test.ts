@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { precioPorCantidad, tramosVigentes, validarTramos, type TramoPrecio } from '../src/precios.js';
+import { precioPorCantidad, tramosVigentes, validarTramos, precioDelTramo, describirTramo, type TramoPrecio } from '../src/precios.js';
 
 // El ejemplo del cliente, textual: «1 por $2.000 y si llevas 3 te llevas los 3 a $1.400 cada uno».
 const CLIENTE: TramoPrecio[] = [{ desde: 3, precio: 1400 }];
@@ -63,6 +63,41 @@ describe('precioPorCantidad — promociones con vigencia', () => {
     const todos = [...promo, { desde: 3, precio: 1400 }];
     expect(tramosVigentes(todos, '2026-09-30')).toEqual([{ desde: 3, precio: 1400 }]);
     expect(tramosVigentes(todos, '2026-09-21').map((x) => x.desde)).toEqual([1, 3]);
+  });
+});
+
+describe('tramos por porcentaje (0021)', () => {
+  it('10 % menos desde 6: el precio sale del precio normal de ese momento', () => {
+    const t: TramoPrecio[] = [{ desde: 6, descuentoPct: 10 }];
+    expect(precioPorCantidad(1990, t, 5).precio).toBe(1990);
+    expect(precioPorCantidad(1990, t, 6).precio).toBe(1791);
+    // Sube el precio normal: la oferta lo sigue sin que nadie la rehaga.
+    expect(precioPorCantidad(2500, t, 6).precio).toBe(2250);
+  });
+  it('redondea al peso como PostgreSQL, sin errores de punto flotante', () => {
+    // 1.999 × 87,5 % = 1.749,125 → 1.749 ; 1.000 × 87,65 % = 876,5 → 877
+    expect(precioDelTramo({ desde: 3, descuentoPct: 12.5 }, 1999)).toBe(1749);
+    expect(precioDelTramo({ desde: 3, descuentoPct: 12.35 }, 1000)).toBe(877);
+    expect(precioDelTramo({ desde: 3, descuentoPct: 33.33 }, 3)).toBe(2);
+  });
+  it('entre un monto y un porcentaje con el mismo "desde", gana el más barato', () => {
+    const t: TramoPrecio[] = [{ desde: 3, precio: 1500 }, { desde: 3, descuentoPct: 30 }];
+    expect(precioPorCantidad(2000, t, 3).precio).toBe(1400);
+    expect(precioPorCantidad(2000, t, 3).tramo).toEqual({ desde: 3, descuentoPct: 30 });
+  });
+  it('se describe en palabras', () => {
+    expect(describirTramo({ desde: 6, descuentoPct: 12.5 })).toBe('12,5% menos');
+    expect(describirTramo({ desde: 3, precio: 1400 })).toBe('a $1.400 c/u');
+  });
+  it('validación: uno de los dos, entre 0 y 100, hasta dos decimales', () => {
+    expect(validarTramos([{ desde: 6, descuentoPct: 10 }], 2000)).toEqual([]);
+    expect(validarTramos([{ desde: 6, descuentoPct: 12.25 }], 2000)).toEqual([]);
+    expect(validarTramos([{ desde: 6, descuentoPct: 0 }], 2000)).toHaveLength(1);
+    expect(validarTramos([{ desde: 6, descuentoPct: 100 }], 2000)).toHaveLength(1);
+    expect(validarTramos([{ desde: 6, descuentoPct: 10.123 }], 2000)).toHaveLength(1);
+    expect(validarTramos([{ desde: 6, precio: 1000, descuentoPct: 10 }], 2000)).toHaveLength(1);
+    expect(validarTramos([{ desde: 6 }], 2000)).toHaveLength(1);
+    expect(validarTramos([{ desde: 1, descuentoPct: 10 }], 2000)[0].mensaje).toMatch(/precio normal/);
   });
 });
 

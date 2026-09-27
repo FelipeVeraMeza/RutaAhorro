@@ -1,6 +1,6 @@
 'use client';
 
-import type { TramoPrecio } from '@rutaahorro/core';
+import { validarTramos, type TramoPrecio } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import { db, getMeta, setMeta } from '../offline/db';
@@ -37,6 +37,13 @@ export interface PreciosProducto {
   tramos: TramoPrecio[];
 }
 
+/** Lo que devuelve aplicar una oferta a muchos productos (0021). */
+export interface ResultadoMasivo {
+  aplicados: number;
+  /** Los que se saltaron, con el código de por qué (OFERTA_NO_ES_MAS_BARATA…). */
+  omitidos: { id: string; nombre: string; motivo: string }[];
+}
+
 export interface RepositorioPrecios {
   impuestos(): Promise<ImpuestoAdicional[]>;
   /** Crea (sin `id`) o cambia un impuesto. Devuelve su id. Solo administrador. */
@@ -48,13 +55,31 @@ export interface RepositorioPrecios {
   guardarTramos(productoId: string, tramos: TramoPrecio[]): Promise<void>;
   /** Qué impuesto tiene cada producto, para la pantalla de asignación masiva. */
   impuestoPorProducto(): Promise<Map<string, string | null>>;
+  /**
+   * La misma oferta a muchos productos (0021). Reemplaza en cada uno el tramo
+   * con la misma cantidad y fechas; el resto de sus ofertas queda igual.
+   */
+  aplicarOfertaMasiva(productoIds: string[], tramo: TramoPrecio): Promise<ResultadoMasivo>;
+  /** Quita todas las ofertas de esos productos. Devuelve a cuántos se les quitó. */
+  quitarOfertas(productoIds: string[]): Promise<number>;
+  /** Las ofertas de cada producto que tiene alguna, para la pantalla masiva. */
+  tramosPorProducto(): Promise<Map<string, TramoPrecio[]>>;
 }
 
 const aFila = (t: TramoPrecio) => ({
   desde: t.desde,
-  precio: t.precio,
+  precio: t.descuentoPct != null ? null : t.precio ?? null,
+  descuento_pct: t.descuentoPct ?? null,
   vigente_desde: t.vigenteDesde || null,
   vigente_hasta: t.vigenteHasta || null,
+});
+
+const deFila = (r: Record<string, unknown>): TramoPrecio => ({
+  desde: Number(r.desde),
+  precio: r.precio == null ? null : Number(r.precio),
+  descuentoPct: r.descuento_pct == null ? null : Number(r.descuento_pct),
+  vigenteDesde: (r.vigente_desde as string) ?? null,
+  vigenteHasta: (r.vigente_hasta as string) ?? null,
 });
 
 const supabaseRepo: RepositorioPrecios = {
@@ -101,19 +126,14 @@ const supabaseRepo: RepositorioPrecios = {
   async preciosDe(productoId) {
     const [{ data: p, error }, { data: t, error: e2 }] = await Promise.all([
       supabase().from('products').select('impuesto_adicional_id').eq('id', productoId).maybeSingle(),
-      supabase().from('product_price_tiers').select('desde, precio, vigente_desde, vigente_hasta')
+      supabase().from('product_price_tiers').select('desde, precio, descuento_pct, vigente_desde, vigente_hasta')
         .eq('product_id', productoId).order('desde'),
     ]);
     if (error) throw error;
     if (e2) throw e2;
     return {
       impuestoId: (p?.impuesto_adicional_id as string) ?? null,
-      tramos: (t ?? []).map((r) => ({
-        desde: Number(r.desde),
-        precio: Number(r.precio),
-        vigenteDesde: (r.vigente_desde as string) ?? null,
-        vigenteHasta: (r.vigente_hasta as string) ?? null,
-      })),
+      tramos: (t ?? []).map(deFila),
     };
   },
 
@@ -129,6 +149,35 @@ const supabaseRepo: RepositorioPrecios = {
     const { data, error } = await supabase().from('products').select('id, impuesto_adicional_id');
     if (error) throw error;
     return new Map((data ?? []).map((r) => [r.id as string, (r.impuesto_adicional_id as string) ?? null]));
+  },
+
+  async aplicarOfertaMasiva(productoIds, tramo) {
+    const { data, error } = await supabase().rpc('fn_aplicar_oferta_masiva', {
+      p_productos: productoIds, p_tramo: aFila(tramo),
+    });
+    if (error) throw error;
+    void syncCatalog().catch(() => {});
+    const r = data as { aplicados: number; omitidos: ResultadoMasivo['omitidos'] };
+    return { aplicados: Number(r?.aplicados ?? 0), omitidos: r?.omitidos ?? [] };
+  },
+
+  async quitarOfertas(productoIds) {
+    const { data, error } = await supabase().rpc('fn_quitar_ofertas', { p_productos: productoIds });
+    if (error) throw error;
+    void syncCatalog().catch(() => {});
+    return Number(data ?? 0);
+  },
+
+  async tramosPorProducto() {
+    const { data, error } = await supabase().from('product_price_tiers')
+      .select('product_id, desde, precio, descuento_pct, vigente_desde, vigente_hasta').order('desde');
+    if (error) throw error;
+    const mapa = new Map<string, TramoPrecio[]>();
+    for (const r of data ?? []) {
+      const id = r.product_id as string;
+      mapa.set(id, [...(mapa.get(id) ?? []), deFila(r)]);
+    }
+    return mapa;
   },
 };
 
@@ -194,6 +243,38 @@ const demoRepo: RepositorioPrecios = {
   async impuestoPorProducto() {
     const productos = await db().products.toArray();
     return new Map(productos.map((p) => [p.id, p.impuestoId ?? null]));
+  },
+  // La misma regla que `fn_aplicar_oferta_masiva`, para que la maqueta enseñe
+  // lo mismo que pasa en producción.
+  async aplicarOfertaMasiva(productoIds, tramo) {
+    const productos = (await db().products.bulkGet(productoIds)).filter((p): p is NonNullable<typeof p> => !!p);
+    const omitidos: ResultadoMasivo['omitidos'] = [];
+    const cambian = [];
+    for (const p of productos) {
+      if (!p.isActive) { omitidos.push({ id: p.id, nombre: p.name, motivo: 'PRODUCTO_INACTIVO' }); continue; }
+      if (validarTramos([tramo], p.salePrice).length) {
+        omitidos.push({ id: p.id, nombre: p.name, motivo: 'OFERTA_NO_ES_MAS_BARATA' });
+        continue;
+      }
+      const mismo = (t: TramoPrecio) => t.desde === tramo.desde
+        && (t.vigenteDesde ?? null) === (tramo.vigenteDesde ?? null)
+        && (t.vigenteHasta ?? null) === (tramo.vigenteHasta ?? null);
+      cambian.push({ ...p, tramos: [...(p.tramos ?? []).filter((t) => !mismo(t)), tramo] });
+    }
+    await db().products.bulkPut(cambian);
+    window.dispatchEvent(new Event('catalogo-actualizado'));
+    return { aplicados: cambian.length, omitidos };
+  },
+  async quitarOfertas(productoIds) {
+    const productos = (await db().products.bulkGet(productoIds))
+      .filter((p): p is NonNullable<typeof p> => !!p && (p.tramos?.length ?? 0) > 0);
+    await db().products.bulkPut(productos.map((p) => ({ ...p, tramos: [] })));
+    window.dispatchEvent(new Event('catalogo-actualizado'));
+    return productos.length;
+  },
+  async tramosPorProducto() {
+    const productos = await db().products.toArray();
+    return new Map(productos.filter((p) => p.tramos?.length).map((p) => [p.id, p.tramos ?? []]));
   },
 };
 

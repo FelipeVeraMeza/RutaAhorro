@@ -117,7 +117,9 @@ export function ProductosClient({
 
   return (
     <div className="px-4 py-5">
-      <div className="flex items-center justify-between gap-3 mb-4">
+      {/* flex-wrap: con Ofertas son cuatro botones, y a 360 px no caben junto
+          al título. Bajan de línea en vez de desbordar la pantalla. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
           <h1 className="text-lg font-semibold">Productos</h1>
           <p className="text-sm text-[var(--texto-suave)]">
@@ -133,6 +135,15 @@ export function ProductosClient({
             >
               🏷️ <span className="hidden sm:inline ml-1.5">Etiquetas</span>
             </Link>
+            {puedeEditarPrecios && (
+              <Link
+                href="/productos/ofertas"
+                title="Una oferta a varios productos a la vez"
+                className="tap inline-flex items-center px-3 py-2.5 rounded-xl border border-[var(--borde)] text-sm font-medium"
+              >
+                % <span className="hidden sm:inline ml-1.5">Ofertas</span>
+              </Link>
+            )}
             <Link
               href="/productos/importar"
               className="tap inline-flex items-center px-3 py-2.5 rounded-xl border border-[var(--borde)] text-sm font-medium"

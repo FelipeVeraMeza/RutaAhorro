@@ -88,6 +88,7 @@ export function useConfiguracion(): ConfiguracionLocal {
 export interface CambiosConfiguracion {
   vender_sin_stock?: boolean;
   tarjeta_emite_documento?: boolean;
+  ofertas_activas?: boolean;
   efectivo_inicial_sugerido?: number;
   cash_alert_hours?: number;
   cost_variation_alert_pct?: number;

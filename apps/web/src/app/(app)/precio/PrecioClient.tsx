@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { formatCLP, cantidadConUnidad, tramosVigentes, diaLocal } from '@rutaahorro/core';
+import { formatCLP, cantidadConUnidad, tramosVigentes, diaLocal, precioDelTramo } from '@rutaahorro/core';
 import { useConfiguracion } from '@/lib/datos/configuracion';
 import {
   findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO,
@@ -28,7 +28,7 @@ export function PrecioClient() {
   const [query, setQuery] = useState('');
   const [resultados, setResultados] = useState<LocalProduct[]>([]);
   const [elegido, setElegido] = useState<LocalProduct | null>(null);
-  const { zonaHoraria } = useConfiguracion();
+  const { zonaHoraria, ofertasActivas } = useConfiguracion();
   const [aviso, setAviso] = useState<string | null>(null);
   const [catalogoListo, setCatalogoListo] = useState<boolean | null>(null);
   const avisoTimer = useRef<number | null>(null);
@@ -139,7 +139,8 @@ export function PrecioClient() {
           </p>
           {/* Ofertas vigentes (0018): lo segundo que pregunta el cliente es
               "¿y si llevo más?". */}
-          {tramosVigentes(elegido.tramos, diaLocal(new Date(), zonaHoraria))
+          {tramosVigentes(ofertasActivas ? elegido.tramos : [], diaLocal(new Date(), zonaHoraria))
+            .map((t) => ({ ...t, precio: precioDelTramo(t, elegido.salePrice) }))
             .filter((t) => t.precio < elegido.salePrice)
             .map((t) => (
               <p key={`${t.desde}-${t.vigenteHasta ?? ''}`}

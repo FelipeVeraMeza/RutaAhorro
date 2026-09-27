@@ -31,6 +31,11 @@ export interface ConfiguracionLocal {
   venderSinStock: boolean;
   /** Lo que la pantalla de Caja propone al abrir (respuesta 23: $20.000). */
   efectivoInicialSugerido: number;
+  /**
+   * Interruptor de las ofertas por cantidad y promociones del local (0021).
+   * Apagado, el POS cobra el precio normal y la base no acepta otro.
+   */
+  ofertasActivas: boolean;
 }
 
 /**
@@ -51,6 +56,7 @@ export const CONFIGURACION_POR_OMISION: ConfiguracionLocal = {
   // base usa el mismo criterio (`fn_register_sale`, 0017).
   venderSinStock: false,
   efectivoInicialSugerido: 0,
+  ofertasActivas: true,
 };
 
 interface SettingsBD {
@@ -63,6 +69,7 @@ interface SettingsBD {
   tarjeta_emite_documento?: boolean;
   vender_sin_stock?: boolean;
   efectivo_inicial_sugerido?: number | string;
+  ofertas_activas?: boolean;
 }
 
 function numero(valor: unknown, porOmision: number): number {
@@ -98,5 +105,7 @@ export function desdeSettings(settings: unknown): ConfiguracionLocal {
       s.tarjeta_emite_documento ?? CONFIGURACION_POR_OMISION.tarjetaEmiteDocumento,
     venderSinStock: s.vender_sin_stock === true,
     efectivoInicialSugerido: numero(s.efectivo_inicial_sugerido, CONFIGURACION_POR_OMISION.efectivoInicialSugerido),
+    // Igual que `fn_ofertas_rigen`: si nadie lo tocó, rigen.
+    ofertasActivas: s.ofertas_activas !== false,
   };
 }

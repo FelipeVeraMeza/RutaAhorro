@@ -88,6 +88,9 @@ revés.
 |---|---|---|---|---|---|
 | 41 | Equipos **nuevos** | **RQ-40** Probar en los celulares reales: cámara (T-49), etiqueta impresa contra el lector (B-07) e impresora | 🔒 Felipe, en el local | — | — |
 | 42 | **2** dispositivos a la vez | **RQ-41** Dos equipos vendiendo a la vez sin pisarse | ✅ probado (CP-01, CP-02, CP-08) · se cruza con RQ-24 | — | — |
+| — | Felipe, 2026-09-27 | **RQ-42** **Una oferta a muchos productos a la vez** (por categoría, búsqueda o a mano), con vista previa de a cuánto queda cada uno y cuáles se saltan | ✅ 2026-09-27, migración 0021. `ofertas-masivas.test.mjs` 11/11 contra PostgreSQL, recorrido `ofertas-masivas.mjs` 21/21 | `fn_aplicar_oferta_masiva`, `fn_quitar_ofertas` | Productos → Ofertas (`/productos/ofertas`), admin y supervisor |
+| — | Felipe, 2026-09-27 | **RQ-43** **Interruptor para apagar todas las ofertas del local** sin borrarlas | ✅ 2026-09-27, 0021. Lo vendido sin conexión antes de apagarlas conserva su precio; 15 min de gracia para celulares con catálogo viejo | `settings.ofertas_activas`, `fn_ofertas_rigen` | Configuración |
+| — | Felipe, 2026-09-27 | **RQ-44** **Oferta por porcentaje** ("desde 6, 10 % menos") que sigue al precio normal cuando sube | ✅ 2026-09-27, 0021. Core y base redondean igual (60 casos al azar) | `product_price_tiers.descuento_pct`, `fn_precio_tramo` | Formulario del producto y pantalla de ofertas |
 
 ---
 

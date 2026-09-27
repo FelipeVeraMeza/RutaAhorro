@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatCLP, toUserMessage, validarMonto, validarCantidad, etiquetaAdicional,
@@ -372,7 +373,7 @@ function OperacionDelLocal({ config, onGuardado, onError }: {
   const vVar = validarCantidad(variacion, { maximo: 100 });
 
   const Interruptor = ({ valor, clave, titulo, detalle }: {
-    valor: boolean; clave: 'vender_sin_stock' | 'tarjeta_emite_documento'; titulo: string; detalle: string;
+    valor: boolean; clave: 'vender_sin_stock' | 'tarjeta_emite_documento' | 'ofertas_activas'; titulo: string; detalle: string;
   }) => (
     <label className="tarjeta p-3 flex items-start gap-3 cursor-pointer">
       <input type="checkbox" checked={valor} disabled={guardando}
@@ -394,6 +395,12 @@ function OperacionDelLocal({ config, onGuardado, onError }: {
       <Interruptor valor={config.tarjetaEmiteDocumento} clave="tarjeta_emite_documento"
                    titulo="La máquina de tarjetas emite el documento"
                    detalle="Con tarjeta se entrega el voucher de la máquina y no se emite boleta. Desmarcar si la máquina no está integrada." />
+      <Interruptor valor={config.ofertasActivas} clave="ofertas_activas"
+                   titulo="Rigen las ofertas y promociones"
+                   detalle="Desmarcar para cobrar el precio normal en todo el local sin borrar ninguna oferta. Los celulares se enteran al entrar a vender o en 10 minutos." />
+      <Link href="/productos/ofertas" className="tap flex items-center justify-between tarjeta px-3 text-sm font-medium">
+        Ofertas de varios productos a la vez <span aria-hidden>›</span>
+      </Link>
 
       <div className="tarjeta p-3 space-y-3">
         <Campo etiqueta="Efectivo con que parte la caja" error={efectivo !== '' ? vEf.error : null}

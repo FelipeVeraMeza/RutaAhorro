@@ -3,6 +3,7 @@
 import { normalizeBarcode, type TramoPrecio } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { db, normalizeSearch, getMeta, setMeta, asegurarDueno, type LocalProduct } from './db';
+import { desdeSettings } from '../datos/configuracionBase';
 
 /**
  * Replicación del catálogo al dispositivo.
@@ -93,18 +94,24 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
   // --- Ofertas e impuestos adicionales (0018) ---
   // Completos cada vez, como el stock: cambiar la tasa de un impuesto cambia
   // lo que se cobra en muchos productos sin tocar su `updated_at`.
-  const [{ data: tiers, error: eTiers }, { data: taxes, error: eTaxes }] = await Promise.all([
-    client.from('product_price_tiers').select('product_id, desde, precio, vigente_desde, vigente_hasta'),
+  const [{ data: tiers, error: eTiers }, { data: taxes, error: eTaxes }, { data: local }] = await Promise.all([
+    client.from('product_price_tiers').select('product_id, desde, precio, descuento_pct, vigente_desde, vigente_hasta'),
     client.from('impuestos_adicionales').select('id, nombre, tasa, is_active'),
+    client.from('tenants').select('settings').maybeSingle(),
   ]);
   if (eTiers) throw eTiers;
   if (eTaxes) throw eTaxes;
+  // 0021 · Con las ofertas apagadas el celular no las recibe. Así el POS sin
+  // conexión tampoco las cobra: si las cobrara, la base rechazaría la venta al
+  // sincronizar (sería un descuento sin permiso) y quedaría trabada.
+  const ofertasActivas = desdeSettings(local?.settings).ofertasActivas;
   const tramosPorProducto = new Map<string, TramoPrecio[]>();
-  for (const t of tiers ?? []) {
+  for (const t of ofertasActivas ? tiers ?? [] : []) {
     const lista = tramosPorProducto.get(t.product_id as string) ?? [];
     lista.push({
       desde: Number(t.desde),
-      precio: Number(t.precio),
+      precio: t.precio == null ? null : Number(t.precio),
+      descuentoPct: t.descuento_pct == null ? null : Number(t.descuento_pct),
       vigenteDesde: (t.vigente_desde as string) ?? null,
       vigenteHasta: (t.vigente_hasta as string) ?? null,
     });

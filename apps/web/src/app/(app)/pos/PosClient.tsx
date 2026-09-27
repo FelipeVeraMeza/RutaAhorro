@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  addToCart, cartTotals, setQuantity, removeFromCart, aplicarOfertas, tramosVigentes, diaLocal,
+  addToCart, cartTotals, setQuantity, removeFromCart, aplicarOfertas, tramosVigentes, diaLocal, precioDelTramo,
   formatCLP, toUserMessage, construirComprobante,
   type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta, type RegistroDte,
 } from '@rutaahorro/core';
@@ -47,6 +47,8 @@ export function PosClient({
   venderSinStockRef.current = config.venderSinStock;
   const zonaRef = useRef(config.zonaHoraria);
   zonaRef.current = config.zonaHoraria;
+  const ofertasRef = useRef(config.ofertasActivas);
+  ofertasRef.current = config.ofertasActivas;
 
   /**
    * Todo cambio del carrito pasa por acá: después de agregar, quitar o
@@ -54,7 +56,15 @@ export function PosClient({
    * jugos la línea va a $2.000; al agregar el tercero, los tres a $1.400.
    */
   const cambiarCarro = useCallback((f: (prev: CartLine[]) => CartLine[]) => {
-    setLines((prev) => aplicarOfertas(f(prev), diaLocal(new Date(), zonaRef.current)));
+    setLines((prev) => {
+      const siguiente = f(prev);
+      // 0021 · Con las ofertas apagadas en el local, precio normal. En
+      // producción el catálogo ya llega sin ellas; esto cubre la maqueta y
+      // un carrito armado antes de que llegara la configuración.
+      const lineas = ofertasRef.current ? siguiente
+        : siguiente.map((l) => (l.tramos?.length ? { ...l, tramos: [] } : l));
+      return aplicarOfertas(lineas, diaLocal(new Date(), zonaRef.current));
+    });
   }, []);
   const [scannerOn, setScannerOn] = useState(false);
   const [query, setQuery] = useState('');
@@ -512,9 +522,11 @@ export function PosClient({
  */
 function OfertaDeLinea({ linea, zona }: { linea: CartLine; zona: string }) {
   if (linea.precioLista == null || !linea.tramos?.length) return null;
+  const lista = linea.precioLista;
   const vigentes = tramosVigentes(linea.tramos, diaLocal(new Date(), zona))
-    .filter((t) => t.precio < (linea.precioLista ?? 0));
-  const ahorro = Math.round((linea.precioLista - linea.unitPrice) * linea.quantity);
+    .map((t) => ({ desde: t.desde, precio: precioDelTramo(t, lista) }))
+    .filter((t) => t.precio < lista);
+  const ahorro = Math.round((lista - linea.unitPrice) * linea.quantity);
   const siguiente = vigentes.find((t) => t.desde > linea.quantity && t.precio < linea.unitPrice);
   return (
     <>
