@@ -10,6 +10,20 @@
 
 ## CÓMO SEGUIR — corte 2026-09-27 (noche), léelo antes que todo
 
+**2026-09-27 (tarde) · 0022 aplicada en Supabase: clientes y precio por
+cliente** (RQ-07, RQ-20, RQ-21). Decisión de Felipe: % general por cliente +
+precios especiales por producto; se cobra el más barato entre oferta, % y
+especial, **sin sumarse**, y el interruptor de ofertas no los apaga. El
+cliente viaja en `p_document.cliente_id` (misma firma, cola sin conexión
+intacta) y queda en `sales.cliente_id`. `/clientes` para admin y
+supervisor; el cajero lo elige en el POS (lista replicada al celular) y la
+venta siguiente parte sin cliente. La factura guarda al receptor y el cobro
+lo autocompleta por RUT. **Riesgo que hay que decirle al cliente:** un cajero
+puede elegir al mayorista para cualquiera. Queda registrado en la venta, pero
+no se le pide autorización (eso sería RQ-17). Pruebas: 369 lógica · 124
+PostgreSQL · db:e2e 26/26 · recorridos clientes 14/14, m5 23/23, documento
+19/19, ofertas-masivas 21/21, móvil OK. **Sigue: combos (0023).**
+
 **2026-09-27 (tarde) · 0021 aplicada en Supabase: ofertas a muchos productos,
 por porcentaje, e interruptor del local** (RQ-42, RQ-43, RQ-44 en `docs/23`).
 Pedido de Felipe sobre lo que 0018 no cubría. `/productos/ofertas` (admin y

@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   formatCLP, change, parseCLP, formatRut, isValidRut,
   documentosDisponibles, validarDocumento, normalizarReceptor, NOMBRE_DOCUMENTO,
-  type TipoDocumento, type DocumentoVenta,
+  type TipoDocumento, type DocumentoVenta, type ClienteConPrecios,
 } from '@rutaahorro/core';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
+import { clientesParaVender } from '@/lib/datos/clientes';
 
 type Metodo = 'efectivo' | 'debito' | 'credito' | 'transferencia';
 
@@ -37,11 +38,13 @@ function sugerencias(total: number): number[] {
 }
 
 export function Cobro({
-  total, tarjetaEmiteDocumento = true, onCancel, onConfirm,
+  total, tarjetaEmiteDocumento = true, cliente = null, onCancel, onConfirm,
 }: {
   total: number;
   /** Del local: `tenants.settings.tarjeta_emite_documento`. */
   tarjetaEmiteDocumento?: boolean;
+  /** El cliente elegido en el POS (0022): sus datos llenan la factura. */
+  cliente?: ClienteConPrecios | null;
   onCancel: () => void;
   /** Resuelve false si la venta no se pudo registrar: el cobro vuelve a quedar disponible. */
   onConfirm: (
@@ -60,10 +63,23 @@ export function Cobro({
   const disponibles = useMemo(
     () => documentosDisponibles(pagos, opciones), [pagos, opciones]);
   const [tipo, setTipo] = useState<TipoDocumento>(disponibles[0]);
-  const [rut, setRut] = useState('');
-  const [razonSocial, setRazonSocial] = useState('');
-  const [giro, setGiro] = useState('');
-  const [direccion, setDireccion] = useState('');
+  const [rut, setRut] = useState(cliente?.rut ?? '');
+  const [razonSocial, setRazonSocial] = useState(cliente?.rut ? cliente.nombre : '');
+  const [giro, setGiro] = useState(cliente?.giro ?? '');
+  const [direccion, setDireccion] = useState(cliente?.direccion ?? '');
+
+  // RQ-20 · Un RUT que ya facturó trae sus datos: antes se escribían cada vez.
+  const [conocidos, setConocidos] = useState<ClienteConPrecios[]>([]);
+  useEffect(() => { void clientesParaVender().then(setConocidos).catch(() => {}); }, []);
+  function completarPorRut(valor: string) {
+    if (!isValidRut(valor)) return;
+    const limpio = (r: string | null | undefined) => (r ?? '').replace(/[^0-9kK]/g, '').toUpperCase();
+    const c = conocidos.find((x) => limpio(x.rut) === limpio(valor));
+    if (!c) return;
+    setRazonSocial((v) => v || c.nombre);
+    setGiro((v) => v || c.giro || '');
+    setDireccion((v) => v || c.direccion || '');
+  }
 
   // Cambiar de medio de pago cambia qué documentos existen: quedarse en uno
   // que ya no corresponde dejaría al cajero confirmando algo imposible.
@@ -162,7 +178,7 @@ export function Cobro({
                   autoComplete="off"
                   value={rut}
                   onChange={(e) => setRut(e.target.value)}
-                  onBlur={() => { if (isValidRut(rut)) setRut(formatRut(rut)); }}
+                  onBlur={() => { if (isValidRut(rut)) { setRut(formatRut(rut)); completarPorRut(rut); } }}
                   placeholder="76.086.428-5"
                   className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] bg-white num"
                 />

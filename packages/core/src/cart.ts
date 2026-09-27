@@ -35,6 +35,11 @@ export interface CartLine {
   precioLista?: number;
   /** Ofertas por cantidad del producto (0018). */
   tramos?: TramoPrecio[];
+  /**
+   * Precio de cada unidad para el cliente elegido (0022), o null. Se cobra el
+   * menor entre este y el de la oferta por cantidad: no se suman.
+   */
+  precioCliente?: number | null;
   /** Tasa del impuesto adicional, en % (IABA 18 → 18). 0 o ausente si no tiene. */
   tasaAdicional?: number;
   nombreAdicional?: string | null;
@@ -140,7 +145,8 @@ export function aplicarOfertas(lines: CartLine[], dia?: string | null): CartLine
   let cambio = false;
   const next = lines.map((l) => {
     if (l.precioLista == null) return l;
-    const { precio } = precioPorCantidad(l.precioLista, l.tramos, l.quantity, dia);
+    const oferta = precioPorCantidad(l.precioLista, l.tramos, l.quantity, dia).precio;
+    const precio = l.precioCliente != null ? Math.min(oferta, clp(l.precioCliente)) : oferta;
     if (precio === l.unitPrice) return l;
     cambio = true;
     return { ...l, unitPrice: precio };

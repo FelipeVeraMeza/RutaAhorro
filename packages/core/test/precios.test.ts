@@ -156,3 +156,32 @@ describe('el carrito con ofertas', () => {
     expect(texto).toMatch(/IABA 18%/);
   });
 });
+
+import { precioParaCliente, describirCliente, type ClienteConPrecios } from '../src/clientes.js';
+
+describe('precio por cliente (0022)', () => {
+  const mayorista: ClienteConPrecios = { id: 'm', nombre: 'Almacén Don Pepe', descuentoPct: 8, precios: { cafe: 3500 } };
+  it('el % general sobre el precio normal', () => {
+    expect(precioParaCliente('jugo', 2000, mayorista)).toBe(1840);
+  });
+  it('el precio especial del producto, si es menor que el %', () => {
+    expect(precioParaCliente('cafe', 4000, mayorista)).toBe(3500);
+    // Si el % sale más barato que el especial, gana el %.
+    expect(precioParaCliente('cafe', 3700, { ...mayorista, descuentoPct: 10 })).toBe(3330);
+  });
+  it('sin cliente, o sin nada mejor que el precio normal, null', () => {
+    expect(precioParaCliente('jugo', 2000, null)).toBeNull();
+    expect(precioParaCliente('jugo', 2000, { ...mayorista, descuentoPct: 0 })).toBeNull();
+    expect(precioParaCliente('cafe', 3000, { ...mayorista, descuentoPct: 0 })).toBeNull();
+  });
+  it('en el carrito gana el más barato entre oferta y cliente, sin sumarse', () => {
+    const base = { productId: 'j', name: 'Jugo', unitPrice: 2000, precioLista: 2000, tramos: CLIENTE };
+    const conCliente = { ...base, precioCliente: 1840 };
+    expect(aplicarOfertas([{ ...conCliente, quantity: 2 }])[0].unitPrice).toBe(1840);
+    expect(aplicarOfertas([{ ...conCliente, quantity: 3 }])[0].unitPrice).toBe(1400);
+  });
+  it('se describe en palabras', () => {
+    expect(describirCliente(mayorista)).toBe('8% menos · 1 precio especial');
+    expect(describirCliente({ ...mayorista, descuentoPct: 0, precios: {} })).toBe('precio normal');
+  });
+});

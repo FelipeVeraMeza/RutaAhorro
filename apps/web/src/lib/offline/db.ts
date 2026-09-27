@@ -75,6 +75,8 @@ export interface QueuedSale {
    * de este campo no lo traen y la base las resuelve por el medio de pago.
    */
   documento?: DocumentoVenta;
+  /** El cliente elegido en el POS (0022): la base le aplica su precio. */
+  clienteId?: string | null;
   /**
    * Se cobró sin conexión: el cliente ya se fue con el producto y un papel en
    * la mano. La base no puede rechazarla por stock (el del celular podía estar

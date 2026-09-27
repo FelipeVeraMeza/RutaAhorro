@@ -39,6 +39,11 @@ export const ERROR_MESSAGES: Record<string, string> = {
   TRAMO_REPETIDO: 'Hay dos ofertas con la misma cantidad y las mismas fechas',
   PORCENTAJE_INVALIDO: 'El porcentaje de la oferta tiene que estar entre 0 y 100, con hasta dos decimales',
   SIN_PRODUCTOS: 'Elige al menos un producto',
+  // 0022 · clientes
+  CLIENTE_NO_ENCONTRADO: 'Ese cliente no existe o está desactivado',
+  NOMBRE_CLIENTE_REQUERIDO: 'El cliente necesita un nombre o razón social',
+  CLIENTE_RUT_DUPLICADO: 'Ya hay un cliente con ese RUT',
+  PRECIO_CLIENTE_INVALIDO: 'El precio especial tiene que ser un monto mayor que cero',
   DEMASIADOS_PRODUCTOS: 'Son demasiados productos de una vez: hazlo por categoría, de a 5.000 como máximo',
   TASA_INVALIDA: 'La tasa tiene que ser un porcentaje entre 0 y 100',
   IMPUESTO_DUPLICADO: 'Ya existe un impuesto con ese nombre',

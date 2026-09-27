@@ -55,6 +55,8 @@ const RPC_PERMITIDAS = [
   'fn_devolver_venta', 'fn_guardar_emisor',
   // 0021 · ofertas a muchos productos
   'fn_aplicar_oferta_masiva', 'fn_quitar_ofertas',
+  // 0022 · clientes
+  'fn_guardar_cliente', 'fn_guardar_precios_cliente',
 ].sort();
 
 // Se arma por partes y no con `connectionString`: una contraseña con `#`, `@`,

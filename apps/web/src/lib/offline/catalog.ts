@@ -4,6 +4,7 @@ import { normalizeBarcode, type TramoPrecio } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { db, normalizeSearch, getMeta, setMeta, asegurarDueno, type LocalProduct } from './db';
 import { desdeSettings } from '../datos/configuracionBase';
+import { syncClientes } from '../datos/clientes';
 
 /**
  * Replicación del catálogo al dispositivo.
@@ -166,6 +167,10 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
       );
     }
   });
+
+  // 0022 · Los clientes y sus precios, para elegirlos en el POS sin conexión.
+  // Si falla, el POS vende igual con la lista anterior.
+  await syncClientes().catch(() => {});
 
   await setMeta(LAST_SYNC_KEY, startedAt);
   // Aviso para las pantallas abiertas: el POS repite la búsqueda en curso.

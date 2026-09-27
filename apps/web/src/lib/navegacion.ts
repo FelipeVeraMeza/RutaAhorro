@@ -64,6 +64,12 @@ export const NAVEGACION: ItemNav[] = [
     roles: ['admin', 'supervisor'], enMovil: false,
   },
   {
+    // Ficha y precio por cliente (0022, RQ-21). El vendedor no entra: elige
+    // al cliente desde el POS.
+    href: '/clientes', label: 'Clientes', labelCorto: 'Clientes', icono: '🤝',
+    roles: ['admin', 'supervisor'], enMovil: false,
+  },
+  {
     href: '/reportes', label: 'Reportes', labelCorto: 'Reportes', icono: '📊',
     roles: ['admin', 'supervisor'], enMovil: false,
   },

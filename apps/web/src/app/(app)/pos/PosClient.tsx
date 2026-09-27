@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   addToCart, cartTotals, setQuantity, removeFromCart, aplicarOfertas, tramosVigentes, diaLocal, precioDelTramo,
+  precioParaCliente, describirCliente, type ClienteConPrecios,
   formatCLP, toUserMessage, construirComprobante,
   type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta, type RegistroDte,
 } from '@rutaahorro/core';
@@ -15,6 +16,7 @@ import type { LocalProduct } from '@/lib/offline/db';
 import { configuracionLocal, CONFIGURACION_POR_OMISION, type ConfiguracionLocal } from '@/lib/datos/configuracion';
 import { Modal } from '@/components/Modal';
 import { db } from '@/lib/offline/db';
+import { clientesParaVender } from '@/lib/datos/clientes';
 import { Escaner } from './Escaner';
 import { Cobro } from './Cobro';
 import { Comprobante } from './Comprobante';
@@ -49,6 +51,11 @@ export function PosClient({
   zonaRef.current = config.zonaHoraria;
   const ofertasRef = useRef(config.ofertasActivas);
   ofertasRef.current = config.ofertasActivas;
+  // 0022 · El cliente de la venta: su % o su precio especial en cada línea.
+  const [cliente, setCliente] = useState<ClienteConPrecios | null>(null);
+  const clienteRef = useRef(cliente);
+  clienteRef.current = cliente;
+  const [eligiendoCliente, setEligiendoCliente] = useState(false);
 
   /**
    * Todo cambio del carrito pasa por acá: después de agregar, quitar o
@@ -61,8 +68,11 @@ export function PosClient({
       // 0021 · Con las ofertas apagadas en el local, precio normal. En
       // producción el catálogo ya llega sin ellas; esto cubre la maqueta y
       // un carrito armado antes de que llegara la configuración.
-      const lineas = ofertasRef.current ? siguiente
-        : siguiente.map((l) => (l.tramos?.length ? { ...l, tramos: [] } : l));
+      const lineas = (ofertasRef.current ? siguiente
+        : siguiente.map((l) => (l.tramos?.length ? { ...l, tramos: [] } : l)))
+        // 0022 · El precio del cliente elegido, que no se apaga con las ofertas.
+        .map((l) => (l.precioLista == null ? l
+          : { ...l, precioCliente: precioParaCliente(l.productId, l.precioLista, clienteRef.current) }));
       return aplicarOfertas(lineas, diaLocal(new Date(), zonaRef.current));
     });
   }, []);
@@ -241,6 +251,7 @@ export function PosClient({
       })),
       payments,
       documento,
+      clienteId: cliente?.id ?? null,
       discountTotal: totals.discountTotal,
       total: totals.total,
     });
@@ -285,8 +296,18 @@ export function PosClient({
     // red ni siquiera cuando hay buena señal (ADR-005). El comprobante que
     // acaba de aparecer ya es el aviso; un toast encima sería ruido.
     setLines([]);
+    // La siguiente venta parte sin cliente: si no, el próximo que pase por
+    // la caja pagaría a precio mayorista.
+    setCliente(null);
     setCobrando(false);
     return true;
+  }
+
+  function elegirCliente(c: ClienteConPrecios | null) {
+    clienteRef.current = c;
+    setCliente(c);
+    cambiarCarro((p) => p);
+    setEligiendoCliente(false);
   }
 
   if (!hasOpenSession) {
@@ -385,6 +406,26 @@ export function PosClient({
         )}
       </div>
 
+      {/* Cliente (0022): precio mayorista o especial, y los datos de la factura. */}
+      <div className="px-3 pt-3">
+        {cliente ? (
+          <div className="flex items-center gap-2 tarjeta px-3 py-1.5">
+            <span className="min-w-0 flex-1 text-sm">
+              <span aria-hidden>🤝 </span><strong className="font-semibold">{cliente.nombre}</strong>
+              <span className="block text-xs text-[var(--texto-suave)]">{describirCliente(cliente)}</span>
+            </span>
+            <button onClick={() => setEligiendoCliente(true)} className="tap px-2 text-sm underline">Cambiar</button>
+            <button onClick={() => elegirCliente(null)} aria-label="Quitar el cliente"
+                    className="tap px-2 text-sm text-[var(--color-alerta)]">Quitar</button>
+          </div>
+        ) : (
+          <button onClick={() => setEligiendoCliente(true)}
+                  className="tap w-full px-3 rounded-xl border border-dashed border-[var(--borde)] text-sm text-[var(--texto-suave)] text-left">
+            🤝 Elegir cliente (precio mayorista o factura)
+          </button>
+        )}
+      </div>
+
       {/* Carrito */}
       <div className="flex-1 px-3 pt-3">
         {lines.length === 0 ? (
@@ -478,11 +519,16 @@ export function PosClient({
         <Cobro
           total={totals.total}
           tarjetaEmiteDocumento={config.tarjetaEmiteDocumento}
+          cliente={cliente}
           onCancel={() => setCobrando(false)}
           onConfirm={(payments, documento) =>
             confirmarVenta(payments, documento).catch((e) => { notificar('error', toUserMessage(e)); return false; })
           }
         />
+      )}
+
+      {eligiendoCliente && (
+        <ElegirCliente onElegir={elegirCliente} onCerrar={() => setEligiendoCliente(false)} />
       )}
 
       {/* Vaciar pide confirmación (RNF-19): un toque de más borraba la venta armada. */}
@@ -521,7 +567,15 @@ export function PosClient({
  * tramo, que es lo que el cajero le ofrece al cliente en voz alta.
  */
 function OfertaDeLinea({ linea, zona }: { linea: CartLine; zona: string }) {
-  if (linea.precioLista == null || !linea.tramos?.length) return null;
+  if (linea.precioLista == null) return null;
+  if (linea.precioCliente != null && linea.unitPrice === linea.precioCliente) {
+    return (
+      <p className="text-xs font-medium text-marca-700 num">
+        🤝 Precio de cliente · ahorra {formatCLP(Math.round((linea.precioLista - linea.unitPrice) * linea.quantity))}
+      </p>
+    );
+  }
+  if (!linea.tramos?.length) return null;
   const lista = linea.precioLista;
   const vigentes = tramosVigentes(linea.tramos, diaLocal(new Date(), zona))
     .map((t) => ({ desde: t.desde, precio: precioDelTramo(t, lista) }))
@@ -539,5 +593,54 @@ function OfertaDeLinea({ linea, zona }: { linea: CartLine; zona: string }) {
         </p>
       )}
     </>
+  );
+}
+
+/**
+ * Elegir al cliente de la venta (0022). La lista viene del celular, así que
+ * funciona sin conexión; se busca por nombre o RUT.
+ */
+function ElegirCliente({ onElegir, onCerrar }: {
+  onElegir: (c: ClienteConPrecios | null) => void;
+  onCerrar: () => void;
+}) {
+  const [clientes, setClientes] = useState<ClienteConPrecios[] | null>(null);
+  const [busqueda, setBusqueda] = useState('');
+  useEffect(() => { void clientesParaVender().then(setClientes).catch(() => setClientes([])); }, []);
+  const q = busqueda.trim().toLowerCase();
+  const soloRut = q.replace(/[^0-9k]/g, '');
+  const visibles = (clientes ?? []).filter((c) => !q
+    || c.nombre.toLowerCase().includes(q)
+    || (soloRut.length >= 3 && (c.rut ?? '').toLowerCase().replace(/[^0-9k]/g, '').includes(soloRut)));
+  return (
+    <Modal titulo="Cliente de la venta" encabezado="visible" onCerrar={onCerrar}>
+      <div className="p-4 space-y-3">
+        <input type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} autoFocus
+               aria-label="Buscar cliente por nombre o RUT" placeholder="Nombre o RUT…"
+               className="tap w-full px-3 rounded-lg border border-[var(--borde)]" />
+        <ul className="divide-y divide-[var(--borde)] tarjeta max-h-[50vh] overflow-y-auto">
+          {visibles.map((c) => (
+            <li key={c.id}>
+              <button onClick={() => onElegir(c)} className="tap w-full px-3 py-2 text-left active:bg-marca-50">
+                <span className="block text-sm font-medium">{c.nombre}</span>
+                <span className="block text-xs text-[var(--texto-suave)]">
+                  {c.rut ? `${c.rut} · ` : ''}{describirCliente(c)}
+                </span>
+              </button>
+            </li>
+          ))}
+          {clientes && visibles.length === 0 && (
+            <li className="p-4 text-sm text-[var(--texto-suave)]">
+              {clientes.length === 0
+                ? 'Todavía no hay clientes. Se crean en Clientes, o solos al hacer una factura.'
+                : 'Ningún cliente coincide.'}
+            </li>
+          )}
+        </ul>
+        <button onClick={() => onElegir(null)} className="tap w-full rounded-xl border border-[var(--borde)] text-sm">
+          Vender sin cliente
+        </button>
+      </div>
+    </Modal>
   );
 }

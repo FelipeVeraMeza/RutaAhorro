@@ -123,13 +123,16 @@ export async function syncQueue(): Promise<SyncResult> {
         p_force: sale.sinConexion === true,
         // La base lo valida de nuevo y decide si viene null: la pantalla no es
         // la única forma de registrar una venta (regla 6).
-        p_document: sale.documento
+        // El cliente (0022) viaja en el mismo objeto: la firma de la función
+        // no cambia y la cola vieja sigue sirviendo.
+        p_document: sale.documento || sale.clienteId
           ? {
-              tipo: sale.documento.tipo,
-              rut: sale.documento.receptor?.rut ?? null,
-              razon_social: sale.documento.receptor?.razonSocial ?? null,
-              giro: sale.documento.receptor?.giro ?? null,
-              direccion: sale.documento.receptor?.direccion ?? null,
+              tipo: sale.documento?.tipo ?? null,
+              rut: sale.documento?.receptor?.rut ?? null,
+              razon_social: sale.documento?.receptor?.razonSocial ?? null,
+              giro: sale.documento?.receptor?.giro ?? null,
+              direccion: sale.documento?.receptor?.direccion ?? null,
+              cliente_id: sale.clienteId ?? null,
             }
           : null,
       });
