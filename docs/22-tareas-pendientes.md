@@ -1,6 +1,6 @@
 # 22 — Tareas pendientes
 
-**Fecha:** 2026-09-19 · **Fuente:** auditado sobre el código, no sobre los documentos.
+**Fecha:** 2026-09-26 · **Fuente:** auditado sobre el código, no sobre los documentos.
 
 Este documento consolida en una sola lista lo que queda por hacer: los hallazgos
 abiertos de la [auditoría de pantallas](21-qa-pantallas.md), las fases del
@@ -131,6 +131,18 @@ base. La regla la aplica `fn_register_sale`, no la pantalla.
 
 **Ojo con el despliegue:** 0015 le cambia la firma a `fn_register_sale`. El
 código y la base se actualizan juntos o no se registra ninguna venta.
+
+### Cerrados el 2026-09-26 — cuestionario del cliente
+
+Las respuestas 1–42 están traducidas en [23](23-requerimientos-cuestionario.md).
+Hechos: **RQ-13** (lector físico), **RQ-14** (vender sin stock, y la venta sin
+internet que quedaba en error para siempre), **RQ-25** (efectivo inicial
+sugerido). Y dos defectos encontrados midiendo el celular: **Productos no
+cargaba para un vendedor** (0017) y las filas de Ventas bajo 44 px.
+
+**Lo que abre el cuestionario** son los RQ ⬜ de [23](23-requerimientos-cuestionario.md) §1,
+en el orden de §4. Los que ya tenían tarea acá: RQ-04 = T-57, RQ-15 = T-16,
+RQ-22 = T-17, RQ-19 = T-56, RQ-37 = T-55.
 
 ### Abiertos
 

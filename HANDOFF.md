@@ -4,11 +4,49 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-09-20.**
+> **Corte: 2026-09-26.**
 
 ---
 
 ## LO ÚLTIMO QUE PASÓ — léelo primero
+
+**2026-09-26 · el cuestionario del cliente.** Respondió las preguntas 1–42
+(del documento del 15-09). Están traducidas a **41 requerimientos (RQ-01 a
+RQ-41)** en `docs/23-requerimientos-cuestionario.md`, con estado real, los
+supuestos para las preguntas sin respuesta y **siete preguntas que hay que
+volver a hacerle** (§3). La más urgente: **¿John y Jo venden del mismo cajón?**
+Hoy la caja es por persona; si comparten cajón, los arqueos no van a cuadrar
+nunca (RQ-24).
+
+Hecho y probado ese día (migración **0017**, ya aplicada en Supabase):
+
+- **RQ-14 · vender sin stock** (respuesta 13), como parámetro del local
+  `vender_sin_stock`. De paso, un defecto: una venta **sin internet** de un
+  vendedor con el stock del celular viejo quedaba en error para siempre al
+  sincronizar. Ahora viaja forzada y deja la alerta.
+- **Productos no cargaba para un vendedor** (400 de la base, celular y
+  computador): la vista `products_public` no tenía las columnas de 0006. Y al
+  arreglarla apareció la regla 21 en versión vista: `create or replace view`
+  con menos columnas falla al reinstalar. 0004 ahora la borra antes.
+- **RQ-13 · lector de códigos físico:** el Enter del lector se ignoraba.
+- **RQ-25 · "Lo habitual: $20.000"** al abrir caja.
+- **`db:test` se colgaba** al terminar (PostgreSQL embebido que no se apagaba
+  en Windows). Ahora apaga con `pg_ctl`.
+- **`tools/ui/movil.mjs`**: todas las pantallas a 360 px y 1280 px, por rol.
+  Mide desbordes y botones bajo 44 px y deja capturas en `tools/ui/.capturas/`.
+
+Estado: **318 pruebas de lógica · 69 contra PostgreSQL (+2 pendientes
+conocidas) · `db:e2e` 24/24 · recorridos M1 20/20, bodega-sala, M5 23/23, M6
+13/13, documento 19/19, móvil sin problemas · build de producción limpio.**
+
+Lo que sigue, en orden (detalle en `docs/23` §4): la caja compartida cuando el
+cliente responda, descuentos con autorización de John/Jo en el mostrador y pago
+mixto, precio por mayor junto con T-14, devoluciones parciales con nota de
+crédito.
+
+---
+
+### Antes · 2026-09-20
 
 **2026-09-20.** El cliente dejó una lista de diez puntos en una reunión. **Seis
 están hechos y probados en el navegador contra Supabase**; cuatro quedan, en el orden que eligió Felipe. El detalle punto por punto está en
@@ -49,8 +87,8 @@ Eso es B-04 y hoy no existe.
 
 **Tres cosas que hay que tener presentes antes de tocar nada:**
 
-1. **Migraciones 0015 y 0016 ya están aplicadas en el Supabase real**
-   (2026-09-20). Las dos le cambian la firma a una función. **Código nuevo con
+1. **Migraciones 0015, 0016 y 0017 ya están aplicadas en el Supabase real**
+   (0017 el 2026-09-26). Las dos le cambian la firma a una función. **Código nuevo con
    base vieja significa que ninguna venta se registra.** Si levantas esto en
    otra máquina, la base ya está al día; si vuelves a instalar, usa
    `npm run db:instalar` y pega `supabase/instalar.sql` completo.
