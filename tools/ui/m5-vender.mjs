@@ -145,7 +145,12 @@ await buscarYAgregar(nA);
 await p.getByRole('button', { name: 'Cobrar' }).click();
 await p.getByRole('button', { name: /Débito/ }).click();
 await p.getByRole('button', { name: 'Confirmar venta' }).click();
-await comp.waitFor({ timeout: 10000 }).then(() => ok('M5-17', true, 'sin internet también entrega el comprobante'), () => ok('M5-17', false, 'sin internet también entrega el comprobante'));
+// Se paga con débito: desde 0015 el ticket dice "EL DOCUMENTO LO EMITE LA
+// MÁQUINA" en vez de "NO ES DOCUMENTO TRIBUTARIO". Lo que tienen todos es esto.
+const compOffline = p.getByText('COMPROBANTE INTERNO').first();
+await compOffline.waitFor({ timeout: 10000 }).then(() => ok('M5-17', true, 'sin internet también entrega el comprobante'),
+  async () => ok('M5-17', false, 'sin internet también entrega el comprobante',
+    (await p.locator('body').innerText()).replace(/\n+/g, ' · ').slice(0, 300)));
 if (await nueva.count()) await nueva.click();
 const indicador = await p.locator('body').innerText();
 ok('M5-19', /sin conexi|pendiente|por sincronizar/i.test(indicador), 'se ve que no hay conexión y que hay ventas pendientes',
