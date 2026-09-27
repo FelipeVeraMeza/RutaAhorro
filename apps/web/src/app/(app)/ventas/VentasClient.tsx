@@ -10,6 +10,8 @@ import { hoyLocal, hace } from '@/lib/datos/reportes';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { useFormatoFecha } from '@/lib/formatoFecha';
+import type { RegistroDte } from '@rutaahorro/core';
+import { DocumentoTributario, DevolverVenta, nombreDocumento } from './DocumentoYDevolucion';
 
 /**
  * Historial de ventas y anulación (RF-M5-15).
@@ -46,6 +48,8 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
 
   const [detalle, setDetalle] = useState<VentaDetallada | null>(null);
   const [anulando, setAnulando] = useState<Venta | null>(null);
+  const [verDoc, setVerDoc] = useState<RegistroDte | null>(null);
+  const [devolviendo, setDevolviendo] = useState<VentaDetallada | null>(null);
   const [motivo, setMotivo] = useState('');
   const [enCurso, setEnCurso] = useState(false);
 
@@ -287,7 +291,50 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
               </p>
             )}
 
-            {puedeAnular && !detalle.anulada && (
+            {/* Documentos tributarios de la venta (0019) */}
+            {detalle.documentos.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium">Documentos</p>
+                {detalle.documentos.map((d) => (
+                  <button key={d.id} onClick={() => setVerDoc(d)}
+                          className="tap w-full px-3 rounded-lg border border-[var(--borde)] text-left text-sm flex items-center justify-between gap-2">
+                    <span>
+                      {nombreDocumento(d)}
+                      {d.ambiente === 'simulacion' && <span className="text-xs text-[var(--texto-suave)]"> · simulada</span>}
+                    </span>
+                    <span className="num shrink-0">{formatCLP(d.total)} · Ver</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {detalle.documentos.length === 0 && detalle.documento.tipo === 'voucher' && (
+              <p className="text-xs text-[var(--texto-suave)]">Pagada con tarjeta: el documento es el voucher de la máquina.</p>
+            )}
+
+            {detalle.devoluciones.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Devoluciones</p>
+                {detalle.devoluciones.map((d) => (
+                  <p key={d.numero} className="text-xs bg-[var(--fondo)] px-3 py-2 rounded-lg">
+                    N° {d.numero} · {fechaHora(d.fecha)} · <strong className="num">{formatCLP(d.monto)}</strong>
+                    {' '}en {ETIQUETA_PAGO[d.reembolso] ?? d.reembolso} · {d.motivo}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {puedeAnular && !detalle.anulada && detalle.lineas.some((l) => l.cantidad > (l.devuelto ?? 0)) && (
+              <button
+                onClick={() => setDevolviendo(detalle)}
+                className="tap w-full py-3 rounded-xl border border-[var(--borde)] font-medium"
+              >
+                Devolver productos
+              </button>
+            )}
+
+            {/* Con boleta o factura, o con devoluciones, no se anula: se devuelve
+                con nota de crédito (0019). */}
+            {puedeAnular && !detalle.anulada && detalle.documentos.length === 0 && detalle.devoluciones.length === 0 && (
               <button
                 onClick={() => { setAnulando(detalle); setMotivo(''); }}
                 className="tap w-full py-3 rounded-xl border border-[var(--color-alerta)] text-[var(--color-alerta)] font-medium"
@@ -297,6 +344,24 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
             )}
           </div>
         </Modal>
+      )}
+
+      {verDoc && <DocumentoTributario doc={verDoc} onCerrar={() => setVerDoc(null)} />}
+
+      {devolviendo && (
+        <DevolverVenta
+          venta={devolviendo}
+          onCerrar={() => setDevolviendo(null)}
+          onHecho={async (r) => {
+            setDevolviendo(null);
+            setExito(`Devolución N° ${r.numero} por ${formatCLP(r.monto)}` +
+              (r.notaCredito ? ` · ${nombreDocumento(r.notaCredito)}` : ''));
+            const actualizado = await repoVentas().detalle(devolviendo.id).catch(() => null);
+            setDetalle(actualizado);
+            if (r.notaCredito) setVerDoc(r.notaCredito);
+            void cargar();
+          }}
+        />
       )}
 
       {anulando && (

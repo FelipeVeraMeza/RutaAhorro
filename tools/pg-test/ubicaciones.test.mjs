@@ -80,7 +80,8 @@ test('La venta descuenta de la sala; si la sala no alcanza, vende igual', async 
   const caj = await banco.como(L.cajero1);
   await rpc(caj, 'fn_open_cash_session', { p_opening_amount: 0 });
   // 2 en sala y 8 en bodega: un vendedor puede vender 3, porque el total alcanza.
-  const { sale_id } = await rpc(caj, 'fn_register_sale', venta(p, 3, 1000));
+  // Con débito: sin boleta nuestra, se anula (0019).
+  const { sale_id } = await rpc(caj, 'fn_register_sale', venta(p, 3, 1000, { metodo: 'debito' }));
   assert.deepEqual(await invariante(L, p), { sala: -1, bodega: 8 });
   // Y la anulación devuelve a la sala.
   await rpc(adm, 'fn_void_sale', { p_sale_id: sale_id, p_reason: 'prueba' });

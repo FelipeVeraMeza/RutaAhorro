@@ -146,7 +146,7 @@ await buscar(nBebida);
 await p.getByRole('button', { name: 'Cobrar' }).click();
 await p.fill('#recibido', '10000');
 await p.getByRole('button', { name: 'Confirmar venta' }).click();
-await p.getByText('COMPROBANTE INTERNO').first().waitFor({ timeout: 15000 });
+await p.locator('#ticket').first().waitFor({ timeout: 15000 });
 const ticket = await p.getByRole('dialog').innerText().catch(async () => p.locator('body').innerText());
 ok('RQ-04', /ahorra \$1\.800/.test(ticket), 'el comprobante dice cuánto se ahorró');
 ok('RQ-06', /IABA bebidas con alto azúcar 18%/.test(ticket), 'el comprobante separa el IABA 18 %');

@@ -226,29 +226,43 @@ await ataque('Sin sesión (anon) no se vende', () =>
   console.log(`  ${lee ? '⚠' : '✔'} Un vendedor lee costos — ${lee ? `sí, avg_cost = ${r.data.avg_cost}. Conocido: T-45` : 'no'}`);
 }
 
-// ------------------------------------------------------- anulación y cierre
-titulo('Anulación y cierre');
+// ------------------------------------------------------- boleta, devolución y cierre
+// Desde 0019 una venta en efectivo lleva boleta electrónica (simulada) y no se
+// anula: se devuelve con nota de crédito.
+titulo('Boleta, devolución y cierre');
 
-await ataque('El cajero no puede anular', () =>
-  cajero.cliente.rpc('fn_void_sale', { p_sale_id: venta.sale_id, p_reason: 'QA' }));
-
-await paso('El administrador anula la venta y el stock vuelve a 10', async () => {
-  datos(await admin.cliente.rpc('fn_void_sale', { p_sale_id: venta.sale_id, p_reason: 'QA: venta de prueba' }));
-  const s = await stockDe(producto);
-  if (s !== 10) throw new Error(`stock ${s}`);
+await paso('La venta en efectivo llevó boleta electrónica (simulada) con folio', async () => {
+  const d = datos(await servicio.from('dte_documentos').select('tipo, folio, total, ambiente').eq('sale_id', venta.sale_id).single());
+  if (d.tipo !== 39 || d.total !== 3000) throw new Error(JSON.stringify(d));
+  return `boleta N° ${d.folio}, ${d.ambiente}`;
 });
 
-await paso('Cerrar caja contando $10.000: cuadra', async () => {
-  const r = datos(await cajero.cliente.rpc('fn_close_cash_session', { p_session_id: sesion.id, p_counted_amount: 10000, p_notes: null }));
-  if (r.expected_amount !== 10000) throw new Error(`esperado ${r.expected_amount}`);
+await ataque('El cajero no puede devolver', () =>
+  cajero.cliente.rpc('fn_devolver_venta', { p_sale_id: venta.sale_id, p_items: null, p_motivo: 'QA', p_reembolso: 'transferencia' }));
+await ataque('Tampoco se puede anular una venta con boleta', () =>
+  admin.cliente.rpc('fn_void_sale', { p_sale_id: venta.sale_id, p_reason: 'QA' }));
+
+await paso('El administrador devuelve todo: stock a 10 y nota de crédito que anula la boleta', async () => {
+  const r = datos(await admin.cliente.rpc('fn_devolver_venta', {
+    p_sale_id: venta.sale_id, p_items: null, p_motivo: 'QA: venta de prueba', p_reembolso: 'transferencia' }));
+  const s = await stockDe(producto);
+  if (s !== 10) throw new Error(`stock ${s}`);
+  if (r.nota_credito?.tipo !== 61 || r.nota_credito.referencia?.codigo !== 1) throw new Error(JSON.stringify(r.nota_credito));
+  return `devolución N° ${r.numero} por $${r.monto}, nota de crédito N° ${r.nota_credito.folio}`;
+});
+
+// Se devolvió por transferencia: el efectivo de la venta sigue en el cajón.
+await paso('Cerrar caja contando $13.000: cuadra', async () => {
+  const r = datos(await cajero.cliente.rpc('fn_close_cash_session', { p_session_id: sesion.id, p_counted_amount: 13000, p_notes: null }));
+  if (r.expected_amount !== 13000) throw new Error(`esperado ${r.expected_amount}`);
   return `esperado $${r.expected_amount}, diferencia $${r.difference ?? 0}`;
 });
 
-await paso('Kardex: recepción, venta y anulación, en ese orden', async () => {
+await paso('Kardex: recepción, venta y devolución, en ese orden', async () => {
   const m = datos(await servicio.from('inventory_movements').select('movement_type, quantity, balance_after')
     .eq('product_id', producto).order('created_at'));
   const tipos = m.map((x) => x.movement_type).join(' → ');
-  if (tipos !== 'recepcion → venta → anulacion_venta') throw new Error(tipos);
+  if (tipos !== 'recepcion → venta → devolucion_venta') throw new Error(tipos);
   return tipos;
 });
 

@@ -3,6 +3,14 @@
 import { useCallback, useEffect, useId, useRef } from 'react';
 
 /**
+ * Los diálogos abiertos, el de más arriba al final. Solo ese atiende el
+ * teclado. Sin esto, con dos abiertos (el detalle de una venta y, encima, su
+ * boleta) los dos escuchaban Escape y Tab en el documento: Escape cerraba el
+ * de abajo y dejaba el de arriba flotando, y Tab lo movía el de abajo.
+ */
+const pila: string[] = [];
+
+/**
  * Diálogo modal de la aplicación.
  *
  * Existe porque los nueve diálogos que había estaban escritos a mano, cada uno
@@ -52,6 +60,12 @@ export function Modal({
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const idTitulo = useId();
+  const idPila = useId();
+
+  useEffect(() => {
+    pila.push(idPila);
+    return () => { const i = pila.lastIndexOf(idPila); if (i >= 0) pila.splice(i, 1); };
+  }, [idPila]);
   const idDescripcion = useId();
 
   const cerrar = useCallback(() => {
@@ -75,6 +89,7 @@ export function Modal({
 
   useEffect(() => {
     function alTeclear(e: KeyboardEvent) {
+      if (pila[pila.length - 1] !== idPila) return;   // hay otro diálogo encima
       if (e.key === 'Escape') { e.preventDefault(); cerrar(); return; }
       if (e.key !== 'Tab') return;
 
@@ -97,7 +112,7 @@ export function Modal({
     }
     document.addEventListener('keydown', alTeclear, true);
     return () => document.removeEventListener('keydown', alTeclear, true);
-  }, [cerrar]);
+  }, [cerrar, idPila]);
 
   const anchos = { sm: 'sm:max-w-sm', md: 'sm:max-w-md', lg: 'sm:max-w-lg' };
 

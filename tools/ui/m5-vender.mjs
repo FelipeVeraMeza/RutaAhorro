@@ -140,8 +140,10 @@ if (await p.getByRole('dialog').count()) await p.getByRole('button', { name: 'Ca
 await p.getByRole('button', { name: 'Cobrar' }).click();
 await p.fill('#recibido', '5000');
 await p.getByRole('button', { name: 'Confirmar venta' }).click();
-const comp = p.getByText('NO ES DOCUMENTO TRIBUTARIO').first();
-await comp.waitFor({ timeout: 15000 }).then(() => ok('M5-14', true, 'muestra el comprobante interno'), () => ok('M5-14', false, 'muestra el comprobante interno'));
+// Desde 0019, en efectivo sale la boleta electrónica (simulada): lo que
+// importa es que no se haga pasar por un documento válido.
+const comp = p.getByText(/SIN VALIDEZ TRIBUTARIA|NO ES DOCUMENTO TRIBUTARIO/).first();
+await comp.waitFor({ timeout: 15000 }).then(() => ok('M5-14', true, 'muestra el comprobante, que dice no tener validez tributaria'), () => ok('M5-14', false, 'muestra el comprobante, que dice no tener validez tributaria'));
 await p.waitForTimeout(4000);
 let vs = await ventasDe();
 ok('M5-12', vs.length === antes + 1 && vs.at(-1)?.total === 3000, 'la venta quedó en la base con total $3.000', `folio ${vs.at(-1)?.folio}`);
@@ -195,7 +197,7 @@ const avisoStock = await p.getByText(/No hay stock suficiente/).first().innerTex
 ok('M4-09', /quedan 0/.test(avisoStock), 'el vendedor se entera antes de entregar, con cuánto queda', avisoStock);
 await p.waitForTimeout(2500);
 const cuerpo = await p.locator('body').innerText();
-ok('M4-09', !/NO ES DOCUMENTO TRIBUTARIO/.test(cuerpo), 'no entrega comprobante de una venta que no se puede registrar');
+ok('M4-09', !/NO ES DOCUMENTO TRIBUTARIO|BOLETA ELECTRÓNICA|COMPROBANTE INTERNO/.test(cuerpo), 'no entrega comprobante de una venta que no se puede registrar');
 ok('M4-09', /QA Agotado/.test(await p.locator('main').innerText()), 'el carrito se conserva para corregir');
 
 console.log('RQ-14 · Con "vender sin stock" el vendedor vende igual (respuesta 13)');

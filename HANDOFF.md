@@ -10,6 +10,29 @@
 
 ## LO ÚLTIMO QUE PASÓ — léelo primero
 
+**2026-09-27 · boletas, facturas y notas de crédito simuladas, y devoluciones
+— migración 0019, aplicada en Supabase.**
+
+- Cada venta en efectivo o transferencia emite su **boleta electrónica (39)**,
+  y la factura su **factura electrónica (33)**, en la misma transacción que la
+  venta, con folio correlativo por tipo. Con tarjeta no: el documento es el
+  voucher de la máquina.
+- El ticket es el documento: nombre, folio, RUT del emisor y **timbre PDF417
+  que se lee con un lector** (el recorrido lo decodifica). Dice
+  **SIMULADA · SIN VALIDEZ TRIBUTARIA**, porque lo es.
+- **Devoluciones parciales o totales** desde Ventas, con **nota de crédito
+  (61)** que referencia el documento. Una venta con boleta ya no se anula.
+- XML del DTE descargable desde Ventas (`packages/core/src/dte.ts`).
+- **Esto no emite ante el SII.** Falta el certificado (B-04), el enrolamiento
+  (B-05), los CAF (T-30), el emisor real (T-31) y la certificación (T-32).
+- `db:check` ya no se caía con archivos grandes; `<Modal>` apilado (X-2).
+
+Pruebas: **359 de lógica · 102 contra PostgreSQL (+2 pendientes) · db:e2e
+26/26 · recorridos documentos 19/19, ofertas 20/20, M5 23/23, M1 20/20, M6
+13/13, documento 19/19, bodega-sala, móvil sin problemas.**
+
+---
+
 **2026-09-26 (noche) · ofertas, impuestos y configuración — migración 0018,
 aplicada en Supabase.**
 
@@ -112,8 +135,8 @@ Eso es B-04 y hoy no existe.
 
 **Tres cosas que hay que tener presentes antes de tocar nada:**
 
-1. **Migraciones 0015 a 0018 ya están aplicadas en el Supabase real**
-   (0017 y 0018 el 2026-09-26). Las dos le cambian la firma a una función. **Código nuevo con
+1. **Migraciones 0015 a 0019 ya están aplicadas en el Supabase real**
+   (0019 el 2026-09-27). Las dos le cambian la firma a una función. **Código nuevo con
    base vieja significa que ninguna venta se registra.** Si levantas esto en
    otra máquina, la base ya está al día; si vuelves a instalar, usa
    `npm run db:instalar` y pega `supabase/instalar.sql` completo.

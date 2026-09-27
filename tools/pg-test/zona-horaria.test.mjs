@@ -14,7 +14,9 @@ async function ventaA(local, usuario, cuando) {
   const p = await local.producto({ stock: 5 });
   const c = await banco.como(usuario);
   await intentar(rpc(c, 'fn_open_cash_session', { p_opening_amount: 0 }));
-  const v = venta(p, 1, 1000);
+  // Con débito: el documento lo emite la máquina y la venta se puede anular.
+  // Una en efectivo lleva boleta y se devuelve con nota de crédito (0019).
+  const v = venta(p, 1, 1000, { metodo: 'debito' });
   v.p_sold_at = cuando;
   return { c, ...(await rpc(c, 'fn_register_sale', v)) };
 }

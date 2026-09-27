@@ -1,6 +1,8 @@
 'use client';
 
-import { diaLocal, rangoDeDias, type DocumentoVenta, type TipoDocumento } from '@rutaahorro/core';
+import {
+  diaLocal, rangoDeDias, type DocumentoVenta, type TipoDocumento, type RegistroDte,
+} from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { configuracionLocal } from './configuracion';
 import { DEMO_ACTIVO } from '../demo';
@@ -25,6 +27,10 @@ import { DEMO_PRODUCTOS } from '../demo/data';
  */
 
 export interface LineaVenta {
+  /** Id de la línea (sale_items). Lo necesita la devolución parcial. */
+  id?: string;
+  /** Cuántas unidades de esta línea ya se devolvieron (0019). */
+  devuelto?: number;
   productoNombre: string;
   cantidad: number;
   precioUnitario: number;
@@ -49,9 +55,35 @@ export interface Venta {
   documento: DocumentoVenta;
 }
 
+export interface DocumentoEmitido extends RegistroDte {
+  id: string;
+  estado: string;
+}
+
+export interface Devolucion {
+  numero: number;
+  monto: number;
+  fecha: string;
+  motivo: string;
+  reembolso: string;
+  esTotal: boolean;
+}
+
 export interface VentaDetallada extends Venta {
   lineas: LineaVenta[];
   pagos: Array<{ metodo: string; monto: number }>;
+  /** Boleta o factura y notas de crédito (0019). Vacío con tarjeta o en la maqueta. */
+  documentos: DocumentoEmitido[];
+  devoluciones: Devolucion[];
+}
+
+export type Reembolso = 'efectivo' | 'transferencia' | 'debito' | 'credito';
+
+export interface ResultadoDevolucion {
+  numero: number;
+  monto: number;
+  esTotal: boolean;
+  notaCredito: RegistroDte | null;
 }
 
 export interface FiltroVentas {
@@ -69,6 +101,17 @@ export interface RepositorioVentas {
   listar(filtro: FiltroVentas): Promise<Venta[]>;
   detalle(id: string): Promise<VentaDetallada | null>;
   anular(id: string, motivo: string): Promise<void>;
+  /**
+   * Devolución parcial (algunas líneas o unidades) o total, con nota de
+   * crédito si la venta tenía boleta o factura (`fn_devolver_venta`, 0019).
+   * `items` null = todo lo que queda.
+   */
+  devolver(
+    id: string,
+    items: Array<{ lineaId: string; cantidad: number }> | null,
+    motivo: string,
+    reembolso: Reembolso,
+  ): Promise<ResultadoDevolucion>;
 }
 
 export const ETIQUETA_PAGO: Record<string, string> = {
@@ -203,7 +246,13 @@ const repoLocal: RepositorioVentas = {
 
   async detalle(id) {
     const v = (await leerVentasDemo()).find((x) => x.id === id);
-    return v ? { ...aVenta(v), lineas: v.lineas, pagos: v.pagos } : null;
+    return v ? { ...aVenta(v), lineas: v.lineas, pagos: v.pagos, documentos: [], devoluciones: [] } : null;
+  },
+
+  // La maqueta no emite documentos ni lleva devoluciones: decirlo es mejor
+  // que simular algo que después no se comporta igual.
+  async devolver() {
+    throw new Error('NO_DISPONIBLE_EN_DEMO');
   },
 
   async anular(id, motivo) {
@@ -324,16 +373,25 @@ const repoSupabase: RepositorioVentas = {
     if (error) throw error;
     if (!data) return null;
 
-    const [{ data: items }, { data: pagos }] = await Promise.all([
+    const [{ data: items }, { data: pagos }, { data: docs }, { data: devs }] = await Promise.all([
       client.from('sale_items')
-        .select('product_name, quantity, unit_price, discount_amount, subtotal')
-        .eq('sale_id', id),
+        .select('id, product_name, quantity, unit_price, discount_amount, subtotal, sale_return_items(cantidad)')
+        .eq('sale_id', id).order('id'),
       client.from('sale_payments').select('method, amount').eq('sale_id', id),
+      client.from('dte_documentos')
+        .select('id, tipo, folio, ambiente, estado, fecha_emision, emitido_en, emisor, receptor, detalle, neto, exento, iva, iva_pct, impuestos_detalle, total, referencia')
+        .eq('sale_id', id).order('emitido_en'),
+      client.from('sale_returns')
+        .select('numero, monto, created_at, motivo, reembolso, es_total')
+        .eq('sale_id', id).order('numero'),
     ]);
 
     return {
       ...aVentaBD(data as unknown as FilaVenta),
       lineas: (items ?? []).map((l) => ({
+        id: l.id as string,
+        devuelto: ((l.sale_return_items as Array<{ cantidad: number }> | null) ?? [])
+          .reduce((s, r) => s + Number(r.cantidad), 0),
         productoNombre: (l.product_name as string) ?? 'Producto',
         cantidad: Number(l.quantity ?? 0),
         precioUnitario: Number(l.unit_price ?? 0),
@@ -344,7 +402,28 @@ const repoSupabase: RepositorioVentas = {
         metodo: p.method as string,
         monto: Number(p.amount ?? 0),
       })),
+      documentos: (docs ?? []) as unknown as DocumentoEmitido[],
+      devoluciones: (devs ?? []).map((d) => ({
+        numero: Number(d.numero),
+        monto: Number(d.monto),
+        fecha: d.created_at as string,
+        motivo: d.motivo as string,
+        reembolso: d.reembolso as string,
+        esTotal: Boolean(d.es_total),
+      })),
     };
+  },
+
+  async devolver(id, items, motivo, reembolso) {
+    const { data, error } = await supabase().rpc('fn_devolver_venta', {
+      p_sale_id: id,
+      p_items: items ? items.map((i) => ({ sale_item_id: i.lineaId, cantidad: i.cantidad })) : null,
+      p_motivo: motivo,
+      p_reembolso: reembolso,
+    });
+    if (error) throw error;
+    const r = data as { numero: number; monto: number; es_total: boolean; nota_credito: RegistroDte | null };
+    return { numero: Number(r.numero), monto: r.monto, esTotal: r.es_total, notaCredito: r.nota_credito };
   },
 
   async anular(id, motivo) {

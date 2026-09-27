@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatCLP, toUserMessage, validarMonto, validarCantidad, etiquetaAdicional,
   IMPUESTOS_ADICIONALES_CHILE,
@@ -12,6 +12,7 @@ import {
 import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
+import { leerEmisor, guardarEmisor, type Emisor } from '@/lib/datos/emisor';
 
 /**
  * Configuración del local (T-18) e impuestos adicionales (0018).
@@ -120,6 +121,12 @@ export function ConfiguracionClient() {
           + Otro impuesto
         </button>
       </section>
+
+      {/* Boletas y facturas ---------------------------------------------------- */}
+      <DatosEmisor
+        onGuardado={(texto) => setAviso({ tipo: 'ok', texto })}
+        onError={(texto) => setAviso({ tipo: 'error', texto })}
+      />
 
       {/* Operación del local ---------------------------------------------------- */}
       {config && (
@@ -415,6 +422,75 @@ function OperacionDelLocal({ config, onGuardado, onError }: {
         <p className="text-xs text-[var(--texto-suave)]">
           El IVA ({config.ivaPct}%) y la zona horaria no se cambian desde acá.
         </p>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+const VACIO: Emisor = { rut: '', razonSocial: '', giro: '', acteco: '', direccion: '', comuna: '', ciudad: '', ambiente: 'simulacion' };
+
+function DatosEmisor({ onGuardado, onError }: {
+  onGuardado: (texto: string) => void;
+  onError: (texto: string) => void;
+}) {
+  const [e, setE] = useState<Emisor>(VACIO);
+  const [guardando, setGuardando] = useState(false);
+  // Se lee una vez al entrar. `onError` cambia en cada render del padre: si
+  // estuviera en las dependencias, el efecto se repetiría sin parar.
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  useEffect(() => {
+    void leerEmisor().then((x) => { if (x) setE(x); }).catch((err) => onErrorRef.current(toUserMessage(err)));
+  }, []);
+  const campo = (clave: keyof Emisor, etiqueta: string, ayuda?: string, modo?: 'numeric') => (
+    <Campo etiqueta={etiqueta} ayuda={ayuda}>
+      {(p) => <input {...p} value={e[clave]} inputMode={modo}
+                     onChange={(ev) => setE((x) => ({ ...x, [clave]: ev.target.value }))}
+                     className="tap w-full px-3 rounded-lg border border-[var(--borde)]" />}
+    </Campo>
+  );
+
+  async function guardar() {
+    setGuardando(true);
+    try {
+      await guardarEmisor(e);
+      onGuardado('Datos del emisor guardados: van en las boletas y facturas desde ahora');
+    } catch (err) {
+      onError(toUserMessage(err));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <section aria-labelledby="t-emisor" className="space-y-3">
+      <div>
+        <h2 id="t-emisor" className="font-semibold">Boletas y facturas</h2>
+        <p className="text-sm text-[var(--texto-suave)]">
+          Los datos del contribuyente que van en cada documento.
+        </p>
+      </div>
+      <div className="tarjeta p-3 text-sm bg-amber-50 border-amber-200">
+        <strong>Modo simulación.</strong> Las boletas, facturas y notas de crédito se numeran y se
+        imprimen con su timbre, pero dicen <em>sin validez tributaria</em>. Para emitir ante el SII
+        faltan tres trámites del local: el <strong>certificado digital</strong>, la{' '}
+        <strong>inscripción como emisor electrónico</strong> y los <strong>folios (CAF)</strong>.
+      </div>
+      <div className="tarjeta p-3 space-y-3">
+        {campo('rut', 'RUT del emisor', 'Ej.: 76.086.428-5')}
+        {campo('razonSocial', 'Razón social')}
+        {campo('giro', 'Giro')}
+        {campo('acteco', 'Código de actividad económica (SII)', 'Ej.: 471100 · opcional para boleta', 'numeric')}
+        {campo('direccion', 'Dirección')}
+        <div className="grid grid-cols-2 gap-2">
+          {campo('comuna', 'Comuna')}
+          {campo('ciudad', 'Ciudad')}
+        </div>
+        <button onClick={() => void guardar()} disabled={guardando}
+                className="tap w-full py-3 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50">
+          {guardando ? 'Guardando…' : 'Guardar datos del emisor'}
+        </button>
       </div>
     </section>
   );

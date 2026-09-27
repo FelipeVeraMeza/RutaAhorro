@@ -6,6 +6,7 @@ import {
   encabezadoDocumento, pieDocumento, etiquetaAdicional,
   type Comprobante as DatosComprobante,
 } from '@rutaahorro/core';
+import { Timbre } from '@/components/Timbre';
 
 /**
  * Comprobante que se le muestra y entrega al cliente (RF-M5-14).
@@ -76,9 +77,12 @@ export function Comprobante({
             <p>{fechaComprobante(datos.fecha)}</p>
             <p>
               {datos.folio != null
-                ? `N° ${datos.folio}`
+                ? `Venta N° ${datos.folio}`
                 : 'N° pendiente de sincronizar'}
             </p>
+            {!datos.dte && datos.folio == null && datos.documento.tipo !== 'voucher' && (
+              <p className="text-[11px]">La {datos.documento.tipo} se emite al volver la conexión</p>
+            )}
             {datos.cajero && <p>Atendió: {datos.cajero}</p>}
 
             <div className="border-t border-dashed border-black my-2" />
@@ -135,6 +139,8 @@ export function Comprobante({
                 {pieDocumento(datos).map((linea) => <p key={linea}>{linea}</p>)}
               </>
             )}
+
+            {datos.dte && <Timbre dte={datos.dte} />}
 
             <p className="text-center text-[10px] mt-3">¡Gracias por su compra!</p>
           </div>

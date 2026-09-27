@@ -160,6 +160,36 @@ RQ-22 = T-17, RQ-19 = T-56, RQ-37 = T-55.
   `tenants` a mano: el IVA, la zona horaria, y **`status` y `plan`, los de la
   suscripción**. Un local suspendido se reactivaba solo. Cerrada en 0018.
 
+### Cerrados el 2026-09-27 — boletas, facturas y notas de crédito (0019)
+
+Pedido del cliente: «el sistema de facturas y boletas». Es F5 (simulador) y
+T-56. **Estado honesto de cada tarea del camino a la boleta:**
+
+| # | Estado |
+|---|---|
+| T-20 · `dte_documentos`, `dte_folios` | ✅ Inmutables por disparador (el documento; el rango de folios solo avanza). `dte_events` **no** se creó: el ciclo de envío (`estado`, `track_id`, `respuesta`) queda en el documento y la bitácora de envíos la hará el emisor real |
+| T-21 · datos del emisor | ✅ `/configuracion`, `fn_guardar_emisor`, congelados en cada documento |
+| T-22 · interfaz `EmisorDTE` | 🟡 La frontera existe (la base registra, `core/dte.ts` arma XML y TED), pero **no hay emisor real**: firmar y enviar es F6 |
+| T-23 · emisión simulada | ✅ En la misma transacción que la venta; folio correlativo por tipo, probado bajo concurrencia |
+| T-24 · máquina de estados | 🟡 Los estados existen y el disparador solo deja cambiar `estado`/`track_id`/`xml`/`respuesta`; las transiciones las hará el emisor real |
+| T-25 · nota de crédito | ✅ Devolución parcial (código 3) o total (código 1), con referencia |
+| T-26 · timbre PDF417 | ✅ Con `bwip-js`. **El recorrido lo decodifica con un lector (ZXing)** y lee el TED del documento |
+| T-27 · marca de simulado | ✅ "SIMULADA · SIN VALIDEZ TRIBUTARIA" en pantalla, papel y timbre |
+| T-28 · pruebas | ✅ 17 contra PostgreSQL (folio bajo concurrencia, cuadratura, inmutabilidad, 100 devoluciones comparadas con core) y 19 en el navegador |
+| **T-56** · notas de crédito | ✅ |
+
+**Lo que no cambia:** esto **no** emite ante el SII. Falta B-04 (certificado),
+B-05 (enrolamiento), CAF reales (T-30), el emisor real (T-31) y la
+certificación (T-32). `fn_guardar_emisor` rechaza cualquier ambiente que no
+sea simulación hasta que eso exista.
+
+**Cambio de regla:** una venta con boleta o factura ya no se anula; se
+devuelve con nota de crédito. Las ventas con tarjeta (voucher de la máquina)
+se siguen anulando. Los reportes restan las devoluciones el día que se hacen.
+
+**Encontrado de paso (X-2):** con dos diálogos abiertos, Escape cerraba el de
+abajo y Tab lo manejaba el de abajo. `<Modal>` ahora lleva una pila.
+
 ### Abiertos
 
 | # | Tarea | Dónde | Por qué importa |

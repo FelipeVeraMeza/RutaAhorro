@@ -45,6 +45,8 @@ const RPC_PERMITIDAS = [
   'fn_transfer_stock', 'fn_update_product', 'fn_void_receipt', 'fn_void_sale', 'fn_write_off_lot',
   // 0018 · ofertas e impuestos adicionales
   'fn_asignar_impuesto', 'fn_guardar_configuracion', 'fn_guardar_impuesto', 'fn_guardar_precios_producto',
+  // 0019 · documentos tributarios y devoluciones
+  'fn_devolver_venta', 'fn_guardar_emisor',
 ].sort();
 
 test('authenticated solo ejecuta las funciones de negocio, ninguna interna', async () => {

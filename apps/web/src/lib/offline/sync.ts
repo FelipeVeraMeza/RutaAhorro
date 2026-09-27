@@ -73,6 +73,17 @@ export interface SyncResult {
 
 let syncing = false;
 
+/**
+ * Lo que respondió la base por cada venta enviada en esta sesión: el folio y
+ * la boleta o factura emitida (0019). El POS lo lee para imprimir el
+ * documento con su número y su timbre, que solo existen después de que la
+ * base confirmó.
+ */
+const respuestas = new Map<string, unknown>();
+export function respuestaDe(clientUuid: string): unknown {
+  return respuestas.get(clientUuid);
+}
+
 /** Envía la cola al servidor. Es seguro llamarla muchas veces. */
 export async function syncQueue(): Promise<SyncResult> {
   const result: SyncResult = { sent: 0, duplicated: 0, failed: 0, remaining: 0 };
@@ -135,6 +146,7 @@ export async function syncQueue(): Promise<SyncResult> {
         continue;
       }
 
+      respuestas.set(sale.clientUuid, data);
       if ((data as { already_existed?: boolean })?.already_existed) result.duplicated++;
       else result.sent++;
 

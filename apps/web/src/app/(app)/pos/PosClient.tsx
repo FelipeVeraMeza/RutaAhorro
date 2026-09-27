@@ -5,12 +5,12 @@ import Link from 'next/link';
 import {
   addToCart, cartTotals, setQuantity, removeFromCart, aplicarOfertas, tramosVigentes, diaLocal,
   formatCLP, toUserMessage, construirComprobante,
-  type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta,
+  type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta, type RegistroDte,
 } from '@rutaahorro/core';
 import { findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO } from '@/lib/offline/catalog';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { sembrarCatalogoDemo } from '@/lib/demo/seed';
-import { enqueueSale, newClientUuid, syncQueue } from '@/lib/offline/sync';
+import { enqueueSale, newClientUuid, syncQueue, respuestaDe } from '@/lib/offline/sync';
 import type { LocalProduct } from '@/lib/offline/db';
 import { configuracionLocal, CONFIGURACION_POR_OMISION, type ConfiguracionLocal } from '@/lib/datos/configuracion';
 import { Modal } from '@/components/Modal';
@@ -235,6 +235,7 @@ export function PosClient({
       total: totals.total,
     });
 
+    let registrada: { folio?: number; dte?: RegistroDte | null } | undefined;
     if (navigator.onLine) {
       await syncQueue();
       const fila = await db().saleQueue.get(clientUuid);
@@ -245,6 +246,7 @@ export function PosClient({
         notificar('error', toUserMessage(fila.lastError ?? ''));
         return false;
       }
+      registrada = respuestaDe(clientUuid) as typeof registrada;
     }
 
     // El comprobante se arma con las líneas ANTES de vaciar el carrito
@@ -254,6 +256,10 @@ export function PosClient({
     // El IVA sale de la configuración del local, no del 19 escrito por
     // omisión en core: el comprobante decía "IVA (19%)" pasara lo que pasara.
     setComprobante(construirComprobante({
+      // Con conexión, el folio y la boleta los asignó la base (0019). Sin
+      // conexión quedan pendientes: el dispositivo no inventa números.
+      folio: registrada?.folio ?? null,
+      dte: registrada?.dte ?? null,
       lineas: lines,
       pagos: payments.map((p) => ({
         metodo: p.method, monto: p.amount, recibido: p.received_amount,

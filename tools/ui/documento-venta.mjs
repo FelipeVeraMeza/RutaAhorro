@@ -111,9 +111,10 @@ ok('M5-20', /Boleta/.test(texto) && !/Voucher/.test(texto),
 ok('M5-20', /Se entrega boleta y ticket/.test(texto), 'dice qué se le entrega al cliente');
 await p.fill('#recibido', '1000');
 await p.getByRole('button', { name: 'Confirmar venta' }).click();
-await p.getByText('NO ES DOCUMENTO TRIBUTARIO').first().waitFor({ timeout: 15000 }).catch(() => {});
+await p.locator('#ticket').first().waitFor({ timeout: 15000 }).catch(() => {});
 let ticket = await p.locator('#ticket').innerText().catch(() => '');
-ok('M5-20', /Corresponde boleta/.test(ticket), 'el ticket dice que corresponde boleta', ticket.split('\n').slice(0, 4).join(' · '));
+// Desde 0019 la base la emite: el ticket es la boleta (simulada) con su folio.
+ok('M5-20', /BOLETA ELECTRÓNICA N° \d+/.test(ticket), 'el ticket es la boleta, con su folio', ticket.split('\n').slice(0, 4).join(' · '));
 await p.waitForTimeout(3500);
 let v = await ultimaVenta();
 ok('M5-20', v?.document_type === 'boleta', 'la venta queda como boleta en la base', `folio ${v?.folio} · ${v?.document_type}`);

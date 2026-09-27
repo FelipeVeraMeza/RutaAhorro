@@ -258,7 +258,8 @@ test('Anular la misma venta desde dos pantallas devuelve el stock una sola vez',
   const local = await nuevoLocal(banco);
   const p = await local.producto({ stock: 10 });
   const cajero = await abrirCaja(local.cajero1);
-  const { sale_id } = await rpc(cajero, 'fn_register_sale', venta(p, 3, 1000));
+  // Con débito: sin boleta nuestra, se anula (0019).
+  const { sale_id } = await rpc(cajero, 'fn_register_sale', venta(p, 3, 1000, { metodo: 'debito' }));
   assert.equal(await local.stock(p), 7);
 
   const [r1, r2] = await dosVeces(await banco.como(local.admin), await banco.como(local.supervisor),

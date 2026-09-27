@@ -24,3 +24,4 @@ export * from './csv.js';
 export * from './fechas.js';
 export * from './precios.js';
 export * from './impuestos.js';
+export * from './dte.js';

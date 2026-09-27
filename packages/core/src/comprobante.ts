@@ -21,6 +21,7 @@ import {
 import type { CartLine } from './cart.js';
 import { lineSubtotal } from './cart.js';
 import { desglosarImpuestos, type ImpuestoAdicionalDesglosado } from './impuestos.js';
+import { NOMBRE_DTE, type RegistroDte, type TipoDte } from './dte.js';
 
 export interface LineaComprobante {
   nombre: string;
@@ -76,6 +77,12 @@ export interface Comprobante {
    */
   documento: DocumentoVenta;
   /**
+   * La boleta o factura electrónica que la base emitió con la venta (0019).
+   * Null con tarjeta (el documento es el voucher de la máquina) y mientras la
+   * venta espera en la cola sin conexión.
+   */
+  dte: RegistroDte | null;
+  /**
    * Discriminante deliberado. Cuando exista la boleta electrónica se agrega
    * otro tipo con `esDocumentoTributario: true`, y el compilador va a obligar
    * a revisar cada lugar que asuma lo contrario.
@@ -95,6 +102,8 @@ export interface DatosComprobante {
   /** Si no se entrega, se deduce del medio de pago con `documentoPorOmision`. */
   documento?: DocumentoVenta;
   opcionesDocumento?: OpcionesDocumento;
+  /** Lo que devolvió la base al registrar la venta (0019). */
+  dte?: RegistroDte | null;
 }
 
 /**
@@ -165,6 +174,7 @@ export function construirComprobante(datos: DatosComprobante): Comprobante {
     pagos: datos.pagos,
     vuelto,
     documento,
+    dte: datos.dte ?? null,
     esDocumentoTributario: false,
   };
 }
@@ -247,6 +257,16 @@ export function comprobanteATexto(c: Comprobante, ancho = 32): string {
  * el timbre debajo.
  */
 export function encabezadoDocumento(c: Comprobante): string[] {
+  // Con documento emitido (0019): su nombre y folio. En simulación, el papel
+  // lo dice en letras que no se pueden pasar por alto (T-27).
+  if (c.dte) {
+    const lineas = [
+      `${NOMBRE_DTE[Number(c.dte.tipo) as TipoDte].toUpperCase()} N° ${c.dte.folio}`,
+      `RUT ${c.dte.emisor.rut}`,
+    ];
+    if (c.dte.ambiente === 'simulacion') lineas.push('SIMULADA · SIN VALIDEZ TRIBUTARIA');
+    return lineas;
+  }
   if (c.documento.tipo === 'voucher') {
     return ['COMPROBANTE INTERNO', 'EL DOCUMENTO LO EMITE LA MÁQUINA'];
   }
