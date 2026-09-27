@@ -224,7 +224,7 @@ con el [inventario](17-inventario-alcance.md) y con las pruebas.
 | ⬜ | RNF-13 | Debe instalarse como **PWA** en la pantalla de inicio del celular, con ícono y pantalla de arranque propios. | — |  |
 | ⬜ | RNF-14 | No debe requerir instalación de software ni drivers en el local. | — |  |
 | ⬜ | RNF-15 | El escaneo por cámara debe degradar con elegancia: si el navegador no soporta `BarcodeDetector`, debe usar la librería de respaldo sin que e | — |  |
-| ✅ | RNF-16 | Todo objetivo táctil debe medir al menos **44 × 44 px**. | — | recorrido documento, recorrido ofertas, recorrido movil (todas las pantallas) |
+| ✅ | RNF-16 | Todo objetivo táctil debe medir al menos **44 × 44 px**. | — | recorrido clientes, recorrido combos, recorrido documento |
 | ⬜ | RNF-17 | Las acciones principales del POS deben estar en el **tercio inferior** de la pantalla, alcanzables con el pulgar. | — |  |
 | ⬜ | RNF-18 | Un usuario nuevo debe completar su primera venta en **menos de 15 min** de capacitación, sin ayuda escrita. | — |  |
 | ✅ | RNF-19 | Toda operación destructiva o irreversible (anular venta, ajustar stock, cerrar caja) debe requerir **confirmación explícita**. | — | recorrido m5 |

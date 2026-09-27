@@ -51,6 +51,8 @@ const RPC_PERMITIDAS = [
   'fn_aplicar_oferta_masiva', 'fn_quitar_ofertas',
   // 0022 · clientes
   'fn_guardar_cliente', 'fn_guardar_precios_cliente',
+  // 0023 · combos
+  'fn_guardar_combo',
 ].sort();
 
 test('authenticated solo ejecuta las funciones de negocio, ninguna interna', async () => {

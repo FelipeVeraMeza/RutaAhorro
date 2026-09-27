@@ -8,7 +8,33 @@
 
 ---
 
-## CÓMO SEGUIR — corte 2026-09-27 (noche), léelo antes que todo
+## CÓMO SEGUIR — corte 2026-09-27 (tarde, segunda sesión), léelo antes que todo
+
+**Estado verificado al cortar** (todo en verde): 380 pruebas de lógica · 131
+contra PostgreSQL (+1 pendiente conocida, T-45) · `db:e2e` 26/26 · recorridos
+m5 23/23, documento-venta 19/19, documentos 19/19, ofertas 20/20,
+ofertas-masivas 21/21, clientes 14/14, combos 10/10, m1 20/20, m6 13/13,
+bodega-sala, móvil (todas las pantallas) · build de producción limpio.
+**Migraciones 0021, 0022 y 0023 aplicadas en Supabase** (29 funciones expuestas).
+
+**2026-09-27 (tarde) · 0023: combos** (RQ-45). «2 bebidas + 1 pan por $3.000»
+se aplica solo en el POS. El ahorro viaja como descuento de las líneas del
+combo, y la base calcula por su cuenta cuánto corresponde
+(`fn_ahorro_combos`, idéntico a `calcularCombos` de core). Ese monto no cuenta
+contra el tope del rol; lo que se descuente de más, sí. No se suma a ofertas
+ni a precio de cliente, y se apaga con el interruptor.
+**Defecto encontrado y corregido:** el POS mandaba como `p_discount_total`
+(descuento a la venta completa) el total de descuentos del carrito,
+incluidos los de línea, que la base ya recibe en cada línea: los restaba dos
+veces. No se veía porque ninguna línea tenía descuento. Ahora va 0 hasta que
+exista RQ-16.
+
+**Pendiente de la primera sesión, sin tocar:** terminar 0020 en la pantalla
+(aviso de edición simultánea, "última modificación por", historial de
+precios) y el recorrido `tools/ui/m2-productos.mjs`. Después, el orden de
+abajo sin lo ya hecho: RQ-15/16/17 descuentos con autorización + RQ-22 pago
+mixto → RQ-24 caja compartida → RQ-03 cajas y packs → RQ-35 devolución a
+proveedor → T-55 → T-45 → RNF medibles.
 
 **2026-09-27 (tarde) · 0022 aplicada en Supabase: clientes y precio por
 cliente** (RQ-07, RQ-20, RQ-21). Decisión de Felipe: % general por cliente +

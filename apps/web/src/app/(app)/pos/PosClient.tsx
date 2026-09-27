@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   addToCart, cartTotals, setQuantity, removeFromCart, aplicarOfertas, tramosVigentes, diaLocal, precioDelTramo,
   precioParaCliente, describirCliente, type ClienteConPrecios,
+  aplicarCombos, lineSubtotal, type Combo,
   formatCLP, toUserMessage, construirComprobante,
   type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta, type RegistroDte,
 } from '@rutaahorro/core';
@@ -17,6 +18,7 @@ import { configuracionLocal, CONFIGURACION_POR_OMISION, type ConfiguracionLocal 
 import { Modal } from '@/components/Modal';
 import { db } from '@/lib/offline/db';
 import { clientesParaVender } from '@/lib/datos/clientes';
+import { combosParaVender } from '@/lib/datos/combos';
 import { Escaner } from './Escaner';
 import { Cobro } from './Cobro';
 import { Comprobante } from './Comprobante';
@@ -56,6 +58,8 @@ export function PosClient({
   const clienteRef = useRef(cliente);
   clienteRef.current = cliente;
   const [eligiendoCliente, setEligiendoCliente] = useState(false);
+  // 0023 · Los combos del local, desde el celular.
+  const combosRef = useRef<Combo[]>([]);
 
   /**
    * Todo cambio del carrito pasa por acá: después de agregar, quitar o
@@ -73,9 +77,23 @@ export function PosClient({
         // 0022 · El precio del cliente elegido, que no se apaga con las ofertas.
         .map((l) => (l.precioLista == null ? l
           : { ...l, precioCliente: precioParaCliente(l.productId, l.precioLista, clienteRef.current) }));
-      return aplicarOfertas(lineas, diaLocal(new Date(), zonaRef.current));
+      const dia = diaLocal(new Date(), zonaRef.current);
+      // 0023 · El combo va después: se mide contra el precio que la línea ya
+      // tiene (oferta o cliente), así nunca se suma a otra rebaja.
+      return aplicarCombos(aplicarOfertas(lineas, dia), ofertasRef.current ? combosRef.current : [], dia);
     });
   }, []);
+
+  // Los combos se leen al entrar y cada vez que el catálogo cambia; el
+  // carrito se recalcula con ellos.
+  useEffect(() => {
+    const leer = () => void combosParaVender()
+      .then((c) => { combosRef.current = c; cambiarCarro((p) => p); })
+      .catch(() => {});
+    leer();
+    window.addEventListener(EVENTO_CATALOGO, leer);
+    return () => window.removeEventListener(EVENTO_CATALOGO, leer);
+  }, [cambiarCarro]);
   const [scannerOn, setScannerOn] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<LocalProduct[]>([]);
@@ -246,13 +264,20 @@ export function PosClient({
         product_id: l.productId,
         quantity: l.quantity,
         unit_price: l.unitPrice,
-        discount_amount: l.discountAmount ?? 0,
+        // El combo viaja como descuento de la línea; la base calcula cuánto
+        // se puede y no acepta más (0023).
+        discount_amount: (l.discountAmount ?? 0) + (l.descuentoCombo ?? 0),
         name: l.name,
       })),
       payments,
       documento,
       clienteId: cliente?.id ?? null,
-      discountTotal: totals.discountTotal,
+      // Solo el descuento a la venta completa: los de cada línea (combos) ya
+      // viajan en `discount_amount`. Antes iba `totals.discountTotal`, que los
+      // incluye, y la base los restaba dos veces. No se notaba porque hasta
+      // 0023 ninguna línea tenía descuento. El POS todavía no ofrece descuento
+      // a la venta completa (RQ-16): es 0.
+      discountTotal: 0,
       total: totals.total,
     });
 
@@ -454,9 +479,14 @@ export function PosClient({
                       )}
                     </p>
                     <OfertaDeLinea linea={l} zona={config.zonaHoraria} />
+                    {(l.descuentoCombo ?? 0) > 0 && (
+                      <p className="text-xs font-medium text-marca-700 num">
+                        🎁 Combo {l.comboNombre} · -{formatCLP(l.descuentoCombo ?? 0)}
+                      </p>
+                    )}
                   </div>
                   <p className="num font-semibold whitespace-nowrap">
-                    {formatCLP(l.unitPrice * l.quantity)}
+                    {formatCLP(lineSubtotal(l))}
                   </p>
                 </div>
 

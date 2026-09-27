@@ -19,7 +19,7 @@ import {
   type DocumentoVenta, type OpcionesDocumento,
 } from './documento.js';
 import type { CartLine } from './cart.js';
-import { lineSubtotal } from './cart.js';
+import { lineSubtotal, descuentoDeLinea } from './cart.js';
 import { desglosarImpuestos, type ImpuestoAdicionalDesglosado } from './impuestos.js';
 import { NOMBRE_DTE, type RegistroDte, type TipoDte } from './dte.js';
 
@@ -32,6 +32,8 @@ export interface LineaComprobante {
   subtotal: number;
   /** Lo que se ahorró por una oferta por cantidad (0 si no hubo). */
   ahorroOferta?: number;
+  /** El combo que le rebajó la línea (0023), si hubo. Su monto va en `descuento`. */
+  combo?: string | null;
 }
 
 export interface PagoComprobante {
@@ -119,15 +121,16 @@ export function construirComprobante(datos: DatosComprobante): Comprobante {
     nombre: l.name,
     cantidad: l.quantity,
     precioUnitario: clp(l.unitPrice),
-    descuento: clp(l.discountAmount ?? 0),
+    descuento: descuentoDeLinea(l),
     subtotal: lineSubtotal(l),
+    combo: l.descuentoCombo ? l.comboNombre ?? null : null,
     ahorroOferta: l.precioLista != null
       ? Math.max(clp(l.precioLista * l.quantity) - clp(l.unitPrice * l.quantity), 0)
       : 0,
   }));
 
   const bruto = datos.lineas.reduce((s, l) => s + clp(l.unitPrice * l.quantity), 0);
-  const descuentoLineas = datos.lineas.reduce((s, l) => s + clp(l.discountAmount ?? 0), 0);
+  const descuentoLineas = datos.lineas.reduce((s, l) => s + descuentoDeLinea(l), 0);
   const descuento = clp(descuentoLineas + (datos.descuentoGlobal ?? 0));
   const total = Math.max(clp(bruto) - descuento, 0);
 
@@ -221,7 +224,7 @@ export function comprobanteATexto(c: Comprobante, ancho = 32): string {
   for (const l of c.lineas) {
     out.push(fila(`${l.cantidad} x ${l.nombre}`.slice(0, ancho - 9), formatCLP(l.subtotal)));
     if (l.ahorroOferta) out.push(fila(`   oferta ${formatCLP(l.precioUnitario)} c/u`, 'ahorra ' + formatCLP(l.ahorroOferta)));
-    if (l.descuento > 0) out.push(fila('   descuento', '-' + formatCLP(l.descuento)));
+    if (l.descuento > 0) out.push(fila(l.combo ? `   combo ${l.combo}`.slice(0, ancho - 10) : '   descuento', '-' + formatCLP(l.descuento)));
   }
 
   out.push(separador);

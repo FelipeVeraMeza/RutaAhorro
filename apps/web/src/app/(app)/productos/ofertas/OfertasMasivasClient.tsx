@@ -170,6 +170,10 @@ export function OfertasMasivasClient({ esAdmin }: { esAdmin: boolean }) {
         <p className="text-sm text-[var(--texto-suave)]">
           Escribe la oferta una vez y elige a qué productos se aplica.
         </p>
+        <Link href="/productos/combos"
+              className="tap mt-2 flex items-center justify-between tarjeta px-3 text-sm font-medium">
+          🎁 Combos: varios productos a un precio <span aria-hidden>›</span>
+        </Link>
       </header>
 
       {!config.ofertasActivas && (

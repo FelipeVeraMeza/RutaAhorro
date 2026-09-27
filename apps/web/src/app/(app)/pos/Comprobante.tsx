@@ -101,7 +101,7 @@ export function Comprobante({
                 )}
                 {l.descuento > 0 && (
                   <div className="flex justify-between gap-2 text-[11px]">
-                    <span>&nbsp;&nbsp;descuento</span>
+                    <span>&nbsp;&nbsp;{l.combo ? `combo ${l.combo}` : 'descuento'}</span>
                     <span>-{formatCLP(l.descuento)}</span>
                   </div>
                 )}

@@ -44,6 +44,13 @@ export const ERROR_MESSAGES: Record<string, string> = {
   NOMBRE_CLIENTE_REQUERIDO: 'El cliente necesita un nombre o razón social',
   CLIENTE_RUT_DUPLICADO: 'Ya hay un cliente con ese RUT',
   PRECIO_CLIENTE_INVALIDO: 'El precio especial tiene que ser un monto mayor que cero',
+  // 0023 · combos
+  NOMBRE_COMBO_REQUERIDO: 'El combo necesita un nombre',
+  COMBO_INVALIDO: 'Revisa el combo: el precio y las cantidades tienen que ser mayores que cero',
+  COMBO_UN_SOLO_PRODUCTO: 'Un combo lleva al menos dos productos distintos. Para uno solo, usa una oferta por cantidad',
+  COMBO_PRODUCTO_REPETIDO: 'Hay un producto repetido en el combo: súmale la cantidad',
+  COMBO_NO_ES_MAS_BARATO: 'El combo tiene que costar menos que sus productos por separado',
+  COMBO_NO_ENCONTRADO: 'No encontramos ese combo',
   DEMASIADOS_PRODUCTOS: 'Son demasiados productos de una vez: hazlo por categoría, de a 5.000 como máximo',
   TASA_INVALIDA: 'La tasa tiene que ser un porcentaje entre 0 y 100',
   IMPUESTO_DUPLICADO: 'Ya existe un impuesto con ese nombre',

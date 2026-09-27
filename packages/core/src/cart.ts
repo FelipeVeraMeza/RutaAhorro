@@ -7,6 +7,7 @@
  */
 import { clp } from './money.js';
 import { precioPorCantidad, type TramoPrecio } from './precios.js';
+import { calcularCombos, type Combo } from './combos.js';
 
 export type UserRole = 'admin' | 'supervisor' | 'vendedor' | 'bodega';
 
@@ -40,6 +41,13 @@ export interface CartLine {
    * menor entre este y el de la oferta por cantidad: no se suman.
    */
   precioCliente?: number | null;
+  /**
+   * Parte del ahorro de un combo que le toca a esta línea (0023), en pesos.
+   * Se recalcula entero con cada cambio del carrito (`aplicarCombos`).
+   */
+  descuentoCombo?: number;
+  /** El combo que le dio `descuentoCombo`, para decirlo en pantalla y en el papel. */
+  comboNombre?: string | null;
   /** Tasa del impuesto adicional, en % (IABA 18 → 18). 0 o ausente si no tiene. */
   tasaAdicional?: number;
   nombreAdicional?: string | null;
@@ -53,16 +61,20 @@ export interface CartTotals {
   unitCount: number;
 }
 
+/** Todo lo que se le descuenta a la línea: el descuento declarado y el del combo. */
+export function descuentoDeLinea(line: CartLine): number {
+  return clp(line.discountAmount ?? 0) + clp(line.descuentoCombo ?? 0);
+}
+
 /** Subtotal de una línea, nunca negativo: un descuento mayor al precio no regala plata. */
 export function lineSubtotal(line: CartLine): number {
   const gross = clp(line.unitPrice * line.quantity);
-  const discount = clp(line.discountAmount ?? 0);
-  return Math.max(gross - discount, 0);
+  return Math.max(gross - descuentoDeLinea(line), 0);
 }
 
 export function cartTotals(lines: CartLine[], globalDiscount = 0): CartTotals {
   const gross = lines.reduce((sum, l) => sum + clp(l.unitPrice * l.quantity), 0);
-  const lineDiscounts = lines.reduce((sum, l) => sum + clp(l.discountAmount ?? 0), 0);
+  const lineDiscounts = lines.reduce((sum, l) => sum + descuentoDeLinea(l), 0);
   const discountTotal = clp(lineDiscounts + globalDiscount);
   return {
     subtotal: clp(gross),
@@ -158,4 +170,35 @@ export function aplicarOfertas(lines: CartLine[], dia?: string | null): CartLine
 export function ahorroPorOferta(line: CartLine): number {
   if (line.precioLista == null) return 0;
   return Math.max(clp(line.precioLista * line.quantity) - clp(line.unitPrice * line.quantity), 0);
+}
+
+/**
+ * Pone a cada línea su parte del ahorro de los combos (0023). Se llama
+ * después de `aplicarOfertas`: el combo se mide contra el precio que la línea
+ * ya tiene (oferta o cliente), así nunca se suma a otra rebaja.
+ */
+export function aplicarCombos(lines: CartLine[], combos: readonly Combo[], dia?: string | null): CartLine[] {
+  const aplicados = calcularCombos(
+    lines.map((l) => ({ productId: l.productId, cantidad: l.quantity, precio: l.unitPrice })),
+    combos, dia);
+  const porProducto = new Map<string, { monto: number; nombre: string }>();
+  for (const a of aplicados) {
+    for (const [id, monto] of Object.entries(a.porProducto)) {
+      const previo = porProducto.get(id);
+      porProducto.set(id, { monto: (previo?.monto ?? 0) + monto, nombre: previo ? `${previo.nombre} + ${a.nombre}` : a.nombre });
+    }
+  }
+  let cambio = false;
+  const vistos = new Set<string>();
+  const next = lines.map((l) => {
+    // Si el producto está en dos líneas, el descuento va entero en la primera.
+    const d = vistos.has(l.productId) ? undefined : porProducto.get(l.productId);
+    vistos.add(l.productId);
+    const monto = d?.monto ?? 0;
+    const nombre = d?.nombre ?? null;
+    if ((l.descuentoCombo ?? 0) === monto && (l.comboNombre ?? null) === nombre) return l;
+    cambio = true;
+    return { ...l, descuentoCombo: monto, comboNombre: nombre };
+  });
+  return cambio ? next : lines;
 }
