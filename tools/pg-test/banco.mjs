@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -77,6 +78,37 @@ function puertoLibre() {
 }
 
 /**
+ * Apaga el motor con `pg_ctl stop`, no con `motor.stop()`.
+ *
+ * En Windows `motor.stop()` hace `taskkill /f /t` y espera el evento `exit`.
+ * A veces un hijo de postgres sobrevive con el pipe de stderr abierto: el
+ * evento no llega, o llega y el pipe retiene el proceso, y `npm run db:test`
+ * no termina nunca aunque todas las pruebas hayan pasado (2026-09-26: se
+ * colgaba al final de un archivo distinto en cada corrida). `pg_ctl stop` le
+ * pide al postmaster que se apague, y él cierra a sus hijos.
+ */
+async function apagar(motor, dir) {
+  const proc = motor.process;
+  if (!proc) return;
+  const salio = new Promise((ok) => (proc.exitCode !== null ? ok() : proc.once('exit', ok)));
+  const plazo = (ms) => new Promise((ok) => setTimeout(ok, ms).unref());
+  try {
+    const plataforma = process.platform === 'win32' ? 'windows' : process.platform;
+    const { pg_ctl } = await import(`@embedded-postgres/${plataforma}-${process.arch}`);
+    spawnSync(pg_ctl, ['-D', dir, 'stop', '-m', 'fast', '-w', '-t', '20'], { stdio: 'ignore' });
+  } catch {
+    // Sin pg_ctl queda el camino de la librería.
+  }
+  await Promise.race([salio, plazo(10000)]);
+  if (proc.exitCode === null) await Promise.race([motor.stop().catch(() => {}), plazo(10000)]);
+  // Pase lo que pase, este proceso no se queda esperando al motor.
+  proc.stdout?.destroy();
+  proc.stderr?.destroy();
+  proc.unref();
+  motor.process = undefined;
+}
+
+/**
  * `aplicar: false` deja la base como la deja Supabase al crear el proyecto,
  * sin esquema: para probar el instalador tal como se va a pegar.
  */
@@ -108,7 +140,7 @@ export async function levantarBanco({ aplicar = true } = {}) {
   } catch (e) {
     // Sin esto el motor queda vivo y el proceso de pruebas no termina nunca.
     await su.end().catch(() => {});
-    await motor.stop().catch(() => {});
+    await apagar(motor, dir).catch(() => {});
     fs.rmSync(dir, { recursive: true, force: true });
     throw e;
   }
@@ -138,7 +170,7 @@ export async function levantarBanco({ aplicar = true } = {}) {
     async bajar() {
       for (const c of abiertas) await c.end().catch(() => {});
       await su.end().catch(() => {});
-      await motor.stop();
+      await apagar(motor, dir);
       fs.rmSync(dir, { recursive: true, force: true });
     },
   };
