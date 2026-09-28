@@ -30,6 +30,7 @@ interface FilaBD {
   expiry_alert_days: number;
   is_active: boolean;
   updated_at: string;
+  editor?: { full_name: string } | null;
   categories?: { name: string } | null;
   product_barcodes?: Array<{ barcode: string }>;
   stock_levels?: Array<{ quantity: number }>;
@@ -38,7 +39,7 @@ interface FilaBD {
 
 const SELECT_BASE =
   'id, name, description, sku, category_id, unit, sale_price, min_stock, tracks_expiry, ' +
-  'expiry_alert_days, is_active, updated_at, ' +
+  'expiry_alert_days, is_active, updated_at, editor:profiles!products_updated_by_fkey(full_name), ' +
   'categories(name), product_barcodes(barcode), stock_levels(quantity), stock_ubicaciones(ubicacion, quantity)';
 
 const SELECT_CON_COSTO = SELECT_BASE.replace('sale_price,', 'sale_price, avg_cost,');
@@ -63,6 +64,7 @@ function aProducto(f: FilaBD): Producto {
     stockSala: Number(f.stock_ubicaciones?.find((u) => u.ubicacion === 'sala')?.quantity ?? 0),
     stockBodega: Number(f.stock_ubicaciones?.find((u) => u.ubicacion === 'bodega')?.quantity ?? 0),
     actualizadoEn: f.updated_at,
+    actualizadoPor: f.editor?.full_name || null,
   };
 }
 
@@ -154,6 +156,8 @@ export const repoSupabase: RepositorioProductos = {
       p_barcodes: datos.codigos.filter(Boolean),
       p_initial_stock: datos.stockInicialBodega,
       p_initial_stock_sala: datos.stockInicialSala,
+      // Solo si viene: sin fecha, la base hace lo de antes (0024).
+      ...(datos.perecible && datos.vencimientoInicial ? { p_initial_expiry: datos.vencimientoInicial } : {}),
     });
     if (error) throw error;
     return { id: (data as { product_id: string }).product_id };
@@ -186,6 +190,8 @@ export const repoSupabase: RepositorioProductos = {
       p_expiry_alert_days: datos.diasAlerta,
       // Lo mismo con los códigos: nulo = no tocarlos.
       p_barcodes: datos.codigos ? datos.codigos.filter(Boolean) : null,
+      // 0020 · el string tal cual vino de la base, sin pasar por Date.
+      p_expected_updated_at: datos.esperadoEn ?? null,
     });
     if (error) throw error;
   },
@@ -238,6 +244,17 @@ export const repoSupabase: RepositorioProductos = {
       .single();
     if (error) throw error;
     return { id: data.id as string, nombre: data.name as string };
+  },
+
+  async historialPrecios(id) {
+    const { data, error } = await supabase().from('price_history')
+      .select('old_price, new_price, changed_at, quien:profiles!price_history_changed_by_fkey(full_name)')
+      .eq('product_id', id).order('changed_at', { ascending: false }).limit(10);
+    if (error) throw error;
+    return (data ?? []).map((r) => ({
+      anterior: Number(r.old_price), nuevo: Number(r.new_price), fecha: r.changed_at as string,
+      quien: ((r.quien as unknown as { full_name?: string } | null)?.full_name) || null,
+    }));
   },
 
   async codigoEnUso(codigo, excluirProductoId) {

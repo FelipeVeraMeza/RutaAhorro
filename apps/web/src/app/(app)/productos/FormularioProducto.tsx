@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   formatCLP, marginPct, isValidEan, normalizeBarcode, toUserMessage,
-  validarMonto, validarCantidad, cantidadConUnidad,
+  validarMonto, validarCantidad, cantidadConUnidad, diaLocal,
 } from '@rutaahorro/core';
-import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
+import { repoProductos, type Categoria, type Producto, type CambioPrecio } from '@/lib/productos';
+import { useFormatoFecha } from '@/lib/formatoFecha';
 import { useScanner } from '@/lib/scanner/useScanner';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
@@ -21,14 +23,28 @@ interface Props {
   /** Ofertas e impuesto adicional: admin y supervisor (fn_guardar_precios_producto, 0018). */
   puedeEditarPrecios?: boolean;
   esAdmin?: boolean;
-  onGuardado: () => void;
+  /** Al guardar, qué quedó: para decirlo en la lista y mostrar el producto. */
+  onGuardado: (resumen: { nombre: string; nuevo: boolean; sala: number; bodega: number }) => void;
   onCancelar: () => void;
+  /** Otra persona lo cambió mientras se editaba (0020): volver a abrirlo con lo nuevo. */
+  onRecargar?: () => void;
 }
 
 export function FormularioProducto({
-  producto, categorias, puedeVerCostos, puedeEditarPrecios = false, esAdmin = false, onGuardado, onCancelar,
+  producto, categorias, puedeVerCostos, puedeEditarPrecios = false, esAdmin = false, onGuardado, onCancelar, onRecargar,
 }: Props) {
   const esEdicion = producto !== null;
+  const { fechaHora, zona } = useFormatoFecha();
+  const hoy = diaLocal(new Date(), zona);
+  const [vencimiento, setVencimiento] = useState('');
+  const [historialPrecios, setHistorialPrecios] = useState<CambioPrecio[]>([]);
+  const [conflicto, setConflicto] = useState(false);
+  useEffect(() => {
+    if (!producto) return;
+    let vivo = true;
+    void repoProductos().historialPrecios(producto.id).then((h) => { if (vivo) setHistorialPrecios(h); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [producto]);
 
   const [nombre, setNombre] = useState(producto?.nombre ?? '');
   const [sku, setSku] = useState(producto?.sku ?? '');
@@ -128,6 +144,7 @@ export function FormularioProducto({
 
   async function guardar() {
     setError(null);
+    setConflicto(false);
 
     if (nombre.trim() === '') { setError('El nombre es obligatorio'); return; }
     for (const v of [vPrecio, vCosto, vStockMinimo, vStockSala, vStockBodega, vDiasAlerta]) {
@@ -172,6 +189,7 @@ export function FormularioProducto({
         // en cero, y con él el margen y el inventario valorizado.
         await repo.actualizar(producto.id, {
           ...base,
+          esperadoEn: producto.actualizadoEn,
           ...(puedeVerCostos && costo.trim() !== '' ? { costo: costoNum } : {}),
         });
       } else {
@@ -180,6 +198,7 @@ export function FormularioProducto({
           costo: costoNum,
           stockInicialSala: vStockSala.valor,
           stockInicialBodega: vStockBodega.valor,
+          vencimientoInicial: perecible && vencimiento ? vencimiento : null,
         })).id;
       }
 
@@ -200,8 +219,9 @@ export function FormularioProducto({
           return;
         }
       }
-      onGuardado();
+      onGuardado({ nombre: base.nombre, nuevo: !esEdicion, sala: vStockSala.valor, bodega: vStockBodega.valor });
     } catch (e) {
+      setConflicto(String((e as { message?: string })?.message ?? '').includes('PRODUCTO_CAMBIO_MIENTRAS_EDITABAS'));
       setError(toUserMessage(e));
     } finally {
       setGuardando(false);
@@ -218,6 +238,33 @@ export function FormularioProducto({
     >
       <>
           <div className="p-4 space-y-4">
+            {/* Edición: cuánto hay y quién lo tocó. La cantidad no se cambia acá:
+                cada cambio de stock queda en el kardex con su motivo. Antes el
+                formulario no lo decía y no se entendía dónde se cambiaba. */}
+            {esEdicion && producto && (
+              <div className="rounded-xl bg-[var(--fondo)] p-3 space-y-2">
+                <p className="text-sm">
+                  <span className="text-[var(--texto-suave)]">Stock ahora: </span>
+                  <strong className="num">{cantidadConUnidad(producto.stock, producto.unidad)}</strong>
+                  <span className="text-[var(--texto-suave)] num">
+                    {' '}· a la vista {producto.stockSala} · en bodega {producto.stockBodega}
+                  </span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Link href={`/inventario?ajustar=${producto.id}`}
+                        className="tap inline-flex items-center px-3 rounded-lg border border-[var(--borde)] bg-white text-sm font-medium">
+                    Ajustar stock
+                  </Link>
+                  <Link href="/proveedores/recepcion"
+                        className="tap inline-flex items-center px-3 rounded-lg border border-[var(--borde)] bg-white text-sm font-medium">
+                    Ingresar mercadería
+                  </Link>
+                </div>
+                <p className="text-xs text-[var(--texto-suave)]">
+                  Última modificación: {producto.actualizadoPor ?? 'sin registro'} · {fechaHora(producto.actualizadoEn)}
+                </p>
+              </div>
+            )}
             <Campo etiqueta="Nombre" obligatorio>
               {(p) => (
                 <input
@@ -227,21 +274,6 @@ export function FormularioProducto({
                   placeholder="Ej: Arroz grado 1 · 1 kg"
                   className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
                   autoFocus
-                />
-              )}
-            </Campo>
-
-            <Campo
-              etiqueta="Descripción"
-              ayuda="Qué es, en palabras. Aparece al escanear el producto en la caja."
-            >
-              {(p) => (
-                <input
-                  {...p}
-                  value={descripcion}
-                  onChange={(e) => setDescripcion(e.target.value)}
-                  placeholder="Ej: Arroz grado 1, bolsa de 1 kilo"
-                  className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
                 />
               )}
             </Campo>
@@ -289,52 +321,118 @@ export function FormularioProducto({
               </p>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <Campo etiqueta="SKU / código interno">
-                {(p) => (
-                  <input
-                    {...p}
-                    value={sku} onChange={(e) => setSku(e.target.value)}
-                    placeholder="Opcional"
-                    className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
-                  />
-                )}
-              </Campo>
-              <Campo etiqueta="Unidad">
-                {(p) => (
-                  <select
-                    {...p}
-                    value={unidad} onChange={(e) => setUnidad(e.target.value)}
-                    className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
-                  >
-                    {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                )}
-              </Campo>
-            </div>
-
-            <Campo etiqueta="Categoría">
+            <Campo etiqueta="Unidad" ayuda="Cómo se vende y se cuenta: por unidad, por kilo, por litro…">
               {(p) => (
-                <>
-                  <select
-                    {...p}
-                    value={categoriaId}
-                    onChange={(e) => { setCategoriaId(e.target.value); setNuevaCategoria(''); }}
-                    className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
-                  >
-                    <option value="">Sin categoría</option>
-                    {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                  </select>
-                  <input
-                    value={nuevaCategoria}
-                    onChange={(e) => { setNuevaCategoria(e.target.value); setCategoriaId(''); }}
-                    aria-label="Nombre de una categoría nueva"
-                    placeholder="…o escribe una categoría nueva"
-                    className="tap w-full mt-2 px-3 py-2.5 rounded-xl border border-dashed border-[var(--borde)] text-sm"
-                  />
-                </>
+                <select
+                  {...p}
+                  value={unidad} onChange={(e) => setUnidad(e.target.value)}
+                  className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
+                >
+                  {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
               )}
             </Campo>
+            {/* ¿Cuántos hay, y dónde? (0016). Antes era un solo "Stock inicial"
+                que entraba entero a la bodega sin decirlo: se cargaba el
+                catálogo creyendo dejarlo listo para vender y la sala quedaba en
+                cero. */}
+            {!esEdicion && (
+              <div className="rounded-xl border border-[var(--borde)] p-3">
+                <p className="text-sm font-medium mb-0.5">¿Cuántos tienes hoy?</p>
+                <p className="text-xs text-[var(--texto-suave)] mb-3">
+                  Lo que está a la vista se puede vender de inmediato. Lo de la bodega
+                  pasa a la sala cuando tocas “Reponer” en Inventario.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Campo
+                    etiqueta="En la sala de ventas"
+                    ayuda="A la vista, listo para vender"
+                    error={stockSala !== '' ? vStockSala.error : null}
+                  >
+                    {(p) => (
+                      <input
+                        {...p}
+                        inputMode="decimal" value={stockSala}
+                        onChange={(e) => setStockSala(e.target.value)}
+                        className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
+                      />
+                    )}
+                  </Campo>
+                  <Campo
+                    etiqueta="En la bodega"
+                    ayuda="Guardado, no se vende todavía"
+                    error={stockBodega !== '' ? vStockBodega.error : null}
+                  >
+                    {(p) => (
+                      <input
+                        {...p}
+                        inputMode="decimal" value={stockBodega}
+                        onChange={(e) => setStockBodega(e.target.value)}
+                        className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
+                      />
+                    )}
+                  </Campo>
+                </div>
+                <p role="status" className="text-xs text-[var(--texto-suave)] mt-2">
+                  Total en el local:{' '}
+                  <span className="num font-medium text-[var(--texto)]">
+                    {cantidadConUnidad(vStockSala.valor + vStockBodega.valor, unidad)}
+                  </span>
+                </p>
+                {/* 0024 · Sin fecha, esas unidades no entran en las alertas de vencimiento. */}
+                {perecible && vStockSala.valor + vStockBodega.valor > 0 && (
+                  <div className="mt-3">
+                    <Campo etiqueta="¿Cuándo vence lo que tienes?"
+                           ayuda="Para avisarte antes de que venza. Si hay fechas distintas, pon la más próxima.">
+                      {(p) => (
+                        <input
+                          {...p}
+                          type="date" value={vencimiento} min={hoy}
+                          onChange={(e) => setVencimiento(e.target.value)}
+                          className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
+                        />
+                      )}
+                    </Campo>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Perecible: activa el control por lote y FEFO (ADR-007) */}
+            <div className="rounded-xl border border-[var(--borde)] p-3">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox" checked={perecible}
+                  onChange={(e) => setPerecible(e.target.checked)}
+                  className="mt-0.5 w-5 h-5 accent-[var(--color-marca-500)]"
+                />
+                <span className="text-sm">
+                  <strong className="block">Producto perecible</strong>
+                  <span className="text-[var(--texto-suave)]">
+                    Se controlará por lote con fecha de vencimiento. Al vender saldrá
+                    primero el lote que vence antes.
+                  </span>
+                </span>
+              </label>
+
+              {perecible && (
+                <div className="mt-3 pl-8">
+                  <Campo
+                    etiqueta="Avisar cuántos días antes de vencer"
+                    error={diasAlerta !== '' ? vDiasAlerta.error : null}
+                  >
+                    {(p) => (
+                      <input
+                        {...p}
+                        inputMode="numeric" value={diasAlerta}
+                        onChange={(e) => setDiasAlerta(e.target.value)}
+                        className="tap w-24 px-3 py-2 rounded-lg border border-[var(--borde)] num text-right"
+                      />
+                    )}
+                  </Campo>
+                </div>
+              )}
+            </div>
 
             {/* Códigos de barras: RF-M2-02 permite varios por producto */}
             <Campo etiqueta="Códigos de barras">
@@ -401,124 +499,124 @@ export function FormularioProducto({
               )}
             </Campo>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Campo
-                etiqueta="Stock mínimo"
-                error={stockMinimo !== '' ? vStockMinimo.error : null}
-              >
-                {(p) => (
-                  <input
-                    {...p}
-                    inputMode="decimal" value={stockMinimo}
-                    onChange={(e) => setStockMinimo(e.target.value)}
-                    className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
-                  />
-                )}
-              </Campo>
-            </div>
+            {/* Lo opcional, plegado: en el celular el formulario era tan largo que
+                "¿Cuántos tienes hoy?" quedaba al fondo y nadie lo encontraba. */}
+            <details className="rounded-xl border border-[var(--borde)] p-3" open={esEdicion && Boolean(descripcion || sku || categoriaId)}>
+              <summary className="text-sm font-semibold cursor-pointer min-h-[28px]">
+                Más datos (opcional): descripción, categoría, stock mínimo
+              </summary>
+              <div className="mt-3 space-y-4">
+                <Campo
+                  etiqueta="Descripción"
+                  ayuda="Qué es, en palabras. Aparece al escanear el producto en la caja."
+                >
+                  {(p) => (
+                    <input
+                      {...p}
+                      value={descripcion}
+                      onChange={(e) => setDescripcion(e.target.value)}
+                      placeholder="Ej: Arroz grado 1, bolsa de 1 kilo"
+                      className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
+                    />
+                  )}
+                </Campo>
 
-            {/* ¿Cuántos hay, y dónde? (0016). Antes era un solo "Stock inicial"
-                que entraba entero a la bodega sin decirlo: se cargaba el
-                catálogo creyendo dejarlo listo para vender y la sala quedaba en
-                cero. */}
-            {!esEdicion && (
-              <div className="rounded-xl border border-[var(--borde)] p-3">
-                <p className="text-sm font-medium mb-0.5">¿Cuántos tienes hoy?</p>
-                <p className="text-xs text-[var(--texto-suave)] mb-3">
-                  Lo que está a la vista se puede vender de inmediato. Lo de la bodega
-                  pasa a la sala cuando tocas “Reponer” en Inventario.
-                </p>
+                <Campo etiqueta="SKU / código interno" ayuda="Opcional: un código tuyo, si usas uno.">
+                  {(p) => (
+                    <input
+                      {...p}
+                      value={sku} onChange={(e) => setSku(e.target.value)}
+                      placeholder="Opcional"
+                      className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
+                    />
+                  )}
+                </Campo>
+                <Campo etiqueta="Categoría">
+                  {(p) => (
+                    <>
+                      <select
+                        {...p}
+                        value={categoriaId}
+                        onChange={(e) => { setCategoriaId(e.target.value); setNuevaCategoria(''); }}
+                        className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
+                      >
+                        <option value="">Sin categoría</option>
+                        {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                      </select>
+                      <input
+                        value={nuevaCategoria}
+                        onChange={(e) => { setNuevaCategoria(e.target.value); setCategoriaId(''); }}
+                        aria-label="Nombre de una categoría nueva"
+                        placeholder="…o escribe una categoría nueva"
+                        className="tap w-full mt-2 px-3 py-2.5 rounded-xl border border-dashed border-[var(--borde)] text-sm"
+                      />
+                    </>
+                  )}
+                </Campo>
+
                 <div className="grid grid-cols-2 gap-3">
                   <Campo
-                    etiqueta="En la sala de ventas"
-                    ayuda="A la vista, listo para vender"
-                    error={stockSala !== '' ? vStockSala.error : null}
+                    etiqueta="Stock mínimo"
+                    ayuda="Con menos que esto, avisa que hay que reponer"
+                    error={stockMinimo !== '' ? vStockMinimo.error : null}
                   >
                     {(p) => (
                       <input
                         {...p}
-                        inputMode="decimal" value={stockSala}
-                        onChange={(e) => setStockSala(e.target.value)}
-                        className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
-                      />
-                    )}
-                  </Campo>
-                  <Campo
-                    etiqueta="En la bodega"
-                    ayuda="Guardado, no se vende todavía"
-                    error={stockBodega !== '' ? vStockBodega.error : null}
-                  >
-                    {(p) => (
-                      <input
-                        {...p}
-                        inputMode="decimal" value={stockBodega}
-                        onChange={(e) => setStockBodega(e.target.value)}
+                        inputMode="decimal" value={stockMinimo}
+                        onChange={(e) => setStockMinimo(e.target.value)}
                         className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
                       />
                     )}
                   </Campo>
                 </div>
-                <p role="status" className="text-xs text-[var(--texto-suave)] mt-2">
-                  Total en el local:{' '}
-                  <span className="num font-medium text-[var(--texto)]">
-                    {cantidadConUnidad(vStockSala.valor + vStockBodega.valor, unidad)}
-                  </span>
-                </p>
+
               </div>
+            </details>
+            {esEdicion && historialPrecios.length > 0 && (
+              <details className="rounded-xl border border-[var(--borde)] p-3">
+                <summary className="text-sm font-semibold cursor-pointer min-h-[28px]">
+                  Historial de precios ({historialPrecios.length})
+                </summary>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {historialPrecios.map((h) => (
+                    <li key={h.fecha} className="flex justify-between gap-2">
+                      <span className="text-[var(--texto-suave)]">{fechaHora(h.fecha)}{h.quien ? ` · ${h.quien}` : ''}</span>
+                      <span className="num whitespace-nowrap">{formatCLP(h.anterior)} → <strong>{formatCLP(h.nuevo)}</strong></span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
-
-            {/* Perecible: activa el control por lote y FEFO (ADR-007) */}
-            <div className="rounded-xl border border-[var(--borde)] p-3">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox" checked={perecible}
-                  onChange={(e) => setPerecible(e.target.checked)}
-                  className="mt-0.5 w-5 h-5 accent-[var(--color-marca-500)]"
-                />
-                <span className="text-sm">
-                  <strong className="block">Producto perecible</strong>
-                  <span className="text-[var(--texto-suave)]">
-                    Se controlará por lote con fecha de vencimiento. Al vender saldrá
-                    primero el lote que vence antes.
-                  </span>
-                </span>
-              </label>
-
-              {perecible && (
-                <div className="mt-3 pl-8">
-                  <Campo
-                    etiqueta="Avisar cuántos días antes de vencer"
-                    error={diasAlerta !== '' ? vDiasAlerta.error : null}
-                  >
-                    {(p) => (
-                      <input
-                        {...p}
-                        inputMode="numeric" value={diasAlerta}
-                        onChange={(e) => setDiasAlerta(e.target.value)}
-                        className="tap w-24 px-3 py-2 rounded-lg border border-[var(--borde)] num text-right"
-                      />
-                    )}
-                  </Campo>
-                </div>
-              )}
-            </div>
-
             {puedeEditarPrecios && (
-              <OfertasEImpuesto
-                filas={filasOferta}
-                onFilas={setFilasOferta}
-                precioLista={precioNum}
-                impuestos={impuestos}
-                impuestoId={impuestoId}
-                onImpuesto={setImpuestoId}
-                esAdmin={esAdmin}
-              />
+              <details className="rounded-xl border border-[var(--borde)] p-3" open={filasOferta.length > 0 || impuestoId != null}>
+                <summary className="text-sm font-semibold cursor-pointer min-h-[28px]">
+                  Ofertas e impuesto adicional (opcional)
+                </summary>
+                <div className="mt-3 space-y-4">
+                  <OfertasEImpuesto
+                    filas={filasOferta}
+                    onFilas={setFilasOferta}
+                    precioLista={precioNum}
+                    impuestos={impuestos}
+                    impuestoId={impuestoId}
+                    onImpuesto={setImpuestoId}
+                    esAdmin={esAdmin}
+                  />
+                </div>
+              </details>
             )}
 
             {error && (
               <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">
                 {error}
               </p>
+            )}
+            {conflicto && onRecargar && (
+              <button onClick={onRecargar}
+                      className="tap w-full rounded-xl border border-[var(--borde)] text-sm font-medium">
+                Recargar el producto (se pierden tus cambios sin guardar)
+              </button>
             )}
           </div>
 

@@ -8,7 +8,56 @@
 
 ---
 
-## CÓMO SEGUIR — corte 2026-09-27 (tarde, segunda sesión), léelo antes que todo
+## CÓMO SEGUIR — corte 2026-09-28, léelo antes que todo
+
+**Despliegue:** la app está en Railway, en **https://rutaahorroweb-production.up.railway.app**
+(lo desplegó Felipe el 27-09 desde `main`). Los recorridos corren contra ella con
+`RA_BASE=https://rutaahorroweb-production.up.railway.app node tools/ui/<x>.mjs`. El 27-09
+pasaron todos contra Railway salvo `ofertas.mjs` (4 fallas: el POS cobró $6.000 en vez de
+$4.200 y el consultador no mostró la oferta) y `ofertas-masivas.mjs` (se cortó sin
+resultado). Sospecha no confirmada: los recorridos esperan 2,5 s fijos a que el celular
+baje el catálogo y por internet tarda más. **Hay que confirmarlo**; hasta entonces, las
+ofertas en Railway no están verificadas. Ojo: `railway.json` del repo no coincide con
+docs/09 (build sin `npm ci --include=dev`, healthcheck `/login`); alinearlo.
+
+**Pedido de Felipe del 28-09, en curso (dos partes):**
+
+**Parte 1 · el flujo completo, de crear un producto al cierre de caja, "perfecto".**
+Se recorrió en el navegador a 360 px con `tools/ui/explorar-flujo.mjs` (capturas en
+`tools/ui/.capturas/flujo`): funciona de punta a punta (crear con 20 en sala → vender 3 →
+stock 17 → boleta → caja espera $750 → cierre pide explicación si no cuadra). Hallazgos:
+
+| # | Hallazgo | Estado |
+|---|---|---|
+| 1 | "¿Cuántos tienes hoy?" quedaba al fondo del formulario en el celular; Felipe no encontraba dónde poner la cantidad | **Código hecho, sin recorrido**: el formulario ahora va Nombre → Precio/Costo → Unidad → ¿Cuántos tienes hoy? → Perecible → Código de barras → "Más datos (opcional)" plegado → Ofertas plegado |
+| 2 | Tras crear, sin aviso y el producto quedaba perdido en la lista | **Código hecho, sin recorrido**: aviso "✓ X creado: 20 a la vista…" y la lista filtra al recién creado |
+| 3 | Editar no decía cuánto stock hay ni cómo cambiarlo | **Código hecho, sin recorrido**: "Stock ahora" + botones "Ajustar stock" (`/inventario?ajustar=<id>` abre el ajuste directo) e "Ingresar mercadería" |
+| 3b | 0020 en pantalla: "última modificación por", historial de precios, aviso de edición simultánea | **Código hecho, sin recorrido**: `fn_update_product` recibe `p_expected_updated_at` (string tal cual), el formulario muestra quién/cuándo y el historial, y ante PRODUCTO_CAMBIO_MIENTRAS_EDITABAS ofrece "Recargar el producto" |
+| 4 | POS: para 20 panes hay que tocar "+" 19 veces; un producto por kilo no admite 0,35 | **Pendiente**: tocar el número y escribir la cantidad (decimales solo si la unidad es kg/gramo/litro/ml; CartLine necesita `unidad`) |
+| 5 | Consultador: Felipe quiere "descontar directamente" desde ahí | **Pendiente**: botón "Agregar a la venta" con cantidad → `sessionStorage` 'pos:agregar' → /pos lo agrega. **Hallazgo relacionado sin arreglar: el carrito del POS vive solo en memoria; si el cajero sale a otra pantalla a mitad de una venta, la pierde.** Persistirlo en sessionStorage |
+| 6 | Un perecible creado con stock no tenía fecha: esas unidades quedaban "sin lote" y fuera de las alertas | **Base hecha y probada** (migración **0024**, `stock-inicial.test.mjs` 4/4, vistas fallar sin ella; reinstalación OK). El formulario pregunta "¿Cuándo vence lo que tienes?". **0024 NO está aplicada en Supabase**: aplicarla antes de subir a GitHub (Railway despliega `main`) |
+| 7 | Botones de la cabecera de Productos solo con íconos en el celular | **Código hecho, sin recorrido**: ahora dicen Etiquetas / Ofertas / Importar |
+
+Falta: recorrer todo lo anterior en el navegador (móvil incluido), convertir
+`explorar-flujo.mjs` en un recorrido con comprobaciones (`flujo-completo.mjs`), correr
+todas las pruebas, aplicar 0024, commit y push.
+
+**Parte 2 · módulo de Facturación aparte** (todavía no empezado). Lo que pidió Felipe:
+emitir una factura manual y editable usando el catálogo de productos (la boleta sigue
+saliendo del POS), autocompletar receptor desde Clientes (0022) y datos de proveedores,
+e historial de facturas, compras y ventas en el mismo módulo. **Modelo a seguir:**
+`C:\Users\felip\OneDrive\Documentos\VS\VSV-Contadores\src\components\facturacion\scripts\factura_manual.mjs`
+(robot Puppeteer que entra al portal de facturación gratuito del SII con la clave del
+contribuyente, llena el formulario, firma con la clave del certificado, lee el folio,
+baja el PDF y guarda en `documentos_emitidos`; ver también `modals/dte/FacturaElectronicaModal.jsx`,
+`tabs/DocumentosDTE.jsx`, `scripts/subir_facturas_recibidas.mjs`, `utils/montos.js`).
+Decisiones tomadas (Felipe puede cambiarlas): (a) la factura manual **descuenta stock**
+si la línea es un producto del catálogo; una línea libre (servicio, flete) no;
+(b) la emisión real será ese robot adaptado, corriendo en el servidor (worker), con la
+clave del SII y del certificado guardadas cifradas; mientras el cliente no las entregue,
+el módulo funciona en **modo simulado** como la boleta (0019 ya tiene folios, XML,
+timbre y notas de crédito simuladas). Es el "EmisorDTE real" de T-22/T-31, y evita
+contratar un proveedor de DTE (B-06).
 
 **Estado verificado al cortar** (todo en verde): 380 pruebas de lógica · 131
 contra PostgreSQL (+1 pendiente conocida, T-45) · `db:e2e` 26/26 · recorridos

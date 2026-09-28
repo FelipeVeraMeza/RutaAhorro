@@ -39,6 +39,9 @@ export const ERROR_MESSAGES: Record<string, string> = {
   TRAMO_REPETIDO: 'Hay dos ofertas con la misma cantidad y las mismas fechas',
   PORCENTAJE_INVALIDO: 'El porcentaje de la oferta tiene que estar entre 0 y 100, con hasta dos decimales',
   SIN_PRODUCTOS: 'Elige al menos un producto',
+  // 0024 · stock inicial de un perecible
+  PRODUCTO_CAMBIO_MIENTRAS_EDITABAS: 'Otra persona cambió este producto mientras lo editabas. Recarga para ver sus cambios',
+  VENCIMIENTO_PASADO: 'Esa fecha de vencimiento ya pasó: no se puede ingresar mercadería vencida',
   // 0022 · clientes
   CLIENTE_NO_ENCONTRADO: 'Ese cliente no existe o está desactivado',
   NOMBRE_CLIENTE_REQUERIDO: 'El cliente necesita un nombre o razón social',
@@ -123,6 +126,9 @@ export function toUserMessage(error: unknown): string {
           : `El código ${codigo} ya está en otro producto`;
       }
       if (detail && code === 'PRODUCTO_INACTIVO') return `"${detail}" está desactivado`;
+      if (code === 'PRODUCTO_CAMBIO_MIENTRAS_EDITABAS') {
+        return `${detail || 'Otra persona'} cambió este producto mientras lo editabas. Recarga para ver sus cambios antes de guardar los tuyos`;
+      }
       if (detail && code === 'VENCIMIENTO_REQUERIDO') return `"${detail}" es perecible: indica la fecha de vencimiento`;
       if (detail && code === 'LOTE_YA_VENCIDO') return `"${detail}" ya está vencido, no puede recibirse`;
       return base;

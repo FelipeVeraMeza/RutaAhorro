@@ -42,7 +42,22 @@ export interface Producto {
    */
   stockSala: number;
   stockBodega: number;
+  /**
+   * El `updated_at` tal cual viene de la base. Es texto a propósito: pasarlo
+   * por `Date` pierde los microsegundos y la comprobación de edición
+   * simultánea (0020) fallaría siempre.
+   */
   actualizadoEn: string;
+  /** Quién lo modificó por última vez (RF-M10-11, 0020). */
+  actualizadoPor?: string | null;
+}
+
+/** Un cambio de precio (`price_history`), para el formulario del producto. */
+export interface CambioPrecio {
+  anterior: number;
+  nuevo: number;
+  fecha: string;
+  quien: string | null;
 }
 
 export interface ProductoNuevo {
@@ -64,6 +79,11 @@ export interface ProductoNuevo {
    */
   stockInicialSala: number;
   stockInicialBodega: number;
+  /**
+   * Cuándo vence lo que se carga, si es perecible ('AAAA-MM-DD'). Con fecha, el
+   * stock inicial nace como lote y entra en las alertas de vencimiento (0024).
+   */
+  vencimientoInicial?: string | null;
 }
 
 /**
@@ -81,8 +101,16 @@ export interface ProductoNuevo {
  *   columna de código, y eso dejaba invisibles al escáner a todos los
  *   productos que la planilla tocara.
  */
-export type ProductoEditable = Omit<ProductoNuevo, 'stockInicialSala' | 'stockInicialBodega' | 'costo' | 'codigos'> &
-  Partial<Pick<ProductoNuevo, 'costo' | 'codigos'>>;
+export type ProductoEditable = Omit<ProductoNuevo, 'stockInicialSala' | 'stockInicialBodega' | 'vencimientoInicial' | 'costo' | 'codigos'> &
+  Partial<Pick<ProductoNuevo, 'costo' | 'codigos'>> & {
+    /**
+     * El `actualizadoEn` que tenía el producto al abrir el formulario. Si otra
+     * persona lo guardó entremedio, la base rechaza con
+     * PRODUCTO_CAMBIO_MIENTRAS_EDITABAS en vez de pisarle el trabajo (0020).
+     * Ausente = no comprobar (la carga masiva).
+     */
+    esperadoEn?: string;
+  };
 
 export interface Categoria {
   id: string;
@@ -129,6 +157,8 @@ export interface RepositorioProductos {
   crearCategoria(nombre: string): Promise<Categoria>;
   /** Códigos ya usados, para avisar de duplicados antes de guardar. */
   codigoEnUso(codigo: string, excluirProductoId?: string): Promise<string | null>;
+  /** Los últimos cambios de precio del producto, del más reciente al más antiguo. */
+  historialPrecios(id: string): Promise<CambioPrecio[]>;
   /**
    * Carga masiva, fila por fila.
    *

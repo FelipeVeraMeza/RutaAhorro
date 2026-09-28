@@ -75,6 +75,18 @@ export function InventarioClient({
     return () => clearTimeout(t);
   }, [cargar]);
 
+  // Desde el formulario del producto ("Ajustar stock"), se llega con
+  // ?ajustar=<id> y se abre el ajuste de ese producto directo. Se busca con
+  // `obtener` y no en la lista: la lista puede estar filtrada o paginada.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('ajustar');
+    if (!id || !puedeAjustar) return;
+    void repoProductos().obtener(id, verCostos).then((p) => {
+      if (p) setAjustando(p);
+      window.history.replaceState(null, '', window.location.pathname);
+    }).catch(() => {});
+  }, [puedeAjustar, verCostos]);
+
   const valorTotal = productos.reduce(
     (s, p) => s + Math.round(p.stock * (p.costoPromedio ?? 0)), 0,
   );

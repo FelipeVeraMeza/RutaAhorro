@@ -49,6 +49,10 @@ export function ProductosClient({
   const [puedeBorrarDef, setPuedeBorrarDef] = useState(false);
   const [consultandoHistorial, setConsultandoHistorial] = useState(false);
   const [ejecutando, setEjecutando] = useState(false);
+  // Lo que se acaba de guardar. Antes el formulario se cerraba sin decir nada
+  // y el producto nuevo quedaba perdido en la lista.
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [formKey, setFormKey] = useState(0);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -131,24 +135,25 @@ export function ProductosClient({
             <Link
               href="/productos/etiquetas"
               title="Imprimir etiquetas con código de barra"
-              className="tap inline-flex items-center px-3 py-2.5 rounded-xl border border-[var(--borde)] text-sm font-medium"
+              className="tap inline-flex flex-col items-center justify-center min-w-[52px] px-2 py-1 rounded-xl border border-[var(--borde)] text-[11px] font-medium leading-tight"
             >
-              🏷️ <span className="hidden sm:inline ml-1.5">Etiquetas</span>
+              <span aria-hidden className="text-base">🏷️</span>Etiquetas
             </Link>
             {puedeEditarPrecios && (
-              <Link
-                href="/productos/ofertas"
-                title="Una oferta a varios productos a la vez"
-                className="tap inline-flex items-center px-3 py-2.5 rounded-xl border border-[var(--borde)] text-sm font-medium"
-              >
-                % <span className="hidden sm:inline ml-1.5">Ofertas</span>
-              </Link>
+            <Link
+              href="/productos/ofertas"
+              title="Una oferta a varios productos a la vez"
+              className="tap inline-flex flex-col items-center justify-center min-w-[52px] px-2 py-1 rounded-xl border border-[var(--borde)] text-[11px] font-medium leading-tight"
+            >
+              <span aria-hidden className="text-base">%</span>Ofertas
+            </Link>
             )}
             <Link
               href="/productos/importar"
-              className="tap inline-flex items-center px-3 py-2.5 rounded-xl border border-[var(--borde)] text-sm font-medium"
+              title="Cargar productos desde Excel"
+              className="tap inline-flex flex-col items-center justify-center min-w-[52px] px-2 py-1 rounded-xl border border-[var(--borde)] text-[11px] font-medium leading-tight"
             >
-              📥 <span className="hidden sm:inline ml-1.5">Importar</span>
+              <span aria-hidden className="text-base">📥</span>Importar
             </Link>
             <button
               onClick={() => setCreando(true)}
@@ -159,6 +164,13 @@ export function ProductosClient({
           </div>
         )}
       </div>
+
+      {aviso && (
+        <p role="status" className="mb-3 text-sm px-3 py-2 rounded-lg bg-marca-100 text-marca-900 flex items-start justify-between gap-2">
+          <span>✓ {aviso}</span>
+          <button onClick={() => setAviso(null)} aria-label="Cerrar aviso" className="px-1 font-bold">×</button>
+        </p>
+      )}
 
       {/* Filtros */}
       <div className="space-y-2 mb-4">
@@ -312,8 +324,27 @@ export function ProductosClient({
           puedeVerCostos={puedeVerCostos}
           puedeEditarPrecios={puedeEditarPrecios}
           esAdmin={esAdmin}
-          onGuardado={() => { setCreando(false); setEditando(null); void cargar(); }}
+          key={formKey}
+          onGuardado={(r) => {
+            setCreando(false);
+            setEditando(null);
+            if (r.nuevo) {
+              const total = r.sala + r.bodega;
+              setAviso(total > 0
+                ? `${r.nombre} creado: ${r.sala} a la vista (listo para vender)${r.bodega ? ` y ${r.bodega} en bodega` : ''}`
+                : `${r.nombre} creado, sin stock. Para cargarle unidades: Inventario → Ajustar, o Proveedores → Recepción`);
+              // Se muestra el recién creado: sin esto quedaba perdido en la lista.
+              setBusqueda(r.nombre);
+            } else {
+              setAviso(`${r.nombre} guardado`);
+              void cargar();
+            }
+          }}
           onCancelar={() => { setCreando(false); setEditando(null); }}
+          onRecargar={editando ? async () => {
+            const fresco = await repoProductos().obtener(editando.id, puedeVerCostos);
+            if (fresco) { setEditando(fresco); setFormKey((k) => k + 1); }
+          } : undefined}
         />
       )}
 

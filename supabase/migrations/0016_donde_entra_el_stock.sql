@@ -27,6 +27,9 @@
 -- con fn_register_sale.
 drop function if exists public.fn_create_product(
   text, text, text, uuid, text, integer, integer, numeric, boolean, integer, text[], numeric);
+-- 0024 · Al reinstalar, la versión con la fecha de vencimiento ya existe.
+drop function if exists public.fn_create_product(
+  text, text, text, uuid, text, integer, integer, numeric, boolean, integer, text[], numeric, numeric, date);
 create or replace function public.fn_create_product(
   p_name              text,
   p_sku               text,

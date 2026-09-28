@@ -276,6 +276,11 @@ export const repoLocal: RepositorioProductos = {
     return nueva;
   },
 
+  // La maqueta no guarda historial de precios.
+  async historialPrecios() {
+    return [];
+  },
+
   async codigoEnUso(codigo, excluirProductoId) {
     const hit = await db().barcodes.get(codigo);
     if (!hit || hit.productId === excluirProductoId) return null;
