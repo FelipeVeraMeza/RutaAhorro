@@ -1,6 +1,7 @@
 import { runBackup, cleanupOldBackups } from './backup.js';
 import { runDailySummary } from './daily-summary.js';
 import { runLowStockCheck, runExpiryCheck, runOpenCashCheck, runIntegrityCheck } from './checks.js';
+import { runFacturasSii } from './facturas-sii.js';
 
 /**
  * Catálogo de trabajos programados.
@@ -43,7 +44,19 @@ export const JOBS = {
     description: 'Reconstruye el stock desde el kardex y verifica lotes',
     run: runIntegrityCheck,
   },
+  'facturas-sii': {
+    schedule: '* * * * *',
+    description: 'Emite en el portal del SII las facturas en cola (apagado sin credenciales)',
+    run: runFacturasSii,
+    // Registra en job_runs solo las facturas que intenta, no cada minuto vacío.
+    directo: true,
+  },
 } as const;
+
+/** Un trabajo que lleva su propio registro (no pasa por recordJobRun en el cron). */
+export function esDirecto(name: JobName): boolean {
+  return 'directo' in JOBS[name] && JOBS[name].directo === true;
+}
 
 export type JobName = keyof typeof JOBS;
 

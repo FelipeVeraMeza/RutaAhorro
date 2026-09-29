@@ -33,3 +33,10 @@ export function useFormatoFecha() {
     fechaHora: (iso: string) => formatoFechaHora(iso, zona),
   }), [zona]);
 }
+
+/**
+ * Un día sin hora ('AAAA-MM-DD') como 'DD-MM-AAAA', tal cual. Pasarlo por
+ * `new Date` lo lee como medianoche UTC y en Chile lo muestra el día anterior
+ * (regla 17): una factura del 28 aparecía del 27.
+ */
+export const diaCorto = (dia: string) => dia.split('-').reverse().join('-');

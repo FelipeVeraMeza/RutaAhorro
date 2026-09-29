@@ -12,6 +12,31 @@ export const ERROR_MESSAGES: Record<string, string> = {
   SIN_PERMISO_ANULAR: 'No tienes permiso para anular esta venta',
   SIN_PERMISO_AJUSTAR: 'No tienes permiso para ajustar el stock',
   SIN_PERMISO_CREAR_PRODUCTO: 'No tienes permiso para crear productos',
+  // 0026 · Facturación
+  SIN_PERMISO_FACTURAR: 'Solo el administrador o un supervisor pueden facturar',
+  FALTA_IDENTIFICADOR: 'No se pudo identificar la factura. Vuelve a intentarlo',
+  FORMA_PAGO_INVALIDA: 'La forma de pago tiene que ser contado o crédito',
+  FACTURA_SIN_LINEAS: 'La factura necesita al menos una línea',
+  FACTURA_DEMASIADAS_LINEAS: 'El SII admite hasta 60 líneas por factura',
+  FACTURA_EN_CERO: 'La factura no puede quedar en $0',
+  GIRO_RECEPTOR_REQUERIDO: 'Falta el giro del cliente: el SII lo exige en una factura',
+  DIRECCION_RECEPTOR_REQUERIDA: 'Falta la dirección o la comuna del cliente: el SII las exige en una factura',
+  CANTIDAD_ENTERA: 'Ese producto se vende entero: la cantidad no puede tener decimales',
+  LINEA_SIN_NOMBRE: 'Una línea libre necesita decir qué se factura',
+  DESCUENTO_MAYOR_QUE_LINEA: 'El descuento de una línea no puede ser mayor que la línea',
+  FACTURA_NO_ENCONTRADA: 'No se encontró esa factura',
+  FACTURA_NO_EMITIDA: 'Esa factura todavía no está emitida en el SII: no lleva nota de crédito, se descarta',
+  NOTA_CREDITO_REAL_NO_DISPONIBLE: 'Esta factura se emitió en el SII: su nota de crédito se emite en el portal del SII por ahora',
+  FACTURA_NO_REINTENTABLE: 'Solo se reintenta una factura que quedó con error',
+  FACTURA_NO_DESCARTABLE: 'Solo se descarta una factura que no llegó al SII (en cola o con error)',
+  FACTURA_RECIBIDA_DUPLICADA: 'Esa factura de ese proveedor ya está registrada',
+  FACTURA_RECIBIDA_NO_ENCONTRADA: 'No se encontró esa factura recibida, o ya estaba anulada',
+  TIPO_DOCUMENTO_INVALIDO: 'Elige el tipo de documento',
+  FOLIO_INVALIDO: 'El folio tiene que ser un número mayor que cero',
+  EXENTA_CON_IVA: 'Una factura exenta no lleva IVA',
+  FECHA_INVALIDA: 'La fecha no puede ser futura',
+  PROVEEDOR_NO_ENCONTRADO: 'No se encontró ese proveedor',
+  FALTAN_CREDENCIALES_SII: 'Primero guarda la clave del SII y la del certificado',
   NOMBRE_REQUERIDO: 'El producto necesita un nombre',
   MONTO_NEGATIVO: 'El precio y el costo no pueden ser negativos',
   CANTIDAD_NEGATIVA: 'La cantidad no puede ser negativa',
@@ -126,6 +151,7 @@ export function toUserMessage(error: unknown): string {
           : `El código ${codigo} ya está en otro producto`;
       }
       if (detail && code === 'PRODUCTO_INACTIVO') return `"${detail}" está desactivado`;
+      if (detail && code === 'CANTIDAD_ENTERA') return `"${detail}" se vende entero: la cantidad no puede tener decimales`;
       if (code === 'PRODUCTO_CAMBIO_MIENTRAS_EDITABAS') {
         return `${detail || 'Otra persona'} cambió este producto mientras lo editabas. Recarga para ver sus cambios antes de guardar los tuyos`;
       }

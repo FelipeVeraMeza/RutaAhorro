@@ -3,7 +3,7 @@ import cron from 'node-cron';
 import { env } from './env.js';
 import { log } from './logger.js';
 import { recordJobRun } from './supabase.js';
-import { JOBS, isJobName, type JobName } from './jobs/index.js';
+import { JOBS, isJobName, esDirecto, type JobName } from './jobs/index.js';
 
 /**
  * Worker de RutaAhorro (Railway).
@@ -93,6 +93,10 @@ server.listen(env.port, () => {
     cron.schedule(
       job.schedule,
       async () => {
+        if (esDirecto(name as JobName)) {
+          await job.run().catch((e: unknown) => log.error('Trabajo programado falló', { job: name, error: String(e) }));
+          return;
+        }
         log.info('Trabajo programado iniciado', { job: name });
         const result = await recordJobRun(name as JobName, job.run);
         if (!result.ok) log.error('Trabajo programado falló', { job: name, error: result.error });

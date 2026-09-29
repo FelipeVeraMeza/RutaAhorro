@@ -53,6 +53,9 @@ const RPC_PERMITIDAS = [
   'fn_guardar_cliente', 'fn_guardar_precios_cliente',
   // 0023 · combos
   'fn_guardar_combo',
+  // 0026 · facturación
+  'fn_activar_emision_sii', 'fn_anular_factura_recibida', 'fn_descartar_factura', 'fn_emitir_factura_manual',
+  'fn_estado_emision_sii', 'fn_nota_credito_factura', 'fn_registrar_factura_recibida', 'fn_reintentar_factura',
 ].sort();
 
 test('authenticated solo ejecuta las funciones de negocio, ninguna interna', async () => {

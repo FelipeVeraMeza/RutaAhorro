@@ -70,6 +70,11 @@ export const NAVEGACION: ItemNav[] = [
     roles: ['admin', 'supervisor'], enMovil: false,
   },
   {
+    // Factura manual, recibidas y resumen mensual (0026). La boleta sale del POS.
+    href: '/facturacion', label: 'Facturación', labelCorto: 'Facturas', icono: '📑',
+    roles: ['admin', 'supervisor'], enMovil: false,
+  },
+  {
     href: '/reportes', label: 'Reportes', labelCorto: 'Reportes', icono: '📊',
     roles: ['admin', 'supervisor'], enMovil: false,
   },

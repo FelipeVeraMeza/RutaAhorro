@@ -10,6 +10,70 @@
 
 ## CÓMO SEGUIR — corte 2026-09-28, léelo antes que todo
 
+**2026-09-28 (noche, 2º corte) · Parte 2 Facturación: CÓDIGO HECHO, SIN
+RECORRIDO, SIN APLICAR, SIN SUBIR.** Dos commits locales encima de `c6e002c`
+(ese sí está en Railway): (1) arreglo de la carrera del carrito del POS,
+(2) facturación. **No hacer push hasta cerrar la lista de abajo**: la web
+nueva pide tablas que Supabase todavía no tiene.
+
+Qué hay y qué está probado:
+- **Carrera del carrito (defecto real, visto en Railway):** si el cajero
+  agregaba un producto mientras el POS terminaba de bajar el catálogo, ese
+  cambio no se guardaba nunca. Ahora el carrito se restaura apenas se monta el
+  POS. `flujo-completo.mjs` tiene el paso "Carrera" que la fuerza (demora la
+  2ª consulta de ofertas 12 s): **visto fallar sin el arreglo (53/54) y pasar
+  con él (54/54)**. Falta repetir m5, documento-venta y clientes, que tocan el POS.
+- **Contra Railway con `c6e002c`:** `ofertas.mjs` **20/20** (las 4 fallas del
+  27-09 quedaron corregidas en producción), `ofertas-masivas` 21/21.
+  `flujo-completo` 41/44 por la carrera de arriba. `movil.mjs` dio 403 en
+  `/auth/v1/user`: **lo causé yo** (un diagnóstico le cambió la clave al cajero
+  mientras corría); repetirlo solo.
+- **Migración 0026 `facturacion.sql`** (no aplicada): `facturas`,
+  `factura_lineas`, `factura_notas_credito`, `facturas_recibidas`,
+  `sii_credenciales` (sin política ni privilegios), vistas
+  `v_ventas_mensuales` y `v_compras_mensuales`, 8 funciones expuestas (ya
+  agregadas a las dos listas) y 3 solo para `service_role` (la cola del robot).
+  La unicidad de folios de `dte_documentos` pasa a ser por ambiente (el SII
+  numera sus folios reales desde 1). `facturacion.test.mjs` **15/15**; db:test
+  completo **155 (+1 T-45)**; reinstalación OK.
+- **Decisiones de Felipe (28-09):** la línea de catálogo descuenta stock (sala,
+  kardex, FEFO; la nota de crédito vuelve a los mismos lotes); la línea libre
+  no. Emisión real = robot del portal del SII, no proveedor de DTE.
+- **core:** `facturacion.ts` (`resumenFactura`, `planFacturaPortal`: neto por
+  línea con 6 decimales para el portal) y `cifrado.ts` (AES-256-GCM con
+  WebCrypto, formato `v1:iv:dato`). 403 pruebas de lógica.
+- **Robot:** copia **intacta** del modelo en `apps/worker/src/sii/modelo-vsv/`
+  (con README de qué cambió y por qué), adaptación en `apps/worker/src/sii/portal.ts`
+  (varias líneas, compara el total del portal con el de la base **antes de
+  firmar**, y todo error después de "Firmar" avisa que puede estar emitida) y
+  cola en `jobs/facturas-sii.ts` (cada minuto, una a la vez, apagada sin
+  `SII_CLAVE_CIFRADO` + `CHROME_PATH` + el interruptor del local).
+  `puppeteer-core` agregado al worker. **Nunca corrió contra el SII** (B-04, B-05).
+- **Web:** `/facturacion` (admin y supervisor, en "Más"): Emitidas (ver, nota
+  de crédito, reintentar/descartar, usar como base), Nueva (cliente por RUT o
+  nombre desde Clientes, líneas de catálogo o libres, precios con IVA o netos,
+  borrador en la pestaña, barra de totales sobre la navegación del celular,
+  medida en 60 px), Recibidas (proveedor por RUT, se crea si no existe),
+  Resumen mensual (IVA débito − crédito, exporta a Excel), Emisor SII (admin).
+  Rutas del servidor `/api/facturacion/credenciales` (cifra con
+  `SII_CLAVE_CIFRADO`) y `/api/facturacion/pdf`. Build de producción limpio.
+
+**Falta, en este orden:**
+1. `tools/ui/facturacion.mjs` a 360 px: emitir con una línea de catálogo y una
+   libre, autocompletar el receptor desde un cliente existente, ver el stock
+   bajar, nota de crédito parcial, registrar una recibida con proveedor por
+   RUT, resumen del mes, y que "Emitir factura" no lo tape la barra inferior
+   (`elementFromPoint`). Agregar `/facturacion` a `RUTAS.admin` de `movil.mjs`.
+2. Una prueba del robot contra un **portal simulado local** (HTML con los
+   mismos `name` del SII) para ejercitar `portal.ts` sin credenciales: hoy
+   solo compila. Para eso las URL del portal tienen que poder cambiarse.
+3. Aplicar 0026: `npm run db:instalar` y `npm run db:aplicar -- --aplicar`
+   (verificar 37 funciones expuestas).
+4. Todas las pruebas y recorridos en local, `node tools/matriz.mjs`, docs
+   (docs/09 §3.4: variables `SII_CLAVE_CIFRADO` en web y worker, `CHROME_PATH`
+   y Chromium en el worker; docs/23 y 24), commit y push. Después, los
+   recorridos contra Railway.
+
 **2026-09-28 (noche) · Parte 1 TERMINADA: el flujo de producto a caja, recorrido
 y en producción.** `tools/ui/flujo-completo.mjs` (53/53) lo hace entero a 360 px:
 crear un pan perecible con 20 en sala, 5 en bodega y su vencimiento → editarlo

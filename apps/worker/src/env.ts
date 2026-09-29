@@ -53,6 +53,15 @@ export const env = {
    */
   timezone: optional('TZ', 'America/Santiago'),
 
+  /**
+   * Emisión real de facturas por el portal del SII (0026). Las dos vacías =
+   * apagada. SII_CLAVE_CIFRADO es la misma llave que usa el servidor web para
+   * cifrar las credenciales (32 bytes en base64); CHROME_PATH, el Chromium del
+   * contenedor. Ver docs/09 §3.4.
+   */
+  siiClaveCifrado: optional('SII_CLAVE_CIFRADO'),
+  chromePath: optional('CHROME_PATH'),
+
   /** Los cron solo corren en producción; en local se disparan a mano. */
   enableCron: optional('ENABLE_CRON', optional('NODE_ENV') === 'production' ? 'true' : 'false') === 'true',
 };

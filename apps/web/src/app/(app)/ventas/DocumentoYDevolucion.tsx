@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-  formatCLP, toUserMessage, NOMBRE_DTE, construirXmlDte, desdeRegistro, montosDevolucion,
+  formatCLP, formatCantidad, toUserMessage, NOMBRE_DTE, construirXmlDte, desdeRegistro, montosDevolucion,
   validarCantidad, type RegistroDte, type TipoDte,
 } from '@rutaahorro/core';
 import { Modal } from '@/components/Modal';
@@ -23,8 +23,16 @@ export function nombreDocumento(d: { tipo: number; folio: number | string }): st
  * armada desde lo que quedó registrado en la base, con su timbre PDF417.
  * Es lo que se reimprime o se le manda al cliente que pide su boleta después.
  */
-export function DocumentoTributario({ doc, onCerrar }: { doc: RegistroDte; onCerrar: () => void }) {
+export function DocumentoTributario({ doc, onCerrar, pdfUrl }: {
+  doc: RegistroDte;
+  onCerrar: () => void;
+  /** El PDF que entregó el SII (factura emitida por el portal, 0026). */
+  pdfUrl?: string | null;
+}) {
   const simulado = doc.ambiente === 'simulacion';
+  // Emitida por el portal del SII: el timbre válido está en el PDF del SII.
+  // Dibujar uno acá sería inventar una firma que no es la del documento.
+  const delPortal = (doc.emisor as { via?: string }).via === 'portal_sii';
 
   function descargarXml() {
     const xml = construirXmlDte(desdeRegistro(doc));
@@ -58,6 +66,12 @@ export function DocumentoTributario({ doc, onCerrar }: { doc: RegistroDte; onCer
           {doc.receptor?.rut && (
             <p>Cliente: {doc.receptor.razon_social} · RUT {doc.receptor.rut}</p>
           )}
+          {doc.receptor?.giro && <p className="text-[11px]">Giro: {doc.receptor.giro}</p>}
+          {doc.receptor?.direccion && (
+            <p className="text-[11px]">
+              {doc.receptor.direccion}{(doc.receptor as { comuna?: string }).comuna ? `, ${(doc.receptor as { comuna?: string }).comuna}` : ''}
+            </p>
+          )}
           {doc.referencia && (
             <p className="text-[11px]">
               Referencia: {NOMBRE_DTE[Number(doc.referencia.tipo) as TipoDte] ?? `Tipo ${doc.referencia.tipo}`} N° {doc.referencia.folio}
@@ -67,7 +81,7 @@ export function DocumentoTributario({ doc, onCerrar }: { doc: RegistroDte; onCer
           <div className="border-t border-dashed border-black my-2" />
           {doc.detalle.map((l, i) => (
             <div key={i} className="flex justify-between gap-2">
-              <span className="truncate">{Number(l.cantidad) !== 1 || l.nombre !== 'Descuento' ? `${l.cantidad} x ` : ''}{l.nombre}</span>
+              <span className="truncate">{Number(l.cantidad) !== 1 || l.nombre !== 'Descuento' ? `${formatCantidad(Number(l.cantidad))} x ` : ''}{l.nombre}</span>
               <span className="shrink-0">{formatCLP(Number(l.monto))}</span>
             </div>
           ))}
@@ -80,16 +94,29 @@ export function DocumentoTributario({ doc, onCerrar }: { doc: RegistroDte; onCer
           <div className="flex justify-between font-bold text-[14px] mt-1">
             <span>TOTAL</span><span>{formatCLP(doc.total)}</span>
           </div>
-          <Timbre dte={doc} />
+          {delPortal
+            ? <p className="text-center text-[11px] mt-2">Timbre electrónico SII: ver el PDF del documento</p>
+            : <Timbre dte={doc} />}
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <button onClick={() => window.print()} className="tap rounded-xl border border-[var(--borde)] font-medium">
             Imprimir
           </button>
-          <button onClick={descargarXml} className="tap rounded-xl border border-[var(--borde)] font-medium">
-            Descargar XML
-          </button>
+          {delPortal ? (
+            pdfUrl
+              ? <a href={pdfUrl} target="_blank" rel="noreferrer"
+                   className="tap inline-flex items-center justify-center rounded-xl border border-[var(--borde)] font-medium">
+                  PDF del SII
+                </a>
+              : <span className="tap inline-flex items-center justify-center text-xs text-[var(--texto-suave)] text-center">
+                  El PDF no se pudo bajar: está en el portal del SII
+                </span>
+          ) : (
+            <button onClick={descargarXml} className="tap rounded-xl border border-[var(--borde)] font-medium">
+              Descargar XML
+            </button>
+          )}
         </div>
         {simulado && (
           <p className="text-xs text-[var(--texto-suave)]">
