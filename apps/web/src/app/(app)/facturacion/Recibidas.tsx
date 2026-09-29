@@ -107,6 +107,13 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { void repoProveedores().listar().then(setProveedores).catch(() => {}); }, []);
+  // La lista llega después de abrir: un RUT escrito antes no se reconocía
+  // nunca (lo encontró tools/ui/facturacion.mjs). Se busca de nuevo al llegar.
+  useEffect(() => {
+    if (supplierId || !isValidRut(rut)) return;
+    const p = proveedores.find((x) => soloRut(x.rut) === soloRut(rut));
+    if (p) { setSupplierId(p.id); setRazon((r) => r || p.nombre); }
+  }, [proveedores]); // eslint-disable-line react-hooks/exhaustive-deps -- solo cuando llega la lista
 
   const vNeto = validarMonto(neto, { etiqueta: 'neto', permiteVacio: true });
   const vExento = validarMonto(exento, { etiqueta: 'exento', permiteVacio: true });

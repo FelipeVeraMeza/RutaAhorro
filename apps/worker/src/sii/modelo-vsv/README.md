@@ -28,3 +28,22 @@ portal del SII cambia y VSV lo arregla, se compara contra esta copia.
 | Guarda en `documentos_emitidos` y crea la empresa en el CRM | `fn_sii_registrar_emision` crea el `dte_documentos` con el folio del SII y marca la factura emitida | El receptor ya quedó como cliente al facturar (0026) |
 | Envía el correo al cliente y registra la cobranza | No se hace todavía | No hay correo propio (T-50) ni cobranza en RutaAhorro |
 | RUT de VSV escrito como valor por omisión | Sin valores por omisión: todo sale de la base | Es otro contribuyente |
+| URL del SII escritas en el código | `portal.ts` recibe `portal: { sii, misii }` opcional; por omisión, el SII real. No se lee de una variable de entorno | Para probarlo contra `test/portal-simulado.ts` sin que una variable mal puesta en Railway mande las claves a otro sitio |
+
+## Lo que NO viene de VSV y sigue siendo un supuesto (2026-09-28)
+
+`test/portal.test.ts` hace pasar el robot por un portal simulado con los mismos
+`name` e `id` (4 casos: emite con dos líneas, no firma si el total no cuadra,
+avisa si el error es después de firmar, se detiene si la empresa no está). Eso
+prueba la lógica del robot, **no** que el SII real sea así. VSV nunca hizo esto,
+así que hasta la primera emisión real (B-04, B-05) son supuestos:
+
+- **El botón para agregar la 2ª línea.** VSV emite siempre una (`EFXP_NMB_01`).
+  El robot busca un botón que diga "agregar línea" o "agregar detalle".
+- **Los campos de totales** que se leen antes de firmar (`MNT_NETO`, `IVA`,
+  `MNT_TOTAL` en el `name` o el `id`). VSV no los lee.
+- **Que el portal redondee el IVA** como `ivaDeNeto` de core.
+
+Si alguno falla, el robot **no firma**: se detiene con "El portal no mostró la
+línea 2" o "No se pudo leer el total" y dice en qué página quedó. La primera
+emisión real hay que hacerla mirando, con una factura de una línea.

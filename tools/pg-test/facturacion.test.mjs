@@ -69,6 +69,27 @@ test('el doble toque no emite dos facturas ni descuenta dos veces', async () => 
   assert.equal(await L.stock(pan), 8);
 });
 
+// 0027. En un DTE 33 el IVA es neto × 19 % redondeado (el portal del SII lo
+// calcula así): un total de $22 no existe. Antes el IVA se extraía del total,
+// como en la boleta, y 1 de cada 6 facturas nunca habría pasado por el portal.
+test('el IVA de la factura sale del neto, como lo calcula el SII', async () => {
+  const L = await nuevoLocal(banco);
+  const adm = await banco.como(L.admin);
+  const f = await rpc(adm, 'fn_emitir_factura_manual', factura([{ nombre: 'Flete', cantidad: 1, precio: 22 }]));
+  assert.deepEqual([f.neto, f.iva, f.total], [18, 3, 21]);
+  assert.equal(f.dte.total, 21, 'el documento dice lo mismo que la factura');
+  for (let k = 0; k < 25; k++) {
+    const precio = 1 + ((k * 7919) % 30000);
+    const g = await rpc(adm, 'fn_emitir_factura_manual', factura([
+      { nombre: 'A', cantidad: 1 + (k % 4), precio }, { nombre: 'B', cantidad: 1, precio: 97 + k }]));
+    assert.equal(g.iva, Math.round(g.neto * 0.19), `precio ${precio}`);
+    assert.equal(g.neto + g.iva, g.total);
+  }
+  // La nota de crédito total devuelve exactamente lo facturado.
+  const nc = await rpc(adm, 'fn_nota_credito_factura', { p_factura: f.id, p_items: null, p_motivo: 'Error' });
+  assert.equal(nc.monto, 21);
+});
+
 test('solo admin y supervisor facturan', async () => {
   const L = await nuevoLocal(banco);
   const pan = await L.producto({ nombre: 'Pan', precio: 1000, stock: 10 });

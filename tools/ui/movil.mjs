@@ -39,7 +39,8 @@ async function credenciales(alias) {
 
 const RUTAS = {
   admin: ['/', '/pos', '/caja', '/precio', '/productos', '/productos/importar', '/productos/etiquetas',
-    '/inventario', '/proveedores', '/proveedores/recepcion', '/ventas', '/reportes', '/usuarios', '/configuracion'],
+    '/inventario', '/proveedores', '/proveedores/recepcion', '/ventas', '/reportes', '/usuarios', '/configuracion',
+    '/facturacion'],
   // Ventas no es del vendedor: lo manda a Inicio, con solo sus ventas (CP-09).
   cajero: ['/', '/pos', '/caja', '/precio', '/productos'],
 };

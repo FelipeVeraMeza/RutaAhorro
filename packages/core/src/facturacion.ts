@@ -4,10 +4,18 @@
  *
  * La base es la autoridad (`fn_emitir_factura_manual`): esto existe para que
  * quien factura vea el total, el neto y el IVA mientras escribe, y hace la
- * misma cuenta que ella (`desglosarImpuestos` = `fn_desglose_lineas`).
+ * misma cuenta que ella (`fn_desglose_factura`, 0027).
  *
  * Los precios incluyen IVA, como todo el sistema (regla 7). Para quien piensa
  * en neto (un flete que se cotizó "más IVA"), `precioConIva` lo convierte.
+ *
+ * Pero una factura NO se calcula como una boleta. En un DTE 33 el IVA es el
+ * neto (entero) por la tasa, redondeado, y el total es neto + IVA; el portal
+ * del SII lo calcula así y no deja escribirlo. Como el neto es entero, hay
+ * totales que ninguna factura puede tener: $22 con IVA es neto 18 → $21, o
+ * neto 19 → $23. Pasa con 1 de cada 6 totales. Por eso el neto sale de la suma
+ * con IVA (como siempre) y el IVA sale del neto; el total puede quedar $1 por
+ * debajo o por encima de la suma de las líneas, y la pantalla lo dice (`ajuste`).
  */
 import { clp } from './money.js';
 import { desglosarImpuestos, type Desglose } from './impuestos.js';
@@ -32,6 +40,13 @@ export function montoLinea(l: LineaFactura): number {
 export interface ResumenFactura extends Desglose {
   /** Líneas que no se pueden emitir, con el motivo, en el orden en que están. */
   errores: string[];
+  /** Total − suma de las líneas con IVA: −1, 0 o +1 (ver arriba). */
+  ajuste: number;
+}
+
+/** El IVA de un DTE: neto × tasa, redondeado. Nunca extraído del total. */
+export function ivaDeNeto(neto: number, ivaPct = 19): number {
+  return clp((neto * ivaPct) / 100);
 }
 
 /** Neto, IVA, adicionales y total de la factura, y qué le falta para emitirse. */
@@ -50,8 +65,10 @@ export function resumenFactura(lineas: readonly LineaFactura[], ivaPct = 19): Re
     lineas.map((l) => ({ subtotal: Math.max(montoLinea(l), 0), tasaAdicional: l.tasaAdicional, nombreAdicional: l.nombreAdicional })),
     ivaPct,
   );
-  if (lineas.length > 0 && d.total <= 0) errores.push('La factura no puede quedar en $0');
-  return { ...d, errores };
+  const iva = ivaDeNeto(d.neto, ivaPct);
+  const total = d.neto + iva + d.totalAdicionales;
+  if (lineas.length > 0 && total <= 0) errores.push('La factura no puede quedar en $0');
+  return { ...d, iva, total, ajuste: total - d.total, errores };
 }
 
 /** Un precio neto llevado a precio con IVA (y adicional), en pesos enteros. */
@@ -101,8 +118,11 @@ function decimal6(n: number): string {
  * precio de cada unidad es ese neto dividido por la cantidad, con hasta 6
  * decimales. Así la suma del portal da el mismo neto que la base.
  *
- * El robot NO firma si el total que calcula el portal no es `total`: un peso
- * de diferencia en un documento tributario es un documento distinto.
+ * La suma de las líneas con IVA puede diferir en $1 del total (el `ajuste` de
+ * `resumenFactura`): se reparte el neto, no el total. Lo que sí se exige es
+ * que `iva` sea el que calculará el portal; si no, no se abre el navegador.
+ * Y el robot NO firma si el total que calcula el portal no es `total`: un
+ * peso de diferencia en un documento tributario es un documento distinto.
  *
  * Una factura con impuesto adicional (IABA, ILA) no se emite por el portal
  * todavía: hay que elegir el código del impuesto en cada línea y ese campo no
@@ -111,9 +131,9 @@ function decimal6(n: number): string {
 export function planFacturaPortal(lineas: readonly LineaParaPortal[], neto: number, iva: number, total: number): PlanPortal {
   if (lineas.length === 0 || lineas.length > 60) throw new Error('PORTAL_LINEAS_FUERA_DE_RANGO');
   if (lineas.some((l) => (l.tasa ?? 0) > 0)) throw new Error('PORTAL_SIN_IMPUESTO_ADICIONAL');
-  if (neto + iva !== total) throw new Error('PORTAL_MONTOS_NO_CUADRAN');
+  if (neto + iva !== total || iva !== ivaDeNeto(neto)) throw new Error('PORTAL_MONTOS_NO_CUADRAN');
   const suma = lineas.reduce((s, l) => s + l.monto, 0);
-  if (suma !== total) throw new Error('PORTAL_MONTOS_NO_CUADRAN');
+  if (suma <= 0 || Math.abs(suma - total) > 1) throw new Error('PORTAL_MONTOS_NO_CUADRAN');
 
   const netos = lineas.map((l) => (suma > 0 ? Math.floor((neto * l.monto) / suma) : 0));
   const sobra = neto - netos.reduce((s, n) => s + n, 0);

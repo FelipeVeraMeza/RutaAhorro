@@ -87,6 +87,7 @@ export function NuevaFactura({ usuarioId, base, onEmitida }: {
   const [emitiendo, setEmitiendo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [intentado, setIntentado] = useState(false);
+  const [verDatosReceptor, setVerDatosReceptor] = useState(false);
   const listo = useRef(false);
 
   // Al abrir: la base elegida, o el borrador de esta pestaña.
@@ -170,6 +171,19 @@ export function NuevaFactura({ usuarioId, base, onEmitida }: {
     const c = clientes.find((x) => soloRut(x.rut) === soloRut(texto));
     if (c) elegirCliente(c);
   }
+  // La lista de clientes llega después de abrir el formulario. Un RUT escrito
+  // antes (usuario rápido, celular lento, borrador, "usar como base") no se
+  // reconocía nunca: se busca de nuevo cuando llega. Solo completa lo vacío.
+  useEffect(() => {
+    if (clienteId || !isValidRut(receptor.rut)) return;
+    const c = clientes.find((x) => soloRut(x.rut) === soloRut(receptor.rut));
+    if (!c) return;
+    setClienteId(c.id);
+    setReceptor((r) => ({
+      ...r, razon_social: r.razon_social || c.nombre, giro: r.giro || (c.giro ?? ''),
+      direccion: r.direccion || (c.direccion ?? ''), comuna: r.comuna || (c.comuna ?? ''), correo: r.correo || (c.email ?? ''),
+    }));
+  }, [clientes]); // eslint-disable-line react-hooks/exhaustive-deps -- solo cuando llega la lista
   const [busquedaCliente, setBusquedaCliente] = useState('');
   const sugerencias = useMemo(() => {
     const q = busquedaCliente.trim().toLowerCase();
@@ -279,6 +293,22 @@ export function NuevaFactura({ usuarioId, base, onEmitida }: {
                          onBlur={() => isValidRut(receptor.rut) && setReceptor((x) => ({ ...x, rut: formatRut(x.rut) }))}
                          placeholder="76.086.428-5" className={campoTexto} />}
         </Campo>
+        {/* Pedido de Felipe (29-09): al poner el RUT de un cliente guardado, que se vea
+            altiro a quién se le factura, no un formulario lleno. Los campos quedan
+            plegados; se abren solos si al cliente le falta algo que el SII exige. */}
+        {clienteId && (
+          <div data-receptor className="rounded-xl border border-marca-500 bg-marca-50 p-3 text-marca-900">
+            <p className="text-xs">Se factura a</p>
+            <p className="font-semibold">{receptor.razon_social || 'Sin razón social'}</p>
+            <p className="text-sm">RUT {formatRut(receptor.rut)}{receptor.giro ? ` · ${receptor.giro}` : ''}</p>
+            <p className="text-sm">{[receptor.direccion, receptor.comuna, receptor.ciudad].filter(Boolean).join(', ')}</p>
+            {receptor.correo && <p className="text-sm">{receptor.correo}</p>}
+            {!verDatosReceptor && erroresReceptor.length === 0 && (
+              <button onClick={() => setVerDatosReceptor(true)} className="tap -mb-2 text-sm underline">Corregir datos</button>
+            )}
+          </div>
+        )}
+        {(!clienteId || verDatosReceptor || erroresReceptor.length > 0) && (<>
         <Campo etiqueta="Razón social" obligatorio>{(p) => <input {...p} {...r('razon_social')} className={campoTexto} />}</Campo>
         <Campo etiqueta="Giro" obligatorio>{(p) => <input {...p} {...r('giro')} className={campoTexto} />}</Campo>
         <Campo etiqueta="Dirección" obligatorio>{(p) => <input {...p} {...r('direccion')} className={campoTexto} />}</Campo>
@@ -289,6 +319,7 @@ export function NuevaFactura({ usuarioId, base, onEmitida }: {
         <Campo etiqueta="Correo" ayuda="Para mandarle la factura">
           {(p) => <input {...p} type="email" inputMode="email" {...r('correo')} className={campoTexto} />}
         </Campo>
+        </>)}
       </section>
 
       {/* ------------------------------------------------ detalle */}
@@ -402,6 +433,7 @@ export function NuevaFactura({ usuarioId, base, onEmitida }: {
             <span>Neto {formatCLP(resumen.neto)}</span>
             <span>IVA {formatCLP(resumen.iva)}</span>
             {resumen.totalAdicionales > 0 && <span>Adic. {formatCLP(resumen.totalAdicionales)}</span>}
+            {resumen.ajuste !== 0 && <span data-ajuste>Ajuste IVA {resumen.ajuste > 0 ? '+' : '−'}{formatCLP(Math.abs(resumen.ajuste))}</span>}
           </div>
           <div className="flex items-center gap-3 mt-1">
             <p className="num text-2xl font-bold flex-1">{formatCLP(resumen.total)}</p>
@@ -423,6 +455,12 @@ export function NuevaFactura({ usuarioId, base, onEmitida }: {
               A <strong>{receptor.razon_social}</strong> (RUT {formatRut(receptor.rut)}) por{' '}
               <strong className="num">{formatCLP(resumen.total)}</strong>, {formaPago === 'credito' ? 'a crédito' : 'al contado'}.
             </p>
+            {resumen.ajuste !== 0 && (
+              <p className="text-[var(--texto-suave)]">
+                Son {formatCLP(Math.abs(resumen.ajuste))} {resumen.ajuste > 0 ? 'más' : 'menos'} que la suma de las líneas:
+                en una factura el IVA se calcula sobre el neto, como lo hace el SII.
+              </p>
+            )}
             {deCatalogo.length > 0 && (
               <p>Descuenta del stock: {deCatalogo.map((c) => `${formatCantidad(c.cant.valor)} ${c.l.nombre}`).join(', ')}.</p>
             )}

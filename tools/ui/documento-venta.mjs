@@ -203,7 +203,10 @@ await Promise.all([a.waitForURL((x) => !x.pathname.startsWith('/login')), a.clic
 
 console.log('M5-23 · El historial de ventas dice qué documento fue cada una');
 await a.goto(`${BASE}/ventas`);
-await a.waitForTimeout(3000);
+// Se espera a la lista, no un tiempo fijo: con 3 s fijos falló una vez
+// (2026-09-29) porque la lista todavía decía "Cargando…".
+await a.getByText(/Folio/).first().waitFor({ timeout: 20000 }).catch(() => {});
+await a.waitForTimeout(500);
 const historial = await a.locator('main').innerText();
 ok('M5-23', /Factura/.test(historial) && /Voucher/.test(historial) && /Boleta/.test(historial),
   'Ventas muestra boleta, factura y voucher',

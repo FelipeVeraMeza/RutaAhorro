@@ -37,7 +37,28 @@ describe('resumenFactura', () => {
   it('con impuesto adicional, el desglose lo separa', () => {
     const r = resumenFactura([{ nombre: 'Bebida', cantidad: 1, precio: 1370, tasaAdicional: 18, nombreAdicional: 'IABA 18%' }]);
     expect(r.totalAdicionales).toBeGreaterThan(0);
-    expect(r.neto + r.iva + r.totalAdicionales).toBe(1370);
+    expect(r.neto + r.iva + r.totalAdicionales).toBe(r.total);
+    expect(r.iva).toBe(Math.round(r.neto * 0.19));
+  });
+
+  // El portal del SII (y cualquier DTE 33) calcula el IVA desde un neto
+  // entero. Un total de $22 no existe en una factura: neto 18 → $21, neto 19 → $23.
+  it('el IVA sale del neto, como en el SII: $22 con IVA se factura en $21', () => {
+    const r = resumenFactura([{ nombre: 'Flete', cantidad: 1, precio: 22 }]);
+    expect([r.neto, r.iva, r.total, r.ajuste]).toEqual([18, 3, 21, -1]);
+  });
+
+  it('para cualquier total, IVA = neto × 19 % redondeado, y el ajuste es de a lo más $1', () => {
+    let ajustados = 0;
+    for (let precio = 1; precio <= 20000; precio++) {
+      const r = resumenFactura([{ nombre: 'X', cantidad: 1, precio }]);
+      expect(r.iva).toBe(Math.round(r.neto * 0.19));
+      expect(r.neto + r.iva).toBe(r.total);
+      expect(r.total - precio).toBe(r.ajuste);
+      expect(Math.abs(r.ajuste)).toBeLessThanOrEqual(1);
+      if (r.ajuste) ajustados++;
+    }
+    expect(ajustados).toBeGreaterThan(0);
   });
 });
 
@@ -81,10 +102,21 @@ describe('planFacturaPortal', () => {
     }
   });
 
+  it('una factura con ajuste del IVA también se puede emitir, y el portal llega a su total', () => {
+    const r = resumenFactura([{ nombre: 'Flete', cantidad: 1, precio: 22 }, { nombre: 'Pan', cantidad: 3, precio: 1000 }]);
+    const plan = planFacturaPortal(
+      [{ nombre: 'Flete', cantidad: 1, monto: 22 }, { nombre: 'Pan', cantidad: 3, monto: 3000 }], r.neto, r.iva, r.total);
+    const neto = plan.lineas.reduce((s, l) => s + Math.round(Number(l.cantidad) * Number(l.precioNeto)), 0);
+    expect(neto + Math.round(neto * 0.19)).toBe(r.total);
+  });
+
   it('no arma el plan de una factura con impuesto adicional ni con montos que no cuadran', () => {
     expect(() => planFacturaPortal([{ nombre: 'Bebida', cantidad: 1, monto: 1370, tasa: 18 }], 1000, 190, 1370))
       .toThrow('PORTAL_SIN_IMPUESTO_ADICIONAL');
     expect(() => planFacturaPortal([{ nombre: 'Pan', cantidad: 1, monto: 1000 }], 840, 159, 1000))
+      .toThrow('PORTAL_MONTOS_NO_CUADRAN');
+    // Cuadra la suma, pero el portal calcularía 160 de IVA: no se manda.
+    expect(() => planFacturaPortal([{ nombre: 'Pan', cantidad: 1, monto: 999 }], 840, 159, 999))
       .toThrow('PORTAL_MONTOS_NO_CUADRAN');
   });
 });

@@ -4,13 +4,74 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-09-28 (noche).**
+> **Corte: 2026-09-29.**
 
 ---
 
-## CÓMO SEGUIR — corte 2026-09-28, léelo antes que todo
+## CÓMO SEGUIR — corte 2026-09-29, léelo antes que todo
 
-**2026-09-28 (noche, 2º corte) · Parte 2 Facturación: CÓDIGO HECHO, SIN
+**2026-09-29 (3er corte) · Parte 2 Facturación: RECORRIDA, APLICADA EN
+SUPABASE Y SUBIDA.** Se cerró la lista del 2º corte (abajo). 0026 y **0027**
+aplicadas (37 funciones expuestas, RLS completo). Estado verificado: 406
+pruebas de lógica · 4 del robot · db:test 156 (+1 T-45) con reinstalación ·
+recorridos en local: m1 20/20, m5 24/24, m6 13/13, documento-venta 19/19,
+documentos 19/19, ofertas 20/20, ofertas-masivas 21/21, clientes 14/14,
+combos 10/10, bodega-sala, flujo-completo 54/54, **facturacion 32/32**, móvil
+(todas, con `/facturacion`) · build de producción limpio.
+
+Lo que destapó el recorrido y las pruebas (todo visto fallar antes de arreglar):
+- **Defecto de diseño de 0026, grave para el robot: el IVA de la factura.**
+  0026 calculaba la factura como una boleta (IVA extraído del total). En un
+  DTE 33 el IVA es `round(neto × 19 %)` con neto entero, y el portal lo calcula
+  así: **1 de cada 6 totales no existe en una factura** ($22 → $21 o $23; medido
+  en 2 millones). El robot se habría negado a firmar esas facturas para siempre.
+  **0027** (`fn_desglose_factura`): el neto sale de la suma, el IVA del neto; el
+  total puede quedar $1 sobre o bajo la suma de las líneas y la pantalla lo avisa
+  ("Ajuste IVA", y en la confirmación). `ivaDeNeto` y `ajuste` en core;
+  `planFacturaPortal` exige que el IVA sea el que calculará el portal.
+- **Robot: `__name is not defined`.** Con `tsx` (`npm run dev`/`job`), esbuild
+  envuelve funciones con nombre dentro de `page.evaluate` y el robot se caía al
+  elegir empresa y al leer totales. Arreglado; comentario en `portal.ts`.
+- **Carrera del RUT** (misma familia que la del POS): en Nueva factura y en
+  Recibidas, un RUT escrito antes de que bajara la lista de clientes/proveedores
+  no se reconocía nunca. Ahora se busca de nuevo al llegar (solo completa lo vacío).
+- **Pedido de Felipe (29-09):** con el RUT de un cliente guardado aparece
+  altiro la tarjeta "Se factura a" (razón social, RUT, giro, dirección) y los
+  campos quedan plegados detrás de "Corregir datos"; se abren solos si falta
+  algo que el SII exige.
+- Inicio: "Ver todos" medía 16 px (solo aparece con muchas alertas). 44 px.
+- `documento-venta` esperaba 3 s fijos a `/ventas`; ahora espera la lista.
+- Edge no arranca bajo puppeteer ("Code: 0"); la prueba del robot usa Chrome.
+
+**Robot del SII:** URL configurables solo por opción (`portal: {sii, misii}`),
+nunca por variable de entorno. `apps/worker/test/portal.test.ts` contra un
+portal simulado (4/4, entra en `npm test`): emite con dos líneas, folio y PDF;
+**no firma** si el total no cuadra (visto fallar quitando esa comparación);
+error después de firmar = "puede estar emitida"; empresa ausente = se detiene.
+**Supuestos hasta el portal real** (VSV nunca los usó): el botón de la 2ª línea
+y los `name` de los totales. Felipe pegó la pantalla real del portal (29-09):
+confirma que muestra "Monto Neto", "IVA 19 %", "Total", "% Desc." por línea,
+"Descuento Global", "Tipo de Compra" y datos de transporte, pero **no los
+`name`**. La primera emisión real: una línea, mirando.
+
+**Pendiente, en orden:**
+1. Recorridos contra Railway con el código nuevo (movil.mjs solo).
+2. **Decisión de Felipe:** con la emisión real encendida, **la factura del POS
+   sigue saliendo simulada** (`fn_emitir_dte_venta` no pasa por la cola). O el
+   POS deja de ofrecer factura y manda a Facturación, o la encola. Además usa
+   el IVA extraído (el problema de 0027).
+3. **Precaución del robot:** el SII completa razón social, dirección y giro
+   desde su registro al validar el RUT (VSV lo lee, `portal.ts` no). Leerlos y
+   no firmar si el SII no reconoció el RUT; guardar lo que el SII puso.
+4. Nota de crédito parcial: su IVA se extrae (no `round(neto × 19 %)`). Da igual
+   mientras sea simulada; importa cuando el robot emita notas.
+5. Campos del portal que la factura manual no tiene: tipo de compra (hoy "Del
+   giro" implícito), descuento global, referencias (OC, guía), transporte.
+   Preguntar al cliente cuáles usa antes de agregarlos.
+6. Exportar el resumen a Excel: sin recorrido.
+7. Worker en Railway con Chromium: documentado (docs/09 §3.4), **no probado**.
+
+**2026-09-28 (noche, 2º corte) · [CERRADO en el 3er corte] Parte 2 Facturación: CÓDIGO HECHO, SIN
 RECORRIDO, SIN APLICAR, SIN SUBIR.** Dos commits locales encima de `c6e002c`
 (ese sí está en Railway): (1) arreglo de la carrera del carrito del POS,
 (2) facturación. **No hacer push hasta cerrar la lista de abajo**: la web

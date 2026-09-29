@@ -167,7 +167,7 @@ export default async function DashboardPage() {
           {masPorVencer > 0 && (
             <p className="text-xs text-[var(--texto-suave)] mt-2">
               Y {masPorVencer} {masPorVencer === 1 ? 'lote más' : 'lotes más'}.{' '}
-              <Link href="/inventario" className="underline">Ver todos</Link>
+              <Link href="/inventario" className="underline inline-flex items-center min-h-[44px] px-1 -my-3">Ver todos</Link>
             </p>
           )}
         </section>
@@ -190,7 +190,7 @@ export default async function DashboardPage() {
           {masBajoStock > 0 && (
             <p className="text-xs text-[var(--texto-suave)] mt-2">
               Y {masBajoStock} {masBajoStock === 1 ? 'producto más' : 'productos más'}.{' '}
-              <Link href="/inventario" className="underline">Ver todos</Link>
+              <Link href="/inventario" className="underline inline-flex items-center min-h-[44px] px-1 -my-3">Ver todos</Link>
             </p>
           )}
         </section>

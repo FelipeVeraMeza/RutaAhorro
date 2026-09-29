@@ -159,6 +159,7 @@ archivo funciona con cualquiera, y además con nvm/fnm en local.
 | `NEXT_PUBLIC_APP_ENV` | `production` | |
 | `NEXT_PUBLIC_APP_URL` | `https://<dominio>` | Se carga después de generar el dominio (§3.3) |
 | `TZ` | `America/Santiago` | |
+| `SII_CLAVE_CIFRADO` | 32 bytes en base64 | **Secreta.** Solo servidor. Cifra las claves del SII que el administrador guarda en Facturación → Emisor SII. La **misma** llave va en el worker (§3.4). Sin ella, guardar las credenciales responde 500 `SIN_CONFIGURAR`; el resto de Facturación funciona |
 
 **Sobre `SUPABASE_SECRET_KEY` donde corre el frontend.** ADR-003 y la versión
 anterior de este documento decían que la llave de servicio no debía estar ahí.
@@ -239,6 +240,38 @@ de por medio la señal no llega confiable y un trabajo puede quedar marcado como
 `running` para siempre.
 
 Todo endpoint distinto de `/health` exige la cabecera `X-Worker-Secret`.
+
+#### Emisión real de facturas en el portal del SII (0026)
+
+El trabajo `facturas-sii` corre cada minuto y emite, una por una, las facturas
+que quedaron "en cola para el SII" (robot en `apps/worker/src/sii/portal.ts`).
+**Está apagado y debe seguir apagado hasta que el cliente entregue su clave
+tributaria y la de su certificado (B-04, B-05).** Se enciende solo si están las
+tres llaves:
+
+| Llave | Dónde | Valor |
+|---|---|---|
+| `SII_CLAVE_CIFRADO` | worker **y** web | La misma en los dos: la web cifra con ella las claves al guardarlas, el worker las descifra. 32 bytes en base64: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Si se cambia, las credenciales guardadas ya no se descifran: hay que volver a guardarlas |
+| `CHROME_PATH` | worker | Ruta del Chromium **del contenedor** (el worker usa `puppeteer-core`, que no baja Chrome) |
+| "Emitir en el SII" | Facturación → Emisor SII | Lo enciende el administrador, con las credenciales ya guardadas |
+
+Si falta cualquiera, no se emite nada y las facturas se siguen emitiendo en
+modo simulado.
+
+**Chromium en el contenedor del worker.** Hay que instalarlo en la imagen y
+apuntar `CHROME_PATH` a él. Con el constructor de Railway se hace con una
+variable del servicio: `RAILPACK_DEPLOY_APT_PACKAGES=chromium` (Railpack) o
+`NIXPACKS_APT_PKGS=chromium` (Nixpacks), y `CHROME_PATH=/usr/bin/chromium`.
+**Esto no se ha probado en Railway**: al desplegar el worker, confirmar la ruta
+con la consola del servicio (`which chromium`) antes de encender la emisión. El
+robot arranca Chromium con `--no-sandbox`, que es lo que necesita un contenedor
+sin usuario privilegiado.
+
+**Antes de la primera emisión real**, correr la prueba del robot contra el
+portal simulado (`npm test -w @rutaahorro/worker`, 4 casos) y leer
+`apps/worker/src/sii/modelo-vsv/README.md` § "Lo que NO viene de VSV": el botón
+de la segunda línea y los campos de totales son supuestos hasta que se vean en
+el portal real. La primera factura real se emite mirando, con una sola línea.
 
 ---
 

@@ -7,8 +7,9 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit",
-    "job": "tsx src/cli.ts"
+    "typecheck": "tsc --noEmit && tsc -p test/tsconfig.json",
+    "job": "tsx src/cli.ts",
+    "test": "node --import tsx --test --test-concurrency=1 test/portal.test.ts"
   },
   "dependencies": {
     "@rutaahorro/core": "*",

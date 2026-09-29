@@ -45,8 +45,21 @@ export interface ResultadoPortal {
  */
 export class ErrorDespuesDeFirmar extends Error {}
 
-const URL_EMISION = 'https://www1.sii.cl/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=33&TIPO=4';
-const URL_SALIR = 'https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout';
+/**
+ * Dónde está el portal. Por omisión, el SII de verdad. La prueba del robot
+ * (`test/portal.test.ts`) lo apunta a un portal simulado local; el worker no
+ * lo cambia nunca, y a propósito no se lee de una variable de entorno: una
+ * variable mal puesta en Railway mandaría las claves del cliente a otro sitio.
+ */
+export interface UrlsPortal { sii: string; misii: string }
+const PORTAL_REAL: UrlsPortal = { sii: 'https://www1.sii.cl', misii: 'https://misiir.sii.cl' };
+const rutas = (u: UrlsPortal) => ({
+  emision: `${u.sii}/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=33&TIPO=4`,
+  salir: `${u.misii}/cgi_misii/siu/cgi_misii_logout`,
+  emitidos: `${u.sii}/cgi-bin/Portal001/mipeAdminDocsEmi.cgi`,
+  pdf: `${u.sii}/cgi-bin/Portal001/mipeDisplayPDF.cgi`,
+});
+type Rutas = ReturnType<typeof rutas>;
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const dos = (n: number) => String(n).padStart(2, '0');
 
@@ -83,17 +96,18 @@ async function dondeQuedo(page: Page): Promise<string> {
 
 async function elegirEmpresa(page: Page, rutEmpresa: string) {
   if (!(await page.$('select[name="RUT_EMP"]'))) return; // una sola empresa
+  // Dentro de page.evaluate no puede haber funciones con nombre (`const f = () =>`):
+  // con tsx (npm run dev / job), esbuild las envuelve en `__name(...)`, que en
+  // el navegador no existe, y el robot se cae. Lo encontró la prueba del portal simulado.
   const r = await page.evaluate((objetivo: string) => {
     const sel = document.querySelector<HTMLSelectElement>('select[name="RUT_EMP"]');
     if (!sel) return { estado: 'sin-select', disponibles: [] as string[] };
-    const cuerpo = (v: string) => {
-      const m = String(v || '').match(/(\d{1,3}(?:\.\d{3}){1,2}|\d{7,8})\s*-?\s*([\dkK])?(?!\d)/);
-      if (m) return m[1].replace(/\D/g, '');
-      const n = String(v || '').replace(/\D/g, '');
-      return n.length > 8 ? n.slice(0, -1) : n;
-    };
     const opciones = Array.from(sel.options);
-    const opt = opciones.find((o) => cuerpo(o.value) === objetivo || cuerpo(o.text) === objetivo);
+    const opt = opciones.find((o) => [o.value, o.text].some((v) => {
+      const m = String(v || '').match(/(\d{1,3}(?:\.\d{3}){1,2}|\d{7,8})\s*-?\s*([\dkK])?(?!\d)/);
+      const n = String(v || '').replace(/\D/g, '');
+      return (m ? m[1].replace(/\D/g, '') : n.length > 8 ? n.slice(0, -1) : n) === objetivo;
+    }));
     const disponibles = opciones.map((o) => o.text).filter(Boolean);
     if (!opt) return { estado: 'no-esta', disponibles };
     sel.selectedIndex = opt.index;
@@ -134,19 +148,18 @@ async function asegurarLinea(page: Page, n: number) {
 
 /** Los montos que el portal calculó, leídos del formulario después de "Validar". */
 async function totalesDelPortal(page: Page): Promise<{ neto: number | null; iva: number | null; total: number | null }> {
-  return page.evaluate(() => {
-    const leer = (patron: RegExp) => {
-      const el = Array.from(document.querySelectorAll<HTMLInputElement>('input'))
-        .find((i) => patron.test(`${i.name} ${i.id}`.toUpperCase()));
-      const n = el ? Number(String(el.value).replace(/[^\d]/g, '')) : NaN;
-      return Number.isFinite(n) && el?.value ? n : null;
-    };
-    return { neto: leer(/MNT_?NETO/), iva: leer(/(^|_)IVA(\b|_)/), total: leer(/MNT_?TOTAL/) };
-  });
+  // Sin funciones con nombre adentro: ver elegirEmpresa.
+  const [neto, iva, total] = await page.evaluate(() => [/MNT_?NETO/, /(^|_)IVA(\b|_)/, /MNT_?TOTAL/].map((patron) => {
+    const el = Array.from(document.querySelectorAll<HTMLInputElement>('input'))
+      .find((i) => patron.test(`${i.name} ${i.id}`.toUpperCase()));
+    const n = el ? Number(String(el.value).replace(/[^\d]/g, '')) : NaN;
+    return Number.isFinite(n) && el?.value ? n : null;
+  }));
+  return { neto, iva, total };
 }
 
-async function bajarPdf(page: Page, folio: number): Promise<Uint8Array | null> {
-  const url = 'https://www1.sii.cl/cgi-bin/Portal001/mipeAdminDocsEmi.cgi'
+async function bajarPdf(page: Page, folio: number, r: Rutas): Promise<Uint8Array | null> {
+  const url = r.emitidos
     + `?RUT_RECP=&FOLIO=${folio}&RZN_SOC=&FEC_DESDE=&FEC_HASTA=&TPO_DOC=&ESTADO=&ORDEN=&NUM_PAG=1`;
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
   const codigo = await page.evaluate((buscado: string) => {
@@ -161,10 +174,10 @@ async function bajarPdf(page: Page, folio: number): Promise<Uint8Array | null> {
   }, String(folio)).catch(() => null);
   if (!codigo) return null;
   const cookies = await page.cookies();
-  const r = await fetch(`https://www1.sii.cl/cgi-bin/Portal001/mipeDisplayPDF.cgi?DHDR_CODIGO=${codigo}`, {
+  const resp = await fetch(`${r.pdf}?DHDR_CODIGO=${codigo}`, {
     headers: { Cookie: cookies.map((c) => `${c.name}=${c.value}`).join('; '), Referer: page.url() },
   });
-  const bytes = new Uint8Array(await r.arrayBuffer());
+  const bytes = new Uint8Array(await resp.arrayBuffer());
   // Un PDF de verdad empieza con "%PDF"; un HTML de error no se guarda.
   const esPdf = bytes.length > 1000 && String.fromCharCode(...bytes.subarray(0, 4)) === '%PDF';
   return esPdf ? bytes : null;
@@ -182,9 +195,10 @@ async function cerrar(browser: Browser | null) {
 export async function emitirEnPortal(
   f: FacturaParaPortal,
   cred: CredencialesSii,
-  opciones: { chromePath: string; headless?: boolean; alPaso?: (texto: string) => void },
+  opciones: { chromePath: string; headless?: boolean; alPaso?: (texto: string) => void; portal?: UrlsPortal },
 ): Promise<ResultadoPortal> {
   const paso = opciones.alPaso ?? (() => {});
+  const url = rutas(opciones.portal ?? PORTAL_REAL);
   const usuario = partirRut(cred.rutUsuario);
   const receptor = partirRut(f.receptor.rut);
   if (!usuario || !receptor) throw new Error('RUT del usuario o del receptor inválido');
@@ -206,7 +220,7 @@ export async function emitirEnPortal(
         // Los avisos del SII bloqueaban los clics en VSV: se aceptan solos.
         page.on('dialog', (d) => { void d.accept().catch(() => {}); });
         page.setDefaultNavigationTimeout(60_000);
-        await page.goto(URL_EMISION, { waitUntil: 'networkidle2', timeout: 45_000 });
+        await page.goto(url.emision, { waitUntil: 'networkidle2', timeout: 45_000 });
         break;
       } catch (e) {
         await cerrar(browser);
@@ -327,7 +341,7 @@ export async function emitirEnPortal(
 
     paso('Bajando el PDF');
     // Que el PDF no baje no invalida la factura: ya está emitida.
-    const pdf = await bajarPdf(p, folio).catch(() => null);
+    const pdf = await bajarPdf(p, folio, url).catch(() => null);
     return { folio, pdf };
   } catch (e) {
     if (firmado) {
@@ -336,7 +350,7 @@ export async function emitirEnPortal(
     }
     throw e;
   } finally {
-    if (page && !page.isClosed()) await page.goto(URL_SALIR, { timeout: 5000 }).catch(() => {});
+    if (page && !page.isClosed()) await page.goto(url.salir, { timeout: 5000 }).catch(() => {});
     await cerrar(browser);
   }
 }
