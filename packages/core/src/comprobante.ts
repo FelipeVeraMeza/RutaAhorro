@@ -13,7 +13,7 @@
  * Cuando exista el DTE, esta misma estructura pasa a ser su representación
  * impresa y se le agrega el timbre. El trabajo no se bota.
  */
-import { clp, formatCLP, taxIncluded } from './money.js';
+import { clp, formatCLP, formatCantidad, taxIncluded } from './money.js';
 import {
   documentoPorOmision, NOMBRE_DOCUMENTO,
   type DocumentoVenta, type OpcionesDocumento,
@@ -222,7 +222,7 @@ export function comprobanteATexto(c: Comprobante, ancho = 32): string {
   out.push(separador);
 
   for (const l of c.lineas) {
-    out.push(fila(`${l.cantidad} x ${l.nombre}`.slice(0, ancho - 9), formatCLP(l.subtotal)));
+    out.push(fila(`${formatCantidad(l.cantidad)} x ${l.nombre}`.slice(0, ancho - 9), formatCLP(l.subtotal)));
     if (l.ahorroOferta) out.push(fila(`   oferta ${formatCLP(l.precioUnitario)} c/u`, 'ahorra ' + formatCLP(l.ahorroOferta)));
     if (l.descuento > 0) out.push(fila(l.combo ? `   combo ${l.combo}`.slice(0, ancho - 10) : '   descuento', '-' + formatCLP(l.descuento)));
   }

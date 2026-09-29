@@ -4,11 +4,45 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-09-26.**
+> **Corte: 2026-09-28 (noche).**
 
 ---
 
 ## CÓMO SEGUIR — corte 2026-09-28, léelo antes que todo
+
+**2026-09-28 (noche) · Parte 1 TERMINADA: el flujo de producto a caja, recorrido
+y en producción.** `tools/ui/flujo-completo.mjs` (53/53) lo hace entero a 360 px:
+crear un pan perecible con 20 en sala, 5 en bodega y su vencimiento → editarlo
+(stock, quién, historial, edición simultánea, "Ajustar stock") → consultador
+"Agregar a la venta" → escribir 12 panes y 0,35 kg de queso → salir y volver sin
+perder la venta → cobrar con boleta → stock, lote FEFO → cierre con faltante.
+
+- **POS:** la cantidad se escribe (entera; hasta 3 decimales solo para kg,
+  gramo, litro y ml, `validarCantidadVenta` en core). El carrito y el cliente
+  se guardan en `sessionStorage` con dueño (regla 18). Las líneas del carrito
+  se refrescan cuando llega el catálogo: **antes, una línea agregada mientras
+  bajaba el catálogo se quedaba sin la oferta para siempre** — era la causa de
+  las 4 fallas de `ofertas.mjs` en Railway, no solo el tiempo fijo del
+  recorrido. El consultador también refresca el producto que muestra.
+- **Consultador:** "Agregar a la venta" con cantidad (admin, supervisor,
+  vendedor; bodega no).
+- **Migración 0025 (aplicada en Supabase):** el producto recién creado dice
+  quién lo creó (antes "sin registro" hasta la primera edición), y la vista
+  `products_public` trae `updated_by`. **Defecto grave de b62fd32 que nunca
+  llegó a producción:** la lista de productos sin costos (vendedor, bodega y
+  los selectores de Configuración, Ofertas, Combos y Clientes) respondía 400.
+  0017 ahora borra la vista antes de recrearla (regla 22).
+- **0024 aplicada en Supabase.** `railway.json` alineado con docs/09.
+- Coma decimal en cantidades (`formatCantidad`): comprobante, lista, formulario.
+- `ofertas-masivas.mjs` contra Railway: 21/21; el corte del 27-09 no se repitió.
+- Pendiente anotado, no hecho: la base acepta 1,5 de un producto por unidad
+  (solo la pantalla lo impide). Cerrarlo es tocar `fn_register_sale` entero.
+
+**Sigue: Parte 2, Facturación.** Felipe confirmó el 28-09: la factura manual
+**descuenta stock** en las líneas de catálogo, y la emisión real va por **el
+robot del portal del SII** copiado de VSV-Contadores (no un proveedor de DTE).
+Pidió copiar el archivo del robot dentro de este repositorio y construir desde
+esa copia.
 
 **Despliegue:** la app está en Railway, en **https://rutaahorroweb-production.up.railway.app**
 (lo desplegó Felipe el 27-09 desde `main`). Los recorridos corren contra ella con

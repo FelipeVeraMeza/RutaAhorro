@@ -1,6 +1,6 @@
 # 24 — Matriz de requerimientos con evidencia
 
-**Generado por `node tools/matriz.mjs` el 2026-09-27.** No se edita a mano:
+**Generado por `node tools/matriz.mjs` el 2026-09-29.** No se edita a mano:
 se regenera. Cruza [03](03-requerimientos-funcionales.md) y [04](04-requerimientos-no-funcionales.md)
 con el [inventario](17-inventario-alcance.md) y con las pruebas.
 
@@ -17,8 +17,8 @@ con el [inventario](17-inventario-alcance.md) y con las pruebas.
 
 | | ✅ | ❌ | ⚠️ | 🔵 | 🟡 | ⬜ | Total |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| Funcionales | 62 | 0 | 39 | 4 | 12 | 17 | 134 |
-| No funcionales | 4 | 0 | 0 | 0 | 0 | 52 | 56 |
+| Funcionales | 65 | 0 | 38 | 3 | 11 | 17 | 134 |
+| No funcionales | 6 | 0 | 0 | 0 | 0 | 50 | 56 |
 
 
 ## Módulo M1
@@ -45,7 +45,7 @@ con el [inventario](17-inventario-alcance.md) y con las pruebas.
 
 | | ID | Requerimiento | Inventario | Evidencia |
 |:-:|---|---|:-:|---|
-| ⚠️ | RF-M2-01 | El sistema debe permitir crear un producto con: nombre, categoría, precio de venta, costo, unidad de medida, stock mínimo. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
+| ✅ | RF-M2-01 | El sistema debe permitir crear un producto con: nombre, categoría, precio de venta, costo, unidad de medida, stock mínimo. | ✅ | recorrido flujo-completo |
 | ✅ | RF-M2-02 | Un producto debe poder tener **uno o más códigos de barra** asociados (el mismo artículo puede venir con distinto código según lote o format | ✅ | codigos.test.ts |
 | ⚠️ | RF-M2-03 | El sistema debe validar que un código de barras no esté asignado a dos productos distintos dentro del mismo local. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
 | 🟡 | RF-M2-04 | El sistema debe permitir crear un producto **escaneando su código**, precargando el código en el formulario. | 🟡 |  |
@@ -53,12 +53,12 @@ con el [inventario](17-inventario-alcance.md) y con las pruebas.
 | ⚠️ | RF-M2-06 | El sistema debe permitir organizar productos en **categorías** (un nivel). | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
 | ⬜ | RF-M2-07 | El sistema debe permitir adjuntar una **imagen** al producto, tomada con la cámara. | ⬜ |  |
 | ⚠️ | RF-M2-08 | El sistema debe permitir **desactivar** un producto sin borrarlo, conservando su historial. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
-| 🔵 | RF-M2-09 | El sistema debe registrar el **historial de cambios de precio** con fecha y usuario. | 🔵 |  |
+| ✅ | RF-M2-09 | El sistema debe registrar el **historial de cambios de precio** con fecha y usuario. | 🔵 | recorrido flujo-completo |
 | ⚠️ | RF-M2-10 | El sistema debe calcular y mostrar el **margen** (precio − costo) y el porcentaje de margen, visible solo para `admin`. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
 | ⚠️ | RF-M2-11 | El sistema debe permitir **carga masiva** de productos desde archivo CSV/Excel con plantilla predefinida. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
 | ⚠️ | RF-M2-12 | La carga masiva debe validar el archivo antes de aplicar y mostrar un informe de errores por fila, sin cargar parcialmente. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
 | ✅ | RF-M2-13 | El sistema debe permitir generar e imprimir **etiquetas con código de barras** para productos sin código de fábrica. | ✅ | etiqueta.test.ts |
-| 🟡 | RF-M2-14 | El sistema debe permitir definir productos vendidos por **peso o fracción** (unidad de medida decimal). | 🟡 |  |
+| ✅ | RF-M2-14 | El sistema debe permitir definir productos vendidos por **peso o fracción** (unidad de medida decimal). | 🟡 | recorrido flujo-completo |
 | ⬜ | RF-M2-15 | El sistema debe permitir duplicar un producto para crear variantes rápidamente. | ⬜ |  |
 
 ## Módulo M3
@@ -81,7 +81,7 @@ con el [inventario](17-inventario-alcance.md) y con las pruebas.
 
 | | ID | Requerimiento | Inventario | Evidencia |
 |:-:|---|---|:-:|---|
-| ✅ | RF-M4-01 | El sistema debe mantener el stock de cada producto **en tiempo real**, reflejando ventas, recepciones y ajustes. | ✅ | concurrencia.test.mjs |
+| ✅ | RF-M4-01 | El sistema debe mantener el stock de cada producto **en tiempo real**, reflejando ventas, recepciones y ajustes. | ✅ | recorrido flujo-completo, concurrencia.test.mjs |
 | ✅ | RF-M4-02 | Todo cambio de stock debe generar un registro inmutable en el **kardex**, con: fecha, producto, tipo de movimiento, cantidad, saldo resultan | ✅ | concurrencia.test.mjs |
 | ⚠️ | RF-M4-03 | Los tipos de movimiento deben ser: `venta`, `anulacion_venta`, `recepcion`, `anulacion_recepcion`, `ajuste_positivo`, `ajuste_negativo`, `me | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
 | ⚠️ | RF-M4-04 | El sistema debe permitir **ajustar el stock** indicando obligatoriamente un motivo. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
@@ -97,7 +97,7 @@ con el [inventario](17-inventario-alcance.md) y con las pruebas.
 | ⚠️ | RF-M4-14 | El sistema debe permitir marcar un producto como **perecible** (`tracks_expiry`), habilitando el control por lote solo en esos productos. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
 | ⚠️ | RF-M4-15 | Al recepcionar un producto perecible, el sistema debe **exigir la fecha de vencimiento** y rechazar lotes ya vencidos. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
 | ⚠️ | RF-M4-16 | El sistema debe mantener el stock de productos perecibles **por lote**, con su fecha de vencimiento y costo. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
-| ✅ | RF-M4-17 | Al vender un producto perecible, el sistema debe descontar automáticamente del lote que **vence primero (FEFO)**, sin intervención del cajer | ✅ | expiry.test.ts |
+| ✅ | RF-M4-17 | Al vender un producto perecible, el sistema debe descontar automáticamente del lote que **vence primero (FEFO)**, sin intervención del cajer | ✅ | recorrido flujo-completo, expiry.test.ts |
 | ✅ | RF-M4-18 | El sistema debe alertar los lotes **por vencer** (según días configurables por producto) y los **ya vencidos**, indicando el valor en riesgo | ✅ | expiry.test.ts |
 | ✅ | RF-M4-19 | El sistema debe permitir dar de baja un lote vencido como **merma**, con motivo obligatorio. | ✅ | concurrencia.test.mjs |
 | ⚠️ | RF-M4-20 | Al anular una venta, las unidades deben volver **al lote exacto** del que salieron. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
@@ -111,21 +111,21 @@ con el [inventario](17-inventario-alcance.md) y con las pruebas.
 | ⚠️ | RF-M5-03 | El sistema debe emitir **retroalimentación sonora y vibración** al reconocer un código. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
 | 🟡 | RF-M5-04 | Si el código escaneado no existe en el catálogo, el sistema debe ofrecer crear el producto en ese momento. | 🟡 |  |
 | ✅ | RF-M5-05 | El sistema debe permitir agregar productos **buscando por nombre**, para artículos sin código. | ✅ | recorrido m5 |
-| ✅ | RF-M5-06 | El sistema debe permitir modificar la cantidad de una línea del carrito y eliminar líneas. | ✅ | recorrido m5 |
+| ✅ | RF-M5-06 | El sistema debe permitir modificar la cantidad de una línea del carrito y eliminar líneas. | ✅ | recorrido flujo-completo, recorrido m5 |
 | ✅ | RF-M5-07 | El sistema debe calcular el total en tiempo real, en pesos chilenos **sin decimales**. | ✅ | recorrido m5 |
 | 🔵 | RF-M5-08 | El sistema debe permitir aplicar un **descuento** por línea o al total, en monto o porcentaje, según el permiso del rol. | 🔵 |  |
 | ⚠️ | RF-M5-09 | El sistema debe permitir registrar el **medio de pago**: efectivo, débito, crédito, transferencia. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
 | 🔵 | RF-M5-10 | El sistema debe permitir **pago mixto** (más de un medio en la misma venta). | 🔵 |  |
 | ✅ | RF-M5-11 | Para pagos en efectivo, el sistema debe calcular el **vuelto** a partir del monto recibido. | ✅ | recorrido m5 |
-| ✅ | RF-M5-12 | Al confirmar la venta, el sistema debe descontar el stock, registrar el kardex y afectar la caja **en una sola transacción atómica**. | ✅ | recorrido m5 |
+| ✅ | RF-M5-12 | Al confirmar la venta, el sistema debe descontar el stock, registrar el kardex y afectar la caja **en una sola transacción atómica**. | ✅ | recorrido flujo-completo, recorrido m5 |
 | ✅ | RF-M5-13 | El sistema debe asignar a cada venta un **folio correlativo** por local. | ✅ | concurrencia.test.mjs |
-| ✅ | RF-M5-14 | El sistema debe mostrar un comprobante en pantalla, compartible por WhatsApp o correo. | ⬜ | recorrido m5 |
+| ✅ | RF-M5-14 | El sistema debe mostrar un comprobante en pantalla, compartible por WhatsApp o correo. | ⬜ | recorrido flujo-completo, recorrido m5 |
 | ✅ | RF-M5-15 | El sistema debe permitir **anular** una venta según los permisos del rol, revirtiendo stock y caja, dejando traza de ambos movimientos. | ✅ | concurrencia.test.mjs |
 | ✅ | RF-M5-16 | El sistema debe impedir vender si el usuario **no tiene caja abierta**. | ✅ | recorrido m5 |
 | ✅ | RF-M5-17 | El POS debe **operar sin conexión a internet**: permitir registrar ventas y encolarlas localmente. | ✅ | recorrido m5 |
 | ✅ | RF-M5-18 | Al recuperar la conexión, el sistema debe **sincronizar automáticamente** las ventas en cola, en orden, sin duplicar. | ✅ | recorrido m5 |
 | ✅ | RF-M5-19 | El sistema debe mostrar de forma permanente y visible el **estado de conexión** y la cantidad de ventas pendientes de sincronizar. | ✅ | recorrido m5 |
-| ✅ | RF-M5-20 | El sistema debe permitir dejar una venta **en espera** y retomarla (cliente que va a buscar otro producto). | ⬜ | recorrido documento |
+| ✅ | RF-M5-20 | El sistema debe permitir dejar una venta **en espera** y retomarla (cliente que va a buscar otro producto). | ⬜ | recorrido documento, recorrido m5 |
 | ✅ | RF-M5-21 | La pantalla del POS debe ser operable **con una sola mano** en un celular de 5 pulgadas. | 🟡 | recorrido documento |
 | ✅ | RF-M5-22 | El sistema debe permitir ingresar un producto genérico "venta varia" con monto libre. | ⬜ | recorrido documento |
 
@@ -133,12 +133,12 @@ con el [inventario](17-inventario-alcance.md) y con las pruebas.
 
 | | ID | Requerimiento | Inventario | Evidencia |
 |:-:|---|---|:-:|---|
-| ✅ | RF-M6-01 | El sistema debe exigir la **apertura de caja** declarando el monto inicial en efectivo. | ✅ | recorrido m5, recorrido m6 |
+| ✅ | RF-M6-01 | El sistema debe exigir la **apertura de caja** declarando el monto inicial en efectivo. | ✅ | recorrido flujo-completo, recorrido m5, recorrido m6 |
 | ⚠️ | RF-M6-02 | Cada usuario debe tener **su propia sesión de caja**; dos usuarios pueden tener cajas abiertas en simultáneo. | ✅ | el inventario dice hecho, pero ninguna prueba lo cita |
 | ✅ | RF-M6-03 | El sistema debe permitir registrar **movimientos de caja** distintos de ventas: ingresos y egresos, con motivo obligatorio. | ✅ | recorrido m6 |
-| ✅ | RF-M6-04 | El sistema debe calcular el **efectivo esperado** = monto inicial + ventas en efectivo + ingresos − egresos. | ✅ | recorrido m6 |
-| ✅ | RF-M6-05 | Al cerrar la caja, el sistema debe solicitar el **conteo físico** y mostrar la diferencia (sobrante o faltante). | ✅ | recorrido m6 |
-| ✅ | RF-M6-06 | Si existe diferencia, el sistema debe exigir un comentario antes de permitir el cierre. | ✅ | recorrido m6, cash.test.ts |
+| ✅ | RF-M6-04 | El sistema debe calcular el **efectivo esperado** = monto inicial + ventas en efectivo + ingresos − egresos. | ✅ | recorrido flujo-completo, recorrido m6 |
+| ✅ | RF-M6-05 | Al cerrar la caja, el sistema debe solicitar el **conteo físico** y mostrar la diferencia (sobrante o faltante). | ✅ | recorrido flujo-completo, recorrido m6 |
+| ✅ | RF-M6-06 | Si existe diferencia, el sistema debe exigir un comentario antes de permitir el cierre. | ✅ | recorrido flujo-completo, recorrido m6, cash.test.ts |
 | ✅ | RF-M6-07 | El cierre de caja debe generar un **resumen**: ventas por medio de pago, cantidad de transacciones, ticket promedio, diferencia. | ✅ | recorrido m6 |
 | ✅ | RF-M6-08 | Una caja cerrada debe ser **inmutable**: no se pueden agregar ni modificar movimientos posteriores. | ✅ | recorrido m6 |
 | ✅ | RF-M6-09 | El sistema debe impedir abrir una segunda caja al usuario que ya tiene una abierta. | ✅ | concurrencia.test.mjs |
@@ -195,7 +195,7 @@ con el [inventario](17-inventario-alcance.md) y con las pruebas.
 |:-:|---|---|:-:|---|
 | ✅ | RF-M10-01 | Varios usuarios deben poder **vender simultáneamente** desde dispositivos distintos, cada uno con su caja y su sesión, sin interferirse. | ✅ | concurrencia.test.mjs |
 | ✅ | RF-M10-02 | Cuando dos cajeros venden el mismo producto a la vez, el descuento de stock debe ser **atómico**: el saldo final debe reflejar ambas ventas, | ✅ | concurrencia.test.mjs |
-| ✅ | RF-M10-03 | Si dos usuarios editan el mismo producto a la vez, el segundo en guardar debe ser **advertido de que el dato cambió** y ver el valor actual  | ⬜ | concurrencia.test.mjs |
+| ✅ | RF-M10-03 | Si dos usuarios editan el mismo producto a la vez, el segundo en guardar debe ser **advertido de que el dato cambió** y ver el valor actual  | ⬜ | recorrido flujo-completo, concurrencia.test.mjs |
 | ✅ | RF-M10-04 | El folio de venta debe ser **único y sin saltos** aunque varias ventas se registren en el mismo instante. | ✅ | concurrencia.test.mjs |
 | 🟡 | RF-M10-05 | Un supervisor no debe poder cerrar la caja de un cajero que tiene una venta en curso sin una **advertencia explícita**. | 🟡 |  |
 | ⬜ | RF-M10-06 | El stock mostrado debe **actualizarse en las demás pantallas** cuando otro usuario vende, sin necesidad de recargar. | ⬜ |  |
@@ -203,7 +203,7 @@ con el [inventario](17-inventario-alcance.md) y con las pruebas.
 | ✅ | RF-M10-08 | Dos usuarios no deben poder aplicar la **misma toma de inventario** dos veces: la segunda debe ser rechazada. | ✅ | concurrencia.test.mjs |
 | ✅ | RF-M10-09 | Cuando dos dispositivos sincronizan ventas offline al mismo tiempo, **ninguna venta debe duplicarse ni perderse**. | ✅ | concurrencia.test.mjs |
 | ✅ | RF-M10-10 | Si un producto perecible es vendido a la vez por dos cajeros, el consumo FEFO no debe descontar **dos veces del mismo lote**. | ✅ | concurrencia.test.mjs |
-| ✅ | RF-M10-11 | El sistema debe mostrar al usuario **quién y cuándo** modificó por última vez un producto, para resolver discrepancias entre turnos. | ⬜ | concurrencia.test.mjs |
+| ✅ | RF-M10-11 | El sistema debe mostrar al usuario **quién y cuándo** modificó por última vez un producto, para resolver discrepancias entre turnos. | ⬜ | recorrido flujo-completo, concurrencia.test.mjs, producto-autor.test.mjs |
 
 ## No funcionales
 
@@ -220,7 +220,7 @@ con el [inventario](17-inventario-alcance.md) y con las pruebas.
 | ⬜ | RNF-09 | RPO (pérdida máxima de datos tolerable): **24 h** vía respaldo diario, y **0** para las ventas ya sincronizadas. | — |  |
 | ⬜ | RNF-10 | RTO (tiempo máximo de recuperación): **4 h** en horario hábil. | — |  |
 | ⬜ | RNF-11 | Debe funcionar en **Chrome/Edge 110+**, **Safari iOS 15+** y **Chrome Android 10+**. | — |  |
-| ⬜ | RNF-12 | La interfaz debe ser **responsiva** de 360 px a 1920 px de ancho, sin scroll horizontal. | — |  |
+| ✅ | RNF-12 | La interfaz debe ser **responsiva** de 360 px a 1920 px de ancho, sin scroll horizontal. | — | recorrido flujo-completo |
 | ⬜ | RNF-13 | Debe instalarse como **PWA** en la pantalla de inicio del celular, con ícono y pantalla de arranque propios. | — |  |
 | ⬜ | RNF-14 | No debe requerir instalación de software ni drivers en el local. | — |  |
 | ⬜ | RNF-15 | El escaneo por cámara debe degradar con elegancia: si el navegador no soporta `BarcodeDetector`, debe usar la librería de respaldo sin que e | — |  |
@@ -258,7 +258,7 @@ con el [inventario](17-inventario-alcance.md) y con las pruebas.
 | ⬜ | RNF-50 | Con **5 cajeros vendiendo en paralelo**, el tiempo de confirmación de venta no debe superar 1,5 s en el percentil 95. | — |  |
 | ⬜ | RNF-54 | Toda operación que modifique stock, caja o folios debe ejecutarse **dentro de una transacción de base de datos**, nunca orquestada desde el  | — |  |
 | ⬜ | RNF-55 | El sistema debe tolerar que **dos dispositivos sincronicen la misma venta** (reintento tras corte de red) sin duplicarla. | — |  |
-| ⬜ | RNF-56 | Los conflictos de edición deben resolverse **avisando al usuario**, nunca descartando silenciosamente el cambio de otro. | — |  |
+| ✅ | RNF-56 | Los conflictos de edición deben resolverse **avisando al usuario**, nunca descartando silenciosamente el cambio de otro. | — | recorrido flujo-completo |
 | ⬜ | RNF-44 | Contraste mínimo **4,5:1** en texto normal (WCAG 2.1 AA). | — |  |
 | ✅ | RNF-45 | La aplicación debe ser operable con teclado en escritorio. | — | recorrido documentos, recorrido m5 |
 | ⬜ | RNF-46 | El estado de la aplicación nunca debe comunicarse **solo** por color (importa para el estado de conexión y el stock bajo). | — |  |

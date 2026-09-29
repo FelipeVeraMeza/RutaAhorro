@@ -204,6 +204,14 @@ console.log('RQ-14 · Con "vender sin stock" el vendedor vende igual (respuesta 
 await venderSinStock(true);
 await p.reload();   // la configuración se lee una vez por carga de página
 await p.locator('input[type=search]').waitFor();
+// Desde 2026-09-28 la venta a medio armar sobrevive a la recarga
+// (sessionStorage): el carrito que M4-09 conservó sigue ahí. Se vacía para
+// que el aviso de "vender sin stock" salga al agregar.
+await p.getByRole('textbox', { name: `Cantidad de ${nB}` }).waitFor({ timeout: 15000 })
+  .then(() => ok('RF-M5-20', true, 'la venta a medio armar sigue ahí después de recargar'),
+    () => ok('RF-M5-20', false, 'la venta a medio armar sigue ahí después de recargar'));
+await p.getByRole('button', { name: 'Vaciar' }).click();
+await p.getByRole('button', { name: 'Sí, vaciar' }).click();
 const ventasAntesRq14 = (await ventasDe()).length;
 await buscarYAgregar(nB);
 const avisoSinStock = await p.getByText(/el sistema tenía/).first().innerText({ timeout: 4000 }).catch(() => '');

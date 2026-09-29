@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  formatCLP, comprobanteATexto, fechaComprobante, nombreMetodo,
+  formatCLP, formatCantidad, comprobanteATexto, fechaComprobante, nombreMetodo,
   encabezadoDocumento, pieDocumento, etiquetaAdicional,
   type Comprobante as DatosComprobante,
 } from '@rutaahorro/core';
@@ -90,7 +90,7 @@ export function Comprobante({
             {datos.lineas.map((l, i) => (
               <div key={i}>
                 <div className="flex justify-between gap-2">
-                  <span className="truncate">{l.cantidad} x {l.nombre}</span>
+                  <span className="truncate">{formatCantidad(l.cantidad)} x {l.nombre}</span>
                   <span className="shrink-0">{formatCLP(l.subtotal)}</span>
                 </div>
                 {!!l.ahorroOferta && (

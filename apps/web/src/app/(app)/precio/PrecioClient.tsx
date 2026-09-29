@@ -1,14 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { formatCLP, cantidadConUnidad, tramosVigentes, diaLocal, precioDelTramo } from '@rutaahorro/core';
+import { useRouter } from 'next/navigation';
+import {
+  formatCLP, cantidadConUnidad, tramosVigentes, diaLocal, precioDelTramo, validarCantidadVenta, admiteDecimales,
+} from '@rutaahorro/core';
 import { useConfiguracion } from '@/lib/datos/configuracion';
 import {
   findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO,
 } from '@/lib/offline/catalog';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { sembrarCatalogoDemo } from '@/lib/demo/seed';
-import type { LocalProduct } from '@/lib/offline/db';
+import { db, type LocalProduct } from '@/lib/offline/db';
+import { pedirAgregarAlPos } from '@/lib/offline/carro';
+import { Campo } from '@/components/Campo';
 import { Escaner } from '../pos/Escaner';
 
 /**
@@ -22,8 +27,20 @@ import { Escaner } from '../pos/Escaner';
  * Por eso esta pantalla no tiene carrito y no cobra nada. Lee el mismo
  * catálogo local que el POS, así que **funciona sin internet**, que es cuando
  * el cliente igual está esperando la respuesta.
+ *
+ * Si el cliente dice "me lo llevo", "Agregar a la venta" lo pasa al POS con la
+ * cantidad (Felipe, 2026-09-28: «descontar directamente desde ahí»). El
+ * consultador sigue sin tocar el carrito: deja el pedido y el POS lo agrega a
+ * la venta en curso, que se conserva (sessionStorage).
  */
-export function PrecioClient() {
+export function PrecioClient({ usuarioId = '', puedeVender = false }: {
+  usuarioId?: string;
+  /** Admin, supervisor y vendedor. Bodega consulta, pero no vende. */
+  puedeVender?: boolean;
+}) {
+  const router = useRouter();
+  const [cantidad, setCantidad] = useState('1');
+  const [errorCantidad, setErrorCantidad] = useState<string | null>(null);
   const [scannerOn, setScannerOn] = useState(false);
   const [query, setQuery] = useState('');
   const [resultados, setResultados] = useState<LocalProduct[]>([]);
@@ -57,8 +74,17 @@ export function PrecioClient() {
   }, []);
 
   const [versionCatalogo, setVersionCatalogo] = useState(0);
+  // Lo que se está mostrando se vuelve a leer cuando el catálogo cambia: si
+  // no, un producto elegido antes de que terminara de bajar el catálogo se
+  // quedaba sin la oferta que llegó un segundo después.
+  const elegidoRef = useRef(elegido);
+  elegidoRef.current = elegido;
   useEffect(() => {
-    const alCambiar = () => setVersionCatalogo((v) => v + 1);
+    const alCambiar = () => {
+      setVersionCatalogo((v) => v + 1);
+      const actual = elegidoRef.current;
+      if (actual) void db().products.get(actual.id).then((p) => { if (p && elegidoRef.current?.id === p.id) setElegido(p); });
+    };
     window.addEventListener(EVENTO_CATALOGO, alCambiar);
     return () => window.removeEventListener(EVENTO_CATALOGO, alCambiar);
   }, []);
@@ -70,10 +96,24 @@ export function PrecioClient() {
     return () => { vivo = false; };
   }, [query, versionCatalogo]);
 
+  const elegir = useCallback((p: LocalProduct) => {
+    setElegido(p);
+    setCantidad('1');
+    setErrorCantidad(null);
+  }, []);
+
+  function agregarALaVenta() {
+    if (!elegido) return;
+    const v = validarCantidadVenta(cantidad, elegido.unit);
+    if (!v.valido) { setErrorCantidad(v.error); return; }
+    pedirAgregarAlPos(usuarioId, elegido.id, v.valor);
+    router.push('/pos');
+  }
+
   const onScan = useCallback(async (code: string) => {
     const p = await findByBarcode(code);
     if (p) {
-      setElegido(p);
+      elegir(p);
       setQuery('');
       // La cámara se cierra al acertar: el precio ocupa la pantalla y nadie
       // quiere leerlo con la cámara encendida gastando batería.
@@ -82,13 +122,13 @@ export function PrecioClient() {
     }
     notificar(`El código ${code} no está en el catálogo`);
     setQuery(code);
-  }, [notificar]);
+  }, [notificar, elegir]);
 
   return (
     <div className="px-4 py-4">
       <h1 className="text-lg font-semibold mb-1">Consultar precio</h1>
       <p className="text-xs text-[var(--texto-suave)] mb-4">
-        Escanea o busca el producto. No se cobra nada ni se toca la venta en curso.
+        Escanea o busca el producto. Consultar no toca la venta en curso.
       </p>
 
       {aviso && (
@@ -115,7 +155,7 @@ export function PrecioClient() {
           e.preventDefault();
           const texto = query.trim();
           if (/^\d{4,}$/.test(texto)) void onScan(texto);
-          else if (resultados.length === 1) { setElegido(resultados[0]); setQuery(''); }
+          else if (resultados.length === 1) { elegir(resultados[0]); setQuery(''); }
         }}
         enterKeyHint="search"
         placeholder="Buscar por nombre o código…"
@@ -158,6 +198,40 @@ export function PrecioClient() {
             {typeof elegido.stockSala === 'number' &&
               ` · a la vista ${elegido.stockSala}`}
           </p>
+          {puedeVender && (
+            <div className="mt-4 pt-4 border-t border-[var(--borde)] text-left">
+              <div className="flex items-end gap-2">
+                <div className="shrink-0">
+                  {/* El error va debajo de la fila, a todo el ancho: en la
+                      columna del campo no cabe. Se anuncia con role=alert. */}
+                  <Campo etiqueta={admiteDecimales(elegido.unit) ? `Cantidad (${elegido.unit})` : 'Cantidad'}>
+                    {(p) => (
+                      <input
+                        {...p}
+                        type="text"
+                        inputMode={admiteDecimales(elegido.unit) ? 'decimal' : 'numeric'}
+                        value={cantidad}
+                        onChange={(e) => { setCantidad(e.target.value); setErrorCantidad(null); }}
+                        onFocus={(e) => e.currentTarget.select()}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregarALaVenta(); } }}
+                        aria-invalid={errorCantidad ? true : undefined}
+                        className="tap w-20 px-2 rounded-xl border border-[var(--borde)] text-center num font-semibold"
+                      />
+                    )}
+                  </Campo>
+                </div>
+                <button
+                  onClick={agregarALaVenta}
+                  className="tap flex-1 px-3 rounded-xl bg-marca-500 text-white font-semibold whitespace-nowrap active:bg-marca-600"
+                >
+                  🛒 Agregar a la venta
+                </button>
+              </div>
+              {errorCantidad && (
+                <p role="alert" className="text-xs text-[var(--color-alerta)] mt-1.5">{errorCantidad}</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -166,7 +240,7 @@ export function PrecioClient() {
           {resultados.map((p) => (
             <li key={p.id}>
               <button
-                onClick={() => { setElegido(p); setQuery(''); }}
+                onClick={() => { elegir(p); setQuery(''); }}
                 className="tap w-full text-left px-4 py-3 flex items-center justify-between gap-3"
               >
                 <span className="min-w-0">

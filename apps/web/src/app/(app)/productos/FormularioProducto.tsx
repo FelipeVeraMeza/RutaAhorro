@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  formatCLP, marginPct, isValidEan, normalizeBarcode, toUserMessage,
+  formatCLP, formatCantidad, marginPct, isValidEan, normalizeBarcode, toUserMessage,
   validarMonto, validarCantidad, cantidadConUnidad, diaLocal,
 } from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto, type CambioPrecio } from '@/lib/productos';
@@ -247,7 +247,7 @@ export function FormularioProducto({
                   <span className="text-[var(--texto-suave)]">Stock ahora: </span>
                   <strong className="num">{cantidadConUnidad(producto.stock, producto.unidad)}</strong>
                   <span className="text-[var(--texto-suave)] num">
-                    {' '}· a la vista {producto.stockSala} · en bodega {producto.stockBodega}
+                    {' '}· a la vista {formatCantidad(producto.stockSala)} · en bodega {formatCantidad(producto.stockBodega)}
                   </span>
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -446,7 +446,7 @@ export function FormularioProducto({
                       <button
                         onClick={() => setCodigos((p) => p.filter((x) => x !== c))}
                         aria-label={`Quitar código ${c}`}
-                        className="text-[var(--color-alerta)] font-bold px-1"
+                        className="tap -my-1.5 -mr-1.5 text-[var(--color-alerta)] font-bold"
                       >
                         ×
                       </button>
@@ -502,7 +502,7 @@ export function FormularioProducto({
             {/* Lo opcional, plegado: en el celular el formulario era tan largo que
                 "¿Cuántos tienes hoy?" quedaba al fondo y nadie lo encontraba. */}
             <details className="rounded-xl border border-[var(--borde)] p-3" open={esEdicion && Boolean(descripcion || sku || categoriaId)}>
-              <summary className="text-sm font-semibold cursor-pointer min-h-[28px]">
+              <summary className="text-sm font-semibold cursor-pointer min-h-[44px] py-2.5 -my-2.5">
                 Más datos (opcional): descripción, categoría, stock mínimo
               </summary>
               <div className="mt-3 space-y-4">
@@ -575,7 +575,7 @@ export function FormularioProducto({
             </details>
             {esEdicion && historialPrecios.length > 0 && (
               <details className="rounded-xl border border-[var(--borde)] p-3">
-                <summary className="text-sm font-semibold cursor-pointer min-h-[28px]">
+                <summary className="text-sm font-semibold cursor-pointer min-h-[44px] py-2.5 -my-2.5">
                   Historial de precios ({historialPrecios.length})
                 </summary>
                 <ul className="mt-2 space-y-1 text-sm">
@@ -590,7 +590,7 @@ export function FormularioProducto({
             )}
             {puedeEditarPrecios && (
               <details className="rounded-xl border border-[var(--borde)] p-3" open={filasOferta.length > 0 || impuestoId != null}>
-                <summary className="text-sm font-semibold cursor-pointer min-h-[28px]">
+                <summary className="text-sm font-semibold cursor-pointer min-h-[44px] py-2.5 -my-2.5">
                   Ofertas e impuesto adicional (opcional)
                 </summary>
                 <div className="mt-3 space-y-4">

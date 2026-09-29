@@ -150,8 +150,8 @@ describe('cantidadConUnidad', () => {
 
   // El caso que motivó esto: el queso se vende por kilo y el panel decía "u".
   it('respeta la unidad real del producto', () => {
-    expect(cantidadConUnidad(2.5, 'kg')).toBe('2.5 kg');
-    expect(cantidadConUnidad(1.5, 'litro')).toBe('1.5 litro');
+    expect(cantidadConUnidad(2.5, 'kg')).toBe('2,5 kg');
+    expect(cantidadConUnidad(1.5, 'litro')).toBe('1,5 litro');
   });
 
   it('una unidad con espacios de más no ensucia el texto', () => {

@@ -2,7 +2,7 @@
  * Lotes y vencimiento — FEFO (First Expired, First Out).
  * Ver ADR-007. Réplica de `fn_consume_lots`.
  */
-import { clp } from './money.js';
+import { clp, formatCantidad } from './money.js';
 
 export type ExpiryStatus = 'vigente' | 'por_vencer' | 'vencido';
 
@@ -135,7 +135,8 @@ export function textoVencimiento(dias: number): string {
  */
 export function cantidadConUnidad(cantidad: number, unidad: string | null | undefined): string {
   const u = (unidad ?? '').trim();
-  const n = Number.isInteger(cantidad) ? String(cantidad) : String(cantidad);
+  // Coma decimal (RNF-22): antes decía "2.5 kg".
+  const n = formatCantidad(cantidad);
   if (u === '' || u === 'unidad') return `${n} ${cantidad === 1 ? 'unidad' : 'unidades'}`;
   return `${n} ${u}`;
 }

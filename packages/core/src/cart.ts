@@ -23,7 +23,10 @@ export interface CartLine {
    */
   description?: string | null;
   unitPrice: number;
+  /** Entera para lo que se cuenta; con decimales solo si `unidad` lo admite (kg, litro…). */
   quantity: number;
+  /** Unidad de medida del producto: decide si la cantidad admite decimales (`admiteDecimales`). */
+  unidad?: string;
   discountAmount?: number;
   unitCost?: number;
   tracksExpiry?: boolean;

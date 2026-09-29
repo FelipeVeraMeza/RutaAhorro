@@ -191,3 +191,47 @@ export function validarCantidad(
 
   return { valido: true, valor, error: null };
 }
+
+/**
+ * Unidades que se venden fraccionadas: 0,35 kg de queso sí, 1,5 panes no.
+ * Las demás (unidad, paquete, caja) se cuentan enteras.
+ */
+export const UNIDADES_FRACCIONARIAS: readonly string[] = ['kg', 'gramo', 'litro', 'ml'];
+
+export function admiteDecimales(unidad: string | null | undefined): boolean {
+  return UNIDADES_FRACCIONARIAS.includes((unidad ?? '').trim().toLowerCase());
+}
+
+/** Una cantidad como se escribe en Chile: coma decimal, hasta 3 decimales, sin ceros de más. */
+export function formatCantidad(cantidad: number): string {
+  if (!Number.isFinite(cantidad)) return '0';
+  return cantidad.toLocaleString('es-CL', { maximumFractionDigits: 3, useGrouping: false });
+}
+
+/**
+ * Valida la cantidad que el cajero escribe en una línea del POS.
+ *
+ * Existe porque para 20 panes había que tocar "+" 19 veces, y un producto por
+ * kilo no admitía 0,35. Entero para lo que se cuenta; hasta 3 decimales (lo
+ * que guarda la base, numeric(14,3)) para lo que se pesa o se mide.
+ */
+export function validarCantidadVenta(
+  entrada: string,
+  unidad: string | null | undefined,
+  maximo = 100_000,
+): MontoValidado {
+  const v = validarCantidad(entrada, { permiteCero: false, maximo });
+  if (!v.valido) return v;
+  if (!admiteDecimales(unidad)) {
+    if (!Number.isInteger(v.valor)) {
+      return { valido: false, valor: 0, error: 'Este producto se vende entero: escribe 1, 2, 3…' };
+    }
+    return v;
+  }
+  // En milésimas, con tolerancia: 0,35 × 1000 da 349,99999999999994.
+  const milesimas = v.valor * 1000;
+  if (Math.abs(milesimas - Math.round(milesimas)) > 1e-6) {
+    return { valido: false, valor: 0, error: 'Hasta 3 decimales: 0,125 sí, 0,1255 no' };
+  }
+  return { valido: true, valor: Math.round(milesimas) / 1000, error: null };
+}

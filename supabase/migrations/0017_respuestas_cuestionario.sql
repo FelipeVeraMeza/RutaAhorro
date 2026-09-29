@@ -25,7 +25,10 @@
 -- ---------------------------------------------------------------------------
 -- (1) La vista sin costos, con todo lo que la pantalla pide
 -- ---------------------------------------------------------------------------
--- `create or replace view` solo permite agregar columnas al final.
+-- `create or replace view` solo permite agregar columnas al final. Y 0025 le
+-- agrega `updated_by`: reaplicar esta migración sobre una base instalada
+-- quitaría esa columna y fallaría (regla 22), así que se borra antes.
+drop view if exists products_public;
 create or replace view products_public
 with (security_invoker = true) as
   select id, tenant_id, sku, name, description, category_id, unit,

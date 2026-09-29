@@ -152,6 +152,12 @@ const c = await entrar(cajero);
 async function carro(pag, nombre, veces) {
   await pag.goto(`${BASE}/pos`);
   await pag.waitForTimeout(2500);
+  // La venta a medio armar sobrevive a la recarga (2026-09-28): la del paso
+  // anterior se vacía, como haría el cajero antes de empezar otra.
+  if (await pag.getByRole('button', { name: 'Vaciar' }).count()) {
+    await pag.getByRole('button', { name: 'Vaciar' }).click();
+    await pag.getByRole('button', { name: 'Sí, vaciar' }).click();
+  }
   await pag.fill('input[type=search]', nombre);
   const b = pag.locator('main li button', { hasText: nombre }).first();
   await b.waitFor({ timeout: 15000 });

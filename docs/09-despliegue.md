@@ -135,6 +135,12 @@ un contenedor que estaba sano.
 > desde el 2026-08-28 no pueden activarlo. Por eso esta configuración vive en el
 > panel, y este documento es su única copia. Si se cambia en el panel, se cambia
 > acá.
+>
+> `railway.json` en la raíz repite exactamente esta tabla, para el caso en que
+> Railway todavía lo lea (servicios anteriores al 2026-08-28). Hasta el
+> 2026-09-28 decía otra cosa —build sin `npm ci --include=dev` y healthcheck en
+> `/login`—, y si el servicio lo leía, contradecía al panel. Si se cambia uno,
+> se cambian los tres: panel, esta tabla y el archivo.
 
 La versión de Node la fija `.node-version` (22) en la raíz. Es deliberado que no
 sea una variable del builder: `engines` dice `>=22` y deja la elección al

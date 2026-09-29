@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { formatCLP, marginPct, toUserMessage, cantidadConUnidad } from '@rutaahorro/core';
+import { formatCLP, formatCantidad, marginPct, toUserMessage, cantidadConUnidad } from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
 import { Modal } from '@/components/Modal';
 import { FormularioProducto } from './FormularioProducto';
@@ -166,9 +166,9 @@ export function ProductosClient({
       </div>
 
       {aviso && (
-        <p role="status" className="mb-3 text-sm px-3 py-2 rounded-lg bg-marca-100 text-marca-900 flex items-start justify-between gap-2">
+        <p role="status" className="mb-3 text-sm px-3 py-2 rounded-lg bg-marca-100 text-marca-900 flex items-center justify-between gap-2">
           <span>✓ {aviso}</span>
-          <button onClick={() => setAviso(null)} aria-label="Cerrar aviso" className="px-1 font-bold">×</button>
+          <button onClick={() => setAviso(null)} aria-label="Cerrar aviso" className="tap -my-2 -mr-2 font-bold">×</button>
         </p>
       )}
 
@@ -280,7 +280,7 @@ export function ProductosClient({
                   <p className={`text-xs num ${est.clase}`}>
                     {est.icono} {est.texto} · {cantidadConUnidad(p.stock, p.unidad)}
                     {p.stockMinimo > 0 && ` (mín. ${p.stockMinimo})`}
-                    {` · a la vista ${p.stockSala} · en bodega ${p.stockBodega}`}
+                    {` · a la vista ${formatCantidad(p.stockSala)} · en bodega ${formatCantidad(p.stockBodega)}`}
                   </p>
 
                   {puedeEditar && (
@@ -331,7 +331,7 @@ export function ProductosClient({
             if (r.nuevo) {
               const total = r.sala + r.bodega;
               setAviso(total > 0
-                ? `${r.nombre} creado: ${r.sala} a la vista (listo para vender)${r.bodega ? ` y ${r.bodega} en bodega` : ''}`
+                ? `${r.nombre} creado: ${formatCantidad(r.sala)} a la vista (listo para vender)${r.bodega ? ` y ${formatCantidad(r.bodega)} en bodega` : ''}`
                 : `${r.nombre} creado, sin stock. Para cargarle unidades: Inventario → Ajustar, o Proveedores → Recepción`);
               // Se muestra el recién creado: sin esto quedaba perdido en la lista.
               setBusqueda(r.nombre);

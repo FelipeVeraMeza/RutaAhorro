@@ -98,6 +98,8 @@ await p.goto(`${BASE}/productos`);
 await p.fill('input[placeholder^="Buscar por nombre"]', nJugo);
 await p.waitForTimeout(1500);
 await p.getByRole('button', { name: 'Editar' }).first().click();
+// Desde 2026-09-28 lo opcional va plegado para que el formulario sea corto.
+await p.getByText('Ofertas e impuesto adicional (opcional)').click();
 await p.getByRole('button', { name: '+ Agregar oferta' }).click();
 await p.getByLabel('Oferta 1: desde cuántas unidades').fill('3');
 await p.getByLabel('Oferta 1: precio de cada unidad').fill('1.400');
@@ -118,9 +120,12 @@ await p.locator('footer').getByRole('button', { name: 'Cancelar' }).click();
 
 console.log('Consultor de precio');
 await p.goto(`${BASE}/precio`);
-await p.waitForTimeout(2500);  // el catálogo del celular se sincroniza al entrar
 await p.getByLabel('Buscar un producto para ver su precio').fill(nJugo);
 await p.getByRole('button', { name: new RegExp(nJugo) }).first().click();
+// El catálogo del celular se pone al día al entrar, y por internet tarda: se
+// espera a que llegue la oferta, sin un tiempo fijo (2,5 s no alcanzaban en
+// Railway). Si nunca llega, la comprobación de abajo falla igual.
+await p.getByText(/Desde 3: .1\.400 c\/u/).first().waitFor({ timeout: 30000 }).catch(() => {});
 const consultor = await p.locator('main').innerText();
 ok('RQ-04', /Desde 3: \$1\.400 c\/u/.test(consultor), 'el consultador muestra la oferta', consultor.replace(/\n+/g, ' · ').slice(0, 120));
 
@@ -136,6 +141,9 @@ await buscar(nJugo);
 await p.getByRole('button', { name: `Agregar una unidad de ${nJugo}` }).click();
 let barra = await p.locator('.sticky.bottom-0').innerText();
 ok('RQ-04', /\$4\.000/.test(barra), 'con 2 unidades, precio normal: $4.000', barra.replace(/\n+/g, ' · '));
+// La línea toma la oferta cuando termina de bajar el catálogo, aunque se haya
+// agregado antes: el POS refresca el carrito.
+await p.getByText(/Llevando 1 más: .1\.400 c\/u/).first().waitFor({ timeout: 30000 }).catch(() => {});
 const pista = await p.getByText(/Llevando 1 más: \$1\.400 c\/u/).count();
 ok('RQ-04', pista > 0, 'el POS le dice al cajero cuántas faltan para la oferta');
 await p.getByRole('button', { name: `Agregar una unidad de ${nJugo}` }).click();

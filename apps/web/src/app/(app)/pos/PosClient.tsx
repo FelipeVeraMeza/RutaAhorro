@@ -6,7 +6,7 @@ import {
   addToCart, cartTotals, setQuantity, removeFromCart, aplicarOfertas, tramosVigentes, diaLocal, precioDelTramo,
   precioParaCliente, describirCliente, type ClienteConPrecios,
   aplicarCombos, lineSubtotal, type Combo,
-  formatCLP, toUserMessage, construirComprobante,
+  formatCLP, formatCantidad, validarCantidadVenta, admiteDecimales, toUserMessage, construirComprobante,
   type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta, type RegistroDte,
 } from '@rutaahorro/core';
 import { findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO } from '@/lib/offline/catalog';
@@ -19,19 +19,40 @@ import { Modal } from '@/components/Modal';
 import { db } from '@/lib/offline/db';
 import { clientesParaVender } from '@/lib/datos/clientes';
 import { combosParaVender } from '@/lib/datos/combos';
+import { guardarCarro, leerCarro, tomarPedidoPendiente } from '@/lib/offline/carro';
 import { Escaner } from './Escaner';
 import { Cobro } from './Cobro';
 import { Comprobante } from './Comprobante';
 
 type Aviso = { tipo: 'ok' | 'error' | 'info'; texto: string } | null;
 
+/** La línea del carrito para un producto del catálogo del celular. */
+function lineaDesde(p: LocalProduct, quantity: number): CartLine {
+  return {
+    productId: p.id,
+    name: p.name,
+    description: p.description ?? null,
+    unitPrice: p.salePrice,
+    precioLista: p.salePrice,
+    tramos: p.tramos ?? [],
+    tasaAdicional: p.tasaAdicional ?? 0,
+    nombreAdicional: p.impuestoNombre ?? null,
+    quantity,
+    unidad: p.unit,
+    tracksExpiry: p.tracksExpiry,
+    stockAvailable: p.stock,
+  };
+}
+
 // Nota: el descuento por línea (RF-M5-08) aún no está en esta pantalla. Cuando
 // se agregue, vuelven a entrar `role` y `maxDiscountPct` para aplicar el tope
 // por rol con `isDiscountAllowed` de @rutaahorro/core.
 export function PosClient({
-  hasOpenSession, local = '', cajero = '', puedeForzarStock = false,
+  hasOpenSession, local = '', cajero = '', usuarioId = '', puedeForzarStock = false,
 }: {
   hasOpenSession: boolean;
+  /** Dueño del carrito guardado en la pestaña: otra persona no hereda la venta a medias. */
+  usuarioId?: string;
   /** Admin y supervisor pueden vender sin stock; el resto no (fn_register_sale). */
   puedeForzarStock?: boolean;
   /** Nombre del local, para encabezar el comprobante. */
@@ -152,21 +173,7 @@ export function PosClient({
   }, []);
 
   const agregar = useCallback((p: LocalProduct, qty = 1) => {
-    cambiarCarro((prev) =>
-      addToCart(prev, {
-        productId: p.id,
-        name: p.name,
-        description: p.description ?? null,
-        unitPrice: p.salePrice,
-        precioLista: p.salePrice,
-        tramos: p.tramos ?? [],
-        tasaAdicional: p.tasaAdicional ?? 0,
-        nombreAdicional: p.impuestoNombre ?? null,
-        quantity: qty,
-        tracksExpiry: p.tracksExpiry,
-        stockAvailable: p.stock,
-      }),
-    );
+    cambiarCarro((prev) => addToCart(prev, lineaDesde(p, qty)));
     // La venta descuenta de la sala. Si lo que hay a la vista no alcanza pero
     // queda en bodega, se avisa y se vende igual (decisión 2026-09-19).
     const enCarro = (linesRef.current.find((l) => l.productId === p.id)?.quantity ?? 0) + qty;
@@ -181,6 +188,79 @@ export function PosClient({
       notificar('ok', `${p.name} · ${formatCLP(p.salePrice)}`);
     }
   }, [notificar, cambiarCarro]);
+
+  /**
+   * La venta a medio armar vuelve al entrar (sessionStorage), y después se
+   * agrega lo que se pidió desde el consultador de precios. Espera al
+   * catálogo: precio, ofertas y stock se toman del catálogo de ahora, no de
+   * cuando se guardó, por si cambiaron mientras tanto.
+   */
+  const restauradoRef = useRef(false);
+
+  /**
+   * Las líneas toman precio, ofertas, impuesto y stock del catálogo del
+   * celular de AHORA. Una línea agregada antes de que terminara de bajar el
+   * catálogo se quedaba con lo viejo para siempre: si la oferta llegó un
+   * segundo después, se cobraba precio normal (lo destapó ofertas.mjs contra
+   * Railway, donde la bajada tarda más). Lo que ya no se vende sale.
+   */
+  const refrescarLineas = useCallback(async (lineas: CartLine[]) => {
+    const quitados: string[] = [];
+    const frescas: CartLine[] = [];
+    for (const l of lineas) {
+      const p = await db().products.get(l.productId).catch(() => undefined);
+      if (p && !p.isActive) { quitados.push(l.name); continue; }
+      frescas.push(p ? { ...lineaDesde(p, l.quantity), discountAmount: l.discountAmount } : l);
+    }
+    if (quitados.length) notificar('info', `Se quitó de la venta porque ya no se vende: ${quitados.join(', ')}`);
+    return frescas;
+  }, [notificar]);
+
+  useEffect(() => {
+    const alCambiar = () => void (async () => {
+      const actuales = linesRef.current;
+      if (actuales.length === 0) return;
+      const frescas = new Map((await refrescarLineas(actuales)).map((l) => [l.productId, l]));
+      // Contra el carrito del momento: el cajero pudo tocar algo mientras se leía.
+      cambiarCarro((prev) => prev.flatMap((l) => {
+        const f = frescas.get(l.productId);
+        return f ? [{ ...f, quantity: l.quantity, discountAmount: l.discountAmount }] : [];
+      }));
+    })();
+    window.addEventListener(EVENTO_CATALOGO, alCambiar);
+    return () => window.removeEventListener(EVENTO_CATALOGO, alCambiar);
+  }, [refrescarLineas, cambiarCarro]);
+
+  useEffect(() => {
+    if (!hasOpenSession || catalogReady === null || restauradoRef.current) return;
+    restauradoRef.current = true;
+    void (async () => {
+      const guardado = leerCarro(usuarioId);
+      if (guardado?.lineas.length) {
+        const lineas = await refrescarLineas(guardado.lineas);
+        // Lo que se alcanzó a escanear mientras tanto se suma, no se pisa.
+        cambiarCarro((prev) => prev.reduce(addToCart, lineas));
+      }
+      if (guardado?.clienteId) {
+        const c = (await clientesParaVender().catch(() => [])).find((x) => x.id === guardado.clienteId) ?? null;
+        clienteRef.current = c;
+        setCliente(c);
+        cambiarCarro((p) => p);
+      }
+      const pedido = tomarPedidoPendiente(usuarioId);
+      if (pedido) {
+        const p = await db().products.get(pedido.productId).catch(() => undefined);
+        if (p?.isActive) agregar(p, pedido.cantidad);
+        else notificar('error', 'Ese producto no está en el catálogo de este dispositivo');
+      }
+    })();
+  }, [hasOpenSession, catalogReady, usuarioId, cambiarCarro, agregar, notificar, refrescarLineas]);
+
+  // Cada cambio queda guardado en la pestaña. Solo después de restaurar: si
+  // no, el carrito vacío del primer momento borraría el guardado.
+  useEffect(() => {
+    if (restauradoRef.current) guardarCarro(usuarioId, lines, cliente?.id ?? null);
+  }, [lines, cliente, usuarioId]);
 
   const onScan = useCallback(async (code: string) => {
     const product = await findByBarcode(code);
@@ -473,7 +553,7 @@ export function PosClient({
                       {l.precioLista != null && l.unitPrice < l.precioLista && (
                         <s className="mr-1">{formatCLP(l.precioLista)}</s>
                       )}
-                      {formatCLP(l.unitPrice)} c/u
+                      {formatCLP(l.unitPrice)} {admiteDecimales(l.unidad) ? `el ${l.unidad}` : 'c/u'}
                       {typeof l.stockAvailable === 'number' && l.stockAvailable < l.quantity && (
                         <span className="text-[var(--color-aviso)]"> · stock {l.stockAvailable}</span>
                       )}
@@ -498,7 +578,11 @@ export function PosClient({
                   >
                     −
                   </button>
-                  <span className="num w-10 text-center font-semibold">{l.quantity}</span>
+                  <CantidadDeLinea
+                    linea={l}
+                    onCambiar={(q) => cambiarCarro((p) => setQuantity(p, l.productId, q))}
+                    onError={(texto) => notificar('error', texto)}
+                  />
                   <button
                     aria-label={`Agregar una unidad de ${l.name}`}
                     onClick={() => cambiarCarro((p) => setQuantity(p, l.productId, l.quantity + 1))}
@@ -524,7 +608,10 @@ export function PosClient({
         <div className="sticky bottom-0 z-20 bg-white border-t border-[var(--borde)] px-3 py-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-[var(--texto-suave)]">
-              {totals.unitCount} {totals.unitCount === 1 ? 'unidad' : 'unidades'}
+              {/* 12 panes y 0,35 kg de queso no suman "12,35 unidades". */}
+              {lines.some((l) => !Number.isInteger(l.quantity))
+                ? `${totals.itemCount} ${totals.itemCount === 1 ? 'producto' : 'productos'}`
+                : `${totals.unitCount} ${totals.unitCount === 1 ? 'unidad' : 'unidades'}`}
             </span>
             <span className="num text-2xl font-bold">{formatCLP(totals.total)}</span>
           </div>
@@ -588,6 +675,50 @@ export function PosClient({
         <Comprobante datos={comprobante} onCerrar={() => setComprobante(null)} />
       )}
     </div>
+  );
+}
+
+/**
+ * La cantidad de la línea, que se toca y se escribe: para 20 panes había que
+ * tocar "+" 19 veces, y un producto por kilo no admitía 0,35 (hallazgo 4 del
+ * flujo completo). Se confirma al salir del campo o con Enter; mientras se
+ * escribe, el carrito no cambia, así que borrar para escribir no saca la línea.
+ */
+function CantidadDeLinea({ linea, onCambiar, onError }: {
+  linea: CartLine;
+  onCambiar: (cantidad: number) => void;
+  onError: (texto: string) => void;
+}) {
+  const [texto, setTexto] = useState<string | null>(null);
+  const decimales = admiteDecimales(linea.unidad);
+  function confirmar() {
+    if (texto === null) return;
+    const v = validarCantidadVenta(texto, linea.unidad);
+    setTexto(null);
+    if (!v.valido) {
+      onError(texto.trim() === '0'
+        ? `Para sacar ${linea.name} de la venta, toca Quitar`
+        : `${linea.name}: ${v.error}`);
+      return;
+    }
+    if (v.valor !== linea.quantity) onCambiar(v.valor);
+  }
+  return (
+    <input
+      type="text"
+      inputMode={decimales ? 'decimal' : 'numeric'}
+      enterKeyHint="done"
+      aria-label={`Cantidad de ${linea.name}${decimales && linea.unidad ? `, en ${linea.unidad}` : ''}`}
+      value={texto ?? formatCantidad(linea.quantity)}
+      onFocus={(e) => { setTexto(formatCantidad(linea.quantity)); e.currentTarget.select(); }}
+      onChange={(e) => setTexto(e.target.value)}
+      onBlur={confirmar}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+        if (e.key === 'Escape') { setTexto(null); e.currentTarget.blur(); }
+      }}
+      className="tap w-16 h-11 rounded-lg border border-[var(--borde)] text-center num font-semibold"
+    />
   );
 }
 
