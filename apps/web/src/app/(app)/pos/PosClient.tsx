@@ -189,12 +189,7 @@ export function PosClient({
     }
   }, [notificar, cambiarCarro]);
 
-  /**
-   * La venta a medio armar vuelve al entrar (sessionStorage), y después se
-   * agrega lo que se pidió desde el consultador de precios. Espera al
-   * catálogo: precio, ofertas y stock se toman del catálogo de ahora, no de
-   * cuando se guardó, por si cambiaron mientras tanto.
-   */
+  /** La venta a medio armar vuelve al entrar (sessionStorage, más abajo). */
   const restauradoRef = useRef(false);
 
   /**
@@ -216,51 +211,71 @@ export function PosClient({
     return frescas;
   }, [notificar]);
 
-  useEffect(() => {
-    const alCambiar = () => void (async () => {
-      const actuales = linesRef.current;
-      if (actuales.length === 0) return;
-      const frescas = new Map((await refrescarLineas(actuales)).map((l) => [l.productId, l]));
-      // Contra el carrito del momento: el cajero pudo tocar algo mientras se leía.
-      cambiarCarro((prev) => prev.flatMap((l) => {
-        const f = frescas.get(l.productId);
-        return f ? [{ ...f, quantity: l.quantity, discountAmount: l.discountAmount }] : [];
-      }));
-    })();
-    window.addEventListener(EVENTO_CATALOGO, alCambiar);
-    return () => window.removeEventListener(EVENTO_CATALOGO, alCambiar);
+  /** El carrito del momento, con el catálogo de ahora (lo del cajero no se pisa). */
+  const refrescarCarro = useCallback(async (lineas: CartLine[]) => {
+    if (lineas.length === 0) return;
+    const ids = new Set(lineas.map((l) => l.productId));
+    const frescas = new Map((await refrescarLineas(lineas)).map((l) => [l.productId, l]));
+    // Contra el carrito del momento: el cajero pudo tocar algo mientras se leía.
+    // Lo que se leyó y ya no se vende sale; lo agregado después queda.
+    cambiarCarro((prev) => prev.flatMap((l) => {
+      if (!ids.has(l.productId)) return [l];
+      const f = frescas.get(l.productId);
+      return f ? [{ ...f, quantity: l.quantity, discountAmount: l.discountAmount }] : [];
+    }));
   }, [refrescarLineas, cambiarCarro]);
 
   useEffect(() => {
-    if (!hasOpenSession || catalogReady === null || restauradoRef.current) return;
-    restauradoRef.current = true;
-    void (async () => {
-      const guardado = leerCarro(usuarioId);
-      if (guardado?.lineas.length) {
-        const lineas = await refrescarLineas(guardado.lineas);
-        // Lo que se alcanzó a escanear mientras tanto se suma, no se pisa.
-        cambiarCarro((prev) => prev.reduce(addToCart, lineas));
-      }
-      if (guardado?.clienteId) {
-        const c = (await clientesParaVender().catch(() => [])).find((x) => x.id === guardado.clienteId) ?? null;
-        clienteRef.current = c;
-        setCliente(c);
-        cambiarCarro((p) => p);
-      }
-      const pedido = tomarPedidoPendiente(usuarioId);
-      if (pedido) {
-        const p = await db().products.get(pedido.productId).catch(() => undefined);
-        if (p?.isActive) agregar(p, pedido.cantidad);
-        else notificar('error', 'Ese producto no está en el catálogo de este dispositivo');
-      }
-    })();
-  }, [hasOpenSession, catalogReady, usuarioId, cambiarCarro, agregar, notificar, refrescarLineas]);
+    const alCambiar = () => void refrescarCarro(linesRef.current);
+    window.addEventListener(EVENTO_CATALOGO, alCambiar);
+    return () => window.removeEventListener(EVENTO_CATALOGO, alCambiar);
+  }, [refrescarCarro]);
 
-  // Cada cambio queda guardado en la pestaña. Solo después de restaurar: si
-  // no, el carrito vacío del primer momento borraría el guardado.
+  // Cada cambio queda guardado en la pestaña, desde que se restauró. Va
+  // declarado ANTES que la restauración, a propósito: en el primer render corre
+  // primero, todavía sin restaurar, y así no escribe el carrito vacío encima
+  // del guardado.
   useEffect(() => {
     if (restauradoRef.current) guardarCarro(usuarioId, lines, cliente?.id ?? null);
   }, [lines, cliente, usuarioId]);
+
+  // Restaurar apenas se monta, sin esperar al catálogo: sessionStorage se lee
+  // al instante. Antes esperaba a que el catálogo estuviera listo, y en
+  // Railway el cajero alcanzaba a agregar un producto en ese rato (el catálogo
+  // ya se podía buscar porque otra sincronización terminó primero): ese cambio
+  // no se guardaba nunca y la venta se perdía al salir. Precios y ofertas se
+  // refrescan después, con el catálogo del celular.
+  useEffect(() => {
+    if (!hasOpenSession || restauradoRef.current) return;
+    restauradoRef.current = true;
+    const guardado = leerCarro(usuarioId);
+    if (guardado?.lineas.length) {
+      cambiarCarro((prev) => prev.reduce(addToCart, guardado.lineas));
+      void refrescarCarro(guardado.lineas);
+    }
+    if (guardado?.clienteId) {
+      void clientesParaVender().catch(() => []).then((lista) => {
+        const c = lista.find((x) => x.id === guardado.clienteId) ?? null;
+        clienteRef.current = c;
+        setCliente(c);
+        cambiarCarro((p) => p);
+      });
+    }
+  }, [hasOpenSession, usuarioId, cambiarCarro, refrescarCarro]);
+
+  // Lo pedido desde el consultador necesita el producto del catálogo del
+  // celular: espera a que esté listo, y se agrega una sola vez.
+  const pedidoRef = useRef(false);
+  useEffect(() => {
+    if (!hasOpenSession || catalogReady === null || pedidoRef.current) return;
+    pedidoRef.current = true;
+    const pedido = tomarPedidoPendiente(usuarioId);
+    if (!pedido) return;
+    void db().products.get(pedido.productId).catch(() => undefined).then((p) => {
+      if (p?.isActive) agregar(p, pedido.cantidad);
+      else notificar('error', 'Ese producto no está en el catálogo de este dispositivo');
+    });
+  }, [hasOpenSession, catalogReady, usuarioId, agregar, notificar]);
 
   const onScan = useCallback(async (code: string) => {
     const product = await findByBarcode(code);

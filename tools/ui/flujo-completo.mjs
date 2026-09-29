@@ -253,6 +253,45 @@ await paso('Caja · el cajero abre con $10.000', async () => {
   ok('RF-M6-01', true, 'caja abierta con $10.000');
 });
 
+await paso('5 · Carrera: lo agregado mientras el POS baja el catálogo también se guarda', async () => {
+  // Lo destapó Railway: el sincronizador global terminaba antes que el del
+  // POS, el producto ya se podía buscar, el cajero lo agregaba… y ese cambio
+  // no se guardaba nunca, porque el POS restauraba recién con su catálogo
+  // listo. Acá se fuerza ese orden: la segunda consulta de ofertas (la del
+  // POS; el sincronizador global pide primero) tarda 12 s. Visto fallar el
+  // 2026-09-28 contra la compilación sin el arreglo.
+  const ctx2 = await nav.newContext(movil);
+  let bloquear = true;
+  let ofertas = 0;
+  await ctx2.route('**/rest/v1/**', async (r) => {
+    if (bloquear) return r.abort();
+    if (r.request().url().includes('/product_price_tiers') && ++ofertas === 2) {
+      await new Promise((listo) => setTimeout(listo, 12_000));
+    }
+    return r.continue().catch(() => {});
+  });
+  const q = await ctx2.newPage();
+  await q.goto(`${BASE}/login`);
+  await q.fill('#email', cajero.correo);
+  await q.fill('#password', cajero.clave);
+  await Promise.all([q.waitForURL((x) => !x.pathname.startsWith('/login'), { timeout: ESPERA }), q.click('button[type=submit]')]);
+  // Con la base bloqueada, el celular sigue sin catálogo: el POS parte de cero.
+  bloquear = false;
+  await q.goto(`${BASE}/pos`);
+  await q.getByLabel('Buscar por nombre o código').fill(nPan);
+  const r = q.locator('main li button', { hasText: nPan }).first();
+  await r.waitFor({ timeout: ESPERA });
+  const antes = ofertas;
+  await r.click();
+  await q.waitForTimeout(800);
+  await q.reload();
+  const linea = q.getByRole('textbox', { name: new RegExp(`^Cantidad de ${nPan}`) });
+  const volvio = await linea.waitFor({ timeout: 20_000 }).then(() => true, () => false);
+  ok('hallazgo 5', volvio, 'lo agregado antes de que el POS terminara de bajar el catálogo sigue ahí al recargar',
+    `consultas de ofertas antes de agregar: ${antes}`);
+  await ctx2.close();
+});
+
 const cantidadDe = (nombre) => c.getByRole('textbox', { name: new RegExp(`^Cantidad de ${nombre}`) });
 const barra = () => c.locator('.sticky.bottom-0').innerText().then((t) => t.replace(/\s+/g, ' '));
 
