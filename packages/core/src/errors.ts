@@ -37,6 +37,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   FECHA_INVALIDA: 'La fecha no puede ser futura',
   PROVEEDOR_NO_ENCONTRADO: 'No se encontró ese proveedor',
   FALTAN_CREDENCIALES_SII: 'Primero guarda la clave del SII y la del certificado',
+  FALTA_ENSAYO_SII: 'Antes de encender, hay que hacer el ensayo en el portal del SII con estas credenciales (sin firmar)',
   NOMBRE_REQUERIDO: 'El producto necesita un nombre',
   MONTO_NEGATIVO: 'El precio y el costo no pueden ser negativos',
   CANTIDAD_NEGATIVA: 'La cantidad no puede ser negativa',

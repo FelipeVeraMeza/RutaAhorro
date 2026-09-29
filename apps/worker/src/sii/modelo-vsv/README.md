@@ -45,5 +45,7 @@ así que hasta la primera emisión real (B-04, B-05) son supuestos:
 - **Que el portal redondee el IVA** como `ivaDeNeto` de core.
 
 Si alguno falla, el robot **no firma**: se detiene con "El portal no mostró la
-línea 2" o "No se pudo leer el total" y dice en qué página quedó. La primera
-emisión real hay que hacerla mirando, con una factura de una línea.
+línea 2" o "No se pudo leer el total" y dice en qué página quedó. Esto lo confirma el **ensayo**
+(`npm run ensayo-sii -w @rutaahorro/worker -- --ver`, `ensayarEnPortal`): el
+recorrido completo contra el portal real, sin firmar. Sin un ensayo exitoso
+con las credenciales vigentes, la base no deja encender la emisión (0028).

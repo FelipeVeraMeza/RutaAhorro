@@ -267,11 +267,25 @@ con la consola del servicio (`which chromium`) antes de encender la emisión. El
 robot arranca Chromium con `--no-sandbox`, que es lo que necesita un contenedor
 sin usuario privilegiado.
 
-**Antes de la primera emisión real**, correr la prueba del robot contra el
-portal simulado (`npm test -w @rutaahorro/worker`, 4 casos) y leer
-`apps/worker/src/sii/modelo-vsv/README.md` § "Lo que NO viene de VSV": el botón
-de la segunda línea y los campos de totales son supuestos hasta que se vean en
-el portal real. La primera factura real se emite mirando, con una sola línea.
+**El día que lleguen las credenciales, en este orden** (0028):
+
+1. `SII_CLAVE_CIFRADO` en la web de Railway (y la misma en tu `.env.local`).
+2. El administrador guarda las credenciales en Facturación → Emisor SII.
+   Guardarlas **apaga** la emisión: unas credenciales nuevas nunca se ensayaron.
+3. **Ensayo**, desde un PC con Chrome y el `.env.local` completo:
+   `npm run ensayo-sii -w @rutaahorro/worker -- --ver` (la ventana a la
+   vista). Entra al portal real, elige la empresa, escribe un receptor (por
+   omisión, la propia empresa; otro con `--receptor=<RUT>`) y dos líneas,
+   valida y compara el total, y **se detiene antes de firmar**: no se emite
+   nada ni se consume un folio. El resultado queda registrado y se ve en
+   Emisor SII.
+4. Recién con un ensayo exitoso, "Encender" se puede tocar (la base lo exige).
+5. La primera factura real: una línea, mirando la cola en Emitidas.
+
+El ensayo es lo que confirma los supuestos del robot que ninguna prueba local
+puede confirmar (el botón de la segunda línea y los campos de totales; ver
+`apps/worker/src/sii/modelo-vsv/README.md`). La prueba contra el portal
+simulado es `npm test -w @rutaahorro/worker` (6 casos).
 
 ---
 

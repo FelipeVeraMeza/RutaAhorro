@@ -38,8 +38,14 @@ export function BottomNav({ role }: { role: Rol }) {
         <ul className="flex">
           {barra.map((item) => (
             <li key={item.href} className="flex-1">
+              {/* Sin precarga, a propósito. Con ella, tocar "Caja" y enseguida
+                  "Vender" en una conexión lenta dejaba la URL en /pos con la Caja
+                  dibujada, y "Vender" ya no respondía (Next 15.5; lo encontró
+                  flujo-completo.mjs contra Railway, 2026-09-29). Lo mismo en la
+                  hoja "Más" y en la barra lateral. */}
               <Link
                 href={item.href}
+                prefetch={false}
                 aria-current={esActivo(item) ? 'page' : undefined}
                 className={celda(esActivo(item))}
               >
@@ -78,6 +84,7 @@ export function BottomNav({ role }: { role: Rol }) {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  prefetch={false}
                   onClick={() => setVerMas(false)}
                   aria-current={esActivo(item) ? 'page' : undefined}
                   className={`tap flex items-center gap-3 px-3 py-3.5 rounded-xl ${

@@ -40,6 +40,7 @@ export function Sidebar({
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  prefetch={false}
                   aria-current={activo ? 'page' : undefined}
                   className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                     activo

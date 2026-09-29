@@ -34,10 +34,23 @@ export interface FacturaParaPortal {
 }
 
 export interface ResultadoPortal {
+  ensayo: false;
   folio: number;
   /** El PDF que entrega el SII; null si no se pudo bajar (la factura igual quedó emitida). */
   pdf: Uint8Array | null;
+  /** La razón social que el SII puso al validar el RUT: esa es la que sale en la factura. */
+  razonSocialSii: string;
 }
+
+/** Lo que devuelve un ensayo: todo el recorrido, sin firmar. */
+export interface ResultadoEnsayo {
+  ensayo: true;
+  totalPortal: number;
+  lineas: number;
+  razonSocialSii: string;
+}
+
+type Opciones = { chromePath: string; headless?: boolean; alPaso?: (texto: string) => void; portal?: UrlsPortal };
 
 /**
  * Un error después de apretar "Firmar". La factura PUEDE estar emitida: quien
@@ -192,11 +205,55 @@ async function cerrar(browser: Browser | null) {
   }
 }
 
-export async function emitirEnPortal(
+/** Emite la factura en el portal del SII: firma, lee el folio y baja el PDF. */
+export function emitirEnPortal(f: FacturaParaPortal, cred: CredencialesSii, opciones: Opciones): Promise<ResultadoPortal> {
+  return recorrer(f, cred, opciones, false) as Promise<ResultadoPortal>;
+}
+
+/**
+ * Hace todo lo de `emitirEnPortal` —entrar, elegir la empresa, receptor,
+ * líneas, validar, comparar el total— y se detiene ANTES de "Firmar". No emite
+ * nada. Es la primera prueba con las credenciales reales (`npm run ensayo-sii`)
+ * y la condición para encender la emisión (0028).
+ */
+export function ensayarEnPortal(f: FacturaParaPortal, cred: CredencialesSii, opciones: Opciones): Promise<ResultadoEnsayo> {
+  return recorrer(f, cred, opciones, true) as Promise<ResultadoEnsayo>;
+}
+
+/** La razón social que el SII completó al validar el RUT (como VSV: campo o texto). */
+async function receptorDelSii(page: Page): Promise<string | null> {
+  // Sin funciones con nombre adentro: ver elegirEmpresa.
+  return page.evaluate(() => {
+    const exacto = document.querySelector<HTMLInputElement>('#EFXP_NMB_RECEP, input[name="EFXP_NMB_RECEP"]');
+    if (exacto?.value && exacto.value.trim().length > 2) return exacto.value.trim();
+    const campo = Array.from(document.querySelectorAll<HTMLInputElement>('input')).find((x) => {
+      const a = `${x.name} ${x.id}`.toUpperCase();
+      return a.includes('RECEP') && /NMB|SOC|RZN/.test(a) && (x.value || '').trim().length > 2;
+    });
+    if (campo) return campo.value.trim();
+    // Si el portal lo muestra como texto: la celda que sigue a "Razón Social", dentro de "Datos receptor".
+    const celdas = Array.from(document.querySelectorAll<HTMLElement>('td, th, span, div, label'));
+    let enReceptor = false;
+    for (let j = 0; j < celdas.length; j++) {
+      const t = (celdas[j].innerText || '').toUpperCase().trim();
+      if (t.includes('DATOS RECEPTOR') || t.includes('DATOS DEL RECEPTOR')) enReceptor = true;
+      if (enReceptor && (t === 'RAZÓN SOCIAL' || t === 'RAZON SOCIAL')) {
+        for (const el of [celdas[j].nextElementSibling as HTMLElement | null, celdas[j + 1], celdas[j + 2]]) {
+          const v = (el?.innerText || '').trim();
+          if (v.length > 2 && !/tipo de compra/i.test(v)) return v;
+        }
+      }
+    }
+    return null;
+  }).catch(() => null);
+}
+
+async function recorrer(
   f: FacturaParaPortal,
   cred: CredencialesSii,
-  opciones: { chromePath: string; headless?: boolean; alPaso?: (texto: string) => void; portal?: UrlsPortal },
-): Promise<ResultadoPortal> {
+  opciones: Opciones,
+  ensayo: boolean,
+): Promise<ResultadoPortal | ResultadoEnsayo> {
   const paso = opciones.alPaso ?? (() => {});
   const url = rutas(opciones.portal ?? PORTAL_REAL);
   const usuario = partirRut(cred.rutUsuario);
@@ -261,6 +318,21 @@ export async function emitirEnPortal(
     await esperarEstable(p);
     await espera(1200);
 
+    // Lo que VSV hacía y la primera adaptación no: si el SII no completa la
+    // razón social, no reconoció el RUT (mal escrito, o no es contribuyente).
+    // Se detiene acá, lejos de "Firmar". Y lo que el SII puso es lo que sale
+    // impreso: se devuelve para guardarlo.
+    paso('Leyendo el receptor que reconoció el SII');
+    let razonSocialSii: string | null = null;
+    for (let i = 0; i < 8 && !razonSocialSii; i++) {
+      razonSocialSii = await receptorDelSii(p);
+      if (!razonSocialSii) await espera(500);
+    }
+    if (!razonSocialSii) {
+      throw new Error(`El SII no reconoció el RUT del receptor ${f.receptor.rut}: no completó la razón social. `
+        + `No se firmó. ${await dondeQuedo(p)}`);
+    }
+
     await escribir(p, 'input[name="EFXP_CIUDAD_ORIGEN"]', f.ciudadEmisor || 'Santiago').catch(() => {});
     await escribir(p, 'input[name="EFXP_CIUDAD_RECEP"]', f.receptor.ciudad || 'Santiago').catch(() => {});
     await escribir(p, 'input[name="EFXP_CONTACTO"]', f.receptor.correo || f.receptor.contacto).catch(() => {});
@@ -298,6 +370,10 @@ export async function emitirEnPortal(
       throw new Error(portal.total === null
         ? `No se pudo leer el total que calculó el portal; por seguridad no se firmó. ${await dondeQuedo(p)}`
         : `El portal calculó un total de $${portal.total} y la factura es de $${f.plan.total}. No se firmó.`);
+    }
+    if (ensayo) {
+      paso('Ensayo terminado: todo cuadró y NO se firmó');
+      return { ensayo: true, totalPortal: portal.total, lineas: f.plan.lineas.length, razonSocialSii };
     }
 
     paso('Firmando la factura');
@@ -342,7 +418,7 @@ export async function emitirEnPortal(
     paso('Bajando el PDF');
     // Que el PDF no baje no invalida la factura: ya está emitida.
     const pdf = await bajarPdf(p, folio, url).catch(() => null);
-    return { folio, pdf };
+    return { ensayo: false, folio, pdf, razonSocialSii };
   } catch (e) {
     if (firmado) {
       throw new ErrorDespuesDeFirmar(`${(e as Error).message} ATENCIÓN: se apretó "Firmar"; la factura puede estar `

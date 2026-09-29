@@ -27,6 +27,8 @@ export interface OpcionesPortal {
   empresas?: Array<{ rut: string; nombre: string }>;
   /** El portal suma $1 más que la base: el robot no debe firmar. */
   totalDistinto?: boolean;
+  /** El SII no encuentra el RUT del receptor: no completa la razón social. */
+  rutDesconocido?: boolean;
   /** Después de firmar, la página no muestra el folio. */
   sinFolio?: boolean;
   folio?: number;
@@ -106,7 +108,7 @@ function formulario(rut: string, dv: string, o: OpcionesPortal) {
     <form id="f" method="POST" action="/firmar">
       <input id="EFXP_RUT_RECEP" name="EFXP_RUT_RECEP" value="${rut}">
       <input id="EFXP_DV_RECEP" name="EFXP_DV_RECEP" value="${dv}" size="1">
-      <input name="EFXP_RZN_SOC_RECEP" value="${rut ? 'RAZÓN SOCIAL QUE TRAE EL SII' : ''}" readonly>
+      <input name="EFXP_RZN_SOC_RECEP" value="${rut && !o.rutDesconocido ? 'RAZÓN SOCIAL QUE TRAE EL SII' : ''}" readonly>
       <input name="EFXP_CIUDAD_ORIGEN"><input name="EFXP_CIUDAD_RECEP"><input name="EFXP_CONTACTO">
       <table><tbody id="detalle">${lineaHtml('01')}</tbody></table>
       <input type="button" value="Agregar línea" onclick="agregarLinea()">

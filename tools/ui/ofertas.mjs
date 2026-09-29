@@ -96,8 +96,12 @@ ok('RQ-06', b1.impuesto_adicional_id === iaba, 'asigna el impuesto a un producto
 console.log('Productos · la oferta del cliente en el formulario');
 await p.goto(`${BASE}/productos`);
 await p.fill('input[placeholder^="Buscar por nombre"]', nJugo);
-await p.waitForTimeout(1500);
-await p.getByRole('button', { name: 'Editar' }).first().click();
+// El "Editar" de la fila del jugo, no el primero de la lista: con 1,5 s fijos
+// la búsqueda a veces no había filtrado y se editaba otro producto (falló así
+// en Railway y en local el 2026-09-29).
+const editarJugo = p.locator('li, tr', { hasText: nJugo }).getByRole('button', { name: 'Editar' }).first();
+await editarJugo.waitFor({ timeout: 15000 });
+await editarJugo.click();
 // Desde 2026-09-28 lo opcional va plegado para que el formulario sea corto.
 await p.getByText('Ofertas e impuesto adicional (opcional)').click();
 await p.getByRole('button', { name: '+ Agregar oferta' }).click();
@@ -111,7 +115,7 @@ const { data: tr } = await servicio.from('product_price_tiers').select('desde, p
 ok('RQ-04', tr?.length === 1 && Number(tr[0].desde) === 3 && tr[0].precio === 1400, 'la oferta quedó en la base', JSON.stringify(tr));
 
 // Una oferta que no es oferta se rechaza en el formulario, sin guardar nada.
-await p.getByRole('button', { name: 'Editar' }).first().click();
+await editarJugo.click();
 await p.getByLabel('Oferta 1: precio de cada unidad').fill('2.500');
 await p.getByRole('button', { name: 'Guardar cambios' }).click();
 const errOferta = await p.getByRole('alert').first().innerText({ timeout: 5000 }).catch(() => '');

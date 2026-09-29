@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit && tsc -p test/tsconfig.json",
     "job": "tsx src/cli.ts",
-    "test": "node --import tsx --test --test-concurrency=1 test/portal.test.ts"
+    "test": "node --import tsx --test --test-concurrency=1 test/portal.test.ts",
+    "ensayo-sii": "tsx --env-file=../../.env.local src/ensayo-sii.ts"
   },
   "dependencies": {
     "@rutaahorro/core": "*",

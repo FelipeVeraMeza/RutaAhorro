@@ -84,7 +84,8 @@ async function emitirUna(): Promise<'nada' | 'emitida' | 'error'> {
         // minutos pasa a error pidiendo revisar el portal. Nunca se reintenta sola.
         throw new ErrorDespuesDeFirmar(`El SII emitió el folio ${r.folio}, pero no se pudo registrar: ${eReg.message}`);
       }
-      return { factura: factura.numero, folio: r.folio, pdf: Boolean(pdfPath) };
+      // Lo que el SII puso como receptor es lo que salió impreso: queda en job_runs.
+      return { factura: factura.numero, folio: r.folio, pdf: Boolean(pdfPath), receptorSii: r.razonSocialSii };
     } catch (e) {
       await admin.rpc('fn_sii_registrar_error', { p_factura: factura.id, p_error: mensaje(e) });
       throw e;

@@ -132,6 +132,11 @@ export interface EstadoEmisionSii {
   actualizadoEn: string | null;
   enCola: number;
   conError: number;
+  /** 0028: los datos del emisor en Configuración (salen impresos). */
+  emisor: boolean;
+  /** Un ensayo exitoso con las credenciales guardadas hoy: sin él no se enciende. */
+  ensayoVigente: boolean;
+  ultimoEnsayo: { en: string; ok: boolean; totalPortal: number | null; razonSocialSii: string | null; error: string | null } | null;
 }
 
 export interface RepositorioFacturacion {
@@ -209,6 +214,12 @@ function aEstado(e: Fila): EstadoEmisionSii {
     activa: Boolean(e.activa), encendida: Boolean(e.encendida), credenciales: Boolean(e.credenciales),
     rutUsuario: (e.rut_usuario as string) ?? null, rutEmpresa: (e.rut_empresa as string) ?? null,
     actualizadoEn: (e.actualizado_en as string) ?? null, enCola: n(e.en_cola), conError: n(e.con_error),
+    emisor: Boolean(e.emisor), ensayoVigente: Boolean(e.ensayo_vigente),
+    ultimoEnsayo: e.ultimo_ensayo ? (() => {
+      const u = e.ultimo_ensayo as { en: string; ok: boolean; detalle?: Record<string, unknown> };
+      return { en: u.en, ok: Boolean(u.ok), totalPortal: u.detalle?.total_portal != null ? Number(u.detalle.total_portal) : null,
+        razonSocialSii: (u.detalle?.razon_social_sii as string) ?? null, error: (u.detalle?.error as string) ?? null };
+    })() : null,
   };
 }
 
@@ -356,7 +367,8 @@ const demoRepo: RepositorioFacturacion = {
   },
   async resumen() { return []; },
   async estadoSii() {
-    return { activa: false, encendida: false, credenciales: false, rutUsuario: null, rutEmpresa: null, actualizadoEn: null, enCola: 0, conError: 0 };
+    return { activa: false, encendida: false, credenciales: false, rutUsuario: null, rutEmpresa: null, actualizadoEn: null, enCola: 0, conError: 0,
+      emisor: false, ensayoVigente: false, ultimoEnsayo: null };
   },
   async activarSii() { throw new Error('La emisión real necesita la base real'); },
   async guardarCredenciales() { throw new Error('La emisión real necesita la base real'); },

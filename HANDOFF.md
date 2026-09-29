@@ -10,6 +10,54 @@
 
 ## CÓMO SEGUIR — corte 2026-09-29, léelo antes que todo
 
+**2026-09-29 (4º corte) · La factura real queda LISTA PARA ENCHUFAR, y un
+defecto de navegación que solo se veía en Railway.** Pedido de Felipe:
+"primero facturas; no tengo RUT, clave ni certificado, pero dejemos todo
+listo; la boleta automática después de vender en efectivo o transferencia
+queda para un paso siguiente". Lo hecho:
+- **Ensayo del robot** (`ensayarEnPortal`, `npm run ensayo-sii -w
+  @rutaahorro/worker -- --ver`): todo el recorrido en el portal REAL con las
+  credenciales guardadas, y se detiene antes de firmar. Confirma los supuestos
+  (2ª línea, campos de totales) sin emitir nada. Pasos del día en que lleguen
+  las credenciales: docs/09 §3.4.
+- **0028 (aplicada, 37 funciones):** `sii_ensayos`; encender exige un ensayo
+  exitoso posterior a las credenciales vigentes; **guardar credenciales apaga
+  la emisión** (disparador en la base). Emisor SII muestra "1. Datos del emisor
+  · 2. Credenciales · 3. Ensayo" con ✔/✖ y texto; "Encender" solo con los tres.
+  Avisa que la factura del POS sigue simulada.
+- **Robot:** si el SII no completa la razón social del receptor (RUT no
+  reconocido), no firma; lo que el SII puso queda en `job_runs`. 6/6 contra el
+  portal simulado (vistos fallar antes).
+- **Defecto de navegación (visto en Railway, reproducido en local, visto
+  fallar):** tocar "Caja" y enseguida "Vender" con red lenta dejaba la URL en
+  /pos con la Caja dibujada, y "Vender" ya no respondía. Es la precarga de los
+  `<Link>` del menú chocando con la navegación en curso (Next 15.5.25; la
+  15.5.26 tampoco lo arregla). Menú inferior, "Más" y barra lateral sin
+  precarga. `flujo-completo.mjs` paso 5 retrasa 1,5 s la Caja para forzarlo, y
+  ahora guarda captura y texto de la pantalla cuando un paso se corta.
+- `ofertas.mjs` editaba "el primer producto" tras 1,5 s fijos: a veces otro.
+  Ahora toca el de la fila buscada.
+- m1, m5 y m6 tenían la URL fija en localhost: **nunca se habían corrido contra
+  Railway**. Ahora aceptan `RA_BASE`.
+- Verificado en local: 406 lógica · 6 robot · db:test 157 (+1 T-45) · m1
+  20/20, m5 24/24, m6 13/13, documento 19/19, documentos 19/19, ofertas 20/20,
+  ofertas-masivas 21/21, clientes 14/14, combos 10/10, bodega-sala,
+  flujo-completo 54/54, facturacion 35/35, móvil todo.
+
+**TAREA DE FELIPE, urgente (no es código):** en Railway los enlaces de
+**invitar empleado** y **recuperar contraseña** llevan a `localhost:3000`
+(m1 14/16 contra Railway): Supabase ignora la dirección que pide la app porque
+el dominio no está autorizado. Supabase → Authentication → URL Configuration:
+**Site URL** = `https://rutaahorroweb-production.up.railway.app`; en **Redirect
+URLs** agregar `https://rutaahorroweb-production.up.railway.app/**` (dejar
+`http://localhost:3001/**`). Verificar `NEXT_PUBLIC_APP_URL` en Railway. Después
+`RA_BASE=… node tools/ui/m1-usuarios.mjs` debe dar 16/16. Y cargar
+**`SII_CLAVE_CIFRADO`** en la web de Railway antes de que el cliente guarde sus
+credenciales (sin ella, guardar responde 500).
+
+**Decisión pendiente de Felipe:** con la emisión real encendida, "Factura" en
+el POS sigue simulada: ¿el POS manda a Facturación, o encola la factura?
+
 **2026-09-29 (3er corte) · Parte 2 Facturación: RECORRIDA, APLICADA EN
 SUPABASE Y SUBIDA.** Se cerró la lista del 2º corte (abajo). 0026 y **0027**
 aplicadas (37 funciones expuestas, RLS completo). Estado verificado: 406

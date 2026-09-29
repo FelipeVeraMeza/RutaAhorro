@@ -41,7 +41,7 @@ export function EmisorSii() {
         rut_usuario: formatRut(rutUsuario), rut_empresa: formatRut(rutEmpresa), clave_sii: claveSii, clave_certificado: claveCert,
       });
       setClaveSii(''); setClaveCert('');
-      setAviso('Credenciales guardadas, cifradas.');
+      setAviso('Credenciales guardadas, cifradas. Antes de encender falta el ensayo con ellas (paso 3).');
       await cargar();
     } catch (e) {
       setError(e instanceof Error ? e.message : toUserMessage(e));
@@ -83,8 +83,33 @@ export function EmisorSii() {
             {(estado.enCola > 0 || estado.conError > 0) && (
               <p className="text-sm">En cola: {estado.enCola} · con error: {estado.conError}</p>
             )}
+            {/* 0028: lo que falta, en orden. Encender exige los tres. */}
+            <ol data-pasos className="text-sm space-y-2 pt-1" aria-label="Para emitir en el SII">
+              <Paso hecho={estado.emisor} titulo="1. Datos del emisor">
+                {estado.emisor ? 'Razón social, giro y dirección listos.'
+                  : <>Faltan: se cargan en <Link href="/configuracion" className="underline">Configuración</Link>.</>}
+              </Paso>
+              <Paso hecho={estado.credenciales} titulo="2. Credenciales del SII">
+                {estado.credenciales ? 'Guardadas, cifradas.' : 'Faltan: clave tributaria, clave del certificado y RUT de la empresa (abajo).'}
+              </Paso>
+              <Paso hecho={estado.ensayoVigente} titulo="3. Ensayo en el portal, sin firmar">
+                {estado.ensayoVigente && estado.ultimoEnsayo
+                  ? <>Pasó el {fechaHora(estado.ultimoEnsayo.en)}: el SII reconoció a «{estado.ultimoEnsayo.razonSocialSii}» y
+                      calculó el mismo total. No se emitió nada.</>
+                  : estado.ultimoEnsayo && !estado.ultimoEnsayo.ok
+                    ? <>El último ({fechaHora(estado.ultimoEnsayo.en)}) no pasó: {estado.ultimoEnsayo.error}</>
+                    : <>Falta. Con las credenciales guardadas, el equipo técnico corre{' '}
+                        <code className="text-xs">npm run ensayo-sii</code>: recorre el portal real y se detiene antes de firmar.
+                        Cambiar las credenciales pide un ensayo nuevo.</>}
+              </Paso>
+            </ol>
+            <p className="text-xs bg-amber-50 text-amber-900 px-3 py-2 rounded-lg">
+              Con la emisión encendida, solo las facturas hechas aquí van al SII. La opción “Factura” del punto de venta sigue
+              siendo simulada: por ahora, las facturas se hacen en esta pantalla.
+            </p>
             <div className="grid grid-cols-2 gap-2 pt-1">
-              <button onClick={() => void activar(!estado.encendida)} disabled={!estado.credenciales && !estado.encendida}
+              <button onClick={() => void activar(!estado.encendida)}
+                      disabled={!estado.encendida && !(estado.emisor && estado.credenciales && estado.ensayoVigente)}
                       className="tap rounded-xl border border-[var(--borde)] text-sm font-semibold disabled:opacity-50">
                 {estado.encendida ? 'Apagar' : 'Encender'}
               </button>
@@ -132,5 +157,15 @@ export function EmisorSii() {
         y se emite a mano en el portal. Las notas de crédito de facturas reales, también en el portal por ahora.
       </p>
     </div>
+  );
+}
+
+/** Un paso de la lista: la marca y el texto dicen lo mismo, el color no va solo (RNF-46). */
+function Paso({ hecho, titulo, children }: { hecho: boolean; titulo: string; children: React.ReactNode }) {
+  return (
+    <li className={`rounded-lg px-3 py-2 ${hecho ? 'bg-marca-50 text-marca-900' : 'bg-gray-50 text-[var(--texto)]'}`}>
+      <p className="font-medium">{hecho ? '✔' : '✖'} {titulo} · {hecho ? 'listo' : 'pendiente'}</p>
+      <p className="text-xs mt-0.5">{children}</p>
+    </li>
   );
 }

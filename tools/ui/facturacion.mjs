@@ -280,6 +280,18 @@ ok('RQ-48', (await tarjeta.innerText()).includes(clp(Math.abs(pagar)).slice(1)),
   `IVA ${pagar >= 0 ? 'a pagar' : 'remanente'}: débito − crédito = ${clp(Math.abs(pagar))}`);
 ok('RNF-16', (await desborde()) <= 1, 'el resumen no se desborda a 360 px', `${await desborde()} px`);
 
+console.log('Emisor SII: qué falta para emitir de verdad (0028)');
+await pestana('Emisor SII');
+const pasos = p.locator('[data-pasos]');
+await pasos.waitFor({ timeout: 15000 });
+const textoPasos = (await pasos.innerText()).replace(/\n+/g, ' · ');
+const { count: conCred } = await servicio.from('sii_credenciales').select('tenant_id', { count: 'exact', head: true }).eq('tenant_id', tenant);
+ok('RQ-49', /1\. Datos del emisor · listo/.test(textoPasos) && /3\. Ensayo en el portal, sin firmar · pendiente/.test(textoPasos)
+  && (conCred ? true : /2\. Credenciales del SII · pendiente/.test(textoPasos)),
+  'la lista dice qué está listo y qué falta, con texto y no solo color', textoPasos.slice(0, 200));
+ok('RQ-49', await p.getByRole('button', { name: 'Encender' }).isDisabled(), 'sin ensayo, "Encender" no se puede tocar');
+ok('RNF-16', (await desborde()) <= 1, 'Emisor SII no se desborda a 360 px', `${await desborde()} px`);
+
 console.log(`\nErrores de JavaScript o HTTP: ${errores.length ? errores.join(' | ') : 'ninguno'}`);
 if (errores.length) ok('RNF', false, 'sin errores de JavaScript ni respuestas 4xx/5xx');
 await nav.close();

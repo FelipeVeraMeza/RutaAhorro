@@ -24,6 +24,12 @@ const factura = (lineas, extra = {}) => ({
 const kardex = async (producto) => (await banco.su.query(
   `select movement_type::text as type, quantity::float as q, reference_type from inventory_movements
     where product_id = $1 order by created_at, id`, [producto])).rows;
+/** Lo que hace `npm run ensayo-sii` cuando el ensayo sale bien (0028). */
+async function ensayoOk(L) {
+  const w = await servicio();
+  await w.query(`select fn_sii_registrar_ensayo($1, true, '{"total_portal": 1190}')`, [L.tenant]);
+  await w.end();
+}
 async function servicio() {
   const c = new pg.Client(banco.conn);
   await c.connect();
@@ -229,6 +235,42 @@ test('encender la emisión real exige credenciales y emisor, y solo el administr
   assert.match((await intentar(rpc(await banco.como(L.supervisor), 'fn_activar_emision_sii', { p_activa: true }))).error, /SIN_PERMISO/);
 });
 
+// 0028: nada se emite de verdad sin haber visto el portal real con estas
+// credenciales. El ensayo recorre todo y no firma (portal.ts, ensayarEnPortal).
+test('encender exige un ensayo exitoso con las credenciales vigentes; cambiarlas apaga la emisión', async () => {
+  const L = await nuevoLocal(banco);
+  const adm = await banco.como(L.admin);
+  await rpc(adm, 'fn_guardar_emisor', { p_datos: { rut: '76.086.428-5', razon_social: 'Almacén', giro: 'Almacén', direccion: 'Calle 1', comuna: 'Maipú' } });
+  await banco.su.query(`insert into sii_credenciales (tenant_id, rut_usuario, clave_sii, clave_certificado, rut_empresa)
+                        values ($1, '11.111.111-1', 'x', 'x', '76.086.428-5')`, [L.tenant]);
+  let e = await rpc(adm, 'fn_estado_emision_sii', {});
+  assert.deepEqual([e.emisor, e.credenciales, e.ensayo_vigente, e.ultimo_ensayo], [true, true, false, null]);
+  assert.match((await intentar(rpc(adm, 'fn_activar_emision_sii', { p_activa: true }))).error, /FALTA_ENSAYO_SII/);
+
+  const w = await servicio();
+  await w.query(`select fn_sii_registrar_ensayo($1, false, '{"error": "No apareció el formulario"}')`, [L.tenant]);
+  e = await rpc(adm, 'fn_estado_emision_sii', {});
+  assert.equal(e.ultimo_ensayo.ok, false);
+  assert.equal(e.ultimo_ensayo.detalle.error, 'No apareció el formulario');
+  assert.match((await intentar(rpc(adm, 'fn_activar_emision_sii', { p_activa: true }))).error, /FALTA_ENSAYO_SII/,
+    'un ensayo fallido no sirve');
+
+  await w.query(`select fn_sii_registrar_ensayo($1, true, '{"total_portal": 1190}')`, [L.tenant]);
+  e = await rpc(adm, 'fn_activar_emision_sii', { p_activa: true });
+  assert.deepEqual([e.encendida, e.activa, e.ensayo_vigente], [true, true, true]);
+
+  // Credenciales nuevas: nunca se ensayaron. La emisión se apaga sola.
+  await banco.su.query(`update sii_credenciales set clave_sii = 'otra' where tenant_id = $1`, [L.tenant]);
+  e = await rpc(adm, 'fn_estado_emision_sii', {});
+  assert.deepEqual([e.encendida, e.activa, e.ensayo_vigente], [false, false, false]);
+
+  // El registro de ensayos es del worker: nadie más lo escribe ni lo lee.
+  assert.match((await intentar(rpc(adm, 'fn_sii_registrar_ensayo', { p_tenant: L.tenant, p_ok: true, p_detalle: {} }))).error,
+    /permission denied|not exist|No function/i);
+  assert.match((await intentar(adm.query('select * from sii_ensayos'))).error, /permission denied/);
+  await w.end();
+});
+
 test('portal del SII: queda por emitir, el worker la emite con el folio del SII', async () => {
   const L = await nuevoLocal(banco);
   const pan = await L.producto({ nombre: 'Pan', precio: 1000, stock: 10 });
@@ -238,6 +280,7 @@ test('portal del SII: queda por emitir, el worker la emite con el folio del SII'
   await rpc(adm, 'fn_guardar_emisor', { p_datos: { rut: '76.086.428-5', razon_social: 'Almacén', giro: 'Almacén', direccion: 'Calle 1', comuna: 'Maipú' } });
   await banco.su.query(`insert into sii_credenciales (tenant_id, rut_usuario, clave_sii, clave_certificado, rut_empresa)
                         values ($1, '11.111.111-1', 'x', 'x', '76.086.428-5')`, [L.tenant]);
+  await ensayoOk(L);
   await rpc(adm, 'fn_activar_emision_sii', { p_activa: true });
 
   const f = await rpc(adm, 'fn_emitir_factura_manual', factura([{ product_id: pan, cantidad: 2, precio: 1000 }]));
@@ -275,6 +318,7 @@ test('portal del SII: el error se reintenta o se descarta devolviendo el stock',
   await rpc(adm, 'fn_guardar_emisor', { p_datos: { rut: '76.086.428-5', razon_social: 'Almacén', giro: 'Almacén', direccion: 'Calle 1', comuna: 'Maipú' } });
   await banco.su.query(`insert into sii_credenciales (tenant_id, rut_usuario, clave_sii, clave_certificado, rut_empresa)
                         values ($1, '11.111.111-1', 'x', 'x', '76.086.428-5')`, [L.tenant]);
+  await ensayoOk(L);
   await rpc(adm, 'fn_activar_emision_sii', { p_activa: true });
   const f = await rpc(adm, 'fn_emitir_factura_manual', factura([{ product_id: leche, cantidad: 3, precio: 1200 }]));
   const w = await servicio();

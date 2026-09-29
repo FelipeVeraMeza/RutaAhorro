@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import { randomBytes } from 'node:crypto';
 
 const env = dotenv.parse(fs.readFileSync('.env.local'));
-const BASE = 'http://localhost:3001';
+const BASE = process.env.RA_BASE ?? 'http://localhost:3001';
 const opc = { auth: { persistSession: false, autoRefreshToken: false } };
 const servicio = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY, opc);
 const ref = new URL(env.NEXT_PUBLIC_SUPABASE_URL).hostname.split('.')[0];

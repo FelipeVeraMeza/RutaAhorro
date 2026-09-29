@@ -43,7 +43,16 @@ function ok(rf, cumple, texto, detalle = '') {
 /** Un paso que se cae no corta los siguientes: queda como falla y se sigue. */
 async function paso(titulo, fn) {
   console.log(titulo);
-  try { await fn(); } catch (e) { ok('flujo', false, `el paso se cortó: ${titulo}`, String(e?.message ?? e).split('\n')[0]); }
+  try { await fn(); } catch (e) {
+    ok('flujo', false, `el paso se cortó: ${titulo}`, String(e?.message ?? e).split('\n')[0]);
+    // Qué había en pantalla: sin esto, un corte en Railway no se puede explicar.
+    let i = 0;
+    for (const ctx of nav.contexts()) for (const pg of ctx.pages()) {
+      i++;
+      await pg.screenshot({ path: `tools/ui/.capturas/flujo/corte-${titulo.slice(0, 12).replace(/\W+/g, '_')}-${i}.png` }).catch(() => {});
+      console.log(`    pantalla ${i} (${new URL(pg.url()).pathname}): ${(await pg.locator('main').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300)}`);
+    }
+  }
 }
 async function usuario(alias) {
   const correo = `qa-${alias}-${ref}@example.com`;
@@ -350,9 +359,14 @@ await paso('4 · POS: la cantidad se escribe', async () => {
 });
 
 await paso('5 · La venta a medio armar no se pierde al salir del POS', async () => {
+  // Caja responde lento, como en Railway, y se vuelve a Vender antes de que
+  // termine de cargar. Así se encontró (2026-09-29): la URL decía /pos y la
+  // pantalla se quedaba en la Caja, sin forma de salir tocando "Vender".
+  await c.route('**/caja?_rsc=*', async (r) => { await new Promise((ok) => setTimeout(ok, 1500)); await r.continue().catch(() => {}); });
   await c.getByRole('link', { name: /Caja/ }).first().click();
   await c.waitForURL((u) => u.pathname === '/caja', { timeout: ESPERA });
   await c.getByRole('link', { name: /Vender/ }).first().click();
+  await c.unroute('**/caja?_rsc=*');
   await c.waitForURL((u) => u.pathname === '/pos', { timeout: ESPERA });
   await cantidadDe(nQueso).waitFor({ timeout: ESPERA });
   ok('hallazgo 5', (await cantidadDe(nPan).inputValue()) === '12' && (await cantidadDe(nQueso).inputValue()) === '0,35',

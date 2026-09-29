@@ -15,7 +15,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { planFacturaPortal, resumenFactura, montoLinea } from '@rutaahorro/core';
-import { emitirEnPortal, ErrorDespuesDeFirmar, type CredencialesSii } from '../src/sii/portal.js';
+import { emitirEnPortal, ensayarEnPortal, ErrorDespuesDeFirmar, type CredencialesSii } from '../src/sii/portal.js';
 import { levantarPortal, type PortalSimulado } from './portal-simulado.js';
 
 const navegador = [
@@ -52,9 +52,9 @@ async function portal(o: Parameters<typeof levantarPortal>[0] = {}) {
   abiertos.push(p);
   return p;
 }
-const emitir = (p: PortalSimulado) => emitirEnPortal(factura(), CRED, {
-  chromePath: navegador as string, portal: { sii: p.url, misii: p.url },
-});
+const opciones = (p: PortalSimulado) => ({ chromePath: navegador as string, portal: { sii: p.url, misii: p.url } });
+const emitir = (p: PortalSimulado) => emitirEnPortal(factura(), CRED, opciones(p));
+const ensayar = (p: PortalSimulado) => ensayarEnPortal(factura(), CRED, opciones(p));
 
 test('emite una factura de dos líneas: folio, PDF y todo lo escrito en su lugar', { skip: sinNavegador, timeout: 180_000 }, async () => {
   const p = await portal({
@@ -63,7 +63,9 @@ test('emite una factura de dos líneas: folio, PDF y todo lo escrito en su lugar
   });
   const r = await emitir(p);
 
+  assert.ok(!r.ensayo);
   assert.equal(r.folio, 4567);
+  assert.equal(r.razonSocialSii, 'RAZÓN SOCIAL QUE TRAE EL SII', 'guarda lo que el SII puso como receptor');
   assert.ok(r.pdf && String.fromCharCode(...r.pdf.subarray(0, 4)) === '%PDF', 'bajó el PDF');
   assert.deepEqual(p.logins, [{ rut: '12345678-5', clave: 'clave-sii-qa' }]);
   assert.equal(p.empresaElegida, '76086428-5', 'eligió la empresa por RUT, no la primera de la lista');
@@ -111,5 +113,29 @@ test('un error después de firmar avisa que la factura puede estar emitida', { s
 test('si la cuenta no puede emitir por esa empresa, se detiene antes de escribir nada', { skip: sinNavegador, timeout: 180_000 }, async () => {
   const p = await portal({ empresas: [{ rut: '77777777-7', nombre: 'OTRA EMPRESA' }, { rut: '99999999-9', nombre: 'TERCERA' }] });
   await assert.rejects(emitir(p), /no aparece entre las que puede emitir.*OTRA EMPRESA/);
+  assert.equal(p.firmas.length, 0);
+});
+
+// El ensayo es lo que se corre el día que lleguen las credenciales: todo el
+// recorrido en el portal real, sin apretar "Firmar". Confirma los supuestos
+// (segunda línea, campos de totales) sin emitir nada.
+test('ensayo: recorre todo, compara el total y NO firma', { skip: sinNavegador, timeout: 180_000 }, async () => {
+  const p = await portal();
+  const r = await ensayar(p);
+  assert.ok(r.ensayo);
+  assert.equal(r.totalPortal, factura().plan.total);
+  assert.equal(r.lineas, 2);
+  assert.equal(r.razonSocialSii, 'RAZÓN SOCIAL QUE TRAE EL SII');
+  assert.equal(p.firmas.length, 0, 'no se apretó Firmar');
+  assert.equal(p.salidas, 1, 'cerró la sesión');
+});
+
+test('si el SII no reconoce el RUT del receptor, no firma', { skip: sinNavegador, timeout: 180_000 }, async () => {
+  const p = await portal({ rutDesconocido: true });
+  await assert.rejects(emitir(p), (e: Error) => {
+    assert.ok(!(e instanceof ErrorDespuesDeFirmar));
+    assert.match(e.message, /El SII no reconoció el RUT del receptor 76\.123\.456-0/);
+    return true;
+  });
   assert.equal(p.firmas.length, 0);
 });
