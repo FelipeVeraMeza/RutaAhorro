@@ -43,6 +43,10 @@ queda para un paso siguiente". Lo hecho:
   20/20, m5 24/24, m6 13/13, documento 19/19, documentos 19/19, ofertas 20/20,
   ofertas-masivas 21/21, clientes 14/14, combos 10/10, bodega-sala,
   flujo-completo 54/54, facturacion 35/35, móvil todo.
+- **Contra Railway con d07847f:** flujo-completo 54/54 (el paso 5, que antes se
+  pegaba), combos 10/10, ofertas 20/20, facturacion 35/35, móvil todo. Con
+  a8f7dbe ya habían pasado m5, m6, documento, documentos, ofertas-masivas,
+  clientes y bodega-sala. m1 espera la configuración de Supabase (abajo).
 
 **TAREA DE FELIPE, urgente (no es código):** en Railway los enlaces de
 **invitar empleado** y **recuperar contraseña** llevan a `localhost:3000`
