@@ -115,11 +115,11 @@ const p = await entrar(admin);
 // ---------------------------------------------------------------- 1 · crear
 await paso('1 · Productos: la cabecera y el formulario, en el celular', async () => {
   await p.goto(`${BASE}/productos`);
-  await p.getByRole('button', { name: '+ Producto' }).waitFor({ timeout: ESPERA });
+  await p.getByRole('button', { name: 'Nuevo producto' }).waitFor({ timeout: ESPERA });
   const cabecera = await p.locator('main').first().innerText();
   ok('hallazgo 7', ['Etiquetas', 'Ofertas', 'Importar'].every((t) => cabecera.includes(t)),
     'los botones de la cabecera dicen Etiquetas, Ofertas e Importar');
-  await p.getByRole('button', { name: '+ Producto' }).click();
+  await p.getByRole('button', { name: 'Nuevo producto' }).click();
   const f = p.getByRole('dialog');
   await f.getByRole('button', { name: 'Crear producto' }).waitFor();
   // Expresiones con mayúscula y ancladas: "unidad" también aparece en ayudas y totales.

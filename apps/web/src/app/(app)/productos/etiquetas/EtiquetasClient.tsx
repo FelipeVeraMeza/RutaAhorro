@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import {
   formatCLP, etiquetaSvg, generateInternalBarcode, toUserMessage,
 } from '@rutaahorro/core';
 import { repoProductos, type Producto } from '@/lib/productos';
+import { Encabezado } from '@/components/Encabezado';
 
 /**
  * Impresión de etiquetas con código de barra (RF-M2-13).
@@ -146,14 +146,14 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
 
   return (
     <div className="px-4 py-5">
-      <div className="flex items-center gap-3 mb-1 no-imprimir">
-        <Link href="/productos" className="tap inline-flex items-center text-sm text-[var(--texto-suave)]">← Productos</Link>
-        <h1 className="text-lg font-semibold">Etiquetas</h1>
+      <div className="no-imprimir">
+        <Encabezado
+          titulo="Etiquetas"
+          icono="precio"
+          volver={{ href: '/productos', texto: 'Productos' }}
+          descripcion="Imprime códigos de barra para los productos que no traen uno de fábrica. Se leen con el mismo escáner de Vender."
+        />
       </div>
-      <p className="text-sm text-[var(--texto-suave)] mb-4 no-imprimir">
-        Imprime códigos de barra para los productos que no traen uno de fábrica.
-        Se lee con el mismo escáner del punto de venta.
-      </p>
 
       {aviso && (
         <p role="status" className="text-sm bg-marca-50 text-marca-900 px-3 py-2 rounded-lg mb-3 no-imprimir">

@@ -9,6 +9,8 @@ import { repoClientes, type Cliente, type DatosCliente } from '@/lib/datos/clien
 import { repoProductos, type Producto } from '@/lib/productos';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
+import { Encabezado } from '@/components/Encabezado';
+import { Icono } from '@/components/Icono';
 
 /**
  * Clientes y precio por cliente (0022, RQ-07, RQ-20, RQ-21).
@@ -45,18 +47,16 @@ export function ClientesClient() {
 
   return (
     <div className="px-4 py-5 max-w-2xl mx-auto space-y-4" aria-busy={cargando}>
-      <header className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold">Clientes</h1>
-          <p className="text-sm text-[var(--texto-suave)]">
-            Precio mayorista o especial, y los datos para la factura.
-          </p>
-        </div>
-        <button onClick={() => setEditando('nuevo')}
-                className="tap shrink-0 px-4 rounded-xl bg-marca-500 text-white text-sm font-semibold">
-          + Cliente
-        </button>
-      </header>
+      <Encabezado
+        titulo="Clientes"
+        icono="clientes"
+        descripcion="Precio mayorista o especial, y los datos para la factura. El cajero los elige en Vender."
+        acciones={
+          <button onClick={() => setEditando('nuevo')} className="btn btn-primario btn-chico">
+            <Icono nombre="agregar" tamano={16} /> Nuevo cliente
+          </button>
+        }
+      />
 
       {aviso && (
         <p role={aviso.tipo === 'error' ? 'alert' : 'status'}

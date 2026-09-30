@@ -1,6 +1,7 @@
 import { config as loadEnv } from 'dotenv';
 import { resolve } from 'node:path';
 import type { NextConfig } from 'next';
+import { execSync } from 'node:child_process';
 
 /**
  * Las variables de entorno viven en UN solo lugar: la raíz del repositorio.
@@ -35,8 +36,24 @@ if (process.env.RAILWAY_ENVIRONMENT && process.env.npm_lifecycle_event === 'buil
   }
 }
 
+/**
+ * Qué código está corriendo (RF-M9-09): el commit que publicó Railway, o el
+ * de la carpeta local. Queda fijo al compilar y se muestra en Novedades y al
+ * pie del menú, para que "¿ya tienes la versión nueva?" se responda mirando.
+ */
+function commitActual(): string {
+  const deRailway = process.env.RAILWAY_GIT_COMMIT_SHA;
+  if (deRailway) return deRailway.slice(0, 7);
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return 'local';
+  }
+}
+
 const config: NextConfig = {
   reactStrictMode: true,
+  env: { NEXT_PUBLIC_COMMIT: commitActual() },
   // Quita el botón flotante "N" de Next.js en desarrollo. Solo aparecía en
   // modo dev (nunca en producción), pero tapaba la barra de navegación.
   devIndicators: false,
@@ -46,6 +63,9 @@ const config: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
   async headers() {
     return [
+      // El service worker siempre fresco: si el navegador lo guardara, una
+      // versión vieja seguiría decidiendo qué se guarda.
+      { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }] },
       {
         source: '/:path*',
         headers: [

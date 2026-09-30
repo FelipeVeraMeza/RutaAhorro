@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -15,6 +16,7 @@ import { db, type LocalProduct } from '@/lib/offline/db';
 import { pedirAgregarAlPos } from '@/lib/offline/carro';
 import { Campo } from '@/components/Campo';
 import { Escaner } from '../pos/Escaner';
+import { Encabezado } from '@/components/Encabezado';
 
 /**
  * Consultador de precios (pedido del cliente, reunión 2026-09-19).
@@ -33,8 +35,10 @@ import { Escaner } from '../pos/Escaner';
  * consultador sigue sin tocar el carrito: deja el pedido y el POS lo agrega a
  * la venta en curso, que se conserva (sessionStorage).
  */
-export function PrecioClient({ usuarioId = '', puedeVender = false }: {
+export function PrecioClient({ usuarioId = '', puedeVender = false, puedeCrearProductos = false }: {
   usuarioId?: string;
+  /** Admin, supervisor y bodega: un código desconocido se crea desde acá (RF-M5-04). */
+  puedeCrearProductos?: boolean;
   /** Admin, supervisor y vendedor. Bodega consulta, pero no vende. */
   puedeVender?: boolean;
 }) {
@@ -126,10 +130,11 @@ export function PrecioClient({ usuarioId = '', puedeVender = false }: {
 
   return (
     <div className="px-4 py-4">
-      <h1 className="text-lg font-semibold mb-1">Consultar precio</h1>
-      <p className="text-xs text-[var(--texto-suave)] mb-4">
-        Escanea o busca el producto. Consultar no toca la venta en curso.
-      </p>
+      <Encabezado
+        titulo="Consultar precio"
+        icono="precio"
+        descripcion="Escanea o busca el producto. Consultar no toca la venta en curso, y funciona sin internet."
+      />
 
       {aviso && (
         <p role="status" className="text-sm bg-[var(--fondo)] px-3 py-2 rounded-lg mb-3">
@@ -257,9 +262,20 @@ export function PrecioClient({ usuarioId = '', puedeVender = false }: {
       )}
 
       {!elegido && query.trim().length >= 2 && resultados.length === 0 && (
-        <p className="text-center text-sm text-[var(--texto-suave)] py-8">
-          No hay ningún producto que se llame así.
-        </p>
+        /\d{4,}/.test(query.trim()) && /^[0-9A-Za-z-]{4,40}$/.test(query.trim()) ? (
+          <div className="tarjeta p-4 text-sm text-center mt-2">
+            <p className="font-medium">El código <span className="num">{query.trim()}</span> no está en el catálogo.</p>
+            {puedeCrearProductos && (
+              <Link href={`/productos?nuevo=${encodeURIComponent(query.trim())}`} prefetch={false} className="btn btn-secundario w-full mt-3">
+                Crear el producto con este código
+              </Link>
+            )}
+          </div>
+        ) : (
+          <p className="text-center text-sm text-[var(--texto-suave)] py-8">
+            No hay ningún producto que se llame así.
+          </p>
+        )
       )}
     </div>
   );

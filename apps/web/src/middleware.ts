@@ -60,6 +60,8 @@ export async function middleware(request: NextRequest) {
   const user = claims?.claims?.sub ? claims.claims : null;
   const path = request.nextUrl.pathname;
   const isAuthRoute = path.startsWith('/login') || path.startsWith('/recuperar');
+  // El buzón de errores recibe también los de la pantalla de ingreso (RNF-40).
+  if (path === '/api/errores') return response;
 
   if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone();

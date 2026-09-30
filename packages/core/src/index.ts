@@ -22,6 +22,8 @@ export * from './codigos.js';
 export * from './xlsx.js';
 export * from './csv.js';
 export * from './fechas.js';
+export * from './tendencia.js';
+export * from './compras.js';
 export * from './precios.js';
 export * from './clientes.js';
 export * from './combos.js';

@@ -1,7 +1,8 @@
 'use client';
+import { Icono } from '@/components/Icono';
+import { Encabezado } from '@/components/Encabezado';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   parsearProductos, parsearFilas, leerXlsx, ErrorPlanilla, plantillaCSV,
@@ -116,9 +117,9 @@ export function ImportarClient() {
           </p>
           <button
             onClick={descargarPlantilla}
-            className="tap w-full py-3 rounded-xl border border-[var(--borde)] font-medium text-sm"
+            className="btn btn-secundario w-full"
           >
-            ⬇ Descargar plantilla CSV
+            <Icono nombre="descargar" tamano={18} /> Descargar plantilla CSV
           </button>
 
           <details className="mt-3">
@@ -394,12 +395,12 @@ export function ImportarClient() {
 
 function Cabecera() {
   return (
-    <div className="flex items-center gap-3">
-      <Link href="/productos" className="tap text-sm text-[var(--texto-suave)]">
-        ← Productos
-      </Link>
-      <h1 className="text-lg font-semibold">Carga masiva</h1>
-    </div>
+    <Encabezado
+      titulo="Carga masiva"
+      icono="subir"
+      volver={{ href: '/productos', texto: 'Productos' }}
+      descripcion="Sube una planilla de Excel o CSV con tus productos. Se revisa entera antes de cargar nada."
+    />
   );
 }
 

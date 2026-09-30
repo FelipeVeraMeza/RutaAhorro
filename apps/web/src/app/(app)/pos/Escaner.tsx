@@ -1,4 +1,5 @@
 'use client';
+import { Icono } from '@/components/Icono';
 
 import { useEffect } from 'react';
 import { useScanner } from '@/lib/scanner/useScanner';
@@ -66,13 +67,14 @@ export function Escaner({
         // Con la cámara en error, el botón reintenta: pedirle al cajero que la
         // apague y la vuelva a prender era el truco que había que saberse.
         onClick={activo && state === 'error' ? () => void start() : onToggle}
-        className={`tap w-full max-w-md mx-auto block mt-2 py-3.5 rounded-xl font-semibold text-base ${
+        className={`tap w-full max-w-md mx-auto flex items-center justify-center gap-2 mt-2 py-3.5 rounded-xl font-semibold text-base ${
           activo
             ? 'border border-[var(--borde)] bg-white'
             : 'bg-marca-500 text-white active:bg-marca-600'
         }`}
       >
-        {activo && state === 'error' ? 'Reintentar cámara' : activo ? 'Cerrar cámara' : '📷  Escanear producto'}
+        {!activo && <Icono nombre="escanear" tamano={22} />}
+        {activo && state === 'error' ? 'Reintentar cámara' : activo ? 'Cerrar cámara' : 'Escanear producto'}
       </button>
     </div>
   );

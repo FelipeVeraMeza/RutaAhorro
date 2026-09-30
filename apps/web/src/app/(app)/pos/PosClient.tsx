@@ -1,4 +1,5 @@
 'use client';
+import { Icono } from '@/components/Icono';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -48,8 +49,10 @@ function lineaDesde(p: LocalProduct, quantity: number): CartLine {
 // se agregue, vuelven a entrar `role` y `maxDiscountPct` para aplicar el tope
 // por rol con `isDiscountAllowed` de @rutaahorro/core.
 export function PosClient({
-  hasOpenSession, local = '', cajero = '', usuarioId = '', puedeForzarStock = false,
+  hasOpenSession, local = '', cajero = '', usuarioId = '', puedeForzarStock = false, puedeCrearProductos = false,
 }: {
+  /** Admin y supervisor: un código desconocido se puede crear desde acá (RF-M5-04). */
+  puedeCrearProductos?: boolean;
   hasOpenSession: boolean;
   /** Dueño del carrito guardado en la pestaña: otra persona no hereda la venta a medias. */
   usuarioId?: string;
@@ -433,7 +436,7 @@ export function PosClient({
   if (!hasOpenSession) {
     return (
       <div className="px-5 py-12 text-center">
-        <p className="text-5xl mb-4" aria-hidden>💵</p>
+        <span className="inline-grid place-items-center w-16 h-16 rounded-2xl bg-marca-50 text-marca-700 mb-4"><Icono nombre="caja" tamano={32} /></span>
         <h1 className="text-lg font-semibold mb-2">Abre tu caja para vender</h1>
         <p className="text-sm text-[var(--texto-suave)] mb-6 max-w-xs mx-auto">
           Declara con cuánto efectivo partes. Así, al cerrar, el sistema puede decirte si cuadra.
@@ -494,9 +497,28 @@ export function PosClient({
           </p>
         )}
         {query.trim().length >= 2 && results.length === 0 && catalogReady !== false && (
-          <p className="text-sm text-[var(--texto-suave)] mt-2 px-1">
-            No hay productos activos que coincidan con «{query.trim()}».
-          </p>
+          /^[0-9A-Za-z-]{4,40}$/.test(query.trim()) && /\d{4,}/.test(query.trim()) ? (
+            // RF-M5-04 · Un código que no está en el catálogo: antes solo se
+            // decía y había que ir a Productos, buscar el botón y volver a
+            // escanear. La venta armada no se pierde (queda en la pestaña).
+            <div className="tarjeta mt-2 p-3 text-sm">
+              <p className="font-medium">El código <span className="num">{query.trim()}</span> no está en el catálogo.</p>
+              {puedeCrearProductos ? (
+                <Link href={`/productos?nuevo=${encodeURIComponent(query.trim())}`} prefetch={false}
+                      className="btn btn-secundario w-full mt-2">
+                  <Icono nombre="agregar" tamano={18} /> Crear el producto con este código
+                </Link>
+              ) : (
+                <p className="text-[var(--texto-suave)] mt-1">
+                  Véndelo buscándolo por nombre, y pídele a un supervisor que le agregue este código.
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--texto-suave)] mt-2 px-1">
+              No hay productos activos que coincidan con «{query.trim()}».
+            </p>
+          )
         )}
         {results.length > 0 && (
           <ul className="tarjeta mt-2 divide-y divide-[var(--borde)] overflow-hidden">
@@ -531,7 +553,7 @@ export function PosClient({
         {cliente ? (
           <div className="flex items-center gap-2 tarjeta px-3 py-1.5">
             <span className="min-w-0 flex-1 text-sm">
-              <span aria-hidden>🤝 </span><strong className="font-semibold">{cliente.nombre}</strong>
+              <strong className="font-semibold inline-flex items-center gap-1.5"><Icono nombre="clientes" tamano={16} className="text-marca-700" />{cliente.nombre}</strong>
               <span className="block text-xs text-[var(--texto-suave)]">{describirCliente(cliente)}</span>
             </span>
             <button onClick={() => setEligiendoCliente(true)} className="tap px-2 text-sm underline">Cambiar</button>
@@ -541,7 +563,7 @@ export function PosClient({
         ) : (
           <button onClick={() => setEligiendoCliente(true)}
                   className="tap w-full px-3 rounded-xl border border-dashed border-[var(--borde)] text-sm text-[var(--texto-suave)] text-left">
-            🤝 Elegir cliente (precio mayorista o factura)
+            <span className="inline-flex items-center gap-2"><Icono nombre="clientes" tamano={18} /> Elegir cliente (precio mayorista o factura)</span>
           </button>
         )}
       </div>

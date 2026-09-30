@@ -1,7 +1,8 @@
 'use client';
+import { Icono } from '@/components/Icono';
+import { Encabezado } from '@/components/Encabezado';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   formatCLP, parseCLP, validarCantidad, weightedAverageCost, costVariationPct,
@@ -201,10 +202,11 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
 
   return (
     <div className="px-4 py-5 pb-56 lg:pb-40">
-      <div className="flex items-center gap-3 mb-4">
-        <Link href="/proveedores" className="tap inline-flex items-center text-sm text-[var(--texto-suave)]">← Compras</Link>
-        <h1 className="text-lg font-semibold">Recibir mercadería</h1>
-      </div>
+      <Encabezado
+        titulo="Recibir mercadería"
+        volver={{ href: '/proveedores', texto: 'Compras' }}
+        descripcion="Lo que llegó del proveedor: entra a la bodega y recalcula el costo. Los perecibles piden su vencimiento."
+      />
 
       {/* Documento */}
       <section className="tarjeta p-4 mb-3 space-y-3">
@@ -257,7 +259,7 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
               escaneando ? 'border border-[var(--borde)]' : 'bg-marca-500 text-white'
             }`}
           >
-            📷
+            <Icono nombre="escanear" tamano={20} />
           </button>
         </div>
 

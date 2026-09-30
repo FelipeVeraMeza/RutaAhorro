@@ -14,6 +14,7 @@ import { NuevaFactura, type BaseFactura } from './NuevaFactura';
 import { Recibidas } from './Recibidas';
 import { Resumen } from './Resumen';
 import { EmisorSii } from './EmisorSii';
+import { Encabezado } from '@/components/Encabezado';
 
 type Pestana = 'emitidas' | 'nueva' | 'recibidas' | 'resumen' | 'sii';
 
@@ -53,12 +54,11 @@ export function FacturacionClient({ esAdmin, usuarioId }: { esAdmin: boolean; us
 
   return (
     <div className="px-4 py-5">
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <div>
-          <h1 className="text-lg font-semibold">Facturación</h1>
-          <p className="text-xs text-[var(--texto-suave)]">Facturas a empresas, compras y el resumen del mes</p>
-        </div>
-      </div>
+      <Encabezado
+        titulo="Facturación"
+        icono="facturacion"
+        descripcion="Facturas a empresas, las facturas de tus compras y el resumen de IVA del mes. La boleta sale sola desde Vender."
+      />
 
       <div role="tablist" aria-label="Secciones de facturación" className="flex gap-2 overflow-x-auto sin-scrollbar pb-1 mb-3">
         {pestanas.map(([id, texto]) => (

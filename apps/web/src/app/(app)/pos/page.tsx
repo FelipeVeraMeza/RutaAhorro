@@ -18,7 +18,7 @@ export default async function PosPage() {
     const caja = leerCajaDemo((await cookies()).get(DEMO_COOKIE_CAJA)?.value, user.id);
     return (
       <PosClient hasOpenSession={caja.abierta} local="Almacén RutaAhorro" cajero={user.fullName}
-                 usuarioId={user.id} puedeForzarStock={puedeForzarStock} />
+                 usuarioId={user.id} puedeForzarStock={puedeForzarStock} puedeCrearProductos={puedeForzarStock} />
     );
   }
 
@@ -49,6 +49,7 @@ export default async function PosPage() {
       cajero={user.fullName}
       usuarioId={user.id}
       puedeForzarStock={puedeForzarStock}
+      puedeCrearProductos={puedeForzarStock}
     />
   );
 }

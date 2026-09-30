@@ -7,15 +7,25 @@ import { repoProveedores, type Proveedor, type Recepcion } from '@/lib/datos/pro
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { useFormatoFecha } from '@/lib/formatoFecha';
+import { Encabezado } from '@/components/Encabezado';
+import { Icono } from '@/components/Icono';
+import { QueComprar } from './QueComprar';
 
 const TIPO_DOC: Record<string, string> = {
   guia: 'Guía', factura: 'Factura', boleta: 'Boleta', sin_documento: 'Sin documento',
 };
 
 
-export function ProveedoresClient({ puedeAnular }: { puedeAnular: boolean }) {
+type Pestana = 'proveedores' | 'recepciones' | 'comprar';
+
+export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, vistaInicial = 'proveedores' }: {
+  puedeAnular: boolean;
+  local?: string;
+  verCostos?: boolean;
+  vistaInicial?: Pestana;
+}) {
   const { fecha } = useFormatoFecha();
-  const [pestana, setPestana] = useState<'proveedores' | 'recepciones'>('proveedores');
+  const [pestana, setPestana] = useState<Pestana>(vistaInicial);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [recepciones, setRecepciones] = useState<Recepcion[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -62,19 +72,21 @@ export function ProveedoresClient({ puedeAnular }: { puedeAnular: boolean }) {
 
   return (
     <div className="px-4 py-5">
-      <div className="flex items-start justify-between gap-3 mb-4">
-        <h1 className="text-lg font-semibold">Compras</h1>
-        <Link
-          href="/proveedores/recepcion"
-          className="tap px-4 py-2.5 rounded-xl bg-marca-500 text-white text-sm font-semibold shrink-0"
-        >
-          + Recepción
-        </Link>
-      </div>
+      <Encabezado
+        titulo="Compras"
+        icono="proveedores"
+        descripcion="Tus proveedores y lo que llega de ellos. Lo recibido entra a la bodega y actualiza el costo."
+        acciones={
+          <Link href="/proveedores/recepcion" prefetch={false} className="btn btn-primario btn-chico">
+            <Icono nombre="agregar" tamano={16} /> Recibir mercadería
+          </Link>
+        }
+      />
 
       {/* Pestañas */}
-      <div className="flex gap-2 mb-4" role="tablist">
+      <div className="flex gap-2 mb-4 overflow-x-auto sin-scrollbar" role="tablist">
         {([
+          ['comprar', 'Qué comprar'],
           ['proveedores', `Proveedores (${proveedores.length})`],
           ['recepciones', `Recepciones (${recepciones.length})`],
         ] as const).map(([id, label]) => (
@@ -83,7 +95,7 @@ export function ProveedoresClient({ puedeAnular }: { puedeAnular: boolean }) {
             role="tab"
             aria-selected={pestana === id}
             onClick={() => setPestana(id)}
-            className={`tap px-4 py-2 rounded-lg text-sm border ${
+            className={`tap px-4 py-2 rounded-lg text-sm border shrink-0 ${
               pestana === id
                 ? 'border-marca-500 bg-marca-50 text-marca-900 font-medium'
                 : 'border-[var(--borde)] bg-white'
@@ -100,7 +112,9 @@ export function ProveedoresClient({ puedeAnular }: { puedeAnular: boolean }) {
         </p>
       )}
 
-      {cargando && <p className="text-sm text-[var(--texto-suave)] py-6 text-center">Cargando…</p>}
+      {pestana === 'comprar' && <QueComprar local={local} verCostos={verCostos} />}
+
+      {cargando && pestana !== 'comprar' && <p className="text-sm text-[var(--texto-suave)] py-6 text-center">Cargando…</p>}
 
       {/* Proveedores */}
       {!cargando && pestana === 'proveedores' && (

@@ -2,10 +2,12 @@
   "name": "RutaAhorro · Inventario y Ventas",
   "short_name": "RutaAhorro",
   "description": "Inventario, ventas y caja desde el celular",
-  "start_url": "/pos",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f6f7f9",
-  "theme_color": "#17804f",
+  "theme_color": "#157a4c",
   "orientation": "any",
   "lang": "es-CL",
   "icons": [
@@ -14,6 +16,7 @@
   ],
   "shortcuts": [
     { "name": "Vender", "url": "/pos" },
-    { "name": "Caja", "url": "/caja" }
+    { "name": "Caja", "url": "/caja" },
+    { "name": "Consultar precio", "url": "/precio" }
   ]
 }

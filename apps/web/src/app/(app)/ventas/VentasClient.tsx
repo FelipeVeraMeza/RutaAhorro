@@ -12,6 +12,7 @@ import { Campo } from '@/components/Campo';
 import { useFormatoFecha } from '@/lib/formatoFecha';
 import type { RegistroDte } from '@rutaahorro/core';
 import { DocumentoTributario, DevolverVenta, nombreDocumento } from './DocumentoYDevolucion';
+import { Encabezado } from '@/components/Encabezado';
 
 /**
  * Historial de ventas y anulación (RF-M5-15).
@@ -119,12 +120,13 @@ export function VentasClient({ puedeAnular, soloPropias = false }: {
 
   return (
     <div className="px-4 py-5">
-      <h1 className="text-lg font-semibold">{soloPropias ? 'Mis ventas' : 'Ventas'}</h1>
-      <p className="text-xs text-[var(--texto-suave)] mb-3">
-        {soloPropias
+      <Encabezado
+        titulo={soloPropias ? 'Mis ventas' : 'Ventas'}
+        icono="ventas"
+        descripcion={soloPropias
           ? 'Solo las que cobraste tú. Para anular o devolver, pídeselo a un supervisor.'
           : 'Toca una venta para ver el detalle, sus documentos, devolverla o anularla.'}
-      </p>
+      />
 
       <div className="grid grid-cols-2 gap-2 mb-2">
         <label className="text-xs text-[var(--texto-suave)]">

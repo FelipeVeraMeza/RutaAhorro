@@ -7,6 +7,8 @@ import { DEMO_BAJO_STOCK, DEMO_LOTES } from '@/lib/demo/data';
 import { diaLocal } from '@rutaahorro/core';
 import { desdeSettings } from '@/lib/datos/configuracionBase';
 import { VentasHoyDemo } from './VentasHoyDemo';
+import { Tendencia } from '@/components/Tendencia';
+import { Icono, type NombreIcono } from '@/components/Icono';
 
 export const metadata = { title: 'Resumen' };
 
@@ -47,6 +49,9 @@ export default async function DashboardPage() {
   // problema de red se veía exactamente igual que un día sin ventas: el dueño
   // leía "Vendido hoy $0" y creía que no se había vendido nada.
   const fallaron: string[] = [];
+  // Primeros pasos (RNF-18): mientras el local se está armando, qué falta y
+  // dónde se hace. Desaparece cuando todo está hecho.
+  let pasos: Array<{ hecho: boolean; texto: string; href: string }> = [];
 
   if (DEMO_ACTIVO) {
     const todosBajos = DEMO_BAJO_STOCK;
@@ -87,7 +92,22 @@ export default async function DashboardPage() {
         .eq('sale_date', hoy)
         .maybeSingle();
     })();
-    const [rVentas, rBajos, rVence] = await Promise.all([pVentas, pBajos, pVence]);
+    const cuantos = (tabla: string) => client.from(tabla).select('id', { count: 'exact', head: true })
+      .then((r) => r.count ?? 0, () => 0);
+    const pPasos = user.role === 'admin'
+      ? Promise.all([cuantos('products'), cuantos('profiles'), cuantos('cash_sessions'), cuantos('sales')])
+      : Promise.resolve(null);
+    const [rVentas, rBajos, rVence, rPasos] = await Promise.all([pVentas, pBajos, pVence, pPasos]);
+    if (rPasos) {
+      const [nProductos, nPersonas, nCajas, nVentas] = rPasos;
+      pasos = [
+        { hecho: nProductos > 0, texto: 'Carga tus productos (uno por uno o desde Excel)', href: '/productos' },
+        { hecho: nPersonas > 1, texto: 'Crea las cuentas de tu personal', href: '/usuarios' },
+        { hecho: nCajas > 0, texto: 'Abre la primera caja', href: '/caja' },
+        { hecho: nVentas > 0, texto: 'Haz la primera venta', href: '/pos' },
+      ];
+      if (pasos.every((x) => x.hecho)) pasos = [];
+    }
 
     // Antes esta
     // pantalla armaba el rango a mano con el desfase -03:00 escrito fijo, y
@@ -121,9 +141,31 @@ export default async function DashboardPage() {
   return (
     <div className="px-4 py-5 space-y-4">
       <div>
-        <h1 className="text-lg font-semibold">Hola, {primerNombre}</h1>
-        <p className="text-sm text-[var(--texto-suave)]">Así va el día</p>
+        <h1 className="text-xl font-bold">Hola, {primerNombre}</h1>
+        <p className="text-sm text-[var(--texto-suave)]">Así va el día en el local</p>
       </div>
+
+      {pasos.length > 0 && (
+        <section className="tarjeta p-4 border-marca-300" aria-labelledby="t-pasos">
+          <h2 id="t-pasos" className="font-semibold text-sm">Primeros pasos</h2>
+          <p className="text-xs text-[var(--texto-suave)] mb-2">
+            {pasos.filter((x) => x.hecho).length} de {pasos.length} listos. Toca uno para hacerlo.
+          </p>
+          <ol className="space-y-1">
+            {pasos.map((x) => (
+              <li key={x.href}>
+                <Link href={x.href} prefetch={false} className="tap flex items-center gap-3 px-2 rounded-lg hover:bg-[var(--fondo)]">
+                  <span className={`grid place-items-center w-6 h-6 rounded-full border ${x.hecho ? 'bg-marca-500 border-marca-500 text-white' : 'border-[var(--borde)]'}`}>
+                    {x.hecho && <Icono nombre="listo" tamano={14} />}
+                  </span>
+                  <span className={`text-sm ${x.hecho ? 'line-through text-[var(--texto-suave)]' : ''}`}>{x.texto}</span>
+                  <span className="sr-only">{x.hecho ? '(hecho)' : '(pendiente)'}</span>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       {fallaron.length > 0 && (
         <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">
@@ -140,6 +182,8 @@ export default async function DashboardPage() {
           <Tarjeta label="Ticket prom." value={formatCLP(ticket)} />
         </div>
       )}
+
+      <Tendencia />
 
       {porVencer.length > 0 && (
         <section className="tarjeta p-4">
@@ -178,7 +222,12 @@ export default async function DashboardPage() {
 
       {bajoStock.length > 0 && (
         <section className="tarjeta p-4">
-          <h2 className="font-semibold text-sm mb-2">Bajo stock mínimo</h2>
+          <div className="flex items-baseline justify-between gap-2 mb-2">
+            <h2 className="font-semibold text-sm">Bajo stock mínimo</h2>
+            <Link href="/proveedores?vista=comprar" prefetch={false} className="tap inline-flex items-center text-xs font-medium text-marca-700 underline -my-3">
+              Qué comprar
+            </Link>
+          </div>
           <ul className="divide-y divide-[var(--borde)] text-sm">
             {bajoStock.map((p) => (
               <li key={p.product_id} className="py-2 flex justify-between gap-2">
@@ -199,15 +248,25 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      <Link
-        href="/pos"
-        className="tap flex items-center justify-center w-full py-3.5 rounded-xl bg-marca-500 text-white font-bold"
-      >
-        Ir a vender
-      </Link>
+      <nav aria-label="Accesos rápidos" className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {ACCESOS.filter((a) => !a.soloAdmin || user.role === 'admin').map((a) => (
+          <Link key={a.href} href={a.href} prefetch={false}
+            className={`tap flex flex-col items-start gap-1.5 p-3 rounded-xl border ${a.principal ? 'bg-marca-500 border-marca-500 text-white' : 'tarjeta hover:border-marca-300'}`}>
+            <Icono nombre={a.icono} tamano={22} />
+            <span className="text-sm font-semibold">{a.texto}</span>
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 }
+
+const ACCESOS: Array<{ href: string; texto: string; icono: NombreIcono; principal?: boolean; soloAdmin?: boolean }> = [
+  { href: '/pos', texto: 'Vender', icono: 'vender', principal: true },
+  { href: '/proveedores/recepcion', texto: 'Recibir mercadería', icono: 'proveedores' },
+  { href: '/ventas', texto: 'Ventas del día', icono: 'ventas' },
+  { href: '/reportes', texto: 'Reportes', icono: 'reportes' },
+];
 
 function Tarjeta({ label, value }: { label: string; value: string }) {
   return (

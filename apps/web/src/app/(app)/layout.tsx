@@ -7,6 +7,9 @@ import { SyncCatalogo } from '@/components/SyncCatalogo';
 import { DemoBanner } from '@/components/DemoBanner';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { NOMBRE_ROL, LEMA_ROL } from '@/lib/navegacion';
+import { Icono } from '@/components/Icono';
+import { BotonSalir } from '@/components/BotonSalir';
+import { versionCompleta } from '@/lib/novedades';
 
 /**
  * Estructura de la aplicación.
@@ -68,7 +71,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {DEMO_ACTIVO && <DemoBanner rolActual={user.role} />}
 
       <div className="flex flex-1 min-h-0">
-        <Sidebar rol={user.role} nombre={user.fullName} />
+        <Sidebar rol={user.role} nombre={user.fullName} version={versionCompleta()} />
 
         <div className="flex-1 flex flex-col min-w-0">
           <EstadoConexion />
@@ -82,11 +85,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </p>
             </div>
             <div className="flex items-center shrink-0">
-              <a href="/clave" className="tap inline-flex items-center px-2 text-sm text-[var(--texto-suave)]"
-                 aria-label="Cambiar mi contraseña" title="Cambiar mi contraseña">🔑</a>
-              <form action="/api/logout" method="post">
-                <button className="tap px-3 text-sm text-[var(--texto-suave)]">Salir</button>
-              </form>
+              <a href="/clave" className="tap inline-grid place-items-center text-[var(--texto-suave)]"
+                 title="Cambiar mi contraseña">
+                <Icono nombre="clave" titulo="Cambiar mi contraseña" />
+              </a>
+              <BotonSalir className="tap inline-flex items-center gap-1.5 px-2 text-sm text-[var(--texto-suave)]">
+                <Icono nombre="salir" tamano={18} /> Salir
+              </BotonSalir>
             </div>
           </header>
 

@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { navPara, LEMA_ROL, NOMBRE_ROL, type Rol } from '@/lib/navegacion';
+import { Icono } from './Icono';
+import { BotonSalir } from './BotonSalir';
 
 /**
  * Barra lateral de escritorio.
@@ -10,7 +12,7 @@ import { navPara, LEMA_ROL, NOMBRE_ROL, type Rol } from '@/lib/navegacion';
  * Oculta bajo 1024 px: en celular manda la navegación inferior, porque el
  * pulgar no llega al borde superior de la pantalla (RNF-17).
  */
-export function Sidebar({ rol, nombre }: { rol: Rol; nombre: string }) {
+export function Sidebar({ rol, nombre, version }: { rol: Rol; nombre: string; version: string }) {
   const pathname = usePathname();
   const items = navPara(rol);
 
@@ -36,13 +38,13 @@ export function Sidebar({ rol, nombre }: { rol: Rol; nombre: string }) {
                   href={item.href}
                   prefetch={false}
                   aria-current={activo ? 'page' : undefined}
-                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
                     activo
                       ? 'bg-marca-50 text-marca-900 font-semibold'
                       : 'text-[var(--texto)] hover:bg-[var(--fondo)]'
                   }`}
                 >
-                  <span aria-hidden className="text-base w-5 text-center">{item.icono}</span>
+                  <Icono nombre={item.icono} tamano={19} className={activo ? 'text-marca-700' : 'text-[var(--texto-suave)]'} />
                   <span className="flex-1">{item.label}</span>
                   {/* El estado activo no se comunica solo por color (RNF-46) */}
                   {activo && <span aria-hidden className="w-1 h-4 rounded-full bg-marca-500" />}
@@ -53,21 +55,23 @@ export function Sidebar({ rol, nombre }: { rol: Rol; nombre: string }) {
         </ul>
       </nav>
 
-      <div className="px-3 py-3 border-t border-[var(--borde)]">
-        <div className="px-1 mb-2">
-          <p className="text-sm font-medium truncate">{nombre}</p>
-          <p className="text-[11px] text-[var(--texto-suave)]">
-            {NOMBRE_ROL[rol]} · {LEMA_ROL[rol]}
-          </p>
+      <div className="px-3 py-2.5 border-t border-[var(--borde)]">
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1 px-1">
+            <p className="text-sm font-medium truncate">{nombre}</p>
+            <p className="text-[11px] text-[var(--texto-suave)] truncate">
+              {NOMBRE_ROL[rol]} · {LEMA_ROL[rol]}
+            </p>
+          </div>
+          <a href="/clave" title="Cambiar mi contraseña"
+             className="tap grid place-items-center rounded-lg text-[var(--texto-suave)] hover:bg-[var(--fondo)]">
+            <Icono nombre="clave" tamano={18} titulo="Cambiar mi contraseña" />
+          </a>
+          <BotonSalir className="tap grid place-items-center rounded-lg text-[var(--texto-suave)] hover:bg-[var(--fondo)]">
+            <Icono nombre="salir" tamano={18} titulo="Cerrar sesión" />
+          </BotonSalir>
         </div>
-        <a href="/clave" className="tap flex items-center w-full px-3 py-2 rounded-lg text-sm text-[var(--texto-suave)] hover:bg-[var(--fondo)]">
-          Cambiar mi contraseña
-        </a>
-        <form action="/api/logout" method="post">
-          <button className="tap w-full text-left px-3 py-2 rounded-lg text-sm text-[var(--texto-suave)] hover:bg-[var(--fondo)]">
-            Cerrar sesión
-          </button>
-        </form>
+        <a href="/novedades" className="block px-1 pt-1 text-[11px] text-[var(--texto-suave)] hover:underline">Versión {version}</a>
       </div>
     </aside>
   );

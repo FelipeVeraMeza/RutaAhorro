@@ -100,7 +100,7 @@ De los **101 requerimientos funcionales**:
 | M1-04 | Asignación de rol | ✅ | Pantalla Usuarios cambia el rol; probado en navegador (m1-usuarios) |
 | M1-05 | Recuperar contraseña por correo | ✅ | Nuevo 2026-09-19: "¿Olvidaste tu contraseña?" y /recuperar. Probado con el enlace real |
 | M1-06 | Sesión persistente entre turnos | ✅ | — |
-| M1-07 | Cerrar sesión | ✅ | — |
+| M1-07 | Cerrar sesión | ✅ | Avisa si quedan ventas sin enviar y ofrece enviarlas (2026-09-30, demo-ronda2) |
 | M1-08 | Contraseña mínima de 8 caracteres | ✅ | Al crear o cambiar la contraseña, mínimo 8. Probado |
 | M1-09 | Cierre de sesión remoto | ⬜ | — |
 | M1-10 | Segundo factor para admin | ⬜ | Prioridad *Could* |
@@ -121,7 +121,7 @@ De los **101 requerimientos funcionales**:
 | M2-01 | Crear producto | ✅ | Formulario con validación. Incluye la descripción, que hasta el 2026-09-17 existía en la base y no leía ni escribía nadie |
 | M2-02 | Varios códigos de barra por producto | ✅ | Se agregan y quitan desde el formulario |
 | M2-03 | Un código no puede estar en dos productos | ✅ | `UNIQUE (tenant_id, barcode)` |
-| M2-04 | Crear producto escaneando | 🟡 | El formulario tiene escáner; falta el salto desde el POS |
+| M2-04 | Crear producto escaneando | ✅ | Desde Vender o Consultar precio, el código desconocido abre el alta con el código puesto (2026-09-30) |
 | M2-05 | Buscar por nombre, código o SKU | ✅ | Local en el POS, y en la pantalla Productos |
 | M2-06 | Categorías | ✅ | Se eligen y se crean desde el formulario |
 | M2-07 | Imagen del producto | ⬜ | Requiere Storage |
@@ -132,7 +132,7 @@ De los **101 requerimientos funcionales**:
 | M2-12 | Validar el archivo antes de aplicar | ✅ | Todo o nada, con 31 pruebas |
 | M2-13 | Generar etiquetas con código de barras | ✅ | Pantalla /productos/etiquetas: EAN-13 en SVG, tres tamaños, con precio, y asignación de código interno a productos sin código de fábrica |
 | M2-14 | Productos por peso o fracción | 🟡 | La base soporta decimales; el POS no pide cantidad fraccionada |
-| M2-15 | Duplicar producto | ⬜ | — |
+| M2-15 | Duplicar producto | ✅ | "Duplicar" al editar: copia todo menos nombre, SKU, códigos y stock (2026-09-30) |
 
 **Estado del módulo: 9 ✅ · 0 🔵 · 3 🟡 · 3 ⬜** *(actualizado 2026-09-15)*
 
@@ -155,7 +155,7 @@ De los **101 requerimientos funcionales**:
 | M3-08 | Advertir variación de costo | ✅ | Aviso en la pantalla de recepción |
 | M3-09 | Anular recepción | ✅ | `fn_void_receipt` invocada desde la app |
 | M3-10 | Historial de compras por proveedor | ⬜ | — |
-| M3-11 | Orden de compra sugerida | ⬜ | Prioridad *Could* |
+| M3-11 | Orden de compra sugerida | ✅ | Compras → Qué comprar: hasta el doble del mínimo, WhatsApp, copiar, Excel (`compras.ts`, 2026-09-30) |
 
 **Estado del módulo: 2 ✅ · 6 🔵 · 0 🟡 · 3 ⬜**
 
@@ -199,7 +199,7 @@ De los **101 requerimientos funcionales**:
 | M5-01 | Agregar escaneando con la cámara | ✅ | Verificado con código real |
 | M5-02 | Escaneo continuo | ✅ | Antirrebote de 1.200 ms |
 | M5-03 | Sonido y vibración al leer | ✅ | — |
-| M5-04 | Ofrecer crear producto si no existe | 🟡 | Avisa y pone el código en la búsqueda; no abre el formulario |
+| M5-04 | Ofrecer crear producto si no existe | ✅ | Admin y supervisor lo crean desde Vender; al vendedor se le dice a quién pedírselo (2026-09-30) |
 | M5-05 | Buscar por nombre | ✅ | **Nunca funcionó** hasta 2026-09-19 (G-1). Probado en navegador |
 | M5-06 | Modificar cantidad y eliminar líneas | ✅ | — |
 | M5-07 | Total en tiempo real sin decimales | ✅ | — |
@@ -260,8 +260,8 @@ De los **101 requerimientos funcionales**:
 | M7-07 | Productos sin movimiento | ✅ | `/reportes`, con umbral de días |
 | M7-08 | Mermas y ajustes | ✅ | `/reportes`, con motivo y responsable |
 | M7-09 | Exportar a Excel/CSV | ✅ | En los seis reportes |
-| M7-10 | Gráfico de los últimos 30 días | ⬜ | — |
-| M7-11 | Comparación con período anterior | ⬜ | Prioridad *Could* |
+| M7-10 | Gráfico de los últimos 30 días | ✅ | Inicio y Reportes (`tendencia.ts`, `GraficoVentas`, 2026-09-30) |
+| M7-11 | Comparación con período anterior | ✅ | Inicio (30 días y mismo día de la semana pasada) y Reportes (período de igual largo) |
 | M7-12 | Reportes respetan permisos | ✅ | Por RLS, y el costo no se pide siquiera cuando el rol no puede verlo |
 
 **Estado del módulo: 3 ✅ · 6 🔵 · 0 🟡 · 3 ⬜**
@@ -293,13 +293,13 @@ base y solo se ven parcialmente en Inicio.
 |---|---|:--:|---|
 | M9-01 | Respaldo automático diario | 🟡 | Implementado; **nunca ejecutado en producción** |
 | M9-02 | Retención de 30 días | 🟡 | Implementado, sin verificar |
-| M9-03 | Descargar respaldo | ⬜ | Sin pantalla |
+| M9-03 | Descargar respaldo | ✅ | Configuración → Mis datos: JSON con todas las tablas del local (sin claves del SII) |
 | M9-04 | Restauración probada | ⬜ | **Pendiente. Un respaldo sin restaurar es una suposición** |
 | M9-05 | Bitácora de auditoría | ✅ | Triggers escribiendo |
 | M9-06 | Detalle de cada registro | ✅ | — |
 | M9-07 | Bitácora inmutable | ✅ | Trigger que rechaza UPDATE/DELETE |
 | M9-08 | Configuración del local | 🟡 | La aplicación ya **lee** `tenants.settings` (IVA, umbral de costo, tope de descuento). Falta la pantalla para escribirlo. T-18 |
-| M9-09 | Versión y changelog visibles | ⬜ | — |
+| M9-09 | Versión y changelog visibles | ✅ | Novedades (por rol) y versión + commit al pie del menú (2026-09-30) |
 | M9-10 | Actualizaciones sin intervención | ✅ | Por diseño de Railway: cada push a main despliega |
 
 **Estado del módulo: 4 ✅ · 1 🔵 · 2 🟡 · 3 ⬜**

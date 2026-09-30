@@ -100,7 +100,7 @@ await p.getByRole('button', { name: 'Salir' }).click(); await p.waitForURL('**/l
 await entrar('admin@demo.cl', 'demo1234');
 check(new URL(p.url()).pathname === '/', 'admin entra al Inicio');
 await p.goto(BASE + '/usuarios', { waitUntil: 'networkidle' });
-await p.getByRole('button', { name: '+ Crear cuenta' }).click();
+await p.getByRole('button', { name: 'Crear cuenta' }).click();
 await p.getByLabel(/^Nombre/).fill('Ana Cajera');
 await p.getByLabel(/^Correo/).fill('ana@demo.cl');
 await p.getByLabel(/Contraseña temporal/).fill('ana12345');

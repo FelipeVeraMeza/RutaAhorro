@@ -10,6 +10,7 @@ import { repoPrecios } from '@/lib/datos/precios';
 import { useConfiguracion } from '@/lib/datos/configuracion';
 import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
 import { Modal } from '@/components/Modal';
+import { Encabezado } from '@/components/Encabezado';
 
 /**
  * La misma oferta a muchos productos a la vez (0021).
@@ -165,11 +166,11 @@ export function OfertasMasivasClient({ esAdmin }: { esAdmin: boolean }) {
   return (
     <div className="px-4 py-5 max-w-2xl mx-auto space-y-5 pb-36" aria-busy={cargando}>
       <header>
-        <Link href="/productos" className="tap inline-flex items-center text-sm text-[var(--texto-suave)] underline">← Productos</Link>
-        <h1 className="text-xl font-bold mt-1">Ofertas a varios productos</h1>
-        <p className="text-sm text-[var(--texto-suave)]">
-          Escribe la oferta una vez y elige a qué productos se aplica.
-        </p>
+        <Encabezado
+          titulo="Ofertas a varios productos"
+          volver={{ href: '/productos', texto: 'Productos' }}
+          descripcion="Escribe la oferta una vez y elige a qué productos se aplica."
+        />
         <Link href="/productos/combos"
               className="tap mt-2 flex items-center justify-between tarjeta px-3 text-sm font-medium">
           🎁 Combos: varios productos a un precio <span aria-hidden>›</span>

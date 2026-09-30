@@ -79,7 +79,7 @@ await p.goto(`${BASE}/productos/ofertas`);
 await p.getByRole('link', { name: /Combos: varios productos a un precio/ }).click();
 await p.waitForURL('**/productos/combos');
 ok('RQ-45', true, 'se llega a Combos desde Ofertas');
-await p.getByRole('button', { name: '+ Combo' }).click();
+await p.getByRole('button', { name: 'Nuevo combo' }).click();
 const d = p.getByRole('dialog');
 await d.getByLabel('Nombre del combo').fill(nCombo);
 await d.getByLabel('Buscar producto para el combo').fill(nBeb);

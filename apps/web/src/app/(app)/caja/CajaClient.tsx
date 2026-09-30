@@ -1,4 +1,5 @@
 'use client';
+import { Icono } from '@/components/Icono';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -248,7 +249,7 @@ export function CajaClient({
             hecho del negocio, no un borrador). La pantalla no lo decía en
             ninguna parte y el botón se ve igual que cualquier otro. docs/21 M-2. */}
         <div className="flex gap-2.5 px-3 py-2.5 rounded-xl bg-amber-50 border border-[var(--color-aviso)]/30 mb-4">
-          <span aria-hidden className="text-base leading-tight">⚠️</span>
+          <Icono nombre="alerta" tamano={18} className="text-[var(--color-aviso)] mt-0.5" />
           <p className="text-xs text-[var(--color-aviso)] leading-relaxed">
             <strong>El cierre no se puede deshacer.</strong> Una vez cerrada, la
             caja queda registrada con el monto contado y ya no admite ventas ni

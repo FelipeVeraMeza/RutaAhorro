@@ -1,4 +1,5 @@
 'use client';
+import { Icono } from '@/components/Icono';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -28,11 +29,20 @@ interface Props {
   onCancelar: () => void;
   /** Otra persona lo cambió mientras se editaba (0020): volver a abrirlo con lo nuevo. */
   onRecargar?: () => void;
+  /** Alta a partir de otro producto (RF-M2-15): mismos datos, sin códigos ni stock. */
+  plantilla?: Producto | null;
+  /** Alta desde un código escaneado que no existía (RF-M5-04, RF-M2-04). */
+  codigoInicial?: string | null;
+  /** Edición: abrir un alta copiando este producto. */
+  onDuplicar?: (p: Producto) => void;
 }
 
 export function FormularioProducto({
   producto, categorias, puedeVerCostos, puedeEditarPrecios = false, esAdmin = false, onGuardado, onCancelar, onRecargar,
+  plantilla = null, codigoInicial = null, onDuplicar,
 }: Props) {
+  // Lo que llena el formulario: el producto que se edita, o el que se duplica.
+  const origen = producto ?? plantilla;
   const esEdicion = producto !== null;
   // Bodega edita productos "sin tocar precio de venta" (matriz del doc 02).
   // Al crear sí lo pone: un producto sin precio no se puede vender.
@@ -49,22 +59,24 @@ export function FormularioProducto({
     return () => { vivo = false; };
   }, [producto]);
 
-  const [nombre, setNombre] = useState(producto?.nombre ?? '');
+  const [nombre, setNombre] = useState(producto?.nombre ?? (plantilla ? `${plantilla.nombre} (copia)` : ''));
+  // El SKU no se copia: es el código interno de UN producto.
   const [sku, setSku] = useState(producto?.sku ?? '');
-  const [descripcion, setDescripcion] = useState(producto?.descripcion ?? '');
-  const [categoriaId, setCategoriaId] = useState(producto?.categoriaId ?? '');
+  const [descripcion, setDescripcion] = useState(origen?.descripcion ?? '');
+  const [categoriaId, setCategoriaId] = useState(origen?.categoriaId ?? '');
   const [nuevaCategoria, setNuevaCategoria] = useState('');
-  const [unidad, setUnidad] = useState(producto?.unidad ?? 'unidad');
-  const [precio, setPrecio] = useState(producto ? String(producto.precioVenta) : '');
-  const [costo, setCosto] = useState(producto?.costoPromedio ? String(producto.costoPromedio) : '');
-  const [stockMinimo, setStockMinimo] = useState(String(producto?.stockMinimo ?? 0));
+  const [unidad, setUnidad] = useState(origen?.unidad ?? 'unidad');
+  const [precio, setPrecio] = useState(origen ? String(origen.precioVenta) : '');
+  const [costo, setCosto] = useState(origen?.costoPromedio ? String(origen.costoPromedio) : '');
+  const [stockMinimo, setStockMinimo] = useState(String(origen?.stockMinimo ?? 0));
   const [stockSala, setStockSala] = useState('0');
   const [stockBodega, setStockBodega] = useState('0');
   // Respuesta 8 del cuestionario: «todos tienen fecha de vencimiento». Un
   // producto nuevo nace perecible; quien crea uno que no vence lo desmarca.
-  const [perecible, setPerecible] = useState(producto?.perecible ?? true);
-  const [diasAlerta, setDiasAlerta] = useState(String(producto?.diasAlerta ?? 30));
-  const [codigos, setCodigos] = useState<string[]>(producto?.codigos ?? []);
+  const [perecible, setPerecible] = useState(origen?.perecible ?? true);
+  const [diasAlerta, setDiasAlerta] = useState(String(origen?.diasAlerta ?? 30));
+  // Los códigos de barra no se copian: cada uno es de un solo producto.
+  const [codigos, setCodigos] = useState<string[]>(producto?.codigos ?? (codigoInicial ? [codigoInicial] : []));
   const [codigoNuevo, setCodigoNuevo] = useState('');
 
   // Ofertas e impuesto (0018). Se cargan aparte porque no son del producto.
@@ -264,7 +276,7 @@ export function FormularioProducto({
 
   return (
     <Modal
-      titulo={esEdicion ? 'Editar producto' : 'Nuevo producto'}
+      titulo={esEdicion ? 'Editar producto' : plantilla ? 'Nuevo producto (copia)' : 'Nuevo producto'}
       ancho="lg"
       encabezado="visible"
       onCerrar={onCancelar}
@@ -272,6 +284,17 @@ export function FormularioProducto({
     >
       <>
           <div className="p-4 space-y-4">
+            {plantilla && (
+              <p className="text-sm bg-marca-50 text-marca-900 px-3 py-2 rounded-lg">
+                Copia de <strong>{plantilla.nombre}</strong>: cambia lo que sea distinto (el nombre, el precio)
+                y agrega su código de barras. El stock parte en lo que pongas abajo.
+              </p>
+            )}
+            {codigoInicial && !esEdicion && (
+              <p className="text-sm bg-marca-50 text-marca-900 px-3 py-2 rounded-lg">
+                El código <strong className="num">{codigoInicial}</strong> no estaba en el catálogo: ya quedó puesto abajo.
+              </p>
+            )}
             {/* Edición: cuánto hay y quién lo tocó. La cantidad no se cambia acá:
                 cada cambio de stock queda en el kardex con su motivo. Antes el
                 formulario no lo decía y no se entendía dónde se cambiaba. */}
@@ -293,6 +316,12 @@ export function FormularioProducto({
                         className="tap inline-flex items-center px-3 rounded-lg border border-[var(--borde)] bg-white text-sm font-medium">
                     Ingresar mercadería
                   </Link>
+                  {onDuplicar && (
+                    <button type="button" onClick={() => onDuplicar(producto)}
+                            className="tap inline-flex items-center gap-1.5 px-3 rounded-lg border border-[var(--borde)] bg-white text-sm font-medium">
+                      <Icono nombre="copiar" tamano={16} /> Duplicar
+                    </button>
+                  )}
                 </div>
                 <p className="text-xs text-[var(--texto-suave)]">
                   Última modificación: {producto.actualizadoPor ?? 'sin registro'} · {fechaHora(producto.actualizadoEn)}
@@ -522,7 +551,7 @@ export function FormularioProducto({
                   aria-label="Escanear código con la cámara"
                   className="tap px-4 rounded-xl bg-marca-500 text-white"
                 >
-                  📷
+                  <Icono nombre="escanear" tamano={20} />
                 </button>
               </div>
 

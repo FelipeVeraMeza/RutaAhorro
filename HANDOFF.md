@@ -8,7 +8,78 @@
 
 ---
 
-## CÓMO SEGUIR — corte 2026-09-30, léelo antes que todo
+## CÓMO SEGUIR — corte 2026-09-30 (2ª ronda), léelo antes que todo
+
+**2026-09-30 (2ª ronda) · Versión 0.3.0: visual profesional, requerimientos
+pendientes y robustez.** Pedido: "seguir avanzando en todo, teniendo en cuenta
+los requerimientos funcionales, no funcionales y técnicos; mejorar el
+entendimiento, los botones y lo visual". Se priorizó con la matriz (docs/24).
+**Sin migraciones nuevas.**
+
+**Visual y entendimiento**
+- **Contraste (RNF-44):** el blanco sobre el verde de TODOS los botones
+  principales daba 3,46:1 (bajo AA) y el gris suave 4,44:1. Verde
+  `#157a4c` (5,36:1) y gris `#5b6577`. Foco visible con teclado (RNF-45).
+- **Íconos SVG propios** (`components/Icono.tsx`) en vez de emoji en el menú,
+  "Más", escáner, exportar: los emoji se ven distinto en cada celular y no
+  toman el color del ítem activo.
+- **Encabezado común** (`components/Encabezado.tsx`) en las 17 pantallas:
+  título, para qué sirve, "volver" de 44 px y acciones. "Más" muestra una
+  frase de ayuda por sección (`ayuda` en `lib/navegacion.ts`). Estado vacío
+  común. Botones `btn-primario/secundario/peligro/fantasma` en globals.css.
+- Ojo: `globals.css` pone TODO `<button>` en 16 px (sin capa) y eso le gana a
+  `text-sm`/`text-xs` de Tailwind en botones. Es a propósito (iOS), no bajarlo.
+- Botones renombrados (recorridos ya ajustados): "+ Producto" → "Nuevo
+  producto", "+ Cliente" → "Nuevo cliente", "+ Combo" → "Nuevo combo",
+  "+ Crear cuenta" → "Crear cuenta", "+ Recepción" → "Recibir mercadería".
+
+**Requerimientos que pasan a hechos (con prueba o recorrido que los cita)**
+- RF-M7-10 gráfico 30 días (Inicio y Reportes) · RF-M7-11 comparación con el
+  período anterior · RF-M3-11 **Compras → Qué comprar** (WhatsApp, copiar,
+  Excel) · RF-M2-15 **Duplicar** producto · RF-M5-04/RF-M2-04 **código
+  desconocido → crear el producto** con el código puesto (admin/supervisor en
+  Vender; también bodega en Consultar precio) · RF-M9-03/RNF-48
+  **Configuración → Mis datos** (JSON con todas las tablas del local, sin
+  claves del SII) · RF-M9-09 **Novedades** y versión+commit al pie del menú ·
+  RF-M1-07 **salir con ventas sin enviar avisa**.
+- Inicio del jefe: primeros pasos (RNF-18) mientras el local se arma, gráfico
+  y accesos rápidos. Lógica en core: `tendencia.ts`, `compras.ts` (10 pruebas).
+
+**Técnico**
+- **Service worker** (`public/sw.js`, solo en producción): Vender y Consultar
+  precio abren sin internet si se abrieron antes (RNF-08/13/01). Solo guarda
+  GET del mismo sitio; nunca /api/; pantallas red-primero; no guarda
+  redirecciones; al salir se borran. La Caja no se guarda (montos viejos).
+- **Errores (RNF-40):** `error.tsx`, `global-error.tsx`, `not-found.tsx` en
+  castellano, y todo error del navegador va a `/api/errores` → queda en los
+  logs de Railway como `[error-navegador]` con usuario, rol y local.
+- **Diálogos en portal** (`Modal` → `document.body`): dentro de la cabecera
+  (sticky z-30) la barra inferior tapaba sus botones. Lo encontró el recorrido.
+- **bwip-js diferido** (timbre PDF417): se carga al mostrar un documento.
+  **RNF-06 cumplido:** Vender bajó de 495 a 249 kB de JS inicial y Ventas de
+  485 a 243 kB (límite 250). Mantenerlo: nada pesado en importación fija.
+
+**Verificado:** core 417 (+10) · typecheck · build de producción · recorridos
+en demo: `demo-ronda2.mjs` **15/15**, `demo-flujo.mjs` 18/18,
+`demo-datos.mjs` 11/11, `demo-roles.mjs` (152: 19 pantallas × 4 roles × 2 anchos, sin errores ni
+desbordes) · `sin-red.mjs` **5/5** contra la app compilada: Vender abre y
+busca sin red (control: con el service worker bloqueado, 0/5). **No se corrió contra
+Supabase ni Railway.**
+
+**No regenerar docs/24 fuera del computador de Felipe:** `tools/matriz.mjs`
+lee `tools/ui/.resultado-*.json`, que no están en el repositorio; corrido acá
+bajaría los ✅ de los recorridos. Felipe: `node tools/matriz.mjs` después de
+correr los recorridos. docs/17 ya dice ✅ en lo nuevo.
+
+**Pendiente, en orden:** lo del corte anterior (llave `SUPABASE_SECRET_KEY` en
+Railway, `db:cuentas`, recorridos contra Railway) · cerrar en la base que bodega
+no cambie el precio · RF-M5-08/10 descuentos y pago mixto (la base acepta
+varios pagos, pero con tarjeta toda la venta sale como voucher: **preguntar
+al contador** antes de ofrecerlo).
+
+---
+
+## CÓMO SEGUIR — corte 2026-09-30 (1ª ronda)
 
 **2026-09-30 · Auditoría completa por rol (jefe, QA, vendedor) y lo que salió.**
 Pedido: "mejorar la página como jefe, QA y vendedor; el ingreso y el manejo de

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * Los diálogos abiertos, el de más arriba al final. Solo ese atiende el
@@ -116,7 +117,10 @@ export function Modal({
 
   const anchos = { sm: 'sm:max-w-sm', md: 'sm:max-w-md', lg: 'sm:max-w-lg' };
 
-  return (
+  // Directo en <body>: dentro de la cabecera (sticky, z-30) su z-50 quedaba
+  // encerrado y la barra inferior del celular (z-40) tapaba los botones de
+  // abajo del diálogo. Lo encontró demo-ronda2.mjs con "Hay ventas sin enviar".
+  const dialogo = (
     <div
       className="fixed inset-0 z-50 bg-black/40 overflow-y-auto"
       onMouseDown={(e) => { if (e.target === e.currentTarget) cerrar(); }}
@@ -158,6 +162,7 @@ export function Modal({
       </div>
     </div>
   );
+  return typeof document === 'undefined' ? dialogo : createPortal(dialogo, document.body);
 }
 
 const SELECTOR_ENFOCABLE = [

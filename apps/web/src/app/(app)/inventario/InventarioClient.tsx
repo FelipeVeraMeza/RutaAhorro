@@ -13,6 +13,7 @@ import {
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { useFormatoFecha } from '@/lib/formatoFecha';
+import { Encabezado } from '@/components/Encabezado';
 
 type Vista = 'stock' | 'lotes' | 'kardex' | 'toma';
 
@@ -138,7 +139,11 @@ export function InventarioClient({
 
   return (
     <div className="px-4 py-5">
-      <h1 className="text-lg font-semibold mb-3">Inventario</h1>
+      <Encabezado
+        titulo="Inventario"
+        icono="inventario"
+        descripcion="Cuánto hay y dónde: a la vista (se vende) o en bodega (hay que reponer). Ajustes, lotes y conteo."
+      />
 
       <div className="flex gap-2 mb-4 overflow-x-auto sin-scrollbar" role="tablist">
         {([

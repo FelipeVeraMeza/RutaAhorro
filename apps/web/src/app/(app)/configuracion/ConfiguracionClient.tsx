@@ -14,6 +14,9 @@ import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { leerEmisor, guardarEmisor, type Emisor } from '@/lib/datos/emisor';
+import { Encabezado } from '@/components/Encabezado';
+import { Icono } from '@/components/Icono';
+import { armarRespaldo, descargarJson } from '@/lib/datos/respaldo';
 
 /**
  * Configuración del local (T-18) e impuestos adicionales (0018).
@@ -49,10 +52,11 @@ export function ConfiguracionClient() {
 
   return (
     <div className="px-4 py-5 max-w-2xl mx-auto space-y-6" aria-busy={cargando}>
-      <header>
-        <h1 className="text-xl font-bold">Configuración</h1>
-        <p className="text-sm text-[var(--texto-suave)]">Impuestos y cómo opera el local.</p>
-      </header>
+      <Encabezado
+        titulo="Configuración"
+        icono="configuracion"
+        descripcion="Impuestos, cómo opera la caja y los datos del local. Los cambios rigen para todos desde que guardas."
+      />
 
       {aviso && (
         <p role={aviso.tipo === 'error' ? 'alert' : 'status'}
@@ -137,6 +141,8 @@ export function ConfiguracionClient() {
           onError={(texto) => setAviso({ tipo: 'error', texto })}
         />
       )}
+
+      <MisDatos />
 
       {editando && (
         <EditarImpuesto
@@ -499,6 +505,45 @@ function DatosEmisor({ onGuardado, onError }: {
           {guardando ? 'Guardando…' : 'Guardar datos del emisor'}
         </button>
       </div>
+    </section>
+  );
+}
+
+/**
+ * Descargar todos los datos del local (RF-M9-03, RNF-48): la copia del dueño,
+ * en un formato que se abre sin este sistema.
+ */
+function MisDatos() {
+  const [progreso, setProgreso] = useState<string | null>(null);
+  const [resultado, setResultado] = useState<string | null>(null);
+  async function descargar() {
+    setResultado(null);
+    setProgreso('Preparando…');
+    try {
+      const r = await armarRespaldo((h, t) => setProgreso(`Leyendo ${h} de ${t} tablas…`));
+      const filas = Object.values(r.tablas).reduce((s, t) => s + t.length, 0);
+      descargarJson(`rutaahorro-datos-${r.exportado_en.slice(0, 10)}.json`, r);
+      const omitidas = Object.keys(r.omitidas).length;
+      setResultado(`Listo: ${filas.toLocaleString('es-CL')} registros de ${Object.keys(r.tablas).length} tablas.` +
+        (omitidas ? ` ${omitidas} no se pudieron leer (van anotadas en el archivo).` : ''));
+    } catch (e) {
+      setResultado(`No se pudo armar el archivo: ${toUserMessage(e)}`);
+    } finally {
+      setProgreso(null);
+    }
+  }
+  return (
+    <section className="tarjeta p-4 space-y-2" aria-labelledby="t-mis-datos">
+      <h2 id="t-mis-datos" className="font-semibold">Mis datos</h2>
+      <p className="text-sm text-[var(--texto-suave)]">
+        Descarga todo lo del local (productos, ventas, caja, inventario, clientes y proveedores) en un
+        archivo JSON. Guárdalo como respaldo propio: se abre sin este sistema. Los respaldos diarios
+        de la base siguen corriendo aparte.
+      </p>
+      <button onClick={() => void descargar()} disabled={progreso !== null} className="btn btn-secundario w-full sm:w-auto">
+        <Icono nombre="descargar" tamano={18} /> {progreso ?? 'Descargar mis datos'}
+      </button>
+      {resultado && <p role="status" className="text-sm">{resultado}</p>}
     </section>
   );
 }

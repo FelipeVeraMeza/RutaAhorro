@@ -12,9 +12,12 @@
   --color-marca-50:  #eef7f2;
   --color-marca-100: #d4ebe0;
   --color-marca-300: #7fc6a4;
-  --color-marca-500: #1f9d63;
-  --color-marca-600: #17804f;
-  --color-marca-700: #12653e;
+  /* 500/600/700 oscurecidos el 2026-09-30 (RNF-44): el blanco sobre el verde
+     anterior (#1f9d63) daba 3,46:1 y todos los botones principales quedaban
+     bajo el 4,5:1 de WCAG AA. Ahora 5,36:1. */
+  --color-marca-500: #157a4c;
+  --color-marca-600: #12693f;
+  --color-marca-700: #0f5c37;
   --color-marca-900: #0a3d26;
 
   --color-alerta:  #b91c1c;
@@ -29,7 +32,8 @@
   --superficie: #ffffff;
   --borde: #e3e6ea;
   --texto: #0f172a;
-  --texto-suave: #64748b;
+  /* #64748b daba 4,44:1 sobre el fondo: bajo AA. */
+  --texto-suave: #5b6577;
   color-scheme: light;
 }
 
@@ -127,4 +131,56 @@ input, select, textarea, button {
   }
   .no-imprimir { display: none !important; }
   @page { margin: 4mm; }
+}
+
+/* Foco visible con teclado (RNF-45). Solo con teclado: al tocar no aparece. */
+:focus-visible {
+  outline: 2px solid var(--color-marca-500);
+  outline-offset: 2px;
+}
+
+/*
+ * Botones — un solo lenguaje en toda la app (2026-09-30).
+ *
+ * Antes cada pantalla armaba el suyo con clases sueltas: verdes de tres
+ * tonos, bordes de dos grosores, "Cancelar" a veces gris y a veces rojo. El
+ * mismo gesto tiene que verse igual en todas partes para que se aprenda una
+ * vez:
+ *   btn-primario    la acción que la pantalla espera (una por pantalla)
+ *   btn-secundario  alternativas y "Cancelar"
+ *   btn-peligro     lo que no se deshace (anular, desactivar, vaciar)
+ *   btn-fantasma    salidas discretas ("Seguir trabajando")
+ */
+@layer components {
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+    min-height: 44px; min-width: 44px; padding: 0.625rem 1rem;
+    border-radius: 0.75rem; font-weight: 600; line-height: 1.2;
+    border: 1px solid transparent;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-grande { min-height: 52px; font-size: 1.0625rem; }
+  .btn-chico { min-height: 36px; padding: 0.375rem 0.75rem; font-size: 0.875rem; font-weight: 500; }
+  .btn-primario { background: var(--color-marca-500); color: #fff; }
+  .btn-primario:not(:disabled):hover, .btn-primario:not(:disabled):active { background: var(--color-marca-600); }
+  .btn-secundario { background: var(--superficie); color: var(--texto); border-color: var(--borde); }
+  .btn-secundario:not(:disabled):hover, .btn-secundario:not(:disabled):active { background: var(--fondo); }
+  .btn-peligro { background: var(--color-alerta); color: #fff; }
+  .btn-peligro:not(:disabled):hover { background: #991b1b; }
+  .btn-peligro-borde { background: var(--superficie); color: var(--color-alerta); border-color: currentColor; }
+  .btn-fantasma { background: transparent; color: var(--texto-suave); }
+  .btn-fantasma:not(:disabled):hover { background: var(--fondo); color: var(--texto); }
+
+  /* Etiqueta de estado: texto + color, nunca solo color (RNF-46). */
+  .insignia {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 0.125rem 0.5rem; border-radius: 999px;
+    font-size: 0.75rem; font-weight: 600; line-height: 1.4;
+  }
+  .insignia-ok { background: var(--color-marca-50); color: var(--color-marca-700); }
+  .insignia-aviso { background: #fffbeb; color: var(--color-aviso); }
+  .insignia-alerta { background: #fef2f2; color: var(--color-alerta); }
+  .insignia-neutra { background: var(--fondo); color: var(--texto-suave); }
 }

@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatCLP, toUserMessage, validarCantidad, validarMonto, validarCombo } from '@rutaahorro/core';
 import { repoCombos, type ComboEditable } from '@/lib/datos/combos';
@@ -8,6 +7,8 @@ import { useConfiguracion } from '@/lib/datos/configuracion';
 import { repoProductos, type Producto } from '@/lib/productos';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
+import { Encabezado } from '@/components/Encabezado';
+import { Icono } from '@/components/Icono';
 
 /**
  * Combos entre productos distintos (0023): «2 bebidas + 1 pan por $3.000».
@@ -45,19 +46,16 @@ export function CombosClient() {
 
   return (
     <div className="px-4 py-5 max-w-2xl mx-auto space-y-4" aria-busy={cargando}>
-      <header className="flex items-start justify-between gap-3">
-        <div>
-          <Link href="/productos/ofertas" className="tap inline-flex items-center text-sm text-[var(--texto-suave)] underline">← Ofertas</Link>
-          <h1 className="text-xl font-bold mt-1">Combos</h1>
-          <p className="text-sm text-[var(--texto-suave)]">
-            Varios productos a un precio. El POS los aplica solo.
-          </p>
-        </div>
-        <button onClick={() => setEditando('nuevo')}
-                className="tap shrink-0 px-4 rounded-xl bg-marca-500 text-white text-sm font-semibold">
-          + Combo
-        </button>
-      </header>
+      <Encabezado
+        titulo="Combos"
+        volver={{ href: '/productos/ofertas', texto: 'Ofertas' }}
+        descripcion="Varios productos a un precio (ej. 2 bebidas + 1 pan por $3.000). Vender lo aplica solo."
+        acciones={
+          <button onClick={() => setEditando('nuevo')} className="btn btn-primario btn-chico">
+            <Icono nombre="agregar" tamano={16} /> Nuevo combo
+          </button>
+        }
+      />
 
       {!config.ofertasActivas && (
         <p role="status" className="text-sm px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900">

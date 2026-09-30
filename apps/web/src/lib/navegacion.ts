@@ -15,6 +15,8 @@
  * que un menú corto.
  */
 
+import type { NombreIcono } from '@/components/Icono';
+
 export type Rol = 'admin' | 'supervisor' | 'vendedor' | 'bodega';
 
 export interface ItemNav {
@@ -22,78 +24,102 @@ export interface ItemNav {
   label: string;
   /** Etiqueta corta para la barra inferior del celular. */
   labelCorto: string;
-  icono: string;
+  icono: NombreIcono;
+  /** Qué se hace ahí, en una frase: la bajada del título de la pantalla y del menú "Más". */
+  ayuda: string;
   roles: Rol[];
   /** Si es true, aparece también en la barra inferior del celular. */
   enMovil: boolean;
   /** Nombre distinto según quién mira: el vendedor ve "Mis ventas". */
-  porRol?: Partial<Record<Rol, { label: string; labelCorto: string }>>;
+  porRol?: Partial<Record<Rol, { label: string; labelCorto: string; ayuda?: string }>>;
 }
 
 export const NAVEGACION: ItemNav[] = [
   {
-    href: '/', label: 'Inicio', labelCorto: 'Inicio', icono: '🏠',
+    href: '/', label: 'Inicio', labelCorto: 'Inicio', icono: 'inicio',
+    ayuda: 'Cómo va el día: ventas, stock bajo y vencimientos',
     roles: ['admin', 'supervisor'], enMovil: true,
   },
   {
-    href: '/pos', label: 'Vender', labelCorto: 'Vender', icono: '🛒',
+    href: '/pos', label: 'Vender', labelCorto: 'Vender', icono: 'vender',
+    ayuda: 'Escanea o busca productos y cobra',
     roles: ['admin', 'supervisor', 'vendedor'], enMovil: true,
   },
   {
-    href: '/caja', label: 'Caja', labelCorto: 'Caja', icono: '💰',
+    href: '/caja', label: 'Caja', labelCorto: 'Caja', icono: 'caja',
+    ayuda: 'Abre tu caja, registra ingresos y egresos, y ciérrala al final del turno',
     roles: ['admin', 'supervisor', 'vendedor'], enMovil: true,
   },
   {
     // Va antes que Productos porque la pregunta "¿cuánto vale esto?" se
     // responde de pie y con el cliente esperando, y Productos no.
-    href: '/precio', label: 'Consultar precio', labelCorto: 'Precio', icono: '🏷️',
+    href: '/precio', label: 'Consultar precio', labelCorto: 'Precio', icono: 'precio',
+    ayuda: 'Cuánto vale un producto, con o sin internet',
     roles: ['admin', 'supervisor', 'vendedor', 'bodega'], enMovil: true,
   },
   {
-    href: '/productos', label: 'Productos', labelCorto: 'Productos', icono: '📦',
+    href: '/productos', label: 'Productos', labelCorto: 'Productos', icono: 'productos',
+    ayuda: 'El catálogo: precios, códigos de barra, ofertas y etiquetas',
     roles: ['admin', 'supervisor', 'vendedor', 'bodega'], enMovil: true,
   },
   {
-    href: '/inventario', label: 'Inventario', labelCorto: 'Stock', icono: '📋',
+    href: '/inventario', label: 'Inventario', labelCorto: 'Stock', icono: 'inventario',
+    ayuda: 'Cuánto hay, dónde está y qué vence; ajustes, reposición y conteo',
     roles: ['admin', 'supervisor', 'bodega'], enMovil: true,
   },
   {
-    href: '/proveedores', label: 'Proveedores', labelCorto: 'Prov.', icono: '🚚',
+    href: '/proveedores', label: 'Proveedores', labelCorto: 'Prov.', icono: 'proveedores',
+    ayuda: 'Proveedores, recepción de mercadería y qué comprar',
     roles: ['admin', 'supervisor', 'bodega'], enMovil: false,
   },
   {
     // El vendedor ve solo las suyas (matriz del doc 02: "Ver historial de
     // ventas propias ✅"; RLS de `sales` ya lo impone). Antes no tenía ninguna
     // forma de encontrar una venta que acababa de cobrar.
-    href: '/ventas', label: 'Ventas', labelCorto: 'Ventas', icono: '🧾',
+    href: '/ventas', label: 'Ventas', labelCorto: 'Ventas', icono: 'ventas',
+    ayuda: 'Historial de ventas: detalle, documentos, devoluciones y anulaciones',
     roles: ['admin', 'supervisor', 'vendedor'], enMovil: false,
-    porRol: { vendedor: { label: 'Mis ventas', labelCorto: 'Mis ventas' } },
+    porRol: {
+      vendedor: { label: 'Mis ventas', labelCorto: 'Mis ventas', ayuda: 'Las ventas que cobraste tú, con su detalle' },
+    },
   },
   {
     // Ficha y precio por cliente (0022, RQ-21). El vendedor no entra: elige
     // al cliente desde el POS.
-    href: '/clientes', label: 'Clientes', labelCorto: 'Clientes', icono: '🤝',
+    href: '/clientes', label: 'Clientes', labelCorto: 'Clientes', icono: 'clientes',
+    ayuda: 'Fichas de clientes y precios especiales o mayoristas',
     roles: ['admin', 'supervisor'], enMovil: false,
   },
   {
     // Factura manual, recibidas y resumen mensual (0026). La boleta sale del POS.
-    href: '/facturacion', label: 'Facturación', labelCorto: 'Facturas', icono: '📑',
+    href: '/facturacion', label: 'Facturación', labelCorto: 'Facturas', icono: 'facturacion',
+    ayuda: 'Facturas emitidas y recibidas, y el resumen de IVA del mes',
     roles: ['admin', 'supervisor'], enMovil: false,
   },
   {
-    href: '/reportes', label: 'Reportes', labelCorto: 'Reportes', icono: '📊',
+    href: '/reportes', label: 'Reportes', labelCorto: 'Reportes', icono: 'reportes',
+    ayuda: 'Qué se vende, quién vende, cuánto hay en bodega y en qué se pierde',
     roles: ['admin', 'supervisor'], enMovil: false,
   },
   // Pendiente: /alertas. No se lista hasta que exista — un menú con enlaces
   // muertos se siente peor que un menú corto.
   {
-    href: '/usuarios', label: 'Usuarios', labelCorto: 'Usuarios', icono: '👥',
+    href: '/usuarios', label: 'Usuarios', labelCorto: 'Usuarios', icono: 'usuarios',
+    ayuda: 'Cuentas del personal: crear, cambiar rol, contraseñas y desactivar',
     roles: ['admin'], enMovil: false,
   },
   {
     // Impuestos adicionales y cómo opera el local (0018, T-18).
-    href: '/configuracion', label: 'Configuración', labelCorto: 'Config.', icono: '⚙️',
+    href: '/configuracion', label: 'Configuración', labelCorto: 'Config.', icono: 'configuracion',
+    ayuda: 'Datos del local, impuestos y cómo opera la caja',
     roles: ['admin'], enMovil: false,
+  },
+  {
+    // Versión instalada y qué cambió (RF-M9-09). Para todos: el cajero también
+    // tiene que enterarse de que un botón se movió.
+    href: '/novedades', label: 'Novedades', labelCorto: 'Novedades', icono: 'novedades',
+    ayuda: 'Qué versión está instalada y qué cambió',
+    roles: ['admin', 'supervisor', 'vendedor', 'bodega'], enMovil: false,
   },
 ];
 
@@ -117,6 +143,11 @@ export function inicioPara(rol: Rol): string {
 }
 
 /** ¿Puede este rol abrir esta ruta? La misma regla que el menú. */
+/** El ítem del menú de una ruta, para el encabezado de la pantalla. */
+export function itemDe(href: string, rol: Rol): ItemNav | undefined {
+  return navPara(rol).find((i) => i.href === href);
+}
+
 export function rolPuedeVer(rol: Rol, href: string): boolean {
   return NAVEGACION.some((i) => i.href === href && i.roles.includes(rol));
 }

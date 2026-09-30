@@ -6,6 +6,8 @@ import { formatCLP, formatCantidad, marginPct, toUserMessage, cantidadConUnidad 
 import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
 import { Modal } from '@/components/Modal';
 import { FormularioProducto } from './FormularioProducto';
+import { Encabezado, EstadoVacio } from '@/components/Encabezado';
+import { Icono } from '@/components/Icono';
 
 type Estado = 'todos' | 'normal' | 'bajo' | 'agotado';
 
@@ -26,8 +28,10 @@ function estadoStock(p: Producto): { icono: string; texto: string; clase: string
 }
 
 export function ProductosClient({
-  puedeVerCostos, puedeEditar, puedeEliminar, puedeEditarPrecios = false, esAdmin = false,
+  puedeVerCostos, puedeEditar, puedeEliminar, puedeEditarPrecios = false, esAdmin = false, codigoNuevo = null,
 }: {
+  /** Vino desde Vender o Consultar precio con un código que no existe: abrir el alta con él. */
+  codigoNuevo?: string | null;
   puedeVerCostos: boolean;
   puedeEditar: boolean;
   puedeEliminar: boolean;
@@ -45,6 +49,8 @@ export function ProductosClient({
 
   const [editando, setEditando] = useState<Producto | null>(null);
   const [creando, setCreando] = useState(false);
+  const [plantilla, setPlantilla] = useState<Producto | null>(null);
+  const [codigoInicial, setCodigoInicial] = useState<string | null>(puedeEditar ? codigoNuevo : null);
   const [confirmando, setConfirmando] = useState<Producto | null>(null);
   const [puedeBorrarDef, setPuedeBorrarDef] = useState(false);
   const [consultandoHistorial, setConsultandoHistorial] = useState(false);
@@ -53,6 +59,16 @@ export function ProductosClient({
   // y el producto nuevo quedaba perdido en la lista.
   const [aviso, setAviso] = useState<string | null>(null);
   const [formKey, setFormKey] = useState(0);
+
+  // El código vino en la dirección: se abre el alta una vez y se limpia, para
+  // que recargar la página no vuelva a abrirla.
+  // Se abre en un efecto y no de entrada: un diálogo no se dibuja en el
+  // servidor (va en un portal a <body>).
+  useEffect(() => {
+    if (!codigoNuevo) return;
+    window.history.replaceState(null, '', '/productos');
+    if (puedeEditar) setCreando(true);
+  }, [codigoNuevo, puedeEditar]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -121,49 +137,32 @@ export function ProductosClient({
 
   return (
     <div className="px-4 py-5">
-      {/* flex-wrap: con Ofertas son cuatro botones, y a 360 px no caben junto
-          al título. Bajan de línea en vez de desbordar la pantalla. */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-          <h1 className="text-lg font-semibold">Productos</h1>
-          <p className="text-sm text-[var(--texto-suave)]">
-            {cargando ? 'Cargando…' : `${productos.length} ${productos.length === 1 ? 'producto' : 'productos'}`}
-          </p>
-        </div>
-        {puedeEditar && (
-          <div className="flex gap-2">
-            <Link
-              href="/productos/etiquetas"
-              title="Imprimir etiquetas con código de barra"
-              className="tap inline-flex flex-col items-center justify-center min-w-[52px] px-2 py-1 rounded-xl border border-[var(--borde)] text-[11px] font-medium leading-tight"
-            >
-              <span aria-hidden className="text-base">🏷️</span>Etiquetas
+      <Encabezado
+        titulo="Productos"
+        icono="productos"
+        descripcion={puedeEditar
+          ? 'El catálogo: precios, códigos de barra y stock. Toca Editar para cambiar un producto.'
+          : 'El catálogo con sus precios y cuánto queda.'}
+        detalle={cargando ? 'Cargando…' : `${productos.length} ${productos.length === 1 ? 'producto' : 'productos'}`}
+        acciones={puedeEditar && (
+          <>
+            <Link href="/productos/etiquetas" prefetch={false} className="btn btn-secundario btn-chico" title="Imprimir etiquetas con código de barra">
+              <Icono nombre="precio" tamano={16} /> Etiquetas
             </Link>
             {puedeEditarPrecios && (
-            <Link
-              href="/productos/ofertas"
-              title="Una oferta a varios productos a la vez"
-              className="tap inline-flex flex-col items-center justify-center min-w-[52px] px-2 py-1 rounded-xl border border-[var(--borde)] text-[11px] font-medium leading-tight"
-            >
-              <span aria-hidden className="text-base">%</span>Ofertas
-            </Link>
+              <Link href="/productos/ofertas" prefetch={false} className="btn btn-secundario btn-chico" title="Una oferta a varios productos a la vez">
+                <span aria-hidden className="font-bold">%</span> Ofertas
+              </Link>
             )}
-            <Link
-              href="/productos/importar"
-              title="Cargar productos desde Excel"
-              className="tap inline-flex flex-col items-center justify-center min-w-[52px] px-2 py-1 rounded-xl border border-[var(--borde)] text-[11px] font-medium leading-tight"
-            >
-              <span aria-hidden className="text-base">📥</span>Importar
+            <Link href="/productos/importar" prefetch={false} className="btn btn-secundario btn-chico" title="Cargar productos desde Excel">
+              <Icono nombre="subir" tamano={16} /> Importar
             </Link>
-            <button
-              onClick={() => setCreando(true)}
-              className="tap px-4 py-2.5 rounded-xl bg-marca-500 text-white text-sm font-semibold"
-            >
-              + Producto
+            <button onClick={() => setCreando(true)} className="btn btn-primario btn-chico">
+              <Icono nombre="agregar" tamano={16} /> Nuevo producto
             </button>
-          </div>
+          </>
         )}
-      </div>
+      />
 
       {aviso && (
         <p role="status" className="mb-3 text-sm px-3 py-2 rounded-lg bg-marca-100 text-marca-900 flex items-center justify-between gap-2">
@@ -230,24 +229,20 @@ export function ProductosClient({
 
       {/* Lista */}
       {!cargando && productos.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-4xl mb-3" aria-hidden>📦</p>
-          <p className="text-sm text-[var(--texto-suave)] mb-4">
-            {busqueda || categoriaId || estado !== 'todos'
-              ? 'Ningún producto coincide con el filtro'
-              : 'Aún no hay productos cargados'}
-          </p>
+        <EstadoVacio
+          icono="productos"
+          titulo={busqueda || categoriaId || estado !== 'todos' ? 'Ningún producto coincide con el filtro' : 'Aún no hay productos cargados'}
+          texto={busqueda || categoriaId || estado !== 'todos'
+            ? 'Prueba con otra palabra o quita los filtros.'
+            : puedeEditar ? 'Crea uno por uno, o sube tu planilla de Excel con todos de una vez.' : 'Pídele al administrador que cargue el catálogo.'}
+        >
           {puedeEditar && !busqueda && (
-            <div className="flex gap-2 justify-center">
-              <Link href="/productos/importar" className="tap px-4 py-2.5 rounded-xl border border-[var(--borde)] text-sm font-medium">
-                Importar desde Excel
-              </Link>
-              <button onClick={() => setCreando(true)} className="tap px-4 py-2.5 rounded-xl bg-marca-500 text-white text-sm font-semibold">
-                Crear el primero
-              </button>
-            </div>
+            <>
+              <Link href="/productos/importar" className="btn btn-secundario">Importar desde Excel</Link>
+              <button onClick={() => setCreando(true)} className="btn btn-primario">Crear el primero</button>
+            </>
           )}
-        </div>
+        </EstadoVacio>
       ) : (
         <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden">
           {productos.map((p) => {
@@ -329,9 +324,14 @@ export function ProductosClient({
           puedeEditarPrecios={puedeEditarPrecios}
           esAdmin={esAdmin}
           key={formKey}
+          plantilla={creando ? plantilla : null}
+          codigoInicial={creando ? codigoInicial : null}
+          onDuplicar={(p) => { setEditando(null); setPlantilla(p); setCodigoInicial(null); setCreando(true); setFormKey((k) => k + 1); }}
           onGuardado={(r) => {
             setCreando(false);
             setEditando(null);
+            setPlantilla(null);
+            setCodigoInicial(null);
             if (r.nuevo) {
               const total = r.sala + r.bodega;
               setAviso(total > 0
@@ -349,7 +349,7 @@ export function ProductosClient({
               void cargar();
             }
           }}
-          onCancelar={() => { setCreando(false); setEditando(null); }}
+          onCancelar={() => { setCreando(false); setEditando(null); setPlantilla(null); setCodigoInicial(null); }}
           onRecargar={editando ? async () => {
             const fresco = await repoProductos().obtener(editando.id, puedeVerCostos);
             if (fresco) { setEditando(fresco); setFormKey((k) => k + 1); }

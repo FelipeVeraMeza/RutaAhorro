@@ -1,9 +1,13 @@
 'use client';
+import { Icono } from '@/components/Icono';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   formatCLP, toUserMessage, aCSV, nombreArchivoReporte, type ColumnaCSV,
+  periodoAnterior, variacionPct, serieCompleta, diasEnRango,
 } from '@rutaahorro/core';
+import { GraficoVentas } from '@/components/GraficoVentas';
+import { Variacion } from '@/components/Tendencia';
 import {
   repoReportes, hoyLocal, hace,
   type RangoFechas, type VentaPorDia, type VentaPorProducto, type VentaPorUsuario,
@@ -11,6 +15,7 @@ import {
 } from '@/lib/datos/reportes';
 import { ETIQUETA_MOVIMIENTO, type TipoMovimiento } from '@/lib/datos/inventario';
 import { useConfiguracion } from '@/lib/datos/configuracion';
+import { Encabezado } from '@/components/Encabezado';
 
 type Vista = 'ventas' | 'productos' | 'usuarios' | 'inventario' | 'dormido' | 'ajustes';
 
@@ -39,6 +44,8 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
   const [diasDormido, setDiasDormido] = useState(30);
 
   const [ventas, setVentas] = useState<VentaPorDia[]>([]);
+  // RF-M7-11 · lo mismo en el período anterior de igual largo.
+  const [anterior, setAnterior] = useState<{ total: number; ventas: number; desde: string; hasta: string } | null>(null);
   const [productos, setProductos] = useState<VentaPorProducto[]>([]);
   const [usuarios, setUsuarios] = useState<VentaPorUsuario[]>([]);
   const [inventario, setInventario] = useState<FilaInventarioValorizado[]>([]);
@@ -65,7 +72,16 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
     setError(null);
     try {
       const repo = repoReportes();
-      if (vista === 'ventas') setVentas(await repo.ventasPorDia(rango));
+      if (vista === 'ventas') {
+        const previo = periodoAnterior(rango.desde, rango.hasta);
+        const [actual, antes] = await Promise.all([repo.ventasPorDia(rango), repo.ventasPorDia(previo)]);
+        setVentas(actual);
+        setAnterior({
+          total: antes.reduce((s, d) => s + d.total, 0),
+          ventas: antes.reduce((s, d) => s + d.ventas, 0),
+          ...previo,
+        });
+      }
       if (vista === 'productos') setProductos(await repo.ventasPorProducto(rango, verCostos));
       if (vista === 'usuarios') setUsuarios(await repo.ventasPorUsuario(rango));
       if (vista === 'inventario') setInventario(await repo.inventarioValorizado());
@@ -116,7 +132,11 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
 
   return (
     <div className="px-4 py-5">
-      <h1 className="text-lg font-semibold mb-3">Reportes</h1>
+      <Encabezado
+        titulo="Reportes"
+        icono="reportes"
+        descripcion="Elige qué quieres saber y el período. Todo se puede bajar a Excel."
+      />
 
       <div className="flex gap-2 mb-4 overflow-x-auto sin-scrollbar" role="tablist">
         {PESTANAS.map(([id, label]) => (
@@ -205,9 +225,25 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
                 ['Ticket prom.', formatCLP(totalTransacciones > 0 ? Math.round(totalVendido / totalTransacciones) : 0)],
               ]}
             >
-              {/* Barras proporcionales al mejor día: un gráfico de verdad
-                  pediría una biblioteca, y esto responde la misma pregunta —
-                  qué días se vende más— sin sumar peso a la descarga. */}
+              {anterior && (
+                <p className="mb-3">
+                  <Variacion pct={variacionPct(totalVendido, anterior.total)}
+                    contra={`${fechaCorta(anterior.desde)} al ${fechaCorta(anterior.hasta)} (${formatCLP(anterior.total)})`} />
+                </p>
+              )}
+              {diasEnRango(desde, hasta) <= 62 && (
+                <div className="tarjeta p-4 mb-3">
+                  <GraficoVentas puntos={serieCompleta(
+                    ventas.map((d) => ({ fecha: d.fecha, total: d.total, ventas: d.ventas })), desde, hasta)}
+                    ultimoEsHoy={hasta === hoyLocal(zona)} />
+                </div>
+              )}
+              {/* Día por día, plegado cuando ya está el gráfico: repetía lo
+                  mismo en 30 filas y empujaba "Exportar" al fondo. */}
+              <details className="group" open={diasEnRango(desde, hasta) > 62}>
+              <summary className="tap flex items-center cursor-pointer text-sm font-medium px-1 mb-2">
+                Ver día por día ({ventas.length} {ventas.length === 1 ? 'día' : 'días'} con ventas)
+              </summary>
               <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden">
                 {ventas.map((d) => {
                   const maximo = Math.max(...ventas.map((x) => x.total), 1);
@@ -230,6 +266,7 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
                   );
                 })}
               </ul>
+              </details>
             </Reporte>
           )}
 
@@ -471,9 +508,11 @@ function Reporte({
   return (
     <>
       {resumen && resumen.length > 0 && (
-        <div className={`grid gap-2 mb-3 ${resumen.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
-          {resumen.map(([label, valor]) => (
-            <div key={label} className="tarjeta p-3">
+        // Con tres cifras, en el celular la primera (la plata) va sola arriba:
+        // en un tercio de 360 px "$4.948.687" se cortaba en "$4.948…".
+        <div className={`grid gap-2 mb-3 ${resumen.length >= 3 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
+          {resumen.map(([label, valor], i) => (
+            <div key={label} className={`tarjeta p-3 ${resumen.length >= 3 && i === 0 ? 'col-span-2 sm:col-span-1' : ''}`}>
               <p className="num text-base font-bold truncate">{valor}</p>
               <p className="text-[11px] text-[var(--texto-suave)] mt-0.5">{label}</p>
             </div>
@@ -483,9 +522,9 @@ function Reporte({
       {children}
       <button
         onClick={onExportar}
-        className="tap w-full mt-3 py-3 rounded-xl border border-[var(--borde)] font-medium text-sm"
+        className="btn btn-secundario w-full mt-3"
       >
-        ⬇ Exportar a Excel
+        <Icono nombre="descargar" tamano={18} /> Exportar a Excel
       </button>
     </>
   );

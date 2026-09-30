@@ -91,7 +91,7 @@ await p.getByRole('button', { name: 'Más' }).click();
 await p.getByRole('link', { name: /Clientes/ }).click();
 await p.waitForURL('**/clientes');
 ok('RQ-21', true, 'se llega a Clientes desde "Más"');
-await p.getByRole('button', { name: '+ Cliente' }).click();
+await p.getByRole('button', { name: 'Nuevo cliente' }).click();
 const f = p.getByRole('dialog');
 await f.getByLabel('Nombre o razón social').fill(nCliente);
 await f.getByLabel('RUT').fill(rutMayorista.replace(/\./g, ''));

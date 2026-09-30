@@ -7,6 +7,8 @@ import { repoUsuarios, type Usuario } from '@/lib/datos/usuarios';
 import { NOMBRE_ROL, LEMA_ROL, type Rol } from '@/lib/navegacion';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
+import { Encabezado } from '@/components/Encabezado';
+import { Icono } from '@/components/Icono';
 
 const ROLES: Rol[] = ['admin', 'supervisor', 'vendedor', 'bodega'];
 
@@ -133,20 +135,20 @@ export function UsuariosClient({ miId }: { miId: string }) {
 
   return (
     <div className="px-4 py-5">
-      <div className="flex items-start justify-between gap-3 mb-4">
-        <div>
-          <h1 className="text-lg font-semibold">Usuarios</h1>
-          <p className="text-sm text-[var(--texto-suave)]">
-            {cargando ? 'Cargando…' : `${usuarios.filter((u) => u.activo).length} activos · ${conectados} conectados ahora`}
-          </p>
-        </div>
-        <button
-          onClick={() => { setError(null); setModo('clave'); setClave(claveTemporal()); setInvitando(true); }}
-          className="tap px-4 py-2.5 rounded-xl bg-marca-500 text-white text-sm font-semibold shrink-0"
-        >
-          + Crear cuenta
-        </button>
-      </div>
+      <Encabezado
+        titulo="Usuarios"
+        icono="usuarios"
+        descripcion="Las cuentas del personal. Cada persona entra con la suya: así cada venta y cada ajuste queda a su nombre."
+        detalle={cargando ? 'Cargando…' : `${usuarios.filter((u) => u.activo).length} activos · ${conectados} conectados ahora`}
+        acciones={
+          <button
+            onClick={() => { setError(null); setModo('clave'); setClave(claveTemporal()); setInvitando(true); }}
+            className="btn btn-primario btn-chico"
+          >
+            <Icono nombre="agregar" tamano={16} /> Crear cuenta
+          </button>
+        }
+      />
 
       {credenciales && (
         <div role="status" className="tarjeta p-4 mb-3 border-marca-500 bg-marca-50">

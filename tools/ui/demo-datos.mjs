@@ -27,7 +27,7 @@ let p = await pagina('admin');
 await p.goto(BASE + '/productos', { waitUntil: 'networkidle' });
 await p.waitForTimeout(1000);
 await p.getByRole('button', { name: '🟠 Bajo' }).click();
-await p.getByRole('button', { name: '+ Producto' }).click();
+await p.getByRole('button', { name: 'Nuevo producto' }).click();
 await p.getByRole('textbox', { name: 'Nombre (obligatorio)' }).fill('Arroz grado 1 · 1 kg');
 await p.getByLabel(/Precio de venta/).click();
 await p.waitForTimeout(1200);

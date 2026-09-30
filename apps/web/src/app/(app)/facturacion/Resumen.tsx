@@ -1,4 +1,5 @@
 'use client';
+import { Icono } from '@/components/Icono';
 
 import { useEffect, useState } from 'react';
 import { formatCLP, toUserMessage, aCSV, nombreArchivoReporte, type ColumnaCSV } from '@rutaahorro/core';
@@ -109,8 +110,8 @@ export function Resumen() {
           );
         })}
       </ul>
-      <button onClick={exportar} className="tap w-full mt-3 rounded-xl border border-[var(--borde)] font-medium text-sm">
-        ⬇ Exportar a Excel
+      <button onClick={exportar} className="btn btn-secundario w-full mt-3">
+        <Icono nombre="descargar" tamano={18} /> Exportar a Excel
       </button>
     </>
   );

@@ -15,6 +15,7 @@ export default async function PrecioPage() {
       usuarioId={user?.id ?? ''}
       // Bodega consulta pero no vende: no ve "Agregar a la venta".
       puedeVender={user?.role === 'admin' || user?.role === 'supervisor' || user?.role === 'vendedor'}
+      puedeCrearProductos={user?.role === 'admin' || user?.role === 'supervisor' || user?.role === 'bodega'}
     />
   );
 }

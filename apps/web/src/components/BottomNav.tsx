@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Modal } from '@/components/Modal';
 import { navMovil, type ItemNav, type Rol } from '@/lib/navegacion';
+import { Icono } from './Icono';
 
 /**
  * Navegación inferior del celular.
@@ -49,7 +50,7 @@ export function BottomNav({ role }: { role: Rol }) {
                 aria-current={esActivo(item) ? 'page' : undefined}
                 className={celda(esActivo(item))}
               >
-                <span aria-hidden className="text-xl leading-none">{item.icono}</span>
+                <Icono nombre={item.icono} tamano={22} />
                 {item.labelCorto}
                 <Subrayado activo={esActivo(item)} />
               </Link>
@@ -68,7 +69,7 @@ export function BottomNav({ role }: { role: Rol }) {
                 // el único botón de la barra; los demás son enlaces.
                 className={celda(enResto) + ' w-full !text-[11px]'}
               >
-                <span aria-hidden className="text-xl leading-none">☰</span>
+                <Icono nombre="mas" tamano={22} />
                 Más
                 <Subrayado activo={enResto} />
               </button>
@@ -87,12 +88,17 @@ export function BottomNav({ role }: { role: Rol }) {
                   prefetch={false}
                   onClick={() => setVerMas(false)}
                   aria-current={esActivo(item) ? 'page' : undefined}
-                  className={`tap flex items-center gap-3 px-3 py-3.5 rounded-xl ${
-                    esActivo(item) ? 'bg-marca-50 text-marca-900 font-semibold' : ''
+                  className={`tap flex items-center gap-3 px-3 py-3 rounded-xl ${
+                    esActivo(item) ? 'bg-marca-50 text-marca-900' : ''
                   }`}
                 >
-                  <span aria-hidden className="text-xl w-7 text-center">{item.icono}</span>
-                  <span className="flex-1">{item.label}</span>
+                  <span className={`grid place-items-center w-10 h-10 rounded-xl ${esActivo(item) ? 'bg-white text-marca-700' : 'bg-[var(--fondo)] text-[var(--texto-suave)]'}`}>
+                    <Icono nombre={item.icono} tamano={20} />
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className={`block ${esActivo(item) ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
+                    <span className="block text-xs text-[var(--texto-suave)] leading-snug">{item.ayuda}</span>
+                  </span>
                   {/* El estado activo no se comunica solo por color (RNF-46) */}
                   {esActivo(item) && <span className="text-xs">Estás aquí</span>}
                 </Link>

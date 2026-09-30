@@ -135,7 +135,18 @@ function semillaDiaria(rango: RangoFechas): VentaPorDia[] {
 
 const repoLocal: RepositorioReportes = {
   async ventasPorDia(rango) {
-    return semillaDiaria(rango);
+    // Hoy sale de las ventas hechas de verdad en este navegador, igual que
+    // "Vendido hoy" del Inicio: si no, el gráfico y la tarjeta no cuadraban.
+    const { configuracionLocal } = await import('./configuracion');
+    const { repoVentas } = await import('./ventas');
+    const hoy = hoyLocal((await configuracionLocal()).zonaHoraria);
+    const dias = semillaDiaria(rango).filter((d) => d.fecha !== hoy);
+    if (rango.desde <= hoy && hoy <= rango.hasta) {
+      const v = await repoVentas().listar({ desde: hoy, hasta: hoy, incluirAnuladas: false, limite: 100_000 });
+      const total = v.reduce((s, x) => s + x.total, 0);
+      if (v.length) dias.push({ fecha: hoy, ventas: v.length, total, ticketPromedio: Math.round(total / v.length) });
+    }
+    return dias;
   },
 
   async ventasPorProducto(rango, verCostos) {
