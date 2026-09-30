@@ -4,11 +4,107 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-09-29.**
+> **Corte: 2026-09-30.**
 
 ---
 
-## CÓMO SEGUIR — corte 2026-09-29, léelo antes que todo
+## CÓMO SEGUIR — corte 2026-09-30, léelo antes que todo
+
+**2026-09-30 · Auditoría completa por rol (jefe, QA, vendedor) y lo que salió.**
+Pedido: "mejorar la página como jefe, QA y vendedor; el ingreso y el manejo de
+información; que se pueda iniciar sesión con una cuenta de vendedor y otras;
+buscar errores en flujos, botones e información; decidir y subir". Se recorrió
+todo en el navegador (modo demo, 360 y 1280 px, los 4 roles) antes de tocar
+nada. **Sin migraciones nuevas**: nada que aplicar en Supabase.
+
+**Ingreso y cuentas**
+- **Crear cuenta con contraseña temporal** (Usuarios → "+ Crear cuenta"): no
+  pasa por el correo, que en Railway lleva a localhost. El admin ve el correo y
+  la clave para dictarlos; al primer ingreso la persona elige una suya
+  (`app_metadata.debe_cambiar_clave`, solo el servidor lo escribe → `/clave`).
+  Invitar por correo sigue como segunda opción. Rutas: `/api/usuarios/crear`,
+  `/api/usuarios/clave` (admin, mismo local), `/api/cuenta/clave` (la propia).
+- **"Nueva contraseña"** por empleado en Usuarios, y **"Cambiar mi
+  contraseña"** (🔑 en el celular, abajo en la lateral).
+- **`npm run db:cuentas -- --dominio=rutaahorro.cl`** crea o repara una cuenta
+  por rol (supervisor@, vendedor@, bodega@ del dominio; `--roles`, `--clave`,
+  `--tenant`, `--cambiar-al-entrar`). Si ya existe, le pone la clave y corrige
+  el perfil: sirve para "no puedo entrar con el vendedor".
+- **Cada rol entra a su pantalla**: admin/supervisor al Inicio, vendedor al
+  POS, bodega a Inventario (antes todos al POS, bodega incluida).
+- Cuenta en Auth **sin perfil**: antes, bucle infinito de redirecciones; ahora
+  dice "no está vinculada a ningún local" con botón Salir.
+- **Modo demo con ingreso de verdad**: `/login` con cuentas de ejemplo
+  (`admin@demo.cl`, `supervisor@demo.cl`, `vendedor@demo.cl`,
+  `bodega@demo.cl`, clave `demo1234`), "Salir" funciona, y las cuentas que se
+  crean en Usuarios también entran.
+
+**Permisos (defectos reales, vistos en el recorrido)**
+- **Bodega abría /pos y /caja** (vendía y veía la plata) y **el Inicio con
+  "Vendido hoy" se abría para vendedor y bodega**. Producción incluida.
+- En el demo, Ofertas, Combos, Etiquetas, Clientes y Facturación **no
+  revisaban el rol** y daban props de admin. Ahora todas las páginas usan
+  `exigirRol` (`lib/permisos.ts`) y quien no puede entrar vuelve a SU inicio.
+- **Vendedor: "Mis ventas"** (matriz doc 02 ✅, la RLS ya lo limitaba), sin
+  anular ni devolver.
+- "Quitar/Desactivar producto" solo admin (matriz); bodega edita productos
+  **sin tocar el precio**. ⚠️ Esto último es solo pantalla: `fn_update_product`
+  deja a bodega cambiar el precio. Cerrarlo en la base es una migración (pendiente).
+- Desactivar/reactivar ya no dice "listo" si la base no tocó la fila.
+
+**Información**
+- **Ventas sumaba solo las 50 cargadas** (un día bueno salía corto) y no
+  restaba devoluciones (no cuadraba con el Inicio). Ahora el resumen sale de
+  `v_sales_daily`, hay **"Cobrado por medio de pago"** y "Ver 50 más antiguas".
+- **Caja**: desglose por medio de pago (efectivo/débito/crédito/transferencia;
+  `fn_cash_session_summary` ya lo traía) y el historial dice "faltaron $2.000"
+  / "sobraron" en vez de "-$2.000".
+- **"Hydration failed" en cada pantalla con hora**: Node y el navegador
+  escriben "a. m." con espacios distintos; React redibujaba la Caja entera.
+  Horas en 24 h (`hourCycle: 'h23'`).
+- El error genérico decía **"Ya fuimos notificados"**: nadie es notificado.
+  Ahora es honesto, y un corte de red dice "No hay conexión con el servidor".
+- Faltaba favicon (404 en cada pantalla).
+
+**Ingreso de datos**
+- Producto: un **código escrito sin tocar "Agregar" se perdía** al guardar
+  (ahora se guarda, o avisa si es de otro); aviso de **nombre repetido**; aviso
+  si un perecible con stock queda sin fecha; el recién creado se ve aunque
+  hubiera filtros; el precio se formatea ($1.590) al salir del campo.
+- **Recepción**: la barra "Confirmar recepción" **quedaba tapada** por la
+  navegación del celular (pendiente desde el 27-09, medido con
+  `elementFromPoint`); la fecha mínima de vencimiento usaba UTC (después de las
+  20-21 h no se podía elegir hoy); la recepción a medio cargar **se guarda en
+  la pestaña** y se recupera; botón "Vaciar" con confirmación.
+- Inventario en 360 px: el nombre salía como "Aceite vege…" (botones debajo
+  ahora); "Mover todo" al reponer; enlaces "← Productos" de 16 px a 44 px.
+- **Caja del demo funciona** (abrir, ingresos/egresos, cerrar, y el POS pide
+  abrirla si se cerró), en una cookie (`lib/demo/caja.ts`).
+
+**Verificado:** 407 lógica (+1: error de red) · typecheck de los 3 paquetes ·
+`db:check` · build de producción con demo apagado · worker 6/6 con Chromium ·
+recorridos nuevos en demo: `tools/ui/demo-roles.mjs` (72 combinaciones rol ×
+pantalla, sin errores ni desbordes), `demo-flujo.mjs` **18/18** (ingreso real
+del vendedor → venta → Mis ventas → caja → cierre → POS pide abrir → reabrir →
+salir → bodega → admin crea cuenta → la cuenta nueva entra),
+`demo-datos.mjs` **11/11**. **No se corrió contra Supabase ni Railway** (esta
+sesión no tiene credenciales): `db:test` no se repitió porque el SQL no cambió.
+
+**Para Felipe, en orden:**
+1. En Railway, que exista **`SUPABASE_SECRET_KEY`** en la web (crear cuentas y
+   poner claves temporales la usan; sin ella responden "falta la llave").
+2. Crear las cuentas de prueba: `npm run db:cuentas -- --dominio=<tu dominio>`
+   y entrar con `vendedor@<dominio>` en Railway. O desde Usuarios → "+ Crear cuenta".
+3. Recorridos contra Railway con el código nuevo: `m1-usuarios.mjs` (arma la
+   invitación por API, no por el botón, así que no cambia), `movil.mjs`,
+   `m6-caja.mjs`, `flujo-completo.mjs`. Falta un recorrido de "+ Crear cuenta"
+   contra Supabase real (en demo pasa, `demo-flujo.mjs`).
+4. Sigue pendiente lo del 29-09 (Site URL de Supabase, `SII_CLAVE_CIFRADO`,
+   decisión de la factura del POS).
+
+---
+
+## CÓMO SEGUIR — corte 2026-09-29
 
 **2026-09-29 (4º corte) · La factura real queda LISTA PARA ENCHUFAR, y un
 defecto de navegación que solo se veía en Railway.** Pedido de Felipe:

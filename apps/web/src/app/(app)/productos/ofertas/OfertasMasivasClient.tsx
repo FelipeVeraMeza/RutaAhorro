@@ -165,7 +165,7 @@ export function OfertasMasivasClient({ esAdmin }: { esAdmin: boolean }) {
   return (
     <div className="px-4 py-5 max-w-2xl mx-auto space-y-5 pb-36" aria-busy={cargando}>
       <header>
-        <Link href="/productos" className="text-sm text-[var(--texto-suave)] underline">← Productos</Link>
+        <Link href="/productos" className="tap inline-flex items-center text-sm text-[var(--texto-suave)] underline">← Productos</Link>
         <h1 className="text-xl font-bold mt-1">Ofertas a varios productos</h1>
         <p className="text-sm text-[var(--texto-suave)]">
           Escribe la oferta una vez y elige a qué productos se aplica.

@@ -1,11 +1,9 @@
-import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/lib/supabase/server';
+import { exigirRol } from '@/lib/permisos';
 import { RecepcionClient } from './RecepcionClient';
 
 export const metadata = { title: 'Recibir mercadería' };
 
 export default async function RecepcionPage() {
-  const user = await getCurrentUser();
-  if (!['admin', 'supervisor', 'bodega'].includes(user!.role)) redirect('/');
-  return <RecepcionClient />;
+  const user = await exigirRol(['admin', 'supervisor', 'bodega']);
+  return <RecepcionClient usuarioId={user.id} />;
 }

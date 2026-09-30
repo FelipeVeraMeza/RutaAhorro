@@ -34,6 +34,9 @@ export function FormularioProducto({
   producto, categorias, puedeVerCostos, puedeEditarPrecios = false, esAdmin = false, onGuardado, onCancelar, onRecargar,
 }: Props) {
   const esEdicion = producto !== null;
+  // Bodega edita productos "sin tocar precio de venta" (matriz del doc 02).
+  // Al crear sí lo pone: un producto sin precio no se puede vender.
+  const precioBloqueado = esEdicion && !puedeEditarPrecios;
   const { fechaHora, zona } = useFormatoFecha();
   const hoy = diaLocal(new Date(), zona);
   const [vencimiento, setVencimiento] = useState('');
@@ -95,6 +98,22 @@ export function FormularioProducto({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [avisoCodigo, setAvisoCodigo] = useState<string | null>(null);
+  // Otro producto que ya se llama igual: el catálogo se llenaba de "Arroz"
+  // repetidos, uno con stock y otro sin código, y al vender se elegía mal.
+  const [parecido, setParecido] = useState<string | null>(null);
+
+  async function revisarNombre() {
+    const n = nombre.trim();
+    setParecido(null);
+    if (n.length < 3 || (n.toLowerCase() === producto?.nombre.toLowerCase())) return;
+    try {
+      const iguales = (await repoProductos().listar({ busqueda: n, soloActivos: false, limite: 20 }, false))
+        .filter((x) => x.id !== producto?.id && x.nombre.trim().toLowerCase() === n.toLowerCase());
+      if (iguales.length) {
+        setParecido(`Ya hay un producto llamado "${iguales[0].nombre}"${iguales[0].activo ? '' : ' (desactivado)'}. Si es el mismo, cancela y edita ese.`);
+      }
+    } catch { /* es solo un aviso */ }
+  }
 
   const { videoRef, start, stop, error: errorCamara } = useScanner({
     enabled: escaneando,
@@ -159,6 +178,21 @@ export function FormularioProducto({
     const ofertas = puedeEditarPrecios ? tramosDesdeFilas(filasOferta, precioNum) : { tramos: [], error: null };
     if (ofertas.error) { setError(ofertas.error); return; }
 
+    // Un código escrito y sin tocar "Agregar" se perdía en silencio al guardar:
+    // el producto quedaba sin código y el lector no lo encontraba en la caja.
+    let codigosFinales = codigos;
+    const pendiente = normalizeBarcode(codigoNuevo.trim());
+    if (pendiente && !codigos.includes(pendiente)) {
+      const dueño = await repoProductos().codigoEnUso(pendiente, producto?.id).catch(() => null);
+      if (dueño) {
+        setError(`El código ${pendiente} que quedó escrito ya pertenece a "${dueño}". Bórralo o corrígelo.`);
+        return;
+      }
+      codigosFinales = [...codigos, pendiente];
+      setCodigos(codigosFinales);
+      setCodigoNuevo('');
+    }
+
     setGuardando(true);
     try {
       const repo = repoProductos();
@@ -178,7 +212,7 @@ export function FormularioProducto({
         stockMinimo: vStockMinimo.valor,
         perecible,
         diasAlerta: vDiasAlerta.valor || 30,
-        codigos,
+        codigos: codigosFinales,
       };
 
       let idGuardado = producto?.id ?? null;
@@ -271,6 +305,7 @@ export function FormularioProducto({
                   {...p}
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
+                  onBlur={() => void revisarNombre()}
                   placeholder="Ej: Arroz grado 1 · 1 kg"
                   className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
                   autoFocus
@@ -278,11 +313,16 @@ export function FormularioProducto({
               )}
             </Campo>
 
+            {parecido && (
+              <p role="status" className="-mt-2 text-xs text-[var(--color-aviso)] bg-amber-50 px-3 py-2 rounded-lg">⚠ {parecido}</p>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               {/* El error se muestra apenas el campo tiene algo escrito: esperar
                   a "Guardar" obliga a recorrer el formulario hacia atrás. */}
               <Campo
                 etiqueta="Precio de venta" obligatorio
+                ayuda={precioBloqueado ? 'Lo cambia el administrador o un supervisor' : undefined}
                 error={precio !== '' ? vPrecio.error : null}
               >
                 {(p) => (
@@ -290,8 +330,10 @@ export function FormularioProducto({
                     {...p}
                     inputMode="numeric" value={precio}
                     onChange={(e) => setPrecio(e.target.value)}
+                    onBlur={() => { if (vPrecio.valido && vPrecio.valor > 0) setPrecio(vPrecio.valor.toLocaleString('es-CL')); }}
+                    readOnly={precioBloqueado}
                     placeholder="0"
-                    className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
+                    className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right read-only:bg-[var(--fondo)]"
                   />
                 )}
               </Campo>
@@ -389,10 +431,15 @@ export function FormularioProducto({
                           {...p}
                           type="date" value={vencimiento} min={hoy}
                           onChange={(e) => setVencimiento(e.target.value)}
-                          className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
+                          className={`tap w-full px-3 py-2.5 rounded-xl border bg-white ${vencimiento ? 'border-[var(--borde)]' : 'border-[var(--color-aviso)]'}`}
                         />
                       )}
                     </Campo>
+                    {!vencimiento && (
+                      <p className="text-xs text-[var(--color-aviso)] mt-1">
+                        Sin fecha, estas unidades no aparecen en las alertas de vencimiento.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

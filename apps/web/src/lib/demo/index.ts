@@ -21,6 +21,33 @@ export const DEMO_ACTIVO = process.env.NEXT_PUBLIC_DEMO === 'true';
 export type DemoRole = 'admin' | 'supervisor' | 'vendedor' | 'bodega';
 
 export const DEMO_COOKIE = 'demo_rol';
+/** Nombre e id de la cuenta de demo con que se entró, si no es la de ejemplo del rol. */
+export const DEMO_COOKIE_CUENTA = 'demo_cuenta';
+
+/** Contraseña de las cuentas de ejemplo del modo demo. Nunca de una real. */
+export const DEMO_CLAVE = 'demo1234';
+
+/** Las cuentas de ejemplo, una por rol, para entrar desde /login. */
+export const DEMO_CUENTAS: Array<{ rol: DemoRole; correo: string }> = [
+  { rol: 'admin', correo: 'admin@demo.cl' },
+  { rol: 'supervisor', correo: 'supervisor@demo.cl' },
+  { rol: 'vendedor', correo: 'vendedor@demo.cl' },
+  { rol: 'bodega', correo: 'bodega@demo.cl' },
+];
+
+export interface CuentaDemo { id: string; nombre: string; correo: string }
+
+export function leerCuentaDemo(valor: string | undefined): CuentaDemo | null {
+  if (!valor) return null;
+  try {
+    const c = JSON.parse(decodeURIComponent(valor)) as Partial<CuentaDemo>;
+    return typeof c.id === 'string' && typeof c.nombre === 'string'
+      ? { id: c.id, nombre: c.nombre, correo: String(c.correo ?? '') }
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 const PERFILES: Record<DemoRole, { nombre: string; descuento: number }> = {
   admin:      { nombre: 'Felipe Vera',  descuento: 100 },
@@ -34,12 +61,12 @@ export function esRolValido(valor: string | undefined): valor is DemoRole {
 }
 
 /** Usuario ficticio del modo demo. Nunca corresponde a una persona real. */
-export function usuarioDemo(rol: DemoRole = 'admin'): CurrentUser {
+export function usuarioDemo(rol: DemoRole = 'admin', cuenta: CuentaDemo | null = null): CurrentUser {
   const perfil = PERFILES[rol];
   return {
-    id: `demo-${rol}`,
-    email: `${rol}@demo.local`,
-    fullName: perfil.nombre,
+    id: cuenta?.id ?? `demo-${rol}`,
+    email: cuenta?.correo || `${rol}@demo.cl`,
+    fullName: cuenta?.nombre ?? perfil.nombre,
     role: rol,
     tenantId: 'demo-tenant',
     storeId: 'demo-store',

@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { createClient, getCurrentUser } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
+import { exigirRol } from '@/lib/permisos';
 import { formatCLP, textoVencimiento, cantidadConUnidad } from '@rutaahorro/core';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { DEMO_BAJO_STOCK, DEMO_LOTES } from '@/lib/demo/data';
@@ -31,7 +32,9 @@ interface FilaVencimiento {
 const TOPE_PANEL = 8;
 
 export default async function DashboardPage() {
-  const user = await getCurrentUser();
+  // El resumen del negocio es del dueño y del supervisor. El vendedor va a
+  // vender y bodega a su inventario (inicioPara).
+  const user = await exigirRol(['admin', 'supervisor']);
 
   let total = 0;
   let cantidadVentas = 0;
@@ -76,7 +79,7 @@ export default async function DashboardPage() {
       .order('days_to_expiry', { ascending: true })
       .limit(TOPE_PANEL);
     const pVentas = (async () => {
-      const { data: local } = await client.from('tenants').select('settings').eq('id', user!.tenantId).maybeSingle();
+      const { data: local } = await client.from('tenants').select('settings').eq('id', user.tenantId).maybeSingle();
       const hoy = diaLocal(new Date(), desdeSettings(local?.settings).zonaHoraria);
       return client
         .from('v_sales_daily')
@@ -113,7 +116,7 @@ export default async function DashboardPage() {
   }
 
   const enRiesgo = porVencer.reduce((s, l) => s + Number(l.value_at_risk ?? 0), 0);
-  const primerNombre = user!.fullName.split(' ')[0] || 'bienvenido';
+  const primerNombre = user.fullName.split(' ')[0] || 'bienvenido';
 
   return (
     <div className="px-4 py-5 space-y-4">

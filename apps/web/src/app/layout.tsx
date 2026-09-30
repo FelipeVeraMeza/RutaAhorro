@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   },
   description: 'Inventario, ventas y caja desde el celular',
   manifest: '/manifest.webmanifest',
+  // Sin esto el navegador pedía /favicon.ico en cada pantalla y recibía 404.
+  icons: { icon: '/icons/icon-192.png', apple: '/icons/icon-192.png' },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

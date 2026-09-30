@@ -26,6 +26,8 @@ export interface ItemNav {
   roles: Rol[];
   /** Si es true, aparece también en la barra inferior del celular. */
   enMovil: boolean;
+  /** Nombre distinto según quién mira: el vendedor ve "Mis ventas". */
+  porRol?: Partial<Record<Rol, { label: string; labelCorto: string }>>;
 }
 
 export const NAVEGACION: ItemNav[] = [
@@ -60,8 +62,12 @@ export const NAVEGACION: ItemNav[] = [
     roles: ['admin', 'supervisor', 'bodega'], enMovil: false,
   },
   {
+    // El vendedor ve solo las suyas (matriz del doc 02: "Ver historial de
+    // ventas propias ✅"; RLS de `sales` ya lo impone). Antes no tenía ninguna
+    // forma de encontrar una venta que acababa de cobrar.
     href: '/ventas', label: 'Ventas', labelCorto: 'Ventas', icono: '🧾',
-    roles: ['admin', 'supervisor'], enMovil: false,
+    roles: ['admin', 'supervisor', 'vendedor'], enMovil: false,
+    porRol: { vendedor: { label: 'Mis ventas', labelCorto: 'Mis ventas' } },
   },
   {
     // Ficha y precio por cliente (0022, RQ-21). El vendedor no entra: elige
@@ -92,7 +98,27 @@ export const NAVEGACION: ItemNav[] = [
 ];
 
 export function navPara(rol: Rol): ItemNav[] {
-  return NAVEGACION.filter((i) => i.roles.includes(rol));
+  return NAVEGACION.filter((i) => i.roles.includes(rol))
+    .map((i) => (i.porRol?.[rol] ? { ...i, ...i.porRol[rol] } : i));
+}
+
+/**
+ * La primera pantalla de cada rol.
+ *
+ * Antes todos entraban al POS, incluida bodega, que no vende (matriz del
+ * doc 02): Luis Rojas iniciaba sesión y quedaba frente a un carrito. Y el
+ * Inicio ("Vendido hoy") se abría para cualquiera que escribiera la
+ * dirección, aunque no estuviera en su menú.
+ */
+export function inicioPara(rol: Rol): string {
+  if (rol === 'vendedor') return '/pos';
+  if (rol === 'bodega') return '/inventario';
+  return '/';
+}
+
+/** ¿Puede este rol abrir esta ruta? La misma regla que el menú. */
+export function rolPuedeVer(rol: Rol, href: string): boolean {
+  return NAVEGACION.some((i) => i.href === href && i.roles.includes(rol));
 }
 
 /** Objetivos táctiles de la barra inferior, "Más" incluido (RNF-16). */

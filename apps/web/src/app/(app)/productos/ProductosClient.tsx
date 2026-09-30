@@ -292,7 +292,10 @@ export function ProductosClient({
                         Editar
                       </button>
                       {/* Reactivar no es destructivo: no lleva el color de
-                          alerta, que queda reservado para quitar (docs/21 B-1). */}
+                          alerta, que queda reservado para quitar (docs/21 B-1).
+                          Desactivar es solo del administrador (matriz del doc
+                          02); antes lo veían también supervisor y bodega. */}
+                      {puedeEliminar && (
                       <button
                         onClick={() => void abrirConfirmacion(p)}
                         className={`tap px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)] ${
@@ -301,6 +304,7 @@ export function ProductosClient({
                       >
                         {p.activo ? 'Quitar' : 'Reactivar'}
                       </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -334,7 +338,12 @@ export function ProductosClient({
                 ? `${r.nombre} creado: ${formatCantidad(r.sala)} a la vista (listo para vender)${r.bodega ? ` y ${formatCantidad(r.bodega)} en bodega` : ''}`
                 : `${r.nombre} creado, sin stock. Para cargarle unidades: Inventario → Ajustar, o Proveedores → Recepción`);
               // Se muestra el recién creado: sin esto quedaba perdido en la lista.
+              // Los demás filtros se sueltan: con "🟠 Bajo" o una categoría
+              // elegidos, el producto nuevo no aparecía aunque se buscara.
               setBusqueda(r.nombre);
+              setCategoriaId('');
+              setEstado('todos');
+              setVerInactivos(false);
             } else {
               setAviso(`${r.nombre} guardado`);
               void cargar();

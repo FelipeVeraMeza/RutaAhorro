@@ -3,7 +3,7 @@
 import { maxDiscountFor, type UserRole } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { topeDescuentoDe } from './configuracion';
-import { DEMO_ACTIVO } from '../demo';
+import { DEMO_ACTIVO, DEMO_CLAVE } from '../demo';
 import { db } from '../offline/db';
 import type { Rol } from '../navegacion';
 
@@ -29,47 +29,84 @@ export interface Usuario {
 export interface RepositorioUsuarios {
   listar(): Promise<Usuario[]>;
   invitar(datos: { nombre: string; email: string; rol: Rol }): Promise<void>;
+  /**
+   * Crear la cuenta con una contraseña temporal, sin correo. La persona la
+   * cambia por una suya al primer ingreso.
+   */
+  crearConClave(datos: { nombre: string; email: string; rol: Rol; clave: string }): Promise<void>;
+  /** Contraseña temporal para quien olvidó la suya. */
+  restablecerClave(id: string, clave: string): Promise<void>;
   cambiarRol(id: string, rol: Rol): Promise<void>;
   desactivar(id: string): Promise<void>;
   reactivar(id: string): Promise<void>;
 }
 
-const KEY = 'demo:usuarios';
+/** Versión 2: los correos son los de las cuentas de ejemplo de /login, y cada una guarda su clave. */
+const KEY = 'demo:usuarios:v2';
 
-const SEMILLA: Usuario[] = [
-  { id: 'demo-admin', nombre: 'Felipe Vera', email: 'felipe@rutaahorro.cl', rol: 'admin', activo: true, ultimaActividad: new Date().toISOString(), descuentoMax: 100 },
-  { id: 'demo-supervisor', nombre: 'Marcela Soto', email: 'marcela@rutaahorro.cl', rol: 'supervisor', activo: true, ultimaActividad: new Date(Date.now() - 12 * 60000).toISOString(), descuentoMax: 10 },
-  { id: 'demo-vendedor', nombre: 'Jorge Peña', email: 'jorge@rutaahorro.cl', rol: 'vendedor', activo: true, ultimaActividad: new Date(Date.now() - 3 * 60000).toISOString(), descuentoMax: 0 },
-  { id: 'demo-bodega', nombre: 'Luis Rojas', email: 'luis@rutaahorro.cl', rol: 'bodega', activo: true, ultimaActividad: new Date(Date.now() - 4 * 3600000).toISOString(), descuentoMax: 0 },
+/** En la maqueta la clave vive junto al usuario. Nunca en producción. */
+type UsuarioDemo = Usuario & { clave: string };
+
+const SEMILLA: UsuarioDemo[] = [
+  { id: 'demo-admin', nombre: 'Felipe Vera', email: 'admin@demo.cl', rol: 'admin', activo: true, ultimaActividad: new Date().toISOString(), descuentoMax: 100, clave: DEMO_CLAVE },
+  { id: 'demo-supervisor', nombre: 'Marcela Soto', email: 'supervisor@demo.cl', rol: 'supervisor', activo: true, ultimaActividad: new Date(Date.now() - 12 * 60000).toISOString(), descuentoMax: 10, clave: DEMO_CLAVE },
+  { id: 'demo-vendedor', nombre: 'Jorge Peña', email: 'vendedor@demo.cl', rol: 'vendedor', activo: true, ultimaActividad: new Date(Date.now() - 3 * 60000).toISOString(), descuentoMax: 0, clave: DEMO_CLAVE },
+  { id: 'demo-bodega', nombre: 'Luis Rojas', email: 'bodega@demo.cl', rol: 'bodega', activo: true, ultimaActividad: new Date(Date.now() - 4 * 3600000).toISOString(), descuentoMax: 0, clave: DEMO_CLAVE },
 ];
 
-
-
-async function leerLocal(): Promise<Usuario[]> {
+async function leerLocal(): Promise<UsuarioDemo[]> {
   const raw = await db().meta.get(KEY);
-  if (raw?.value) return JSON.parse(raw.value) as Usuario[];
+  if (raw?.value) return JSON.parse(raw.value) as UsuarioDemo[];
   await db().meta.put({ key: KEY, value: JSON.stringify(SEMILLA) });
-  return SEMILLA;
+  return SEMILLA.map((u) => ({ ...u }));
 }
 
-async function guardarLocal(us: Usuario[]) {
+async function guardarLocal(us: UsuarioDemo[]) {
   await db().meta.put({ key: KEY, value: JSON.stringify(us) });
 }
 
+/**
+ * La cuenta de demo con ese correo, para /login. Las de ejemplo y las que el
+ * administrador creó en Usuarios con su clave temporal.
+ */
+export async function cuentaDemoPorCorreo(correo: string): Promise<{
+  id: string; nombre: string; correo: string; rol: Rol; clave: string; activo: boolean;
+} | null> {
+  const u = (await leerLocal()).find((x) => x.email?.toLowerCase() === correo.toLowerCase());
+  return u ? { id: u.id, nombre: u.nombre, correo: u.email ?? correo, rol: u.rol, clave: u.clave, activo: u.activo } : null;
+}
+
 const repoLocal: RepositorioUsuarios = {
-  listar: leerLocal,
+  async listar() {
+    // La clave no sale del repositorio: la pantalla no tiene por qué verla.
+    return (await leerLocal()).map(({ clave: _clave, ...u }) => u);
+  },
 
   async invitar({ nombre, email, rol }) {
+    // En la maqueta no hay correo: queda con la clave de ejemplo.
+    await repoLocal.crearConClave({ nombre, email, rol, clave: DEMO_CLAVE });
+  },
+
+  async crearConClave({ nombre, email, rol, clave }) {
     const us = await leerLocal();
     if (us.some((u) => u.email?.toLowerCase() === email.toLowerCase())) {
       throw new Error('CORREO_YA_REGISTRADO');
     }
     us.push({
       id: `u${Date.now()}`,
-      nombre, email, rol, activo: true,
+      nombre, email: email.toLowerCase(), rol, activo: true,
       ultimaActividad: null,          // aún no ha entrado
       descuentoMax: maxDiscountFor(rol as UserRole),
+      clave,
     });
+    await guardarLocal(us);
+  },
+
+  async restablecerClave(id, clave) {
+    const us = await leerLocal();
+    const u = us.find((x) => x.id === id);
+    if (!u) throw new Error('NO_ENCONTRADO');
+    u.clave = clave;
     await guardarLocal(us);
   },
 
@@ -131,6 +168,14 @@ const repoSupabase: RepositorioUsuarios = {
     }
   },
 
+  async crearConClave(datos) {
+    await llamar('/api/usuarios/crear', datos);
+  },
+
+  async restablecerClave(id, clave) {
+    await llamar('/api/usuarios/clave', { id, clave });
+  },
+
   async cambiarRol(id, rol) {
     const { error } = await supabase()
       .from('profiles')
@@ -149,6 +194,26 @@ const repoSupabase: RepositorioUsuarios = {
     if (error) throw error;
   },
 };
+
+/** Las rutas del servidor responden { error: { code, message } }. */
+async function llamar(url: string, cuerpo: unknown): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo),
+    });
+  } catch {
+    throw new Error('SIN_CONEXION');
+  }
+  if (!res.ok) {
+    const r = await res.json().catch(() => ({}));
+    const e = new Error(r?.error?.code ?? 'ERROR_INTERNO') as Error & { detalle?: string };
+    e.detalle = r?.error?.message;
+    throw e;
+  }
+}
 
 export function repoUsuarios(): RepositorioUsuarios {
   return DEMO_ACTIVO ? repoLocal : repoSupabase;

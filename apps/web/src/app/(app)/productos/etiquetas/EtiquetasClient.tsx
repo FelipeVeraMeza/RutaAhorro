@@ -147,7 +147,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
   return (
     <div className="px-4 py-5">
       <div className="flex items-center gap-3 mb-1 no-imprimir">
-        <Link href="/productos" className="tap text-sm text-[var(--texto-suave)]">← Productos</Link>
+        <Link href="/productos" className="tap inline-flex items-center text-sm text-[var(--texto-suave)]">← Productos</Link>
         <h1 className="text-lg font-semibold">Etiquetas</h1>
       </div>
       <p className="text-sm text-[var(--texto-suave)] mb-4 no-imprimir">

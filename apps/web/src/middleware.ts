@@ -8,11 +8,23 @@ import { NextResponse, type NextRequest } from 'next/server';
  * turnos sin volver a escribir su clave (RF-M1-06, US-02).
  */
 export async function middleware(request: NextRequest) {
-  // MODO DEMO: sin sesión, todas las rutas quedan abiertas. Dev-only.
+  // MODO DEMO: la "sesión" es la cookie de la cuenta de ejemplo con que se
+  // entró en /login. Antes no había ingreso: se abría directo como
+  // administrador y no había cómo probar entrar con un vendedor. Dev-only.
   if (process.env.NEXT_PUBLIC_DEMO === 'true') {
-    if (request.nextUrl.pathname.startsWith('/login')) {
+    const path = request.nextUrl.pathname;
+    const conSesion = Boolean(request.cookies.get('demo_rol')?.value);
+    const esIngreso = path.startsWith('/login') || path.startsWith('/recuperar');
+    if (!conSesion && !esIngreso && !path.startsWith('/api/')) {
       const url = request.nextUrl.clone();
-      url.pathname = '/pos';
+      url.pathname = '/login';
+      url.search = '';
+      if (path !== '/') url.searchParams.set('next', path);
+      return NextResponse.redirect(url);
+    }
+    if (conSesion && path.startsWith('/login')) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/';
       url.search = '';
       return NextResponse.redirect(url);
     }
@@ -57,12 +69,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Solo /login devuelve al POS a quien ya tiene sesión. /recuperar no: el
+  // Solo /login devuelve a quien ya tiene sesión a su primera pantalla ("/"
+  // la decide según el rol: vendedor al POS, bodega a Inventario). /recuperar no: el
   // enlace de una invitación o de recuperación trae una sesión nueva en la
   // URL, y redirigir la perdería.
   if (user && path.startsWith('/login')) {
     const url = request.nextUrl.clone();
-    url.pathname = '/pos';
+    url.pathname = '/';
     url.search = '';
     return NextResponse.redirect(url);
   }

@@ -100,7 +100,8 @@ function Recuperar() {
           : 'No se pudo guardar la contraseña. Pide un enlace nuevo.');
       return;
     }
-    router.push('/pos');
+    // "/" lleva a cada rol a su pantalla: un invitado de bodega no vende.
+    router.push('/');
     router.refresh();
   }
 

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   formatCLP, parseCLP, validarCantidad, weightedAverageCost, costVariationPct,
-  shouldWarnCostVariation, toUserMessage,
+  shouldWarnCostVariation, toUserMessage, diaLocal,
 } from '@rutaahorro/core';
 import {
   repoProveedores, buscarParaRecepcion, productoParaRecepcion,
@@ -13,7 +13,7 @@ import {
 } from '@/lib/datos/proveedores';
 import { findByBarcode } from '@/lib/offline/catalog';
 import { useScanner } from '@/lib/scanner/useScanner';
-import { configuracionLocal, CONFIGURACION_POR_OMISION } from '@/lib/datos/configuracion';
+import { configuracionLocal, CONFIGURACION_POR_OMISION, useConfiguracion } from '@/lib/datos/configuracion';
 
 const TIPOS = [
   { id: 'guia', label: 'Guía de despacho' },
@@ -22,10 +22,43 @@ const TIPOS = [
   { id: 'sin_documento', label: 'Sin documento' },
 ];
 
-const hoy = () => new Date().toISOString().slice(0, 10);
+/**
+ * La recepción a medio cargar queda en la pestaña (sessionStorage), con dueño.
+ * Veinte líneas con costos y vencimientos se perdían enteras al salir a
+ * Productos a crear el que faltaba, o al tocar otra sección por error.
+ */
+const CLAVE_BORRADOR = 'recepcion:borrador';
 
-export function RecepcionClient() {
+interface Borrador {
+  usuario: string;
+  proveedorId: string;
+  tipoDoc: string;
+  documento: string;
+  lineas: LineaRecepcion[];
+}
+
+function leerBorrador(usuario: string): Borrador | null {
+  try {
+    const b = JSON.parse(sessionStorage.getItem(CLAVE_BORRADOR) ?? 'null') as Borrador | null;
+    return b && b.usuario === usuario && Array.isArray(b.lineas) ? b : null;
+  } catch {
+    return null;
+  }
+}
+
+function guardarBorrador(b: Borrador | null) {
+  try {
+    if (!b || b.lineas.length === 0) sessionStorage.removeItem(CLAVE_BORRADOR);
+    else sessionStorage.setItem(CLAVE_BORRADOR, JSON.stringify(b));
+  } catch { /* sin almacenamiento, vive solo en memoria como antes */ }
+}
+
+export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
   const router = useRouter();
+  // El día del local, no el de UTC: con toISOString, después de las 20:00 o
+  // 21:00 "hoy" ya era mañana y no se podía elegir un vencimiento de hoy.
+  const { zonaHoraria } = useConfiguracion();
+  const hoy = () => diaLocal(new Date(), zonaHoraria);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   // El umbral de aviso de variación de costo lo fija el local (RF-M9-08). El
   // 20 % que traía shouldWarnCostVariation por omisión era el único que se
@@ -52,6 +85,21 @@ export function RecepcionClient() {
   const [aviso, setAviso] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+
+  // Restaurar el borrador una vez, y guardar cada cambio desde entonces.
+  const [restaurado, setRestaurado] = useState(false);
+  useEffect(() => {
+    const b = leerBorrador(usuarioId);
+    if (b) {
+      setProveedorId(b.proveedorId); setTipoDoc(b.tipoDoc); setDocumento(b.documento);
+      setLineas(b.lineas);
+      setAviso(`Se recuperó la recepción que estabas cargando (${b.lineas.length} ${b.lineas.length === 1 ? 'producto' : 'productos'})`);
+    }
+    setRestaurado(true);
+  }, [usuarioId]);
+  useEffect(() => {
+    if (restaurado) guardarBorrador({ usuario: usuarioId, proveedorId, tipoDoc, documento, lineas });
+  }, [restaurado, usuarioId, proveedorId, tipoDoc, documento, lineas]);
 
   const agregar = useCallback((p: {
     productId: string; nombre: string; perecible: boolean;
@@ -142,6 +190,7 @@ export function RecepcionClient() {
         documento: documento.trim() || null,
         lineas,
       });
+      guardarBorrador(null);
       router.push(`/proveedores?recibido=${r.id}`);
       router.refresh();
     } catch (e) {
@@ -151,9 +200,9 @@ export function RecepcionClient() {
   }
 
   return (
-    <div className="px-4 py-5 pb-40">
+    <div className="px-4 py-5 pb-56 lg:pb-40">
       <div className="flex items-center gap-3 mb-4">
-        <Link href="/proveedores" className="tap text-sm text-[var(--texto-suave)]">← Compras</Link>
+        <Link href="/proveedores" className="tap inline-flex items-center text-sm text-[var(--texto-suave)]">← Compras</Link>
         <h1 className="text-lg font-semibold">Recibir mercadería</h1>
       </div>
 
@@ -380,8 +429,10 @@ export function RecepcionClient() {
 
       {/* Confirmar */}
       {lineas.length > 0 && (
-        <div className="fixed bottom-0 inset-x-0 lg:left-60 bg-white border-t border-[var(--borde)] px-4 py-3 z-30"
-             style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+        // Sobre la barra de navegación del celular (60 px, lg:hidden), no
+        // debajo: antes era bottom-0 y la barra (z-40) tapaba "Confirmar
+        // recepción". Igual que Nueva factura y Ofertas.
+        <div data-acciones className="fixed inset-x-0 lg:left-60 bottom-[calc(60px+env(safe-area-inset-bottom))] lg:bottom-0 bg-white border-t border-[var(--borde)] px-4 py-3 z-30">
           <div className="max-w-5xl mx-auto">
             {faltanVencimientos.length > 0 && (
               <p className="text-xs text-[var(--color-alerta)] mb-2">
@@ -392,6 +443,8 @@ export function RecepcionClient() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-[var(--texto-suave)]">
                 {lineas.length} {lineas.length === 1 ? 'producto' : 'productos'}
+                <button type="button" onClick={() => { if (window.confirm('¿Quitar todos los productos de esta recepción?')) { setLineas([]); setCantidadTexto({}); } }}
+                  className="tap ml-2 px-2 text-xs underline">Vaciar</button>
               </span>
               <span className="num text-xl font-bold">{formatCLP(total)}</span>
             </div>

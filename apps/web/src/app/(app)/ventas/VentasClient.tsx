@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { formatCLP, toUserMessage, NOMBRE_DOCUMENTO } from '@rutaahorro/core';
 import {
   repoVentas, ETIQUETA_PAGO,
-  type Venta, type VentaDetallada,
+  type Venta, type VentaDetallada, type ResumenVentas,
 } from '@/lib/datos/ventas';
 import { hoyLocal, hace } from '@/lib/datos/reportes';
 import { Modal } from '@/components/Modal';
@@ -32,7 +32,14 @@ const MOTIVOS_SUGERIDOS = [
   'Venta duplicada',
 ];
 
-export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
+/** De a cuántas se traen. "Ver más" pide otras tantas. */
+const POR_PAGINA = 50;
+
+export function VentasClient({ puedeAnular, soloPropias = false }: {
+  puedeAnular: boolean;
+  /** Vendedor: la base le entrega solo las suyas; la pantalla lo dice. */
+  soloPropias?: boolean;
+}) {
   const { fechaHora, zona } = useFormatoFecha();
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [desde, setDesde] = useState(hoyLocal(zona));
@@ -43,6 +50,8 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
   const [incluirAnuladas, setIncluirAnuladas] = useState(true);
 
   const [cargando, setCargando] = useState(true);
+  const [limite, setLimite] = useState(POR_PAGINA);
+  const [resumen, setResumen] = useState<ResumenVentas | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exito, setExito] = useState<string | null>(null);
 
@@ -58,16 +67,25 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
     setError(null);
     try {
       const n = Number(folio.trim());
-      setVentas(await repoVentas().listar({
-        desde, hasta, incluirAnuladas,
-        ...(folio.trim() !== '' && Number.isFinite(n) ? { folio: n } : {}),
-      }));
+      const porFolio = folio.trim() !== '' && Number.isFinite(n);
+      const [lista, res] = await Promise.all([
+        repoVentas().listar({
+          desde, hasta, incluirAnuladas, limite,
+          ...(porFolio ? { folio: n } : {}),
+        }),
+        porFolio ? Promise.resolve(null) : repoVentas().resumen(desde, hasta),
+      ]);
+      setVentas(lista);
+      setResumen(res);
     } catch (e) {
       setError(toUserMessage(e));
     } finally {
       setCargando(false);
     }
-  }, [desde, hasta, folio, incluirAnuladas]);
+  }, [desde, hasta, folio, incluirAnuladas, limite]);
+
+  // Otro filtro vuelve a la primera página.
+  useEffect(() => { setLimite(POR_PAGINA); }, [desde, hasta, folio, incluirAnuladas]);
 
   useEffect(() => {
     const t = setTimeout(() => void cargar(), 200);
@@ -95,10 +113,18 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
 
   const totalMostrado = ventas.filter((v) => !v.anulada).reduce((s, v) => s + v.total, 0);
   const anuladas = ventas.filter((v) => v.anulada).length;
+  const hayMas = ventas.length >= limite;
+  const medios = Object.entries(resumen?.porMedio ?? {}).filter(([, m]) => m > 0)
+    .sort((a, b) => b[1] - a[1]);
 
   return (
     <div className="px-4 py-5">
-      <h1 className="text-lg font-semibold mb-3">Ventas</h1>
+      <h1 className="text-lg font-semibold">{soloPropias ? 'Mis ventas' : 'Ventas'}</h1>
+      <p className="text-xs text-[var(--texto-suave)] mb-3">
+        {soloPropias
+          ? 'Solo las que cobraste tú. Para anular o devolver, pídeselo a un supervisor.'
+          : 'Toca una venta para ver el detalle, sus documentos, devolverla o anularla.'}
+      </p>
 
       <div className="grid grid-cols-2 gap-2 mb-2">
         <label className="text-xs text-[var(--texto-suave)]">
@@ -157,18 +183,45 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
         </p>
       )}
 
-      {!cargando && ventas.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <div className="tarjeta p-3">
-            <p className="num text-lg font-bold">{formatCLP(totalMostrado)}</p>
-            <p className="text-[11px] text-[var(--texto-suave)]">Vendido (sin anuladas)</p>
+      {/* El resumen sale de la base, no de sumar la lista: la lista trae de a
+          50 y no resta devoluciones. Con folio, el resumen es la venta misma. */}
+      {!cargando && resumen && (resumen.ventas > 0 || resumen.total !== 0) && (
+        <div className="mb-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="tarjeta p-3">
+              <p className="num text-lg font-bold">{formatCLP(resumen.total)}</p>
+              <p className="text-[11px] text-[var(--texto-suave)]">Vendido (sin anuladas ni devoluciones)</p>
+            </div>
+            <div className="tarjeta p-3">
+              <p className="num text-lg font-bold">{resumen.ventas}</p>
+              <p className="text-[11px] text-[var(--texto-suave)]">
+                Ventas{resumen.ventas > 0 && ` · ticket ${formatCLP(Math.round(resumen.total / resumen.ventas))}`}
+              </p>
+            </div>
           </div>
-          <div className="tarjeta p-3">
-            <p className="num text-lg font-bold">{ventas.length - anuladas}</p>
-            <p className="text-[11px] text-[var(--texto-suave)]">
-              Ventas{anuladas > 0 && ` · ${anuladas} anulada${anuladas === 1 ? '' : 's'}`}
+          {medios.length > 0 && (
+            <div className="tarjeta p-3">
+              <p className="text-[11px] text-[var(--texto-suave)] mb-1">Cobrado por medio de pago</p>
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                {medios.map(([m, monto]) => (
+                  <li key={m} className="num">
+                    {ETIQUETA_PAGO[m] ?? m} <strong>{formatCLP(monto)}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {anuladas > 0 && (
+            <p className="text-xs text-[var(--texto-suave)]">
+              {anuladas} {anuladas === 1 ? 'anulada' : 'anuladas'} en la lista (no suman).
             </p>
-          </div>
+          )}
+        </div>
+      )}
+      {!cargando && !resumen && ventas.length > 0 && (
+        <div className="tarjeta p-3 mb-3">
+          <p className="num text-lg font-bold">{formatCLP(totalMostrado)}</p>
+          <p className="text-[11px] text-[var(--texto-suave)]">Folio {folio}</p>
         </div>
       )}
 
@@ -222,6 +275,15 @@ export function VentasClient({ puedeAnular }: { puedeAnular: boolean }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {!cargando && hayMas && (
+        <button
+          onClick={() => setLimite((l) => l + POR_PAGINA)}
+          className="tap w-full mt-3 py-3 rounded-xl border border-[var(--borde)] text-sm font-medium"
+        >
+          Ver {POR_PAGINA} más antiguas
+        </button>
       )}
 
       {detalle && (

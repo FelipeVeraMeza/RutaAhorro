@@ -10,13 +10,7 @@ import { navPara, LEMA_ROL, NOMBRE_ROL, type Rol } from '@/lib/navegacion';
  * Oculta bajo 1024 px: en celular manda la navegación inferior, porque el
  * pulgar no llega al borde superior de la pantalla (RNF-17).
  */
-export function Sidebar({
-  rol, nombre, mostrarSalir,
-}: {
-  rol: Rol;
-  nombre: string;
-  mostrarSalir: boolean;
-}) {
+export function Sidebar({ rol, nombre }: { rol: Rol; nombre: string }) {
   const pathname = usePathname();
   const items = navPara(rol);
 
@@ -66,13 +60,14 @@ export function Sidebar({
             {NOMBRE_ROL[rol]} · {LEMA_ROL[rol]}
           </p>
         </div>
-        {mostrarSalir && (
-          <form action="/api/logout" method="post">
-            <button className="tap w-full text-left px-3 py-2 rounded-lg text-sm text-[var(--texto-suave)] hover:bg-[var(--fondo)]">
-              Cerrar sesión
-            </button>
-          </form>
-        )}
+        <a href="/clave" className="tap flex items-center w-full px-3 py-2 rounded-lg text-sm text-[var(--texto-suave)] hover:bg-[var(--fondo)]">
+          Cambiar mi contraseña
+        </a>
+        <form action="/api/logout" method="post">
+          <button className="tap w-full text-left px-3 py-2 rounded-lg text-sm text-[var(--texto-suave)] hover:bg-[var(--fondo)]">
+            Cerrar sesión
+          </button>
+        </form>
       </div>
     </aside>
   );

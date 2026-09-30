@@ -8,6 +8,7 @@ import { configuracionLocal } from './configuracion';
 import { DEMO_ACTIVO } from '../demo';
 import { db, type QueuedSale } from '../offline/db';
 import { DEMO_PRODUCTOS } from '../demo/data';
+import { cajaDemo, usuarioDemoActual } from '../demo/caja';
 
 /**
  * Historial de ventas y anulación (RF-M5-15).
@@ -97,8 +98,24 @@ export interface FiltroVentas {
   limite?: number;
 }
 
+/**
+ * Lo vendido en un período, calculado en la base y no sumando la lista.
+ *
+ * La lista trae de a 50: con más ventas que eso, la pantalla sumaba solo las
+ * 50 últimas y el "Vendido" quedaba corto justo en los días buenos. Además no
+ * restaba las devoluciones, y no cuadraba con el Inicio (v_sales_daily sí).
+ */
+export interface ResumenVentas {
+  ventas: number;
+  /** Neto de devoluciones, igual que "Vendido hoy" del Inicio. */
+  total: number;
+  /** Cobrado por medio de pago, antes de devoluciones. */
+  porMedio: Record<string, number>;
+}
+
 export interface RepositorioVentas {
   listar(filtro: FiltroVentas): Promise<Venta[]>;
+  resumen(desde: string, hasta: string): Promise<ResumenVentas>;
   detalle(id: string): Promise<VentaDetallada | null>;
   anular(id: string, motivo: string): Promise<void>;
   /**
@@ -199,6 +216,7 @@ export async function registrarVentaDemo(v: QueuedSale): Promise<void> {
     motivoAnulacion: null,
     anuladaEn: null,
   });
+  cajaDemo.registrarVenta(usuarioDemoActual(), v.total, v.payments);
   for (const i of v.items) {
     const p = await db().products.get(i.product_id);
     if (p) await db().products.put({ ...p, stock: p.stock - i.quantity, updatedAt: new Date().toISOString() });
@@ -242,6 +260,17 @@ const repoLocal: RepositorioVentas = {
       .sort((a, b) => b.fecha.localeCompare(a.fecha))
       .slice(0, filtro.limite ?? 50)
       .map(aVenta);
+  },
+
+  async resumen(desde, hasta) {
+    const lista = await repoLocal.listar({ desde, hasta, incluirAnuladas: false, limite: 100_000 });
+    const ids = new Set(lista.map((v) => v.id));
+    const porMedio: Record<string, number> = {};
+    for (const v of await leerVentasDemo()) {
+      if (!ids.has(v.id)) continue;
+      for (const p of v.pagos) porMedio[p.metodo] = (porMedio[p.metodo] ?? 0) + p.monto;
+    }
+    return { ventas: lista.length, total: lista.reduce((s, v) => s + v.total, 0), porMedio };
   },
 
   async detalle(id) {
@@ -361,6 +390,45 @@ const repoSupabase: RepositorioVentas = {
       .limit(filtro.limite ?? 50);
     if (error) throw error;
     return (data ?? []).map((f) => aVentaBD(f as unknown as FilaVenta));
+  },
+
+  async resumen(desde, hasta) {
+    const client = supabase();
+    const { zonaHoraria } = await configuracionLocal();
+    const r = rangoDeDias(desde, hasta, zonaHoraria);
+    const { data: dias, error } = await client
+      .from('v_sales_daily')
+      .select('sales_count, total_amount')
+      .gte('sale_date', desde)
+      .lte('sale_date', hasta);
+    if (error) throw error;
+
+    // Los pagos se traen por páginas: la API corta en 1.000 filas, y un mes
+    // de un almacén las pasa. Cortar en silencio sería el mismo error de antes.
+    const porMedio: Record<string, number> = {};
+    const PAGINA = 1000;
+    for (let desdeFila = 0; ; desdeFila += PAGINA) {
+      const { data: pagos, error: e2 } = await client
+        .from('sale_payments')
+        .select('method, amount, sales!inner(sold_at, status)')
+        .gte('sales.sold_at', r.desde)
+        .lt('sales.sold_at', r.hasta)
+        .eq('sales.status', 'completada')
+        .order('id')
+        .range(desdeFila, desdeFila + PAGINA - 1);
+      if (e2) throw e2;
+      for (const p of pagos ?? []) {
+        const m = p.method as string;
+        porMedio[m] = (porMedio[m] ?? 0) + Number(p.amount ?? 0);
+      }
+      if ((pagos ?? []).length < PAGINA) break;
+    }
+
+    return {
+      ventas: (dias ?? []).reduce((s, d) => s + Number(d.sales_count ?? 0), 0),
+      total: (dias ?? []).reduce((s, d) => s + Number(d.total_amount ?? 0), 0),
+      porMedio,
+    };
   },
 
   async detalle(id) {

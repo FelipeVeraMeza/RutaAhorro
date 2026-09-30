@@ -196,14 +196,18 @@ export const repoSupabase: RepositorioProductos = {
     if (error) throw error;
   },
 
+  // Con `select`, para saber si de verdad cambió: si RLS no deja, el update
+  // no da error, simplemente no toca ninguna fila, y la pantalla decía que sí.
   async desactivar(id) {
-    const { error } = await supabase().from('products').update({ is_active: false }).eq('id', id);
+    const { data, error } = await supabase().from('products').update({ is_active: false }).eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('SIN_PERMISO');
   },
 
   async reactivar(id) {
-    const { error } = await supabase().from('products').update({ is_active: true }).eq('id', id);
+    const { data, error } = await supabase().from('products').update({ is_active: true }).eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('SIN_PERMISO');
   },
 
   async tieneMovimientos(id) {

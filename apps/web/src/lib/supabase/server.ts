@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
-import { DEMO_ACTIVO, DEMO_COOKIE, esRolValido, usuarioDemo } from '../demo';
+import { DEMO_ACTIVO, DEMO_COOKIE, DEMO_COOKIE_CUENTA, esRolValido, usuarioDemo, leerCuentaDemo } from '../demo';
 
 /**
  * Cliente de servidor: actúa COMO EL USUARIO, respetando sus políticas RLS.
@@ -45,6 +45,12 @@ export interface CurrentUser {
   storeId: string | null;
   maxDiscountPct: number;
   isActive: boolean;
+  /**
+   * Entró con una contraseña temporal que le dio el administrador: tiene que
+   * cambiarla antes de usar el sistema. Vive en app_metadata (solo el servidor
+   * la escribe) y viaja en el token, así que no cuesta otra consulta.
+   */
+  debeCambiarClave?: boolean;
 }
 
 /**
@@ -84,6 +90,19 @@ async function marcarActividad(
 }
 
 /**
+ * ¿Hay una sesión válida aunque no haya perfil? Sirve para distinguir "no
+ * entró" de "entró, pero su cuenta no está vinculada a ningún local": en el
+ * segundo caso redirigir a /login era un bucle sin fin (el middleware lo
+ * devolvía a "/" porque la sesión existe, y el layout otra vez a /login).
+ */
+export async function haySesion(): Promise<boolean> {
+  if (DEMO_ACTIVO) return false;
+  const client = await createClient();
+  const { data } = await client.auth.getClaims();
+  return Boolean(data?.claims?.sub);
+}
+
+/**
  * Perfil del usuario autenticado, o null si no hay sesión o está desactivado.
  *
  * Memorizado por petición con `cache`: el layout y la página lo pedían cada
@@ -93,9 +112,12 @@ async function marcarActividad(
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   // MODO DEMO: devuelve un usuario ficticio sin consultar Supabase.
   // Ver src/lib/demo/index.ts — solo se activa con NEXT_PUBLIC_DEMO=true.
+  // Sin la cookie no hay sesión: se entra por /login, como en producción.
   if (DEMO_ACTIVO) {
-    const rol = (await cookies()).get(DEMO_COOKIE)?.value;
-    return usuarioDemo(esRolValido(rol) ? rol : 'admin');
+    const galletas = await cookies();
+    const rol = galletas.get(DEMO_COOKIE)?.value;
+    if (!esRolValido(rol)) return null;
+    return usuarioDemo(rol, leerCuentaDemo(galletas.get(DEMO_COOKIE_CUENTA)?.value));
   }
 
   const client = await createClient();
@@ -106,6 +128,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const sub = claims?.claims?.sub;
   if (!sub) return null;
   const user = { id: sub, email: (claims.claims.email as string | undefined) ?? null };
+  const appMeta = (claims.claims as { app_metadata?: { debe_cambiar_clave?: boolean } }).app_metadata;
 
   const { data: profile } = await client
     .from('profiles')
@@ -129,5 +152,6 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     storeId: profile.store_id,
     maxDiscountPct: Number(profile.max_discount_pct ?? 0),
     isActive: profile.is_active,
+    debeCambiarClave: appMeta?.debe_cambiar_clave === true,
   };
 });

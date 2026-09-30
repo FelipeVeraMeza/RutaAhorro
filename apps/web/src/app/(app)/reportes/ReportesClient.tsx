@@ -491,10 +491,11 @@ function Reporte({
   );
 }
 
-const fechaCorta = (iso: string) =>
-  new Date(`${iso}T12:00:00`).toLocaleDateString('es-CL', {
-    day: '2-digit', month: '2-digit',
-  });
+/** 'AAAA-MM-DD' (o una fecha con hora) como 'DD-MM', sin pasar por Date (regla 17). */
+const fechaCorta = (iso: string) => {
+  const [a, m, d] = iso.slice(0, 10).split('-');
+  return d && m ? `${d}-${m}` : a;
+};
 
 function etiquetaTipo(tipo: string): string {
   return ETIQUETA_MOVIMIENTO[tipo as TipoMovimiento] ?? tipo;

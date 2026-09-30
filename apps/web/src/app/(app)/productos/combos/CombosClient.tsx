@@ -47,7 +47,7 @@ export function CombosClient() {
     <div className="px-4 py-5 max-w-2xl mx-auto space-y-4" aria-busy={cargando}>
       <header className="flex items-start justify-between gap-3">
         <div>
-          <Link href="/productos/ofertas" className="text-sm text-[var(--texto-suave)] underline">← Ofertas</Link>
+          <Link href="/productos/ofertas" className="tap inline-flex items-center text-sm text-[var(--texto-suave)] underline">← Ofertas</Link>
           <h1 className="text-xl font-bold mt-1">Combos</h1>
           <p className="text-sm text-[var(--texto-suave)]">
             Varios productos a un precio. El POS los aplica solo.

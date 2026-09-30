@@ -1,34 +1,29 @@
-import { createClient, getCurrentUser } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
+import { exigirRol } from '@/lib/permisos';
 import { DEMO_ACTIVO } from '@/lib/demo';
-import { DEMO_CAJA, DEMO_MOVIMIENTOS_CAJA, DEMO_CIERRES } from '@/lib/demo/data';
+import { cookies } from 'next/headers';
+import { DEMO_COOKIE_CAJA, leerCajaDemo, resumenCajaDemo } from '@/lib/demo/caja';
 import { CajaClient } from './CajaClient';
 
 export const metadata = { title: 'Caja' };
 
 export default async function CajaPage() {
-  const user = await getCurrentUser();
+  // Bodega no tiene caja ni ve dinero (matriz del doc 02).
+  const user = await exigirRol(['admin', 'supervisor', 'vendedor']);
 
   if (DEMO_ACTIVO) {
-    const puedeVerHistorial = user!.role === 'admin' || user!.role === 'supervisor';
+    // La caja de la maqueta vive en una cookie (lib/demo/caja.ts): se abre,
+    // recibe movimientos y se cierra como la real.
+    const c = leerCajaDemo((await cookies()).get(DEMO_COOKIE_CAJA)?.value, user.id);
+    const puedeVerHistorial = user.role === 'admin' || user.role === 'supervisor';
     return (
       <CajaClient
-        session={{
-          id: DEMO_CAJA.id,
-          opened_at: DEMO_CAJA.opened_at,
-          opening_amount: DEMO_CAJA.opening_amount,
-        }}
-        resumen={{
-          opening_amount: DEMO_CAJA.opening_amount,
-          cash_sales: DEMO_CAJA.cash_sales,
-          cash_in: DEMO_CAJA.cash_in,
-          cash_out: DEMO_CAJA.cash_out,
-          expected_amount: DEMO_CAJA.expected_amount,
-          sales_count: DEMO_CAJA.sales_count,
-          sales_total: DEMO_CAJA.sales_total,
-          average_ticket: DEMO_CAJA.average_ticket,
-        }}
-        movimientos={DEMO_MOVIMIENTOS_CAJA}
-        historial={puedeVerHistorial ? DEMO_CIERRES : []}
+        session={c.abierta ? { id: c.id, opened_at: c.abiertaEn, opening_amount: c.apertura } : null}
+        resumen={c.abierta ? resumenCajaDemo(c) : null}
+        movimientos={c.abierta ? c.movs : []}
+        historial={puedeVerHistorial ? c.cierres : []}
+        usuarioId={user.id}
+        nombre={user.fullName}
       />
     );
   }
@@ -38,7 +33,7 @@ export default async function CajaPage() {
   const { data: session } = await client
     .from('cash_sessions')
     .select('id, opened_at, opening_amount')
-    .eq('user_id', user!.id)
+    .eq('user_id', user.id)
     .eq('status', 'abierta')
     .maybeSingle();
 
@@ -47,7 +42,7 @@ export default async function CajaPage() {
 
   // Todo lo que sigue depende solo de la sesión y del rol: va en paralelo.
   // En fila eran cuatro viajes a Supabase uno tras otro.
-  const puedeVerHistorial = user!.role === 'admin' || user!.role === 'supervisor';
+  const puedeVerHistorial = user.role === 'admin' || user.role === 'supervisor';
   const sinFilas = Promise.resolve({ data: [] as never[] });
   const [rResumen, rMovs, { data: historial }, { data: ajenas }] = await Promise.all([
     session ? client.rpc('fn_cash_session_summary', { p_session_id: session.id }) : Promise.resolve({ data: null }),
@@ -77,7 +72,7 @@ export default async function CajaPage() {
         .from('v_cash_sessions_summary')
         .select('session_id, full_name, opened_at, sales_total, expected_amount, user_id, status')
         .eq('status', 'abierta')
-        .neq('user_id', user!.id)
+        .neq('user_id', user.id)
         .order('opened_at')
     : sinFilas,
   ]);

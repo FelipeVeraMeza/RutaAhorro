@@ -8,6 +8,9 @@ import { Campo } from '@/components/Campo';
 import { Modal } from '@/components/Modal';
 import { useFormatoFecha } from '@/lib/formatoFecha';
 import { useConfiguracion } from '@/lib/datos/configuracion';
+import { ETIQUETA_PAGO } from '@/lib/datos/ventas';
+import { DEMO_ACTIVO } from '@/lib/demo';
+import { cajaDemo } from '@/lib/demo/caja';
 
 interface Session { id: string; opened_at: string; opening_amount: number }
 interface Movimiento { id: string; type: string; amount: number; reason: string; created_at: string }
@@ -24,8 +27,11 @@ interface CajaAjena {
 
 
 export function CajaClient({
-  session, resumen, movimientos, historial, cajasAjenas = [],
+  session, resumen, movimientos, historial, cajasAjenas = [], usuarioId = '', nombre = '',
 }: {
+  /** Solo la maqueta los usa: su caja es por cuenta de demo. */
+  usuarioId?: string;
+  nombre?: string;
   session: Session | null;
   resumen: Record<string, unknown> | null;
   movimientos: Movimiento[];
@@ -204,9 +210,11 @@ export function CajaClient({
             disabled={cargando || !inicial.valido}
             onClick={() =>
               accion(() =>
-                supabase().rpc('fn_open_cash_session', {
-                  p_opening_amount: inicial.valor,
-                }),
+                DEMO_ACTIVO
+                  ? cajaDemo.abrir(usuarioId, inicial.valor)
+                  : supabase().rpc('fn_open_cash_session', {
+                      p_opening_amount: inicial.valor,
+                    }),
               )
             }
             className="tap w-full mt-4 py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50"
@@ -316,11 +324,13 @@ export function CajaClient({
               disabled={cargando || !cont.valido || (necesitaNota && nota.trim() === '')}
               onClick={async () => {
                 const ok = await accion(() =>
-                  supabase().rpc('fn_close_cash_session', {
-                    p_session_id: session.id,
-                    p_counted_amount: cont.valor,
-                    p_notes: nota.trim() || null,
-                  }),
+                  DEMO_ACTIVO
+                    ? cajaDemo.cerrar(usuarioId, nombre, cont.valor)
+                    : supabase().rpc('fn_close_cash_session', {
+                        p_session_id: session.id,
+                        p_counted_amount: cont.valor,
+                        p_notes: nota.trim() || null,
+                      }),
                 );
                 if (ok) { setCerrando(false); setContado(''); setNota(''); }
               }}
@@ -365,6 +375,11 @@ export function CajaClient({
           <Metrica label="Total" value={formatCLP(Number(r.sales_total ?? 0))} />
           <Metrica label="Ticket prom." value={formatCLP(Number(r.average_ticket ?? 0))} />
         </div>
+
+        {/* fn_cash_session_summary lo calculaba desde el primer día y la
+            pantalla no lo mostraba: al cerrar, el cajero no tenía cómo cuadrar
+            lo de la máquina de tarjetas ni las transferencias. */}
+        <PorMedioDePago medios={r.by_payment_method} />
       </div>
 
       {/* Movimientos */}
@@ -422,11 +437,13 @@ export function CajaClient({
                 disabled={cargando || !movMotivo.trim() || !mov.valido}
                 onClick={async () => {
                   const ok = await accion(() =>
-                    supabase().rpc('fn_add_cash_movement', {
-                      p_type: vistaMovimiento,
-                      p_amount: mov.valor,
-                      p_reason: movMotivo.trim(),
-                    }),
+                    DEMO_ACTIVO
+                      ? cajaDemo.movimiento(usuarioId, vistaMovimiento, mov.valor, movMotivo.trim())
+                      : supabase().rpc('fn_add_cash_movement', {
+                          p_type: vistaMovimiento,
+                          p_amount: mov.valor,
+                          p_reason: movMotivo.trim(),
+                        }),
                   );
                   if (ok) { setVistaMovimiento(null); setMovMonto(''); setMovMotivo(''); }
                 }}
@@ -535,6 +552,27 @@ function CajasAjenas({
   );
 }
 
+function PorMedioDePago({ medios }: { medios: unknown }) {
+  const filas = Object.entries((medios ?? {}) as Record<string, number>)
+    .map(([m, v]) => [m, Number(v)] as const)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1]);
+  if (filas.length === 0) return null;
+  return (
+    <div className="mt-3 pt-3 border-t border-[var(--borde)]">
+      <p className="text-xs text-[var(--texto-suave)] mb-1">Cobrado por medio de pago</p>
+      <dl className="space-y-1 text-sm">
+        {filas.map(([m, v]) => (
+          <div key={m} className="flex justify-between">
+            <dt>{ETIQUETA_PAGO[m] ?? m}{m !== 'efectivo' && <span className="text-xs text-[var(--texto-suave)]"> · no entra al cajón</span>}</dt>
+            <dd className="num">{formatCLP(v)}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
 function Fila({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex justify-between">
@@ -572,7 +610,10 @@ function Historial({ cierres }: { cierres: Cierre[] }) {
                 (c.difference ?? 0) === 0 ? 'text-marca-700' : 'text-[var(--color-aviso)]'
               }`}
             >
-              {(c.difference ?? 0) === 0 ? 'cuadró' : formatCLP(c.difference ?? 0)}
+              {/* Con signo y sin palabra, "-$2.000" no decía si faltó o sobró. */}
+              {(c.difference ?? 0) === 0
+                ? 'cuadró'
+                : `${(c.difference ?? 0) < 0 ? 'faltaron' : 'sobraron'} ${formatCLP(Math.abs(c.difference ?? 0))}`}
             </span>
           </li>
         ))}

@@ -1,19 +1,10 @@
-import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/lib/supabase/server';
+import { exigirRol } from '@/lib/permisos';
 import { InventarioClient } from './InventarioClient';
 
 export const metadata = { title: 'Inventario' };
 
 export default async function InventarioPage() {
-  const user = await getCurrentUser();
-
   // El vendedor no entra a inventario (matriz del doc 02)
-  if (!['admin', 'supervisor', 'bodega'].includes(user!.role)) redirect('/');
-
-  return (
-    <InventarioClient
-      puedeAjustar={['admin', 'supervisor', 'bodega'].includes(user!.role)}
-      verCostos={user!.role === 'admin'}
-    />
-  );
+  const user = await exigirRol(['admin', 'supervisor', 'bodega']);
+  return <InventarioClient puedeAjustar verCostos={user.role === 'admin'} />;
 }

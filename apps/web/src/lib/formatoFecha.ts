@@ -10,8 +10,15 @@ import { useConfiguracion } from './datos/configuracion';
  * escrito a mano: cinco copias del mismo valor, y ninguna leía la
  * configuración que la base ya tenía.
  */
+/**
+ * Reloj de 24 horas ("14:05"), no "2:05 p. m.": el servidor (Node) y el
+ * navegador escriben el "p. m." con espacios distintos (uno normal y otro
+ * duro), y React tiraba el HTML del servidor y redibujaba toda la Caja en
+ * cada visita ("Hydration failed", visto con tools/ui en /caja). Además en
+ * un comprobante o un arqueo 24 h no se presta a confusión.
+ */
 export function formatoHora(iso: string, zona: string): string {
-  return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: zona });
+  return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: zona });
 }
 
 export function formatoFecha(iso: string, zona: string): string {
@@ -20,7 +27,7 @@ export function formatoFecha(iso: string, zona: string): string {
 
 export function formatoFechaHora(iso: string, zona: string): string {
   return new Date(iso).toLocaleString('es-CL', {
-    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: zona,
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: zona,
   });
 }
 

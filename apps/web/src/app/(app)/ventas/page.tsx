@@ -1,17 +1,16 @@
-import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/lib/supabase/server';
+import { exigirRol } from '@/lib/permisos';
 import { VentasClient } from './VentasClient';
 
 export const metadata = { title: 'Ventas' };
 
 export default async function VentasPage() {
-  const user = await getCurrentUser();
-
-  // Un vendedor no revisa el historial completo del local (matriz del doc 02).
-  if (!['admin', 'supervisor'].includes(user!.role)) redirect('/');
-
-  // Anular es de admin y supervisor, y fn_void_sale además le exige al
-  // supervisor que la venta sea del día. La pantalla no repite esa segunda
-  // regla: la base la aplica y el error se explica solo.
-  return <VentasClient puedeAnular={['admin', 'supervisor'].includes(user!.role)} />;
+  // El vendedor entra a "Mis ventas": la base (RLS de `sales`) le entrega solo
+  // las suyas, y no puede anular ni devolver (matriz del doc 02).
+  const user = await exigirRol(['admin', 'supervisor', 'vendedor']);
+  return (
+    <VentasClient
+      puedeAnular={user.role === 'admin' || user.role === 'supervisor'}
+      soloPropias={user.role === 'vendedor'}
+    />
+  );
 }

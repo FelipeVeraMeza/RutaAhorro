@@ -24,6 +24,7 @@
     "db:bundle": "node tools/sql-check/bundle.js",
     "db:instalar": "node tools/sql-check/instalar.js",
     "db:admin": "node tools/crear-admin.mjs",
+    "db:cuentas": "node tools/crear-cuentas.mjs",
     "db:aplicar": "node tools/aplicar-esquema.mjs",
     "db:limpiar": "node tools/limpiar-base.mjs",
     "db:e2e": "node tools/venta-real.mjs",

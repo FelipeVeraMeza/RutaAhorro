@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/lib/supabase/server';
+import { getCurrentUser, haySesion } from '@/lib/supabase/server';
 import { BottomNav } from '@/components/BottomNav';
 import { Sidebar } from '@/components/Sidebar';
 import { EstadoConexion } from '@/components/EstadoConexion';
@@ -21,7 +21,31 @@ import { NOMBRE_ROL, LEMA_ROL } from '@/lib/navegacion';
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
 
-  if (!user) redirect('/login');
+  if (!user) {
+    // Con sesión pero sin perfil (una cuenta creada a mano en el panel de
+    // Supabase, sin local): antes era un bucle de redirecciones entre "/" y
+    // /login, y el navegador terminaba en "demasiadas redirecciones".
+    if (await haySesion()) {
+      return (
+        <main className="min-h-dvh grid place-items-center px-6 text-center">
+          <div>
+            <p className="text-4xl mb-3" aria-hidden>🔗</p>
+            <h1 className="text-lg font-semibold mb-1">Tu cuenta no está vinculada a ningún local</h1>
+            <p className="text-sm text-[var(--texto-suave)] mb-4">
+              Pídele al administrador que te cree la cuenta desde Usuarios.
+            </p>
+            <form action="/api/logout" method="post">
+              <button className="tap px-4 rounded-xl border border-[var(--borde)] text-sm">Salir</button>
+            </form>
+          </div>
+        </main>
+      );
+    }
+    redirect('/login');
+  }
+
+  // Entró con la contraseña temporal que le dio el administrador.
+  if (user.debeCambiarClave) redirect('/clave');
 
   // Un usuario desactivado conserva su sesión hasta que expira: hay que
   // bloquearlo aquí y no solo al iniciar sesión (US-01).
@@ -44,7 +68,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {DEMO_ACTIVO && <DemoBanner rolActual={user.role} />}
 
       <div className="flex flex-1 min-h-0">
-        <Sidebar rol={user.role} nombre={user.fullName} mostrarSalir={!DEMO_ACTIVO} />
+        <Sidebar rol={user.role} nombre={user.fullName} />
 
         <div className="flex-1 flex flex-col min-w-0">
           <EstadoConexion />
@@ -57,11 +81,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 {NOMBRE_ROL[user.role]} · {LEMA_ROL[user.role]}
               </p>
             </div>
-            {!DEMO_ACTIVO && (
+            <div className="flex items-center shrink-0">
+              <a href="/clave" className="tap inline-flex items-center px-2 text-sm text-[var(--texto-suave)]"
+                 aria-label="Cambiar mi contraseña" title="Cambiar mi contraseña">🔑</a>
               <form action="/api/logout" method="post">
                 <button className="tap px-3 text-sm text-[var(--texto-suave)]">Salir</button>
               </form>
-            )}
+            </div>
           </header>
 
           {/* pb-20 en celular deja espacio para la barra inferior */}

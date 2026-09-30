@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { DEMO_COOKIE, type DemoRole } from '@/lib/demo';
+import { DEMO_COOKIE, DEMO_COOKIE_CUENTA, type DemoRole } from '@/lib/demo';
 import { DEMO_USUARIOS } from '@/lib/demo/data';
 
 /**
@@ -20,6 +20,8 @@ export function DemoBanner({ rolActual }: { rolActual: DemoRole }) {
   function cambiarRol(rol: DemoRole) {
     // Cookie de sesión: se borra al cerrar el navegador.
     document.cookie = `${DEMO_COOKIE}=${rol}; path=/; SameSite=Lax`;
+    // La cuenta con que se entró era de otro rol: se vuelve a la de ejemplo.
+    document.cookie = `${DEMO_COOKIE_CUENTA}=; path=/; max-age=0; SameSite=Lax`;
     setAbierto(false);
     router.refresh();
   }
@@ -37,7 +39,7 @@ export function DemoBanner({ rolActual }: { rolActual: DemoRole }) {
           <span aria-hidden>⚠️</span>
           <span className="whitespace-nowrap">MODO DEMO</span>
           <span className="font-normal truncate opacity-80">
-            · datos de ejemplo, sin sesión
+            · datos de ejemplo
           </span>
         </span>
         <span className="text-[11px] font-semibold whitespace-nowrap flex items-center gap-1">

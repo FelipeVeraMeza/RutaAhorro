@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { isValidRut, formatRut, cleanRut, computeDv } from '../src/rut.js';
 import { isValidEan, detectFormat, normalizeBarcode, generateInternalBarcode } from '../src/barcode.js';
-import { toUserMessage, errorCode } from '../src/errors.js';
+import { toUserMessage, errorCode, ERROR_MESSAGES } from '../src/errors.js';
 
 // Evidencia de RF-M3-02: formato y dígito verificador del RUT.
 describe('RUT chileno', () => {
@@ -98,8 +98,17 @@ describe('mensajes de error en lenguaje del negocio (RNF-20)', () => {
 
   it('nunca filtra jerga técnica al cajero', () => {
     const msg = toUserMessage({ message: 'PostgresError: constraint violation on relation sale_items' });
-    expect(msg).toBe('Ocurrió un problema. Ya fuimos notificados');
+    expect(msg).toBe(ERROR_MESSAGES.ERROR_INTERNO);
     expect(msg).not.toMatch(/constraint|relation|Postgres/i);
+    // No promete lo que no pasa: el sistema no reporta errores a nadie.
+    expect(msg).not.toMatch(/notificad/i);
+  });
+
+  it('distingue un corte de red del error genérico', () => {
+    for (const m of ['TypeError: Failed to fetch', 'Load failed', 'NetworkError when attempting to fetch resource.', 'fetch failed']) {
+      expect(toUserMessage(new Error(m))).toBe(ERROR_MESSAGES.SIN_CONEXION);
+    }
+    expect(toUserMessage(new Error('SIN_CONEXION'))).toBe(ERROR_MESSAGES.SIN_CONEXION);
   });
 
   it('reconoce el código duplicado de Postgres', () => {

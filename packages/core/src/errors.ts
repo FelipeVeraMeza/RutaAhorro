@@ -118,7 +118,17 @@ export const ERROR_MESSAGES: Record<string, string> = {
   REGISTRO_INMUTABLE: 'Este registro no se puede modificar ni eliminar',
   NO_ENCONTRADO: 'No encontramos lo que buscas',
   LIMITE_PETICIONES: 'Demasiados intentos. Espera un momento',
-  ERROR_INTERNO: 'Ocurrió un problema. Ya fuimos notificados',
+  // Cuentas con contraseña temporal (/api/usuarios/crear y /clave)
+  SIN_CONEXION: 'No hay conexión con el servidor. Revisa internet y vuelve a intentar',
+  CLAVE_CORTA: 'La contraseña necesita al menos 8 caracteres',
+  SERVIDOR_SIN_LLAVE: 'El servidor no tiene configurada la llave de Supabase (SUPABASE_SECRET_KEY)',
+  SIN_PERFIL: 'La cuenta se creó pero no quedó vinculada al local. Avísale a quien instaló el sistema',
+  NO_TU_CUENTA: 'Tu propia contraseña se cambia en "Cambiar mi contraseña"',
+  DATOS_INVALIDOS: 'Faltan datos o hay alguno que no es válido',
+  // Antes decía "Ya fuimos notificados", y nadie era notificado: el sistema
+  // no reporta errores a ninguna parte. Una promesa falsa deja al cajero
+  // esperando que alguien lo arregle solo.
+  ERROR_INTERNO: 'Ocurrió un problema inesperado. Vuelve a intentarlo; si se repite, avísale al administrador',
 };
 
 /**
@@ -160,6 +170,13 @@ export function toUserMessage(error: unknown): string {
       if (detail && code === 'LOTE_YA_VENCIDO') return `"${detail}" ya está vencido, no puede recibirse`;
       return base;
     }
+  }
+
+  // Sin red, fetch lanza con un mensaje del navegador ("Failed to fetch" en
+  // Chrome, "Load failed" en Safari, "NetworkError…" en Firefox). Antes caía
+  // en el error genérico y el cajero no sabía que era la conexión.
+  if (/failed to fetch|load failed|networkerror|network request failed|fetch failed/i.test(raw)) {
+    return ERROR_MESSAGES.SIN_CONEXION;
   }
 
   // Errores conocidos de Postgres que no son nuestros

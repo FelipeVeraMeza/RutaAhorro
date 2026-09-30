@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  formatCLP, validarCantidad, toUserMessage, textoVencimiento, cantidadConUnidad,
+  formatCLP, formatCantidad, validarCantidad, toUserMessage, textoVencimiento, cantidadConUnidad,
 } from '@rutaahorro/core';
 import { repoProductos, type Producto } from '@/lib/productos';
 import {
@@ -204,9 +204,11 @@ export function InventarioClient({
                 const agotado = p.stock <= 0;
                 const bajo = !agotado && p.stockMinimo > 0 && p.stock <= p.stockMinimo;
                 return (
-                  <li key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                  // En el celular los botones van debajo: al lado se comían el
+                  // ancho y el nombre quedaba en "Aceite vege…" (captura 360 px).
+                  <li key={p.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{p.nombre}</p>
+                      <p className="text-sm font-medium sm:truncate">{p.nombre}</p>
                       <p className={`text-xs num ${
                         agotado ? 'text-[var(--color-alerta)]'
                         : bajo ? 'text-[var(--color-aviso)]'
@@ -230,7 +232,7 @@ export function InventarioClient({
                         )}
                       </p>
                     </div>
-                    <div className="flex gap-1.5 shrink-0">
+                    <div className="flex gap-1.5 shrink-0 self-end sm:self-auto">
                       {(p.stockBodega > 0 || p.stockSala > 0) && (
                         <button
                           onClick={() => setReponiendo(p)}
@@ -885,6 +887,13 @@ function DialogoReponer({
             />
           )}
         </Campo>
+
+        {disponible > 0 && (
+          <button type="button" onClick={() => setCantidad(formatCantidad(disponible))}
+            className="tap w-full rounded-xl border border-[var(--borde)] text-sm">
+            Mover todo ({cantidadConUnidad(disponible, producto.unidad)})
+          </button>
+        )}
 
         {error && (
           <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>
