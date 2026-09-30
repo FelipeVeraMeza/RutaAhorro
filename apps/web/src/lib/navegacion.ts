@@ -109,10 +109,28 @@ export const NAVEGACION: ItemNav[] = [
     roles: ['admin'], enMovil: false,
   },
   {
+    // Quién hizo qué (RF-M9-11). La base la escribe desde 0002.
+    href: '/bitacora', label: 'Bitácora', labelCorto: 'Bitácora', icono: 'bitacora',
+    ayuda: 'Quién cambió precios, anuló ventas, ajustó stock o tocó cuentas',
+    roles: ['admin'], enMovil: false,
+  },
+  {
     // Impuestos adicionales y cómo opera el local (0018, T-18).
     href: '/configuracion', label: 'Configuración', labelCorto: 'Config.', icono: 'configuracion',
     ayuda: 'Datos del local, impuestos y cómo opera la caja',
     roles: ['admin'], enMovil: false,
+  },
+  {
+    // Contraseña y preferencias de este celular (RF-M9-14).
+    href: '/cuenta', label: 'Mi cuenta', labelCorto: 'Mi cuenta', icono: 'cuenta',
+    ayuda: 'Tu contraseña, letra más grande y bloqueo de pantalla en este celular',
+    roles: ['admin', 'supervisor', 'vendedor', 'bodega'], enMovil: false,
+  },
+  {
+    // "¿Cómo se hace?" por rol (RF-M9-12, RNF-18).
+    href: '/ayuda', label: 'Ayuda', labelCorto: 'Ayuda', icono: 'ayuda',
+    ayuda: 'Cómo se hace cada cosa, paso a paso',
+    roles: ['admin', 'supervisor', 'vendedor', 'bodega'], enMovil: false,
   },
   {
     // Versión instalada y qué cambió (RF-M9-09). Para todos: el cajero también

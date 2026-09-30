@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { destinoSeguro } from '@rutaahorro/core';
 import { supabase } from '@/lib/supabase/client';
@@ -11,6 +11,9 @@ import { DEMO_USUARIOS } from '@/lib/demo/data';
 import { cuentaDemoPorCorreo } from '@/lib/datos/usuarios';
 import { inicioPara, type Rol } from '@/lib/navegacion';
 
+const CORREO_RECORDADO = 'ra:correo';
+const INTENTOS_ANTES_DE_ESPERAR = 5;
+
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
@@ -19,6 +22,53 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // RF-M1-16 · la causa más común de "contraseña incorrecta" en el mostrador.
+  const [mayusculas, setMayusculas] = useState(false);
+  // RF-M1-17 · tras varios intentos fallidos seguidos, una pausa creciente.
+  const [fallos, setFallos] = useState(0);
+  const [esperarHasta, setEsperarHasta] = useState(0);
+  const [ahora, setAhora] = useState(() => Date.now());
+  // RF-M1-18 · el correo de quien usa este celular, para no escribirlo cada turno.
+  const [recordar, setRecordar] = useState(true);
+
+  useEffect(() => {
+    try {
+      const guardado = localStorage.getItem(CORREO_RECORDADO);
+      if (guardado) setEmail(guardado);
+      else if (localStorage.getItem(CORREO_RECORDADO + ':no')) setRecordar(false);
+    } catch { /* sin almacenamiento */ }
+  }, []);
+
+  useEffect(() => {
+    if (esperarHasta <= Date.now()) return;
+    const t = setInterval(() => setAhora(Date.now()), 500);
+    return () => clearInterval(t);
+  }, [esperarHasta]);
+  const segundosEspera = Math.max(0, Math.ceil((esperarHasta - ahora) / 1000));
+
+  function recordarCorreo(correo: string) {
+    try {
+      if (recordar) { localStorage.setItem(CORREO_RECORDADO, correo); localStorage.removeItem(CORREO_RECORDADO + ':no'); }
+      else { localStorage.removeItem(CORREO_RECORDADO); localStorage.setItem(CORREO_RECORDADO + ':no', '1'); }
+    } catch { /* sin almacenamiento */ }
+  }
+
+  function fallo(mensaje: string) {
+    const n = fallos + 1;
+    setFallos(n);
+    if (n >= INTENTOS_ANTES_DE_ESPERAR) {
+      const seg = 30 * 2 ** (n - INTENTOS_ANTES_DE_ESPERAR);
+      setEsperarHasta(Date.now() + Math.min(seg, 300) * 1000);
+      setAhora(Date.now());
+      setError(`${mensaje}. Demasiados intentos: espera un momento antes de probar de nuevo.`);
+    } else {
+      setError(mensaje);
+    }
+  }
+
+  function revisarMayusculas(e: React.KeyboardEvent<HTMLInputElement>) {
+    setMayusculas(e.getModifierState?.('CapsLock') ?? false);
+  }
 
   /**
    * A dónde va después de entrar. Sin `next`, a "/", que manda a cada rol a su
@@ -34,9 +84,10 @@ function LoginForm() {
   async function entrarDemo(correo: string, clave: string) {
     const cuenta = await cuentaDemoPorCorreo(correo);
     if (!cuenta || cuenta.clave !== clave) {
-      setError('Correo o contraseña incorrectos');
+      fallo('Correo o contraseña incorrectos');
       return;
     }
+    recordarCorreo(cuenta.correo);
     if (!cuenta.activo) {
       setError('Esa cuenta está desactivada. Pídele al administrador que la reactive.');
       return;
@@ -49,6 +100,7 @@ function LoginForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (segundosEspera > 0) return;
     setLoading(true);
     setError(null);
 
@@ -77,10 +129,11 @@ function LoginForm() {
 
     if (authError) {
       // Nunca revelar si el correo existe: eso permite enumerar usuarios.
-      setError('Correo o contraseña incorrectos');
+      fallo('Correo o contraseña incorrectos');
       setLoading(false);
       return;
     }
+    recordarCorreo(email.trim());
 
     // Directo a la pantalla de su rol, sin pasar por "/" y rebotar. Si el
     // perfil no se puede leer, "/" decide igual.
@@ -137,6 +190,9 @@ function LoginForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onKeyUp={revisarMayusculas}
+                onKeyDown={revisarMayusculas}
+                aria-describedby={mayusculas ? 'aviso-mayus' : undefined}
                 className="tap w-full px-3 py-3 pr-20 rounded-xl border border-[var(--borde)] bg-white focus:outline-none focus:ring-2 focus:ring-marca-500"
                 placeholder="••••••••"
               />
@@ -150,7 +206,17 @@ function LoginForm() {
                 {showPassword ? 'Ocultar' : 'Ver'}
               </button>
             </div>
+            {mayusculas && (
+              <p id="aviso-mayus" className="text-xs text-[var(--color-aviso)] font-medium mt-1.5">
+                Las mayúsculas están activadas (Bloq Mayús).
+              </p>
+            )}
           </div>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" className="w-5 h-5" checked={recordar} onChange={(e) => setRecordar(e.target.checked)} />
+            Recordar mi correo en este celular
+          </label>
 
           {error && (
             <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">
@@ -160,10 +226,10 @@ function LoginForm() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || segundosEspera > 0}
             className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-semibold text-base active:bg-marca-600 disabled:opacity-50"
           >
-            {loading ? 'Ingresando…' : 'Ingresar'}
+            {loading ? 'Ingresando…' : segundosEspera > 0 ? `Espera ${segundosEspera} s` : 'Ingresar'}
           </button>
         </form>
 

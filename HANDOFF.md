@@ -8,7 +8,59 @@
 
 ---
 
-## CÓMO SEGUIR — corte 2026-09-30 (2ª ronda), léelo antes que todo
+## CÓMO SEGUIR — corte 2026-09-30 (3ª ronda), léelo antes que todo
+
+**2026-09-30 (3ª ronda) · Versión 0.4.0: 50 requerimientos nuevos.** Pedido:
+"tomemos en cuenta 50 requerimientos completos que crees que falten". Están
+especificados en **docs/25** (enunciado, por qué falta, criterios de
+aceptación, MoSCoW, estado y evidencia) y agregados en una línea a 03, 04 y 17
+para que la matriz los siga. **41 ✅ · 6 🟡 · 3 ⬜. Sin migraciones nuevas.**
+
+**Lo hecho, por rol**
+- Vendedor: Deshacer (RF-M5-24), frecuentes del celular (M5-25), monto y
+  cantidad sospechosos piden confirmar (M5-26/27), frescura de precios (M5-29),
+  arqueo por billete (M6-13), resumen del cierre (M6-14), caja de otro día
+  (M6-15), reimprimir COPIA (M5-23).
+- Dueño: ordenar, precio rápido, "Revisar datos", exportar y búsqueda sin
+  tildes en Productos (M2-16..20), cartel de góndola (M2-22), pedido por
+  proveedor (M3-12), Qué reponer / hoja para contar / oferta de lo que vence
+  (M4-21..23), panel "Para revisar" (M8-07/08, M4-24), por hora, ABC,
+  anulaciones y línea por línea (M7-13..16), resumen por WhatsApp (M7-17),
+  **Bitácora** (M9-11), contraseña temporal sin cambiar (M1-20,
+  `/api/usuarios/estado`, necesita la llave de servicio).
+- Todos: **Mi cuenta** (M9-14) con letra grande (RNF-59) y **bloqueo por
+  inactividad** (M1-19; desbloqueo sin red con huella PBKDF2 guardada tras un
+  desbloqueo en línea), **Ayuda** por rol (M9-12), login con Bloq Mayús,
+  pausa tras 5 fallos y correo recordado (M1-16..18).
+- Reglas nuevas en core: `operacion.ts` (12 pruebas): redondeo Ley 20.956,
+  atípicos, arqueo, calidad del catálogo, reposición, ABC, ventas por hora.
+
+**Técnico**
+- RNF-60: HSTS y Cross-Origin-Opener-Policy en `next.config.ts`.
+- RNF-61: `demo-roles.mjs` ahora **falla** si un control no tiene nombre
+  accesible (encontró 228: búsquedas y filtros solo con placeholder; 0 ahora).
+- RNF-62: **`tools/peso-js.mjs`**. Ojo: la columna "First Load JS" de
+  `next build` **no suma el layout de la app** (~135 kB: Supabase + IndexedDB);
+  el "249 kB" de Vender de la ronda 2 era en realidad ~257. Límite duro 270 kB
+  (26/26 lo cumplen), meta 250 (10/26). Es la deuda técnica más clara.
+- RNF-64: con letra grande a 320 px nada desborda (Productos desbordaba).
+- RNF-66: `/api/version` + aviso "Actualizar" en `RegistrarSW`.
+
+**Verificado:** core 429 (+12) · typecheck · db:check · build de producción ·
+`demo-ronda3.mjs` **45/45** · `demo-flujo` 18/18 · `demo-datos` 11/11 ·
+`demo-ronda2` 15/15 · `demo-roles` 176 pantallas sin errores, desbordes ni
+controles sin nombre · `sin-red` 5/5 · `peso-js` 26/26 bajo 270 kB. **No se
+corrió contra Supabase ni Railway.** No regenerar docs/24 acá (ver 2ª ronda).
+
+**Pendiente (necesita base de datos), en orden:** RF-M5-28 registrar el
+redondeo del efectivo en `fn_register_sale` y el cuadre · RF-M3-13 cuentas por
+pagar · RF-M5-30 fiado · RF-M9-13 pie del comprobante (lista blanca de
+`tenants.settings`) · bajar el layout a la meta de 250 kB · recorridos para
+M4-24, M6-14, M6-15 y M8-08.
+
+---
+
+## CÓMO SEGUIR — corte 2026-09-30 (2ª ronda)
 
 **2026-09-30 (2ª ronda) · Versión 0.3.0: visual profesional, requerimientos
 pendientes y robustez.** Pedido: "seguir avanzando en todo, teniendo en cuenta

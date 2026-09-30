@@ -121,3 +121,20 @@ una intención, no un requerimiento.
 | RNF-47 | El tratamiento de datos personales debe cumplir la normativa chilena vigente (Ley 19.628 y Ley 21.719 según su entrada en vigencia). | [10 — Seguridad §6](10-seguridad-cumplimiento.md) |
 | RNF-48 | El cliente debe poder **exportar todos sus datos** en formato abierto y solicitar su eliminación al término del servicio. | RF-M9-03 |
 | RNF-49 | Debe informarse al cliente que sus datos residen en **Canadá (`ca-central-1`)** y obtener su conformidad. | Cláusula en el contrato de servicio |
+
+## 11. Uso diario, accesibilidad y entrega (agregados el 2026-09-30)
+
+Detalle, motivo y evidencia de cada uno en [25](25-requerimientos-nuevos.md).
+
+| ID | Requerimiento | Verificación |
+|---|---|---|
+| RNF-57 | Cada pantalla dice para qué sirve: título con una bajada de una frase, y los botones dicen la acción con un verbo (nunca solo un ícono sin nombre). | Recorrido por rol: todas las pantallas tienen h1 y bajada |
+| RNF-58 | Ningún diálogo ni botón queda tapado por la barra inferior del celular ni por la cabecera. | Recorrido a 360 px con diálogos abiertos |
+| RNF-59 | El sistema debe ofrecer letra grande (≈ 19 px de base) por celular, aplicada antes de pintar la pantalla y conservada al recargar. | Recorrido: activar en Mi cuenta y recargar |
+| RNF-60 | La aplicación debe responder con Strict-Transport-Security (1 año) y Cross-Origin-Opener-Policy: same-origin, además de los encabezados ya exigidos. | Recorrido: lee los encabezados de la respuesta |
+| RNF-61 | Todo botón, enlace y campo debe tener un nombre accesible (texto, etiqueta o aria-label). Cero excepciones. | tools/ui/demo-roles.mjs: 4 roles × 2 anchos × 22 pantallas; falla si encuentra uno |
+| RNF-62 | El JavaScript de la primera carga de cada pantalla, sumando página y layouts, comprimido, no debe superar 270 kB (límite) y debe tender a 250 kB (meta). | node tools/peso-js.mjs después de compilar |
+| RNF-63 | Una venta a medio armar no debe perderse al recargar la página, cerrar la pestaña por error o bloquearse la pantalla. | Recorrido: agregar, recargar, sigue |
+| RNF-64 | Con letra grande y en un ancho de 320 px (equivalente a 200 % de zoom), ninguna pantalla debe desbordarse horizontalmente. | Recorrido a 320 px con letra grande |
+| RNF-65 | Todas las horas se muestran en formato de 24 horas (09:15, 18:40), igual en servidor y navegador. | Recorrido: sin "a. m."/"p. m." |
+| RNF-66 | Cuando se publica una versión nueva, una pestaña abierta desde antes debe ofrecer "Actualizar" en menos de 5 minutos (o al volver a la aplicación). | Recorrido: /api/version con otro commit |

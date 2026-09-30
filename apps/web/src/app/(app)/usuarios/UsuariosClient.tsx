@@ -209,6 +209,13 @@ export function UsuariosClient({ miId }: { miId: string }) {
                   {!u.activo && (
                     <span className="block text-[11px] text-[var(--color-alerta)] mt-1">desactivado</span>
                   )}
+                  {u.activo && u.claveTemporal && (
+                    <span className="block mt-1">
+                      <span className="insignia insignia-aviso" title="Todavía entra con la contraseña que le diste">
+                        Contraseña temporal sin cambiar
+                      </span>
+                    </span>
+                  )}
                 </div>
               </div>
 

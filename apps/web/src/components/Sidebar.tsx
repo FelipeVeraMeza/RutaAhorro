@@ -63,9 +63,9 @@ export function Sidebar({ rol, nombre, version }: { rol: Rol; nombre: string; ve
               {NOMBRE_ROL[rol]} · {LEMA_ROL[rol]}
             </p>
           </div>
-          <a href="/clave" title="Cambiar mi contraseña"
+          <a href="/cuenta" title="Mi cuenta"
              className="tap grid place-items-center rounded-lg text-[var(--texto-suave)] hover:bg-[var(--fondo)]">
-            <Icono nombre="clave" tamano={18} titulo="Cambiar mi contraseña" />
+            <Icono nombre="cuenta" tamano={18} titulo="Mi cuenta" />
           </a>
           <BotonSalir className="tap grid place-items-center rounded-lg text-[var(--texto-suave)] hover:bg-[var(--fondo)]">
             <Icono nombre="salir" tamano={18} titulo="Cerrar sesión" />

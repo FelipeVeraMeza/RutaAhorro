@@ -228,3 +228,12 @@ export async function searchProducts(term: string, limit = 25): Promise<LocalPro
 export async function localProductCount(): Promise<number> {
   return db().products.count();
 }
+
+/**
+ * Cuándo se actualizó por última vez el catálogo de este celular (RF-M5-29).
+ * El POS lo muestra: sin internet, el cajero tiene que saber si los precios
+ * que ve son de hoy o de hace tres días.
+ */
+export async function ultimaActualizacionCatalogo(): Promise<string | null> {
+  try { return await getMeta(LAST_SYNC_KEY); } catch { return null; }
+}

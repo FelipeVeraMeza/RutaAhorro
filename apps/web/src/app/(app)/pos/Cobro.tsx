@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   formatCLP, change, parseCLP, formatRut, isValidRut,
-  documentosDisponibles, validarDocumento, normalizarReceptor, NOMBRE_DOCUMENTO,
+  documentosDisponibles, validarDocumento, normalizarReceptor, NOMBRE_DOCUMENTO, montoRecibidoAtipico,
   type TipoDocumento, type DocumentoVenta, type ClienteConPrecios,
 } from '@rutaahorro/core';
 import { Modal } from '@/components/Modal';
@@ -55,6 +55,8 @@ export function Cobro({
   const [metodo, setMetodo] = useState<Metodo>('efectivo');
   const [recibido, setRecibido] = useState('');
   const [enviando, setEnviando] = useState(false);
+  // RF-M5-26 · un "100.000" por "10.000" se confirma dos veces.
+  const [atipicoConfirmado, setAtipicoConfirmado] = useState(false);
 
   // Documento (reunión 2026-09-19). Por omisión, el que corresponde al medio
   // de pago: boleta con efectivo o transferencia, voucher con tarjeta.
@@ -104,8 +106,12 @@ export function Cobro({
   // antes de que el cajero alcance a teclear es ruido, no ayuda.
   const errorRut = rut.trim() !== '' && !isValidRut(rut) ? 'Revisa el RUT' : null;
 
+  const atipico = metodo === 'efectivo' && montoRecibidoAtipico(montoRecibido, total);
+  useEffect(() => { setAtipicoConfirmado(false); }, [recibido, metodo]);
+
   async function confirmar() {
     if (!puedeConfirmar || enviando) return;
+    if (atipico && !atipicoConfirmado) { setAtipicoConfirmado(true); return; }
     setEnviando(true);
     const registrada = await onConfirm([
       metodo === 'efectivo'
@@ -268,6 +274,13 @@ export function Cobro({
           </div>
         )}
 
+        {atipico && (
+          <p role="alert" className="text-sm text-[var(--color-aviso)] bg-amber-50 px-3 py-2 rounded-lg mb-3">
+            ¿Recibiste <strong className="num">{formatCLP(montoRecibido)}</strong>? Es mucho más que el total: revisa que
+            no sobre un cero. {atipicoConfirmado ? 'Toca otra vez para confirmar.' : ''}
+          </p>
+        )}
+
         {/* Por qué no se puede confirmar, antes de que lo intente. */}
         {!revision.valido && (
           <p role="alert" className="text-sm text-[var(--color-alerta)] mb-3">
@@ -280,7 +293,7 @@ export function Cobro({
           disabled={!puedeConfirmar || enviando}
           className="tap w-full py-4 rounded-xl bg-marca-500 text-white font-bold text-lg active:bg-marca-600 disabled:opacity-40"
         >
-          {enviando ? 'Registrando…' : 'Confirmar venta'}
+          {enviando ? 'Registrando…' : atipico && atipicoConfirmado ? `Sí, recibí ${formatCLP(montoRecibido)}` : 'Confirmar venta'}
         </button>
       </div>
     </Modal>

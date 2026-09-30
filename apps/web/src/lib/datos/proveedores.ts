@@ -330,3 +330,37 @@ function paraRecepcion(p: {
     stock: p.stock,
   };
 }
+
+/**
+ * El proveedor de la última recepción confirmada de cada producto (RF-M3-12),
+ * para armar el pedido sugerido por proveedor. `product_suppliers` existe
+ * desde 0001 pero ninguna función lo llena; la recepción sí sabe de quién vino.
+ */
+export async function ultimoProveedorPorProducto(): Promise<Map<string, { id: string; nombre: string }>> {
+  const mapa = new Map<string, { id: string; nombre: string }>();
+  if (DEMO_ACTIVO) {
+    // La maqueta no guarda qué productos trajo cada recepción: se reparte por
+    // rubro entre los tres proveedores de ejemplo, para poder probar el pedido.
+    const { DEMO_PRODUCTOS } = await import('../demo/data');
+    const ps = await leerJson<Proveedor[]>(KEY_PROV, SEMILLA);
+    const de = (id: string) => ps.find((x) => x.id === id && x.activo);
+    for (const p of DEMO_PRODUCTOS) {
+      const prov = de(p.categoria === 'Lácteos' ? 'pr2' : p.categoria === 'Limpieza' ? 'pr3' : 'pr1');
+      if (prov) mapa.set(p.id, { id: prov.id, nombre: prov.nombre });
+    }
+    return mapa;
+  }
+  const { data, error } = await supabase().from('purchase_receipt_items')
+    .select('product_id, recepcion:purchase_receipts!inner(received_at, status, supplier_id, proveedor:suppliers(name))')
+    .eq('recepcion.status', 'confirmada')
+    .limit(5000);
+  if (error) throw error;
+  const filas = (data ?? []).map((f) => {
+    const r = f.recepcion as unknown as { received_at: string; supplier_id: string | null; proveedor: { name: string } | null };
+    return { productId: f.product_id as string, fecha: r.received_at, id: r.supplier_id, nombre: r.proveedor?.name ?? null };
+  }).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  for (const f of filas) {
+    if (!mapa.has(f.productId) && f.id && f.nombre) mapa.set(f.productId, { id: f.id, nombre: f.nombre });
+  }
+  return mapa;
+}

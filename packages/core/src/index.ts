@@ -24,6 +24,7 @@ export * from './csv.js';
 export * from './fechas.js';
 export * from './tendencia.js';
 export * from './compras.js';
+export * from './operacion.js';
 export * from './precios.js';
 export * from './clientes.js';
 export * from './combos.js';

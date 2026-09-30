@@ -6,6 +6,7 @@ import {
   type LineaSugerida,
 } from '@rutaahorro/core';
 import { repoProductos } from '@/lib/productos';
+import { ultimoProveedorPorProducto } from '@/lib/datos/proveedores';
 import { EstadoVacio } from '@/components/Encabezado';
 import { Icono } from '@/components/Icono';
 
@@ -23,6 +24,10 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+  // RF-M3-12 · el proveedor de la última recepción de cada producto.
+  const [proveedorDe, setProveedorDe] = useState<Map<string, { id: string; nombre: string }>>(new Map());
+  const [proveedorElegido, setProveedorElegido] = useState('');
+  useEffect(() => { void ultimoProveedorPorProducto().then(setProveedorDe).catch(() => {}); }, []);
 
   useEffect(() => {
     void repoProductos().listar({ soloActivos: true, limite: 5000 }, verCostos)
@@ -34,12 +39,24 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
   }, [verCostos]);
 
   // Lo que se va a pedir: las marcadas, con la cantidad que haya escrito.
-  const pedido = useMemo(() => (lineas ?? [])
+  const enVista = useMemo(() => (lineas ?? [])
+    .filter((l) => !proveedorElegido || (proveedorElegido === 'sin' ? !proveedorDe.has(l.id) : proveedorDe.get(l.id)?.id === proveedorElegido)),
+  [lineas, proveedorElegido, proveedorDe]);
+  const pedido = useMemo(() => enVista
     .filter((l) => !fuera.has(l.id))
     .map((l) => {
       const n = Number((cantidades[l.id] ?? '').replace(',', '.'));
       return cantidades[l.id] !== undefined && Number.isFinite(n) && n > 0 ? { ...l, pedir: n } : l;
-    }), [lineas, fuera, cantidades]);
+    }), [enVista, fuera, cantidades]);
+
+  const proveedores = useMemo(() => {
+    const m = new Map<string, { nombre: string; n: number }>();
+    for (const l of lineas ?? []) {
+      const p = proveedorDe.get(l.id);
+      if (p) m.set(p.id, { nombre: p.nombre, n: (m.get(p.id)?.n ?? 0) + 1 });
+    }
+    return [...m.entries()].sort((a, b) => b[1].n - a[1].n);
+  }, [lineas, proveedorDe]);
 
   if (error) return <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>;
   if (!lineas) return <p className="text-sm text-[var(--texto-suave)] py-6 text-center">Revisando el stock…</p>;
@@ -77,8 +94,19 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
         Lo que está bajo su mínimo, con lo que falta para llegar al doble del mínimo. Cambia la cantidad
         si quieres, o desmarca lo que no vas a pedir.
       </p>
+      {proveedores.length > 0 && (
+        <label className="block text-sm">
+          <span className="text-[var(--texto-suave)]">Pedido para</span>
+          <select value={proveedorElegido} onChange={(e) => setProveedorElegido(e.target.value)}
+            className="tap w-full mt-1 px-3 rounded-xl border border-[var(--borde)] bg-white">
+            <option value="">Todos los proveedores</option>
+            {proveedores.map(([id, p]) => <option key={id} value={id}>{p.nombre} ({p.n})</option>)}
+            <option value="sin">Sin proveedor conocido</option>
+          </select>
+        </label>
+      )}
       <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden">
-        {lineas.map((l) => {
+        {enVista.map((l) => {
           const incluido = !fuera.has(l.id);
           return (
             <li key={l.id} className={`px-3 py-2.5 flex items-center gap-3 ${incluido ? '' : 'opacity-50'}`}>
@@ -86,6 +114,7 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
                 onChange={() => setFuera((f) => { const n = new Set(f); if (n.has(l.id)) n.delete(l.id); else n.add(l.id); return n; })} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{l.nombre}</p>
+                {proveedorDe.get(l.id) && <p className="text-[11px] text-[var(--texto-suave)]">Último proveedor: {proveedorDe.get(l.id)!.nombre}</p>}
                 <p className="text-xs num">
                   <span className={`insignia ${l.stock <= 0 ? 'insignia-alerta' : 'insignia-aviso'}`}>{l.stock <= 0 ? 'Agotado' : 'Bajo'}</span>
                   <span className="text-[var(--texto-suave)]"> hay {formatCantidad(l.stock)} · mínimo {formatCantidad(l.minimo)}</span>

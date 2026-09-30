@@ -5,13 +5,14 @@ import { formatCLP } from '@rutaahorro/core';
 import { repoVentas } from '@/lib/datos/ventas';
 import { hoyLocal } from '@/lib/datos/reportes';
 import { useConfiguracion } from '@/lib/datos/configuracion';
+import { enlaceResumenDia } from '@/lib/resumenDia';
 
 /**
  * "Vendido hoy" en la maqueta, sumado desde las ventas que de verdad se
  * hicieron en el POS de este navegador. Antes era un número fijo
  * ($187.450): se vendía y no se movía.
  */
-export function VentasHoyDemo() {
+export function VentasHoyDemo({ bajoMinimo, enRiesgo }: { bajoMinimo: number; enRiesgo: number }) {
   const { zonaHoraria } = useConfiguracion();
   const [r, setR] = useState<{ total: number; n: number } | null>(null);
 
@@ -23,11 +24,21 @@ export function VentasHoyDemo() {
 
   const total = r?.total ?? 0;
   const n = r?.n ?? 0;
+  const ticket = n ? Math.round(total / n) : 0;
   return (
-    <div className="grid grid-cols-3 gap-2">
-      <Tarjeta label="Vendido hoy" value={r ? formatCLP(total) : '…'} />
-      <Tarjeta label="Ventas" value={r ? String(n) : '…'} />
-      <Tarjeta label="Ticket prom." value={r ? formatCLP(n ? Math.round(total / n) : 0) : '…'} />
+    <div>
+      <div className="grid grid-cols-3 gap-2">
+        <Tarjeta label="Vendido hoy" value={r ? formatCLP(total) : '…'} />
+        <Tarjeta label="Ventas" value={r ? String(n) : '…'} />
+        <Tarjeta label="Ticket prom." value={r ? formatCLP(ticket) : '…'} />
+      </div>
+      {r && (
+        <a href={enlaceResumenDia({ total, ventas: n, ticket, bajoMinimo, enRiesgo })}
+           target="_blank" rel="noopener noreferrer"
+           className="tap inline-flex items-center gap-1.5 text-sm font-medium text-marca-700 underline mt-1">
+          Enviar el resumen de hoy por WhatsApp
+        </a>
+      )}
     </div>
   );
 }

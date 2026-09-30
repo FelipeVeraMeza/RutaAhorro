@@ -1,8 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { formatCLP, formatCantidad, marginPct, toUserMessage, cantidadConUnidad } from '@rutaahorro/core';
+import {
+  formatCLP, formatCantidad, marginPct, toUserMessage, cantidadConUnidad, aCSV,
+  calidadCatalogo, TEXTO_PROBLEMA, precioConRedondeo, validarMonto, type ProblemaCatalogo,
+} from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
 import { Modal } from '@/components/Modal';
 import { FormularioProducto } from './FormularioProducto';
@@ -10,6 +13,16 @@ import { Encabezado, EstadoVacio } from '@/components/Encabezado';
 import { Icono } from '@/components/Icono';
 
 type Estado = 'todos' | 'normal' | 'bajo' | 'agotado';
+
+/** RF-M2-16 · cómo ordenar la lista. */
+type Orden = 'nombre' | 'precio_menor' | 'precio_mayor' | 'stock_menor' | 'recientes';
+const ORDENES: Array<[Orden, string]> = [
+  ['nombre', 'Nombre (A-Z)'],
+  ['precio_menor', 'Precio: menor primero'],
+  ['precio_mayor', 'Precio: mayor primero'],
+  ['stock_menor', 'Stock: menos primero'],
+  ['recientes', 'Modificados hace poco'],
+];
 
 const ESTADOS: Array<{ id: Estado; label: string }> = [
   { id: 'todos', label: 'Todos' },
@@ -29,9 +42,12 @@ function estadoStock(p: Producto): { icono: string; texto: string; clase: string
 
 export function ProductosClient({
   puedeVerCostos, puedeEditar, puedeEliminar, puedeEditarPrecios = false, esAdmin = false, codigoNuevo = null,
+  editarId = null,
 }: {
   /** Vino desde Vender o Consultar precio con un código que no existe: abrir el alta con él. */
   codigoNuevo?: string | null;
+  /** Viene de otra pantalla (ej. un lote por vencer) a editar este producto. */
+  editarId?: string | null;
   puedeVerCostos: boolean;
   puedeEditar: boolean;
   puedeEliminar: boolean;
@@ -44,6 +60,10 @@ export function ProductosClient({
   const [categoriaId, setCategoriaId] = useState('');
   const [estado, setEstado] = useState<Estado>('todos');
   const [verInactivos, setVerInactivos] = useState(false);
+  const [orden, setOrden] = useState<Orden>('nombre');
+  // RF-M2-18 · ver solo los que tienen datos por completar.
+  const [revisando, setRevisando] = useState(false);
+  const [cambiandoPrecio, setCambiandoPrecio] = useState<Producto | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,6 +89,12 @@ export function ProductosClient({
     window.history.replaceState(null, '', '/productos');
     if (puedeEditar) setCreando(true);
   }, [codigoNuevo, puedeEditar]);
+
+  useEffect(() => {
+    if (!editarId || !puedeEditar) return;
+    window.history.replaceState(null, '', '/productos');
+    void repoProductos().obtener(editarId, puedeVerCostos).then((p) => { if (p) setEditando(p); }).catch(() => {});
+  }, [editarId, puedeEditar, puedeVerCostos]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -135,6 +161,47 @@ export function ProductosClient({
     }
   }
 
+  const calidad = useMemo(() => calidadCatalogo(productos.filter((p) => p.activo).map((p) => ({
+    id: p.id, nombre: p.nombre, codigos: p.codigos, costo: p.costoPromedio, stockMinimo: p.stockMinimo,
+    categoriaId: p.categoriaId, precio: p.precioVenta, perecible: p.perecible,
+  })), puedeVerCostos), [productos, puedeVerCostos]);
+
+  const visibles = useMemo(() => {
+    const base = revisando ? productos.filter((p) => calidad.porProducto.has(p.id)) : productos;
+    const orden2 = [...base];
+    const porNombre = (a: Producto, b: Producto) => a.nombre.localeCompare(b.nombre, 'es');
+    if (orden === 'nombre') orden2.sort(porNombre);
+    if (orden === 'precio_menor') orden2.sort((a, b) => a.precioVenta - b.precioVenta || porNombre(a, b));
+    if (orden === 'precio_mayor') orden2.sort((a, b) => b.precioVenta - a.precioVenta || porNombre(a, b));
+    if (orden === 'stock_menor') orden2.sort((a, b) => a.stock - b.stock || porNombre(a, b));
+    if (orden === 'recientes') orden2.sort((a, b) => b.actualizadoEn.localeCompare(a.actualizadoEn));
+    return orden2;
+  }, [productos, orden, revisando, calidad]);
+
+  /** RF-M2-19 · el catálogo en Excel, con lo que la pantalla muestra. */
+  function exportar() {
+    const csv = aCSV(visibles, [
+      { titulo: 'nombre', valor: (p) => p.nombre },
+      { titulo: 'codigo_interno', valor: (p) => p.sku ?? '' },
+      { titulo: 'codigos_de_barra', valor: (p) => p.codigos.join(' ') },
+      { titulo: 'categoria', valor: (p) => p.categoriaNombre ?? '' },
+      { titulo: 'unidad', valor: (p) => p.unidad },
+      { titulo: 'precio_venta', valor: (p) => p.precioVenta },
+      ...(puedeVerCostos ? [{ titulo: 'costo_promedio', valor: (p: Producto) => p.costoPromedio ?? 0 }] : []),
+      { titulo: 'stock_total', valor: (p) => p.stock },
+      { titulo: 'en_sala', valor: (p) => p.stockSala },
+      { titulo: 'en_bodega', valor: (p) => p.stockBodega },
+      { titulo: 'stock_minimo', valor: (p) => p.stockMinimo },
+      { titulo: 'perecible', valor: (p) => (p.perecible ? 'si' : 'no') },
+      { titulo: 'activo', valor: (p) => (p.activo ? 'si' : 'no') },
+    ]);
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `catalogo-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
   return (
     <div className="px-4 py-5">
       <Encabezado
@@ -178,12 +245,14 @@ export function ProductosClient({
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
           placeholder="Buscar por nombre, SKU o código…"
+          aria-label="Buscar producto por nombre, SKU o código"
           className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] bg-white"
         />
         <div className="flex gap-2 overflow-x-auto sin-scrollbar pb-1">
           <select
             value={categoriaId}
             onChange={(e) => setCategoriaId(e.target.value)}
+            aria-label="Filtrar por categoría"
             className="tap px-3 py-2 rounded-lg border border-[var(--borde)] bg-white text-sm shrink-0"
           >
             <option value="">Todas las categorías</option>
@@ -219,6 +288,34 @@ export function ProductosClient({
             </button>
           )}
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-sm text-[var(--texto-suave)] flex items-center gap-2 min-w-0 max-w-full">
+            Ordenar
+            <select value={orden} onChange={(e) => setOrden(e.target.value as Orden)}
+              className="tap min-w-0 max-w-full px-3 py-2 rounded-lg border border-[var(--borde)] bg-white text-sm text-[var(--texto)]">
+              {ORDENES.map(([id, t]) => <option key={id} value={id}>{t}</option>)}
+            </select>
+          </label>
+          {puedeEditar && productos.length > 0 && (
+            <button onClick={() => setRevisando((v) => !v)} aria-pressed={revisando}
+              className={`tap px-3 rounded-lg text-sm border ${revisando ? 'border-marca-500 bg-marca-50 text-marca-900 font-medium' : 'border-[var(--borde)] bg-white'}`}>
+              {calidad.porProducto.size === 0 ? '✓ Datos completos' : `Revisar datos (${calidad.porProducto.size})`}
+            </button>
+          )}
+          {/* Exportar: no el vendedor (matriz del doc 02). */}
+          {puedeEditar && productos.length > 0 && (
+            <button onClick={exportar} className="btn btn-secundario btn-chico ml-auto">
+              <Icono nombre="descargar" tamano={16} /> Exportar
+            </button>
+          )}
+        </div>
+        {revisando && calidad.porProducto.size > 0 && (
+          <p className="text-xs text-[var(--texto-suave)] bg-[var(--superficie)] border border-[var(--borde)] rounded-lg px-3 py-2">
+            {(Object.entries(calidad.conteo) as Array<[ProblemaCatalogo, number]>).filter(([, n]) => n > 0)
+              .map(([k, n]) => `${n} ${TEXTO_PROBLEMA[k].split(':')[0].toLowerCase()}`).join(' · ')}.
+            Toca Editar para completarlos.
+          </p>
+        )}
       </div>
 
       {error && (
@@ -245,8 +342,9 @@ export function ProductosClient({
         </EstadoVacio>
       ) : (
         <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden">
-          {productos.map((p) => {
+          {visibles.map((p) => {
             const est = estadoStock(p);
+            const problemas = revisando ? calidad.porProducto.get(p.id) ?? [] : [];
             return (
               <li key={p.id} className={`px-4 py-3 ${!p.activo ? 'opacity-55' : ''}`}>
                 <div className="flex items-start justify-between gap-3">
@@ -262,7 +360,16 @@ export function ProductosClient({
                     </p>
                   </div>
                   <div className="text-right whitespace-nowrap">
-                    <p className="num font-semibold">{formatCLP(p.precioVenta)}</p>
+                    {/* RF-M2-17 · el precio se cambia tocándolo, sin abrir todo el formulario. */}
+                    {puedeEditarPrecios && p.activo ? (
+                      <button onClick={() => setCambiandoPrecio(p)} title="Cambiar el precio"
+                        aria-label={`Cambiar el precio de ${p.nombre}, ahora ${formatCLP(p.precioVenta)}`}
+                        className="tap -my-2 -mr-2 px-2 num font-semibold underline decoration-dotted underline-offset-4">
+                        {formatCLP(p.precioVenta)}
+                      </button>
+                    ) : (
+                      <p className="num font-semibold">{formatCLP(p.precioVenta)}</p>
+                    )}
                     {puedeVerCostos && typeof p.costoPromedio === 'number' && p.costoPromedio > 0 && (
                       <p className="text-xs text-[var(--texto-suave)] num">
                         costo {formatCLP(p.costoPromedio)} · {marginPct(p.precioVenta, p.costoPromedio)}%
@@ -271,6 +378,11 @@ export function ProductosClient({
                   </div>
                 </div>
 
+                {problemas.length > 0 && (
+                  <ul className="mt-1.5 flex flex-wrap gap-1">
+                    {problemas.map((x) => <li key={x} className="insignia insignia-aviso">{TEXTO_PROBLEMA[x].split(':')[0]}</li>)}
+                  </ul>
+                )}
                 <div className="flex items-center justify-between gap-2 mt-1.5">
                   <p className={`text-xs num ${est.clase}`}>
                     {est.icono} {est.texto} · {cantidadConUnidad(p.stock, p.unidad)}
@@ -357,6 +469,14 @@ export function ProductosClient({
         />
       )}
 
+      {cambiandoPrecio && (
+        <CambiarPrecio
+          producto={cambiandoPrecio}
+          onCerrar={() => setCambiandoPrecio(null)}
+          onGuardado={(texto) => { setCambiandoPrecio(null); setAviso(texto); void cargar(); }}
+        />
+      )}
+
       {/* Confirmación de baja */}
       {confirmando && (
         <Modal
@@ -436,5 +556,73 @@ export function ProductosClient({
         </Modal>
       )}
     </div>
+  );
+}
+
+/**
+ * Cambio rápido de precio (RF-M2-17). Pasa por la misma función que el
+ * formulario, así que queda en el historial de precios y en la bitácora, y
+ * avisa si otra persona cambió el producto entremedio.
+ */
+function CambiarPrecio({ producto, onCerrar, onGuardado }: {
+  producto: Producto;
+  onCerrar: () => void;
+  onGuardado: (texto: string) => void;
+}) {
+  const [precio, setPrecio] = useState(producto.precioVenta.toLocaleString('es-CL'));
+  const [error, setError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const v = validarMonto(precio, { etiqueta: 'precio', permiteCero: false, maximo: 50_000_000 });
+  const variacion = v.valido && producto.precioVenta > 0
+    ? Math.round(((v.valor - producto.precioVenta) / producto.precioVenta) * 100) : 0;
+
+  async function guardar() {
+    if (!v.valido) { setError(v.error); return; }
+    if (v.valor === producto.precioVenta) { onCerrar(); return; }
+    setGuardando(true);
+    setError(null);
+    try {
+      await repoProductos().actualizar(producto.id, {
+        nombre: producto.nombre, descripcion: producto.descripcion, sku: producto.sku,
+        categoriaId: producto.categoriaId, unidad: producto.unidad, precioVenta: v.valor,
+        stockMinimo: producto.stockMinimo, perecible: producto.perecible, diasAlerta: producto.diasAlerta,
+        esperadoEn: producto.actualizadoEn,
+      });
+      onGuardado(`${producto.nombre}: ${formatCLP(producto.precioVenta)} → ${formatCLP(v.valor)}`);
+    } catch (e) {
+      setError(toUserMessage(e));
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <Modal titulo={`Precio de ${producto.nombre}`} encabezado="visible" onCerrar={onCerrar} bloqueado={guardando}>
+      <form className="p-5 space-y-3" onSubmit={(e) => { e.preventDefault(); void guardar(); }}>
+        <p className="text-sm text-[var(--texto-suave)]">
+          Ahora: <strong className="num text-[var(--texto)]">{formatCLP(producto.precioVenta)}</strong>. El cambio queda en el
+          historial de precios con tu nombre, y los celulares lo reciben al actualizar el catálogo.
+        </p>
+        <label className="block">
+          <span className="block text-sm font-medium mb-1.5">Precio nuevo</span>
+          <input value={precio} onChange={(e) => setPrecio(e.target.value)} inputMode="numeric" autoFocus
+            onFocus={(e) => e.currentTarget.select()}
+            className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] num text-right text-lg" />
+        </label>
+        {v.valido && Math.abs(variacion) >= 30 && (
+          <p className="text-xs text-[var(--color-aviso)] bg-amber-50 px-3 py-2 rounded-lg">
+            ⚠ Es un cambio de {variacion > 0 ? '+' : ''}{variacion} %. Revisa que no falte o sobre un cero.
+          </p>
+        )}
+        {v.valido && precioConRedondeo(v.valor) && (
+          <p className="text-xs text-[var(--color-aviso)] bg-amber-50 px-3 py-2 rounded-lg">
+            No termina en 0: al pagar en efectivo habrá que redondear (Ley 20.956).
+          </p>
+        )}
+        {error && <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+        <button type="submit" disabled={guardando || !v.valido} className="btn btn-primario w-full">
+          {guardando ? 'Guardando…' : 'Guardar precio'}
+        </button>
+      </form>
+    </Modal>
   );
 }

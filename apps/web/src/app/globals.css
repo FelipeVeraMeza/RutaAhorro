@@ -55,8 +55,13 @@ body {
 }
 
 input, select, textarea, button {
-  font-size: 16px; /* obligatorio: menos que esto hace zoom en iOS */
+  /* 16 px mínimo: menos que esto hace zoom en iOS. Con max() también crece
+     con la letra grande (RNF-59), que agranda el rem. */
+  font-size: max(16px, 1rem);
 }
+
+/* RNF-59 · letra grande en este celular (Mi cuenta). Todo lo que usa rem crece. */
+html[data-letra='grande'] { font-size: 118.75%; }
 
 /* Utilidades propias -------------------------------------------------- */
 
@@ -103,7 +108,10 @@ input, select, textarea, button {
 @media print {
   body * { visibility: hidden; }
   #ticket, #ticket *,
-  #hoja-etiquetas, #hoja-etiquetas * { visibility: visible; }
+  #hoja-etiquetas, #hoja-etiquetas *,
+  #hoja-conteo, #hoja-conteo * { visibility: visible; }
+  /* RF-M4-22 · la hoja para contar a mano. */
+  #hoja-conteo { display: block !important; position: absolute; left: 0; top: 0; width: 100%; color: #000; }
 
   /* Hoja de etiquetas (RF-M2-13). Las medidas del SVG van en milímetros y no
      se tocan: si la hoja escala, el lector deja de reconocer el código. */
@@ -132,6 +140,9 @@ input, select, textarea, button {
   .no-imprimir { display: none !important; }
   @page { margin: 4mm; }
 }
+
+/* La hoja de conteo solo existe impresa. */
+#hoja-conteo { display: none; }
 
 /* Foco visible con teclado (RNF-45). Solo con teclado: al tocar no aparece. */
 :focus-visible {

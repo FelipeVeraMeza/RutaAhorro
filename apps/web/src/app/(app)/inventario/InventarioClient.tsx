@@ -1,8 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  formatCLP, formatCantidad, validarCantidad, toUserMessage, textoVencimiento, cantidadConUnidad,
+  formatCLP, formatCantidad, validarCantidad, sugerirReposicion, toUserMessage, textoVencimiento, cantidadConUnidad,
 } from '@rutaahorro/core';
 import { repoProductos, type Producto } from '@/lib/productos';
 import {
@@ -13,9 +14,10 @@ import {
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { useFormatoFecha } from '@/lib/formatoFecha';
-import { Encabezado } from '@/components/Encabezado';
+import { Encabezado, EstadoVacio } from '@/components/Encabezado';
+import { Icono } from '@/components/Icono';
 
-type Vista = 'stock' | 'lotes' | 'kardex' | 'toma';
+type Vista = 'stock' | 'reponer' | 'lotes' | 'kardex' | 'toma';
 
 const fecha = (iso: string) =>
   new Date(`${iso}T12:00:00`).toLocaleDateString('es-CL', {
@@ -25,10 +27,12 @@ const fecha = (iso: string) =>
 
 
 export function InventarioClient({
-  puedeAjustar, verCostos,
+  puedeAjustar, verCostos, puedeOfertar = false,
 }: {
   puedeAjustar: boolean;
   verCostos: boolean;
+  /** Admin y supervisor: un lote por vencer se puede poner en oferta (RF-M4-23). */
+  puedeOfertar?: boolean;
 }) {
   const { fechaHora } = useFormatoFecha();
   const [vista, setVista] = useState<Vista>('stock');
@@ -51,6 +55,10 @@ export function InventarioClient({
   const enUbicacion = (p: Producto, u: Ubicacion) => (u === 'sala' ? p.stockSala : p.stockBodega);
   const [conteo, setConteo] = useState<Record<string, string>>({});
   const [aplicandoToma, setAplicandoToma] = useState(false);
+  // RF-M4-21 · reposición en lote: cuánto mover de cada uno y cuáles no.
+  const [aMover, setAMover] = useState<Record<string, string>>({});
+  const [sinReponer, setSinReponer] = useState<Set<string>>(new Set());
+  const [reponiendoTodo, setReponiendoTodo] = useState<string | null>(null);
   const [revisandoToma, setRevisandoToma] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -87,6 +95,35 @@ export function InventarioClient({
       window.history.replaceState(null, '', window.location.pathname);
     }).catch(() => {});
   }, [puedeAjustar, verCostos]);
+
+  const sugeridos = sugerirReposicion(productos.filter((p) => p.activo).map((p) => ({
+    id: p.id, nombre: p.nombre, sala: p.stockSala, bodega: p.stockBodega, minimo: p.stockMinimo, unidad: p.unidad,
+  })));
+
+  async function reponerMarcados() {
+    const lista = sugeridos
+      .filter((s) => !sinReponer.has(s.id))
+      .map((s) => ({ s, v: validarCantidad(aMover[s.id] ?? String(s.mover), { maximo: s.bodega }) }))
+      .filter((x) => x.v.valido && x.v.valor > 0);
+    if (lista.length === 0) return;
+    setError(null);
+    let hechos = 0;
+    try {
+      for (const { s, v } of lista) {
+        setReponiendoTodo(`Reponiendo ${hechos + 1} de ${lista.length}…`);
+        await repoInventario().reponer({ productoId: s.id, cantidad: v.valor, desde: 'bodega', hacia: 'sala', motivo: 'Reposición en lote' });
+        hechos++;
+      }
+      setExito(`${hechos} ${hechos === 1 ? 'producto pasó' : 'productos pasaron'} de la bodega a la sala`);
+      setAMover({}); setSinReponer(new Set());
+      await cargar();
+    } catch (e) {
+      setError(`${hechos ? `Se repusieron ${hechos}; ` : ''}${toUserMessage(e)}`);
+      await cargar();
+    } finally {
+      setReponiendoTodo(null);
+    }
+  }
 
   const valorTotal = productos.reduce(
     (s, p) => s + Math.round(p.stock * (p.costoPromedio ?? 0)), 0,
@@ -148,6 +185,7 @@ export function InventarioClient({
       <div className="flex gap-2 mb-4 overflow-x-auto sin-scrollbar" role="tablist">
         {([
           ['stock', 'Stock'],
+          ['reponer', `Qué reponer${sugeridos.length ? ` (${sugeridos.length})` : ''}`],
           ['lotes', 'Lotes'],
           ['kardex', 'Movimientos'],
           ...(puedeAjustar ? [['toma', 'Toma de inventario'] as const] : []),
@@ -198,6 +236,7 @@ export function InventarioClient({
           <input
             type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar producto…"
+            aria-label="Buscar producto"
             className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] bg-white mb-3"
           />
 
@@ -263,6 +302,59 @@ export function InventarioClient({
         </>
       )}
 
+      {/* ------------------------------------------------------ QUÉ REPONER */}
+      {vista === 'reponer' && (
+        <>
+          <p className="text-sm text-[var(--texto-suave)] mb-3">
+            Lo que en la sala está vacío o bajo su mínimo y tiene en la bodega. Se sugiere llevar la
+            sala al doble del mínimo; cambia la cantidad si quieres y repón todo de una vez.
+          </p>
+          {cargando ? (
+            <p className="text-sm text-[var(--texto-suave)] text-center py-6">Cargando…</p>
+          ) : sugeridos.length === 0 ? (
+            <EstadoVacio icono="listo" titulo="La sala está surtida"
+              texto="Cuando algo se acabe a la vista y quede en bodega, aparece acá." />
+          ) : (
+            <>
+              <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden mb-3">
+                {sugeridos.map((s) => {
+                  const incluido = !sinReponer.has(s.id);
+                  return (
+                    <li key={s.id} className={`px-3 py-2.5 flex items-center gap-3 ${incluido ? '' : 'opacity-50'}`}>
+                      <input type="checkbox" checked={incluido} className="w-5 h-5 shrink-0" aria-label={`Reponer ${s.nombre}`}
+                        onChange={() => setSinReponer((x) => { const n = new Set(x); if (n.has(s.id)) n.delete(s.id); else n.add(s.id); return n; })} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">{s.nombre}</p>
+                        <p className="text-xs num text-[var(--texto-suave)]">
+                          <span className={`insignia ${s.sala <= 0 ? 'insignia-alerta' : 'insignia-aviso'}`}>
+                            {s.sala <= 0 ? 'Vacío a la vista' : 'Bajo en sala'}
+                          </span>{' '}
+                          a la vista {formatCantidad(s.sala)} · en bodega {formatCantidad(s.bodega)}
+                        </p>
+                      </div>
+                      <label className="shrink-0 text-right">
+                        <span className="block text-[11px] text-[var(--texto-suave)]">Pasar</span>
+                        <input inputMode="decimal" disabled={!incluido} value={aMover[s.id] ?? formatCantidad(s.mover)}
+                          onChange={(e) => setAMover((m) => ({ ...m, [s.id]: e.target.value }))}
+                          aria-label={`Cuánto pasar a la sala de ${s.nombre}`}
+                          className="tap w-20 px-2 rounded-lg border border-[var(--borde)] num text-right" />
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+              <button onClick={() => void reponerMarcados()} disabled={reponiendoTodo !== null || sugeridos.every((s) => sinReponer.has(s.id))}
+                className="btn btn-primario w-full">
+                {reponiendoTodo ?? `Reponer ${sugeridos.filter((s) => !sinReponer.has(s.id)).length} productos`}
+              </button>
+              <p className="text-[11px] text-[var(--texto-suave)] mt-2">
+                Cada reposición queda en el historial como traspaso, con tu nombre. No cambia el total ni el costo.
+              </p>
+            </>
+          )}
+        </>
+      )}
+
       {/* ------------------------------------------------------------ LOTES */}
       {vista === 'lotes' && (
         <>
@@ -323,6 +415,13 @@ export function InventarioClient({
                       {verCostos && ` · ${formatCLP(l.valorEnRiesgo)}`}
                     </p>
                   </div>
+                  {/* RF-M4-23 · lo que está por vencer se vende antes si baja de precio. */}
+                  {puedeOfertar && l.estado === 'por_vencer' && (
+                    <Link href={`/productos?editar=${l.productoId}`} prefetch={false}
+                      className="tap inline-flex items-center px-3 py-1.5 text-xs rounded-lg border border-marca-500 text-marca-700 shrink-0">
+                      Poner en oferta
+                    </Link>
+                  )}
                   {puedeAjustar && (
                     <button
                       onClick={() => { setDandoDeBaja(l); setMotivoBaja(''); }}
@@ -391,6 +490,30 @@ export function InventarioClient({
             Cuenta físicamente y anota lo que encuentres. Los productos que dejes en
             blanco no se tocan, así que puedes contar por partes.
           </p>
+          {/* RF-M4-22 · contar con papel y lápiz, y después anotarlo acá. */}
+          <button onClick={() => window.print()} className="btn btn-secundario btn-chico mb-3 no-imprimir">
+            <Icono nombre="descargar" tamano={16} /> Imprimir hoja para contar ({ETIQUETA_UBICACION[ubicacionToma].toLowerCase()})
+          </button>
+          <div id="hoja-conteo" aria-hidden>
+            <h2 style={{ fontSize: 14, fontWeight: 700 }}>Hoja de conteo · {ETIQUETA_UBICACION[ubicacionToma]} · {new Date().toLocaleDateString('es-CL')}</h2>
+            <p style={{ fontSize: 10, margin: '2px 0 6px' }}>Contó: ______________________ · Revisó: ______________________</p>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <thead><tr>
+                <th style={{ textAlign: 'left', borderBottom: '1px solid #000' }}>Producto</th>
+                <th style={{ textAlign: 'left', borderBottom: '1px solid #000' }}>Código</th>
+                <th style={{ borderBottom: '1px solid #000', width: '28mm' }}>Contado</th>
+              </tr></thead>
+              <tbody>
+                {[...productos].filter((p) => p.activo).sort((a, b) => (a.categoriaNombre ?? '').localeCompare(b.categoriaNombre ?? '', 'es') || a.nombre.localeCompare(b.nombre, 'es')).map((p) => (
+                  <tr key={p.id}>
+                    <td style={{ borderBottom: '1px solid #bbb', padding: '4px 2px' }}>{p.nombre}{p.unidad !== 'unidad' ? ` (${p.unidad})` : ''}</td>
+                    <td style={{ borderBottom: '1px solid #bbb', padding: '4px 2px' }}>{p.codigos[0] ?? p.sku ?? ''}</td>
+                    <td style={{ borderBottom: '1px solid #bbb' }} />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <div className="flex gap-2 mb-3" role="radiogroup" aria-label="Dónde estás contando">
             {(['sala', 'bodega'] as const).map((u) => (

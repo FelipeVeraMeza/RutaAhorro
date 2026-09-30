@@ -4,20 +4,21 @@ import { Icono } from '@/components/Icono';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   formatCLP, toUserMessage, aCSV, nombreArchivoReporte, type ColumnaCSV,
-  periodoAnterior, variacionPct, serieCompleta, diasEnRango,
+  periodoAnterior, variacionPct, serieCompleta, diasEnRango, ventasPorHora, clasificacionABC,
 } from '@rutaahorro/core';
+import { useFormatoFecha } from '@/lib/formatoFecha';
 import { GraficoVentas } from '@/components/GraficoVentas';
 import { Variacion } from '@/components/Tendencia';
 import {
   repoReportes, hoyLocal, hace,
   type RangoFechas, type VentaPorDia, type VentaPorProducto, type VentaPorUsuario,
-  type FilaInventarioValorizado, type ProductoSinMovimiento, type Ajuste,
+  type FilaInventarioValorizado, type ProductoSinMovimiento, type Ajuste, type ControlAnulaciones,
 } from '@/lib/datos/reportes';
 import { ETIQUETA_MOVIMIENTO, type TipoMovimiento } from '@/lib/datos/inventario';
 import { useConfiguracion } from '@/lib/datos/configuracion';
 import { Encabezado } from '@/components/Encabezado';
 
-type Vista = 'ventas' | 'productos' | 'usuarios' | 'inventario' | 'dormido' | 'ajustes';
+type Vista = 'ventas' | 'horas' | 'productos' | 'usuarios' | 'control' | 'inventario' | 'dormido' | 'ajustes';
 
 /**
  * Reportes del negocio (módulo M7).
@@ -33,9 +34,11 @@ type Vista = 'ventas' | 'productos' | 'usuarios' | 'inventario' | 'dormido' | 'a
  * repositorio de productos, porque un dato que no viaja no se puede filtrar
  * mal después.
  */
-export function ReportesClient({ verCostos }: { verCostos: boolean }) {
+const VISTAS: readonly Vista[] = ['ventas', 'horas', 'productos', 'usuarios', 'control', 'inventario', 'dormido', 'ajustes'];
+
+export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean; vistaInicial?: string }) {
   const { zonaHoraria: zona } = useConfiguracion();
-  const [vista, setVista] = useState<Vista>('ventas');
+  const [vista, setVista] = useState<Vista>(VISTAS.includes(vistaInicial as Vista) ? vistaInicial as Vista : 'ventas');
   const [desde, setDesde] = useState(hace(29, zona));
   const [hasta, setHasta] = useState(hoyLocal(zona));
   // Los valores de arriba se calculan con la zona por omisión; cuando llega
@@ -51,6 +54,10 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
   const [inventario, setInventario] = useState<FilaInventarioValorizado[]>([]);
   const [dormido, setDormido] = useState<ProductoSinMovimiento[]>([]);
   const [ajustes, setAjustes] = useState<Ajuste[]>([]);
+  const [porHora, setPorHora] = useState<ReturnType<typeof ventasPorHora>>([]);
+  const [control, setControl] = useState<ControlAnulaciones | null>(null);
+  const [exportandoDetalle, setExportandoDetalle] = useState(false);
+  const { fechaHora } = useFormatoFecha();
 
   const [ordenProductos, setOrdenProductos] = useState<'monto' | 'unidades'>('monto');
   const [cargando, setCargando] = useState(true);
@@ -83,6 +90,8 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
         });
       }
       if (vista === 'productos') setProductos(await repo.ventasPorProducto(rango, verCostos));
+      if (vista === 'horas') setPorHora(ventasPorHora(await repo.ventasCrudas(rango), zona));
+      if (vista === 'control') setControl(await repo.controlAnulaciones(rango));
       if (vista === 'usuarios') setUsuarios(await repo.ventasPorUsuario(rango));
       if (vista === 'inventario') setInventario(await repo.inventarioValorizado());
       if (vista === 'dormido') setDormido(await repo.sinMovimiento(diasDormido));
@@ -92,7 +101,33 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
     } finally {
       setCargando(false);
     }
-  }, [vista, rango, rangoInvertido, verCostos, diasDormido]);
+  }, [vista, rango, rangoInvertido, verCostos, diasDormido, zona]);
+
+  /** RF-M7-16 · una fila por línea vendida: lo que pide el contador. */
+  async function exportarDetalle() {
+    setExportandoDetalle(true);
+    try {
+      const filas = await repoReportes().ventasDetalladas(rango);
+      exportar('Ventas detalladas', filas, [
+        { titulo: 'folio', valor: (f) => f.folio },
+        { titulo: 'fecha', valor: (f) => fechaHora(f.fecha) },
+        { titulo: 'estado', valor: (f) => f.estado },
+        { titulo: 'documento', valor: (f) => f.documento },
+        { titulo: 'vendedor', valor: (f) => f.vendedor ?? '' },
+        { titulo: 'producto', valor: (f) => f.producto },
+        { titulo: 'cantidad', valor: (f) => f.cantidad },
+        { titulo: 'precio_unitario', valor: (f) => f.precioUnitario },
+        { titulo: 'descuento', valor: (f) => f.descuento },
+        { titulo: 'subtotal', valor: (f) => f.subtotal },
+        { titulo: 'total_venta', valor: (f) => f.totalVenta },
+        { titulo: 'medios_de_pago', valor: (f) => f.mediosDePago },
+      ]);
+    } catch (e) {
+      setError(toUserMessage(e));
+    } finally {
+      setExportandoDetalle(false);
+    }
+  }
 
   useEffect(() => { void cargar(); }, [cargar]);
 
@@ -115,6 +150,8 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
   const utilidadTotal = productos.reduce((s, p) => s + (p.utilidad ?? 0), 0);
   const ingresoTotal = productos.reduce((s, p) => s + p.ingresos, 0);
 
+  // RF-M7-14 · A: el 80 % de lo vendido; B: el 15 % siguiente; C: el resto.
+  const claseABC = useMemo(() => new Map(clasificacionABC(productos).map((p) => [p.productoId, p.clase])), [productos]);
   const productosOrdenados = useMemo(
     () => [...productos].sort((a, b) =>
       ordenProductos === 'monto' ? b.ingresos - a.ingresos : b.unidades - a.unidades),
@@ -123,8 +160,10 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
 
   const PESTANAS: Array<[Vista, string]> = [
     ['ventas', 'Ventas'],
+    ['horas', 'Por hora'],
     ['productos', 'Productos'],
     ['usuarios', 'Vendedores'],
+    ['control', 'Anulaciones'],
     ['inventario', 'Inventario'],
     ['dormido', 'Sin vender'],
     ['ajustes', 'Mermas'],
@@ -267,6 +306,9 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
                 })}
               </ul>
               </details>
+              <button onClick={() => void exportarDetalle()} disabled={exportandoDetalle} className="btn btn-secundario w-full mt-3">
+                <Icono nombre="descargar" tamano={18} /> {exportandoDetalle ? 'Preparando…' : 'Exportar ventas línea por línea (para el contador)'}
+              </button>
             </Reporte>
           )}
 
@@ -290,6 +332,11 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
                 ['Margen', ingresoTotal > 0 ? `${Math.round((utilidadTotal / ingresoTotal) * 100)}%` : '—'],
               ] : [['Ingresos', formatCLP(ingresoTotal)]]}
             >
+              <p className="text-xs text-[var(--texto-suave)] mb-2">
+                <span className="insignia insignia-ok">A</span> {[...claseABC.values()].filter((c) => c === 'A').length} productos hacen el 80 % de lo
+                vendido: que nunca falten. <span className="insignia insignia-neutra">C</span> {[...claseABC.values()].filter((c) => c === 'C').length} juntan
+                solo el último 5 %.
+              </p>
               <div className="flex gap-2 mb-2">
                 {(['monto', 'unidades'] as const).map((o) => (
                   <button
@@ -308,7 +355,11 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
                 {productosOrdenados.map((p) => (
                   <li key={p.productoId} className="px-4 py-2.5 flex justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm truncate">{p.nombre}</p>
+                      <p className="text-sm truncate">
+                        <span className={`insignia mr-1.5 ${claseABC.get(p.productoId) === 'A' ? 'insignia-ok' : 'insignia-neutra'}`}
+                              title="A: el 80 % de lo vendido · B: el 15 % siguiente · C: el resto">{claseABC.get(p.productoId)}</span>
+                        {p.nombre}
+                      </p>
                       <p className="text-xs text-[var(--texto-suave)] num">
                         {p.unidades} vendidas
                         {verCostos && typeof p.utilidad === 'number' && p.ingresos > 0 && (
@@ -352,6 +403,100 @@ export function ReportesClient({ verCostos }: { verCostos: boolean }) {
                       </p>
                     </div>
                     <p className="num font-semibold text-sm shrink-0">{formatCLP(u.total)}</p>
+                  </li>
+                ))}
+              </ul>
+            </Reporte>
+          )}
+
+          {/* ---------------------------------------------------- POR HORA */}
+          {vista === 'horas' && (
+            <Reporte
+              vacio={porHora.every((h) => h.ventas === 0)}
+              mensajeVacio="No hay ventas en este período."
+              onExportar={() => exportar('Ventas por hora', porHora, [
+                { titulo: 'hora', valor: (h) => `${String(h.hora).padStart(2, '0')}:00` },
+                { titulo: 'ventas', valor: (h) => h.ventas },
+                { titulo: 'total', valor: (h) => h.total },
+              ])}
+              resumen={(() => {
+                const pico = [...porHora].sort((a, b) => b.total - a.total)[0];
+                return pico ? [['Hora de más venta', `${String(pico.hora).padStart(2, '0')}:00 a ${String(pico.hora + 1).padStart(2, '0')}:00`], ['Vendido en esa hora', formatCLP(pico.total)]] : [];
+              })() as Array<[string, string]>}
+            >
+              {/* RF-M7-13 · para saber cuándo reforzar el mostrador. */}
+              <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden">
+                {porHora.filter((h) => h.ventas > 0).map((h) => {
+                  const maximo = Math.max(...porHora.map((x) => x.total), 1);
+                  return (
+                    <li key={h.hora} className="px-4 py-2">
+                      <div className="flex justify-between gap-2 text-sm">
+                        <span className="num">{String(h.hora).padStart(2, '0')}:00</span>
+                        <span className="num font-semibold">{formatCLP(h.total)}</span>
+                      </div>
+                      <div className="mt-1 h-1.5 rounded-full bg-[var(--fondo)] overflow-hidden">
+                        <div className="h-full bg-marca-500" style={{ width: `${Math.round((h.total / maximo) * 100)}%` }} />
+                      </div>
+                      <p className="text-[11px] text-[var(--texto-suave)] num mt-0.5">{h.ventas} {h.ventas === 1 ? 'venta' : 'ventas'}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Reporte>
+          )}
+
+          {/* ------------------------------------------------ ANULACIONES */}
+          {vista === 'control' && control && (
+            <Reporte
+              vacio={control.anulaciones.length === 0 && control.devoluciones.length === 0}
+              mensajeVacio="No hubo anulaciones ni devoluciones en este período."
+              onExportar={() => exportar('Anulaciones y devoluciones', [
+                ...control.anulaciones.map((a) => ({ tipo: 'anulación', n: a.folio, fecha: a.fecha, monto: a.total, motivo: a.motivo ?? '', quien: a.anulo ?? '', vendio: a.vendio ?? '' })),
+                ...control.devoluciones.map((d) => ({ tipo: 'devolución', n: d.folio ?? d.numero, fecha: d.fecha, monto: d.monto, motivo: d.motivo, quien: d.hizo ?? '', vendio: '' })),
+              ], [
+                { titulo: 'tipo', valor: (f) => f.tipo },
+                { titulo: 'folio', valor: (f) => f.n },
+                { titulo: 'fecha', valor: (f) => fechaHora(f.fecha) },
+                { titulo: 'monto', valor: (f) => f.monto },
+                { titulo: 'motivo', valor: (f) => f.motivo },
+                { titulo: 'hecha_por', valor: (f) => f.quien },
+                { titulo: 'vendida_por', valor: (f) => f.vendio },
+              ])}
+              resumen={[
+                ['Anulado', formatCLP(control.anulaciones.reduce((s, a) => s + a.total, 0))],
+                ['Devuelto', formatCLP(control.devoluciones.reduce((s, d) => s + d.monto, 0))],
+              ]}
+            >
+              {/* RF-M7-15 · muchas anulaciones de la misma persona son la primera señal de un problema de caja. */}
+              {(() => {
+                const porPersona = new Map<string, number>();
+                for (const a of control.anulaciones) porPersona.set(a.anulo ?? 'Sin nombre', (porPersona.get(a.anulo ?? 'Sin nombre') ?? 0) + 1);
+                for (const d of control.devoluciones) porPersona.set(d.hizo ?? 'Sin nombre', (porPersona.get(d.hizo ?? 'Sin nombre') ?? 0) + 1);
+                return (
+                  <p className="text-xs text-[var(--texto-suave)] mb-2">
+                    Por persona: {[...porPersona.entries()].sort((a, b) => b[1] - a[1]).map(([n, c]) => `${n} ${c}`).join(' · ')}
+                  </p>
+                );
+              })()}
+              <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden">
+                {control.anulaciones.map((a) => (
+                  <li key={`a-${a.folio}`} className="px-4 py-2.5 flex justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm"><span className="insignia insignia-alerta">Anulada</span> Folio <span className="num">{a.folio}</span></p>
+                      <p className="text-xs text-[var(--texto-suave)]">{fechaHora(a.fecha)} · anuló {a.anulo ?? '—'}{a.vendio ? ` · vendió ${a.vendio}` : ''}</p>
+                      {a.motivo && <p className="text-xs italic text-[var(--texto-suave)] truncate">{a.motivo}</p>}
+                    </div>
+                    <p className="num font-semibold text-sm shrink-0">{formatCLP(a.total)}</p>
+                  </li>
+                ))}
+                {control.devoluciones.map((d) => (
+                  <li key={`d-${d.numero}`} className="px-4 py-2.5 flex justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm"><span className="insignia insignia-aviso">Devolución</span> N° <span className="num">{d.numero}</span>{d.folio ? ` · venta ${d.folio}` : ''}</p>
+                      <p className="text-xs text-[var(--texto-suave)]">{fechaHora(d.fecha)} · hizo {d.hizo ?? '—'}</p>
+                      <p className="text-xs italic text-[var(--texto-suave)] truncate">{d.motivo}</p>
+                    </div>
+                    <p className="num font-semibold text-sm shrink-0">{formatCLP(d.monto)}</p>
                   </li>
                 ))}
               </ul>

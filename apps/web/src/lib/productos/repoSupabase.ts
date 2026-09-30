@@ -2,6 +2,7 @@
 
 import { normalizeBarcode, codigosDesdeImportacion, toUserMessage, type FilaProducto } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
+import { db, normalizeSearch } from '../offline/db';
 import type {
   FiltroProductos, Producto, ProductoEditable, ProductoNuevo,
   RepositorioProductos, ResultadoLote,
@@ -96,6 +97,16 @@ export const repoSupabase: RepositorioProductos = {
       const { data: porCodigo } = await client.from('product_barcodes')
         .select('product_id').eq('barcode', normalizeBarcode(texto));
       const ids = (porCodigo ?? []).map((c) => c.product_id as string);
+      // RF-M2-20 · "azucar" no encontraba "Azúcar": `ilike` distingue tildes.
+      // El catálogo del celular ya guarda el nombre normalizado (el mismo que
+      // usa el POS): de ahí salen los que coinciden sin tildes.
+      try {
+        const q = normalizeSearch(filtro.busqueda);
+        if (q.length >= 2) {
+          const locales = await db().products.filter((p) => p.nameSearch.includes(q)).limit(100).toArray();
+          for (const p of locales) if (!ids.includes(p.id)) ids.push(p.id);
+        }
+      } catch { /* sin catálogo local, queda la búsqueda de la base */ }
       q = q.or([
         `name.ilike.%${texto}%`,
         `sku.ilike.%${texto}%`,

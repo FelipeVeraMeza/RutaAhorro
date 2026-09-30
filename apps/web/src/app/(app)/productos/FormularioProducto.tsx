@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   formatCLP, formatCantidad, marginPct, isValidEan, normalizeBarcode, toUserMessage,
-  validarMonto, validarCantidad, cantidadConUnidad, diaLocal,
+  validarMonto, validarCantidad, cantidadConUnidad, diaLocal, precioConRedondeo,
 } from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto, type CambioPrecio } from '@/lib/productos';
 import { useFormatoFecha } from '@/lib/formatoFecha';
@@ -381,6 +381,13 @@ export function FormularioProducto({
                 </Campo>
               )}
             </div>
+
+            {/* RF-M2-21 · un precio que no termina en 0 obliga a redondear en efectivo. */}
+            {vPrecio.valido && precioConRedondeo(precioNum) && (
+              <p className="-mt-2 text-xs text-[var(--color-aviso)]">
+                No termina en 0: al pagar en efectivo habrá que redondear (Ley 20.956). Por kilo puede estar bien.
+              </p>
+            )}
 
             {margen !== null && (
               <p className={`text-sm px-3 py-2 rounded-lg ${

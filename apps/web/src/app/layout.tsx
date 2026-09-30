@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { CapturaErrores } from '@/components/CapturaErrores';
 import { RegistrarSW } from '@/components/RegistrarSW';
+import { SCRIPT_PREFERENCIAS } from '@/lib/preferencias';
 
 export const metadata: Metadata = {
   title: {
@@ -33,7 +34,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es-CL">
+    // suppressHydrationWarning: el script de preferencias marca <html> antes
+    // de que React llegue (letra grande), y eso no es un error.
+    <html lang="es-CL" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_PREFERENCIAS }} />
+      </head>
       <body>
         {children}
         <CapturaErrores />

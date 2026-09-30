@@ -19,10 +19,12 @@ import { Timbre } from '@/components/Timbre';
  * docs/18-documentos-tributarios-sii.md.
  */
 export function Comprobante({
-  datos, onCerrar,
+  datos, onCerrar, copia = false,
 }: {
   datos: DatosComprobante;
   onCerrar: () => void;
+  /** Reimpresión desde Ventas (RF-M5-23): el papel dice COPIA y el botón no es "Nueva venta". */
+  copia?: boolean;
 }) {
   const [copiado, setCopiado] = useState(false);
   const texto = comprobanteATexto(datos);
@@ -52,12 +54,12 @@ export function Comprobante({
       className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center"
       role="dialog"
       aria-modal="true"
-      aria-label="Comprobante de la venta"
+      aria-label={copia ? 'Copia del comprobante' : 'Comprobante de la venta'}
     >
       <div className="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl max-h-[92vh] flex flex-col">
         <div className="px-4 pt-4 pb-3 text-center border-b border-[var(--borde)]">
-          <p className="text-3xl mb-1" aria-hidden>✅</p>
-          <h2 className="text-base font-semibold">Venta registrada</h2>
+          {!copia && <p className="text-3xl mb-1" aria-hidden>✅</p>}
+          <h2 className="text-base font-semibold">{copia ? 'Copia del comprobante' : 'Venta registrada'}</h2>
           <p className="text-2xl font-bold mt-1">{formatCLP(datos.total)}</p>
         </div>
 
@@ -69,6 +71,7 @@ export function Comprobante({
                 ningún ticket puede llamarse boleta ni factura. */}
             <div className="text-center mb-2">
               {datos.local && <p className="font-bold text-[13px]">{datos.local}</p>}
+              {copia && <p className="font-bold">*** COPIA ***</p>}
               {encabezadoDocumento(datos).map((linea, i) => (
                 <p key={linea} className={i === 0 ? 'font-bold' : 'text-[11px]'}>{linea}</p>
               ))}
@@ -173,7 +176,7 @@ export function Comprobante({
             onClick={onCerrar}
             className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-bold active:bg-marca-600"
           >
-            Nueva venta
+            {copia ? 'Cerrar' : 'Nueva venta'}
           </button>
         </div>
       </div>

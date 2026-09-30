@@ -1,6 +1,6 @@
 'use client';
 
-import { db, normalizeSearch, asegurarDueno, type LocalProduct } from '../offline/db';
+import { db, normalizeSearch, asegurarDueno, setMeta, type LocalProduct } from '../offline/db';
 import { DEMO_PRODUCTOS } from './data';
 
 /**
@@ -41,6 +41,9 @@ export async function sembrarCatalogoDemo(): Promise<number> {
       DEMO_PRODUCTOS.map((p) => ({ barcode: p.barcode, productId: p.id })),
     );
   });
+  // La misma marca que deja la sincronización real: Vender dice de cuándo son
+  // los precios (RF-M5-29) también en la maqueta.
+  await setMeta('catalog:lastSync', new Date().toISOString());
 
   return productos.length;
 }

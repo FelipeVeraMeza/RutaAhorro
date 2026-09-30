@@ -10,7 +10,7 @@ import { mkdirSync } from 'node:fs';
 const BASE = process.env.RA_BASE ?? 'http://localhost:3000';
 const RUTAS = ['/novedades', '/', '/pos', '/caja', '/precio', '/productos', '/productos/etiquetas', '/productos/ofertas',
   '/productos/importar', '/productos/combos', '/inventario', '/proveedores', '/proveedores/recepcion',
-  '/ventas', '/clientes', '/facturacion', '/reportes', '/usuarios', '/configuracion'];
+  '/ventas', '/clientes', '/facturacion', '/reportes', '/usuarios', '/configuracion', '/bitacora', '/cuenta', '/ayuda'];
 const ROLES = (process.env.ROLES ?? 'admin,supervisor,vendedor,bodega').split(',');
 const ANCHOS = (process.env.ANCHOS ?? '360,1280').split(',').map(Number);
 const SHOTS = process.env.SHOTS;
@@ -36,9 +36,24 @@ for (const rol of ROLES) {
         const chicos = [...document.querySelectorAll('button, a, input, select')]
           .filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.height < 40 && getComputedStyle(el).visibility !== 'hidden'; })
           .map((el) => `${el.tagName.toLowerCase()}:"${(el.innerText || el.getAttribute('aria-label') || el.getAttribute('placeholder') || '').trim().slice(0, 30)}"(${Math.round(el.getBoundingClientRect().height)})`);
+        // RNF-61 · todo control tiene un nombre que un lector de pantalla pueda decir.
+        const nombre = (el) => {
+          const t = (x) => (x ?? '').trim();
+          if (t(el.getAttribute('aria-label'))) return true;
+          const ids = el.getAttribute('aria-labelledby');
+          if (ids && ids.split(/\s+/).some((id) => t(document.getElementById(id)?.textContent))) return true;
+          if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)) {
+            if (el.labels && [...el.labels].some((l) => t(l.textContent))) return true;
+            return Boolean(t(el.getAttribute('title')));
+          }
+          return Boolean(t(el.textContent) || t(el.getAttribute('title')) || el.querySelector('img[alt]:not([alt=""]), svg title, [role=img][aria-label]'));
+        };
+        const sinNombre = [...document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea')]
+          .filter((el) => !el.closest('[aria-hidden=true]') && !nombre(el))
+          .map((el) => el.outerHTML.slice(0, 80));
         const h1 = document.querySelector('main h1')?.textContent?.trim() ?? '';
         const alertas = [...document.querySelectorAll('[role=alert]')].map((a) => a.textContent.trim().slice(0, 120));
-        return { desborde, chicos: chicos.slice(0, 8), h1, alertas };
+        return { desborde, chicos: chicos.slice(0, 8), h1, alertas, sinNombre };
       });
       if (SHOTS) await p.screenshot({ path: `${SHOTS}/${rol}-${ancho}-${ruta.replaceAll('/', '_') || 'inicio'}.png`, fullPage: true });
       informe.push({ rol, ancho, ruta, final, ...medida, errores: [...new Set(errores)] });
@@ -54,5 +69,10 @@ for (const f of informe) {
   if (f.errores.length) marcas.push(`ERR ${f.errores.join(' | ')}`);
   if (f.alertas.length) marcas.push(`ALERTA ${f.alertas.join(' | ')}`);
   if (f.chicos.length && f.ancho === 360) marcas.push(`chicos ${f.chicos.join(' ')}`);
+  if (f.sinNombre.length) marcas.push(`SIN NOMBRE ${f.sinNombre.join(' | ')}`);
   console.log(`${f.rol.padEnd(10)} ${String(f.ancho).padEnd(5)} ${f.ruta.padEnd(24)} h1="${f.h1}" ${marcas.join(' · ')}`);
 }
+const sinNombre = informe.reduce((n, f) => n + f.sinNombre.length, 0);
+const conError = informe.filter((f) => f.errores.length || f.desborde).length;
+console.log(`\nRNF-61 · controles sin nombre accesible: ${sinNombre} · pantallas con error o desborde: ${conError} de ${informe.length}`);
+process.exit(sinNombre || conError ? 1 : 0);

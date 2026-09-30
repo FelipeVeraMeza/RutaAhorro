@@ -16,6 +16,29 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.4.0',
+    fecha: '2026-09-30',
+    titulo: 'Menos errores de tecleo, más control para el dueño',
+    cambios: [
+      { para: 'todos', texto: 'Nueva sección "Mi cuenta": tus datos, tu contraseña, letra más grande y bloqueo de pantalla en este celular.' },
+      { para: 'todos', texto: 'Nueva sección "Ayuda": cómo se hace cada cosa, paso a paso, solo lo que te toca.' },
+      { para: 'todos', texto: 'Al entrar: aviso de mayúsculas activadas y el celular recuerda tu correo.' },
+      { para: 'todos', texto: 'La búsqueda encuentra sin tildes: "azucar" encuentra "Azúcar".' },
+      { para: 'todos', texto: 'Si se publica una versión nueva, aparece "Actualizar".' },
+      { para: 'vendedor', texto: 'Vender: "Deshacer" después de agregar o quitar, productos frecuentes a un toque y de cuándo son los precios.' },
+      { para: 'vendedor', texto: 'Vender pregunta antes de cobrar un monto recibido o una cantidad que parecen error de tecleo.' },
+      { para: 'vendedor', texto: 'Caja: contar por billete al cerrar y un resumen del cierre para imprimir.' },
+      { para: 'vendedor', texto: 'Mis ventas: reimprimir o compartir el comprobante de una venta (sale como COPIA).' },
+      { para: 'admin', texto: 'Productos: ordenar, cambiar el precio tocándolo, "Revisar datos" incompletos y exportar a Excel.' },
+      { para: 'admin', texto: 'Reportes: ventas por hora, productos A-B-C, anulaciones por persona y ventas línea por línea para el contador.' },
+      { para: 'admin', texto: 'Inicio: "Para revisar" (avisos, cajas olvidadas, merma del mes) y el resumen del día por WhatsApp.' },
+      { para: 'admin', texto: 'Nueva sección "Bitácora": quién cambió precios, anuló ventas o ajustó stock.' },
+      { para: 'admin', texto: 'Usuarios marca a quien todavía no cambia la contraseña temporal.' },
+      { para: 'bodega', texto: 'Inventario: "Qué reponer" de la bodega a la sala, hoja para contar en papel y oferta para lo que vence.' },
+      { para: 'bodega', texto: 'Etiquetas: cartel de precio para la góndola. Qué comprar: pedido por proveedor.' },
+    ],
+  },
+  {
     version: '0.3.0',
     fecha: '2026-09-30',
     titulo: 'Más claro, más legible y funciona mejor sin internet',

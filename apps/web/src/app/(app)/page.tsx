@@ -8,7 +8,9 @@ import { diaLocal } from '@rutaahorro/core';
 import { desdeSettings } from '@/lib/datos/configuracionBase';
 import { VentasHoyDemo } from './VentasHoyDemo';
 import { Tendencia } from '@/components/Tendencia';
+import { PanelControl } from '@/components/PanelControl';
 import { Icono, type NombreIcono } from '@/components/Icono';
+import { enlaceResumenDia } from '@/lib/resumenDia';
 
 export const metadata = { title: 'Resumen' };
 
@@ -175,13 +177,22 @@ export default async function DashboardPage() {
       )}
 
       {/* En la maqueta las ventas viven en el navegador y el servidor no las ve */}
-      {DEMO_ACTIVO ? <VentasHoyDemo /> : (
-        <div className="grid grid-cols-3 gap-2">
-          <Tarjeta label="Vendido hoy" value={formatCLP(total)} />
-          <Tarjeta label="Ventas" value={String(cantidadVentas)} />
-          <Tarjeta label="Ticket prom." value={formatCLP(ticket)} />
+      {DEMO_ACTIVO ? <VentasHoyDemo bajoMinimo={bajoStock.length + masBajoStock} enRiesgo={enRiesgo} /> : (
+        <div>
+          <div className="grid grid-cols-3 gap-2">
+            <Tarjeta label="Vendido hoy" value={formatCLP(total)} />
+            <Tarjeta label="Ventas" value={String(cantidadVentas)} />
+            <Tarjeta label="Ticket prom." value={formatCLP(ticket)} />
+          </div>
+          <a href={enlaceResumenDia({ total, ventas: cantidadVentas, ticket, bajoMinimo: bajoStock.length + masBajoStock, enRiesgo })}
+             target="_blank" rel="noopener noreferrer"
+             className="tap inline-flex items-center gap-1.5 text-sm font-medium text-marca-700 underline mt-1">
+            Enviar el resumen de hoy por WhatsApp
+          </a>
         </div>
       )}
+
+      <PanelControl usuarioId={user.id} verCostos={user.role === 'admin'} />
 
       <Tendencia />
 

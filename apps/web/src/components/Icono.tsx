@@ -37,6 +37,9 @@ const TRAZOS = {
   volver: 'm15 18-6-6 6-6',
   copiar: 'r8,8,13,13,2|M4 16V5a2 2 0 0 1 2-2h11',
   subir: 'M12 21V9|m7 14 5-5 5 5|M4 3h16',
+  bitacora: 'M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z|m9 12 2 2 4-4',
+  cuenta: 'c12,8,4|M4 21a8 8 0 0 1 16 0',
+  candado: 'r5,11,14,10,2|M8 11V7a4 4 0 0 1 8 0v4',
 } as const;
 
 export type NombreIcono = keyof typeof TRAZOS;

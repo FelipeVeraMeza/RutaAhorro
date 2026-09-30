@@ -250,6 +250,7 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
           <input
             type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre o SKU…"
+            aria-label="Buscar producto por nombre o SKU"
             className="tap flex-1 px-3 py-2.5 rounded-xl border border-[var(--borde)]"
           />
           <button

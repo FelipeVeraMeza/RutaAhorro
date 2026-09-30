@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { formatCLP, toUserMessage, NOMBRE_DOCUMENTO } from '@rutaahorro/core';
+import { formatCLP, toUserMessage, NOMBRE_DOCUMENTO, type Comprobante as DatosComprobante } from '@rutaahorro/core';
+import { Comprobante } from '../pos/Comprobante';
+import { useConfiguracion } from '@/lib/datos/configuracion';
 import {
   repoVentas, ETIQUETA_PAGO,
   type Venta, type VentaDetallada, type ResumenVentas,
@@ -36,8 +38,32 @@ const MOTIVOS_SUGERIDOS = [
 /** De a cuántas se traen. "Ver más" pide otras tantas. */
 const POR_PAGINA = 50;
 
-export function VentasClient({ puedeAnular, soloPropias = false }: {
+/**
+ * La copia del comprobante de una venta pasada (RF-M5-23), con lo que quedó
+ * guardado en la base: no se recalcula nada, se reproduce.
+ */
+function copiaDe(v: VentaDetallada, local: string, ivaPct: number): DatosComprobante {
+  const lineas = v.lineas.map((l) => ({
+    nombre: l.productoNombre, cantidad: l.cantidad, precioUnitario: l.precioUnitario,
+    descuento: l.descuento, subtotal: l.subtotal,
+  }));
+  return {
+    folio: v.folio, fecha: v.fecha, local, cajero: v.vendedor ?? '',
+    lineas,
+    subtotal: lineas.reduce((s, l) => s + Math.round(l.precioUnitario * l.cantidad), 0),
+    descuento: lineas.reduce((s, l) => s + l.descuento, 0) + v.descuento,
+    total: v.total, iva: v.iva, neto: v.total - v.iva, adicionales: [], totalAdicionales: 0, ivaPct,
+    pagos: v.pagos.map((p) => ({ metodo: p.metodo, monto: p.monto })), vuelto: 0,
+    documento: v.documento,
+    dte: v.documentos.find((d) => d.tipo !== 61) ?? null,
+    esDocumentoTributario: false,
+  };
+}
+
+export function VentasClient({ puedeAnular, soloPropias = false, local = '' }: {
   puedeAnular: boolean;
+  /** Nombre del local, para la copia del comprobante. */
+  local?: string;
   /** Vendedor: la base le entrega solo las suyas; la pantalla lo dice. */
   soloPropias?: boolean;
 }) {
@@ -60,6 +86,8 @@ export function VentasClient({ puedeAnular, soloPropias = false }: {
   const [anulando, setAnulando] = useState<Venta | null>(null);
   const [verDoc, setVerDoc] = useState<RegistroDte | null>(null);
   const [devolviendo, setDevolviendo] = useState<VentaDetallada | null>(null);
+  const [copia, setCopia] = useState<DatosComprobante | null>(null);
+  const { ivaPct } = useConfiguracion();
   const [motivo, setMotivo] = useState('');
   const [enCurso, setEnCurso] = useState(false);
 
@@ -387,6 +415,11 @@ export function VentasClient({ puedeAnular, soloPropias = false }: {
               </div>
             )}
 
+            <button onClick={() => { setCopia(copiaDe(detalle, local, ivaPct)); setDetalle(null); }}
+              className="btn btn-secundario w-full">
+              Reimprimir o compartir el comprobante
+            </button>
+
             {puedeAnular && !detalle.anulada && detalle.lineas.some((l) => l.cantidad > (l.devuelto ?? 0)) && (
               <button
                 onClick={() => setDevolviendo(detalle)}
@@ -411,6 +444,7 @@ export function VentasClient({ puedeAnular, soloPropias = false }: {
       )}
 
       {verDoc && <DocumentoTributario doc={verDoc} onCerrar={() => setVerDoc(null)} />}
+      {copia && <Comprobante datos={copia} copia onCerrar={() => setCopia(null)} />}
 
       {devolviendo && (
         <DevolverVenta

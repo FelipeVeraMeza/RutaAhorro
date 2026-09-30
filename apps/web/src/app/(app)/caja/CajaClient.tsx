@@ -1,9 +1,9 @@
 'use client';
 import { Icono } from '@/components/Icono';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCLP, validarMonto, toUserMessage } from '@rutaahorro/core';
+import { formatCLP, validarMonto, toUserMessage, DENOMINACIONES_CLP, totalArqueo } from '@rutaahorro/core';
 import { supabase } from '@/lib/supabase/client';
 import { Campo } from '@/components/Campo';
 import { Modal } from '@/components/Modal';
@@ -26,6 +26,11 @@ interface CajaAjena {
   sales_total: number | null; expected_amount: number | null;
 }
 
+
+/** AAAA-MM-DD en la zona del navegador. */
+function diaLocal(iso: string): string {
+  return new Date(iso).toLocaleDateString('sv');
+}
 
 export function CajaClient({
   session, resumen, movimientos, historial, cajasAjenas = [], usuarioId = '', nombre = '',
@@ -53,6 +58,15 @@ export function CajaClient({
   const [cerrando, setCerrando] = useState(false);
   const [contado, setContado] = useState('');
   const [nota, setNota] = useState('');
+  // RF-M6-13 · contar por billete y moneda en vez de sumar de cabeza.
+  const [porBillete, setPorBillete] = useState(false);
+  const [billetes, setBilletes] = useState<Record<number, string>>({});
+  // RF-M6-14 · el resumen del cierre que se acaba de hacer, para imprimirlo.
+  // El día de hoy se calcula en el navegador (su zona horaria), después de
+  // montar: en el servidor sería otra zona y no calzaría al hidratar.
+  const [hoyLocal, setHoyLocal] = useState<string | null>(null);
+  useEffect(() => setHoyLocal(diaLocal(new Date().toISOString())), []);
+  const [cierreHecho, setCierreHecho] = useState<{ esperado: number; contado: number; nota: string; resumen: Record<string, unknown>; abierta: string } | null>(null);
 
   const [forzando, setForzando] = useState<CajaAjena | null>(null);
   const [contadoAjeno, setContadoAjeno] = useState('');
@@ -173,6 +187,7 @@ export function CajaClient({
   if (!session) {
     return (
       <div className="px-4 py-6">
+        {cierreHecho && <ResumenCierre c={cierreHecho} onListo={() => setCierreHecho(null)} />}
         <h1 className="text-lg font-semibold mb-1">Abrir caja</h1>
         <p className="text-sm text-[var(--texto-suave)] mb-5">
           Cuenta el efectivo con el que partes y decláralo. Es lo que permite saber al cierre si la caja cuadra.
@@ -259,18 +274,46 @@ export function CajaClient({
 
         <div className="tarjeta p-4 space-y-4">
           <div>
-            <label htmlFor="contado" className="block text-sm font-medium mb-1.5">
-              Efectivo contado
-            </label>
-            <input
-              id="contado"
-              type="text"
-              inputMode="numeric"
-              value={contado}
-              onChange={(e) => setContado(e.target.value)}
-              placeholder="0"
-              className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] text-xl num text-right"
-            />
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <label htmlFor="contado" className="block text-sm font-medium">
+                Efectivo contado
+              </label>
+              <button type="button" onClick={() => setPorBillete((v) => !v)} aria-pressed={porBillete}
+                className="tap -my-2 px-2 text-sm text-marca-700 underline">
+                {porBillete ? 'Escribir el total' : 'Contar por billete'}
+              </button>
+            </div>
+            {porBillete ? (
+              <div className="grid grid-cols-2 gap-2">
+                {DENOMINACIONES_CLP.map((d) => (
+                  <label key={d} className="flex items-center gap-2 rounded-lg border border-[var(--borde)] px-2">
+                    <span className="text-sm num w-16 shrink-0">{d >= 1000 ? 'Billete' : 'Moneda'} {formatCLP(d)}</span>
+                    <span aria-hidden className="text-[var(--texto-suave)]">×</span>
+                    <input inputMode="numeric" value={billetes[d] ?? ''} placeholder="0"
+                      aria-label={`Cuántos de ${formatCLP(d)}`}
+                      onChange={(e) => {
+                        const nuevos = { ...billetes, [d]: e.target.value.replace(/\D/g, '') };
+                        setBilletes(nuevos);
+                        setContado(String(totalArqueo(Object.fromEntries(Object.entries(nuevos).map(([k, v]) => [k, Number(v || 0)])))));
+                      }}
+                      className="tap w-full min-w-0 px-2 rounded-lg num text-right" />
+                  </label>
+                ))}
+                <p className="col-span-2 text-sm text-right">
+                  Total contado: <strong className="num">{formatCLP(cont.valido ? cont.valor : 0)}</strong>
+                </p>
+              </div>
+            ) : (
+              <input
+                id="contado"
+                type="text"
+                inputMode="numeric"
+                value={contado}
+                onChange={(e) => setContado(e.target.value)}
+                placeholder="0"
+                className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] text-xl num text-right"
+              />
+            )}
           </div>
 
           {contado !== '' && cont.error && (
@@ -333,7 +376,10 @@ export function CajaClient({
                         p_notes: nota.trim() || null,
                       }),
                 );
-                if (ok) { setCerrando(false); setContado(''); setNota(''); }
+                if (ok) {
+                  setCierreHecho({ esperado, contado: cont.valor, nota: nota.trim(), resumen: resumen ?? {}, abierta: session.opened_at });
+                  setCerrando(false); setContado(''); setNota(''); setBilletes({});
+                }
               }}
               className="tap flex-1 py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-40"
             >
@@ -347,18 +393,29 @@ export function CajaClient({
 
   // ---------------------------------------------------------------- abierta
   const r = resumen ?? {};
+  const deOtroDia = hoyLocal !== null && diaLocal(session.opened_at) !== hoyLocal;
   return (
     <div className="px-4 py-5 space-y-4">
       <div className="tarjeta p-4">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="font-semibold">Caja abierta</h1>
-            <p className="text-xs text-[var(--texto-suave)]">desde las {hora(session.opened_at)}</p>
+            <p className="text-xs text-[var(--texto-suave)]">
+              {deOtroDia ? `desde el ${fecha(session.opened_at)} a las ${hora(session.opened_at)}` : `desde las ${hora(session.opened_at)}`}
+            </p>
           </div>
           <span className="px-2.5 py-1 rounded-full bg-marca-100 text-marca-900 text-xs font-medium">
             Activa
           </span>
         </div>
+
+        {/* RF-M6-15 · una caja de ayer mezcla dos días de ventas en un solo cierre. */}
+        {deOtroDia && (
+          <p role="status" className="mb-3 rounded-lg bg-amber-50 border border-amber-300 px-3 py-2 text-sm text-amber-950">
+            <strong>Esta caja quedó abierta de otro día.</strong> Ciérrala contando lo que hay ahora y abre una nueva:
+            así las ventas de cada día no se mezclan.
+          </p>
+        )}
 
         <dl className="space-y-1.5 text-sm">
           <Fila label="Efectivo inicial" value={Number(r.opening_amount ?? 0)} />
@@ -620,5 +677,45 @@ function Historial({ cierres }: { cierres: Cierre[] }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * El resumen del cierre que se acaba de hacer (RF-M6-14): para imprimirlo o
+ * guardarlo junto al dinero. Es lo que el dueño pide ver al final del día.
+ */
+function ResumenCierre({ c, onListo }: {
+  c: { esperado: number; contado: number; nota: string; resumen: Record<string, unknown>; abierta: string };
+  onListo: () => void;
+}) {
+  const { fecha, hora } = useFormatoFecha();
+  const dif = c.contado - c.esperado;
+  const medios = Object.entries((c.resumen.by_payment_method ?? {}) as Record<string, number>).filter(([, v]) => Number(v) > 0);
+  return (
+    <section className="tarjeta p-4 mb-4 border-marca-300" aria-labelledby="t-cierre">
+      <h2 id="t-cierre" className="font-semibold mb-2">✓ Caja cerrada</h2>
+      <div id="ticket" className="font-mono text-[12px] leading-5 text-black">
+        <p className="font-bold text-center">RESUMEN DE CIERRE DE CAJA</p>
+        <p>Abierta: {fecha(c.abierta)} {hora(c.abierta)}</p>
+        <p>Cerrada: {fecha(new Date().toISOString())} {hora(new Date().toISOString())}</p>
+        <div className="border-t border-dashed border-black my-1" />
+        <p className="flex justify-between"><span>Ventas</span><span>{String(c.resumen.sales_count ?? 0)}</span></p>
+        <p className="flex justify-between"><span>Total vendido</span><span>{formatCLP(Number(c.resumen.sales_total ?? 0))}</span></p>
+        {medios.map(([m, v]) => (
+          <p key={m} className="flex justify-between"><span>&nbsp;&nbsp;{ETIQUETA_PAGO[m] ?? m}</span><span>{formatCLP(Number(v))}</span></p>
+        ))}
+        <div className="border-t border-dashed border-black my-1" />
+        <p className="flex justify-between"><span>Efectivo inicial</span><span>{formatCLP(Number(c.resumen.opening_amount ?? 0))}</span></p>
+        <p className="flex justify-between"><span>Debía haber</span><span>{formatCLP(c.esperado)}</span></p>
+        <p className="flex justify-between"><span>Contado</span><span>{formatCLP(c.contado)}</span></p>
+        <p className="flex justify-between font-bold"><span>{dif === 0 ? 'Cuadra' : dif < 0 ? 'Faltante' : 'Sobrante'}</span><span>{formatCLP(Math.abs(dif))}</span></p>
+        {c.nota && <p>Nota: {c.nota}</p>}
+        <p className="mt-3">Firma: ________________________</p>
+      </div>
+      <div className="flex gap-2 mt-3 no-imprimir">
+        <button onClick={() => window.print()} className="btn btn-secundario flex-1">Imprimir</button>
+        <button onClick={onListo} className="btn btn-fantasma flex-1">Listo</button>
+      </div>
+    </section>
   );
 }

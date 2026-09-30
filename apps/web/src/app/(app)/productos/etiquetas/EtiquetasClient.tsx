@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  formatCLP, etiquetaSvg, generateInternalBarcode, toUserMessage,
+  formatCLP, etiquetaSvg, generateInternalBarcode, toUserMessage, admiteDecimales,
 } from '@rutaahorro/core';
 import { repoProductos, type Producto } from '@/lib/productos';
 import { Encabezado } from '@/components/Encabezado';
@@ -44,6 +44,8 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
   const [cantidades, setCantidades] = useState<Record<string, number>>({});
   const [tamanio, setTamanio] = useState<TamanioId>('normal');
   const [conPrecio, setConPrecio] = useState(true);
+  // RF-M2-22 · además del código de barras, el cartel de precio de la repisa.
+  const [tipo, setTipo] = useState<'codigo' | 'gondola'>('codigo');
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -67,7 +69,8 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
     return () => clearTimeout(t);
   }, [aviso]);
 
-  const conCodigo = productos.filter((p) => p.codigos.length > 0);
+  // En la góndola va el precio: sirve también para lo que no tiene código.
+  const conCodigo = tipo === 'gondola' ? productos : productos.filter((p) => p.codigos.length > 0);
   const sinCodigo = productos.filter((p) => p.codigos.length === 0);
 
   /**
@@ -120,10 +123,14 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
 
   /** Una entrada por etiqueta a imprimir: un producto repetido N veces. */
   const aImprimir = useMemo(() => {
-    const salida: Array<{ clave: string; svg: string }> = [];
+    const salida: Array<{ clave: string; svg?: string; gondola?: Producto }> = [];
     for (const p of conCodigo) {
       const n = cantidades[p.id] ?? 0;
       if (n <= 0) continue;
+      if (tipo === 'gondola') {
+        for (let i = 0; i < n; i++) salida.push({ clave: `${p.id}-${i}`, gondola: p });
+        continue;
+      }
       const svg = etiquetaSvg(p.codigos[0], {
         anchoModulo: opciones.anchoModulo,
         altoBarras: opciones.altoBarras,
@@ -134,9 +141,9 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
       for (let i = 0; i < n; i++) salida.push({ clave: `${p.id}-${i}`, svg });
     }
     return salida;
-  }, [conCodigo, cantidades, opciones, conPrecio]);
+  }, [conCodigo, cantidades, opciones, conPrecio, tipo]);
 
-  const noImprimibles = conCodigo.filter(
+  const noImprimibles = tipo === 'gondola' ? [] : conCodigo.filter(
     (p) => (cantidades[p.id] ?? 0) > 0 && !etiquetaSvg(p.codigos[0]),
   );
 
@@ -151,7 +158,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
           titulo="Etiquetas"
           icono="precio"
           volver={{ href: '/productos', texto: 'Productos' }}
-          descripcion="Imprime códigos de barra para los productos que no traen uno de fábrica. Se leen con el mismo escáner de Vender."
+          descripcion="Imprime códigos de barra para lo que no trae uno de fábrica, o carteles de precio para la repisa."
         />
       </div>
 
@@ -168,6 +175,18 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
 
       {/* Opciones de impresión */}
       <div className="tarjeta p-4 mb-3 no-imprimir">
+        <p className="text-sm font-medium mb-2">Qué imprimir</p>
+        <div className="grid grid-cols-2 gap-2 mb-3" role="radiogroup" aria-label="Qué imprimir">
+          {([['codigo', 'Código de barras', 'Para pegar en el producto y escanearlo'],
+             ['gondola', 'Precio de góndola', 'Cartel con el precio grande para la repisa']] as const).map(([id, t, d]) => (
+            <button key={id} role="radio" aria-checked={tipo === id} onClick={() => { setTipo(id); setCantidades({}); }}
+              className={`tap text-left px-3 py-2 rounded-lg border ${tipo === id ? 'border-marca-500 bg-marca-50 text-marca-900' : 'border-[var(--borde)]'}`}>
+              <span className="block text-sm font-medium">{t}</span>
+              <span className="block text-xs text-[var(--texto-suave)]">{d}</span>
+            </button>
+          ))}
+        </div>
+        {tipo === 'codigo' && <>
         <p className="text-sm font-medium mb-2">Tamaño de la etiqueta</p>
         <div className="flex gap-2 mb-3">
           {TAMANIOS.map((t) => (
@@ -192,6 +211,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
           />
           Imprimir el precio en la etiqueta
         </label>
+        </>}
       </div>
 
       <input
@@ -202,7 +222,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
       />
 
       {/* Sin código: hay que asignarles uno antes de poder etiquetar */}
-      {!cargando && sinCodigo.length > 0 && (
+      {tipo === 'codigo' && !cargando && sinCodigo.length > 0 && (
         <div className="tarjeta p-4 mb-3 no-imprimir">
           <h2 className="font-semibold text-sm mb-1">
             Sin código de barra · {sinCodigo.length}
@@ -249,7 +269,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
                   <div className="min-w-0">
                     <p className="text-sm truncate">{p.nombre}</p>
                     <p className="text-xs text-[var(--texto-suave)] num">
-                      {p.codigos[0]} · {formatCLP(p.precioVenta)}
+                      {p.codigos[0] ? `${p.codigos[0]} · ` : ''}{formatCLP(p.precioVenta)}
                     </p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -303,11 +323,13 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
           </div>
 
           <div id="hoja-etiquetas" className="flex flex-wrap gap-2 bg-white p-3 rounded-xl border border-[var(--borde)]">
-            {aImprimir.map((e) => (
+            {aImprimir.map((e) => e.gondola ? (
+              <CartelGondola key={e.clave} p={e.gondola} />
+            ) : (
               <div
                 key={e.clave}
                 className="etiqueta"
-                dangerouslySetInnerHTML={{ __html: e.svg }}
+                dangerouslySetInnerHTML={{ __html: e.svg ?? '' }}
               />
             ))}
           </div>
@@ -327,6 +349,32 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Cartel de precio para la repisa (RF-M2-22): 60 × 35 mm, el precio en
+ * grande y, si se vende por kilo o litro, a qué corresponde. En milímetros
+ * para que salga del mismo tamaño en cualquier impresora.
+ */
+function CartelGondola({ p }: { p: Producto }) {
+  const porUnidad = admiteDecimales(p.unidad) ? `el ${p.unidad}` : null;
+  return (
+    <div className="etiqueta" style={{
+      width: '60mm', height: '35mm', border: '0.3mm solid #000', borderRadius: '1.5mm', padding: '2mm',
+      display: 'flex', flexDirection: 'column', justifyContent: 'space-between', color: '#000', background: '#fff',
+      fontFamily: 'system-ui, sans-serif', boxSizing: 'border-box',
+    }}>
+      <p style={{ fontSize: '3.4mm', fontWeight: 600, lineHeight: 1.15, margin: 0, overflow: 'hidden', maxHeight: '8mm' }}>{p.nombre}</p>
+      <p style={{ fontSize: '11mm', fontWeight: 800, lineHeight: 1, margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+        {formatCLP(p.precioVenta)}
+        {porUnidad && <span style={{ fontSize: '3.2mm', fontWeight: 600 }}> {porUnidad}</span>}
+      </p>
+      <p style={{ fontSize: '2.4mm', margin: 0, display: 'flex', justifyContent: 'space-between' }}>
+        <span>{p.codigos[0] ?? p.sku ?? ''}</span>
+        <span>{new Date().toLocaleDateString('es-CL')}</span>
+      </p>
     </div>
   );
 }

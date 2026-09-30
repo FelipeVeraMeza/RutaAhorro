@@ -331,6 +331,65 @@ base y solo se ven parcialmente en Inicio.
 
 ---
 
+### Agregados el 2026-09-30 · 50 requerimientos ([25](25-requerimientos-nuevos.md))
+
+| RF | Ítem | Estado | Falta |
+|---|---|:--:|---|
+| M1-16 | Aviso de Bloq Mayús | ✅ | — |
+| M1-17 | Pausa tras intentos fallidos | ✅ | — |
+| M1-18 | Recordar el correo | ✅ | — |
+| M1-19 | Bloqueo por inactividad | ✅ | — |
+| M1-20 | Contraseña temporal sin cambiar | ✅ | — |
+| M2-16 | Ordenar la lista de productos | ✅ | — |
+| M2-17 | Cambio rápido de precio | ✅ | — |
+| M2-18 | Revisar datos incompletos | ✅ | — |
+| M2-19 | Exportar el catálogo | ✅ | — |
+| M2-20 | Buscar sin tildes | ✅ | — |
+| M2-21 | Aviso de precio sin redondear | ✅ | — |
+| M2-22 | Cartel de precio de góndola | ✅ | — |
+| M3-12 | Pedido por proveedor | ✅ | — |
+| M3-13 | Cuentas por pagar a proveedores | ⬜ | Pendiente: necesita tabla y migración (no se aplican migraciones sin revisar el esquema en Supabase) |
+| M4-21 | Qué reponer en la sala | ✅ | — |
+| M4-22 | Hoja para contar | ✅ | — |
+| M4-23 | Oferta para lo que vence | ✅ | — |
+| M4-24 | Merma del mes | 🟡 | Implementado en PanelControl; sin recorrido propio (los datos de ejemplo no traen ajustes del mes) |
+| M5-23 | Reimprimir comprobante | ✅ | — |
+| M5-24 | Deshacer lo último | ✅ | — |
+| M5-25 | Frecuentes a un toque | ✅ | — |
+| M5-26 | Monto recibido sospechoso | ✅ | — |
+| M5-27 | Cantidad sospechosa | ✅ | — |
+| M5-28 | Redondeo del efectivo (Ley 20.956) | 🟡 | packages/core/test/operacion.test.ts (la regla); el registro necesita migración |
+| M5-29 | Frescura de los precios | ✅ | — |
+| M5-30 | Venta fiada | ⬜ | Pendiente: necesita tablas de cuenta corriente y cambio en fn_register_sale |
+| M6-13 | Arqueo por billete | ✅ | — |
+| M6-14 | Resumen del cierre | 🟡 | Implementado; sin recorrido que cierre una caja de ejemplo |
+| M6-15 | Caja abierta de otro día | 🟡 | Implementado; sin recorrido (la caja de ejemplo siempre es de hoy) |
+| M7-13 | Ventas por hora | ✅ | — |
+| M7-14 | Clasificación ABC | ✅ | — |
+| M7-15 | Control de anulaciones | ✅ | — |
+| M7-16 | Ventas línea por línea | ✅ | — |
+| M7-17 | Resumen del día por WhatsApp | ✅ | — |
+| M8-07 | Panel "Para revisar" | ✅ | — |
+| M8-08 | Cajas olvidadas | 🟡 | Implementado; sin recorrido (los datos de ejemplo no traen cajas viejas) |
+| M9-11 | Leer la bitácora | ✅ | — |
+| M9-12 | Ayuda por rol | ✅ | — |
+| M9-13 | Pie del comprobante | ⬜ | Pendiente: `tenants.settings` tiene lista blanca de claves en la base; agregar una requiere migración |
+| M9-14 | Mi cuenta | ✅ | — |
+| RNF-57 | Cada pantalla dice para qué sirve: título con una bajada de… | ✅ | — |
+| RNF-58 | Ningún diálogo ni botón queda tapado por la barra inferior d… | ✅ | — |
+| RNF-59 | El sistema debe ofrecer letra grande (≈ 19 px de base) por c… | ✅ | — |
+| RNF-60 | La aplicación debe responder con Strict-Transport-Security (… | ✅ | — |
+| RNF-61 | Todo botón, enlace y campo debe tener un nombre accesible (t… | ✅ | — |
+| RNF-62 | El JavaScript de la primera carga de cada pantalla, sumando… | 🟡 | tools/peso-js.mjs: 26/26 bajo 270 kB; 10/26 en la meta de 250 kB |
+| RNF-63 | Una venta a medio armar no debe perderse al recargar la pági… | ✅ | — |
+| RNF-64 | Con letra grande y en un ancho de 320 px (equivalente a 200… | ✅ | — |
+| RNF-65 | Todas las horas se muestran en formato de 24 horas (09:15, 1… | ✅ | — |
+| RNF-66 | Cuando se publica una versión nueva, una pestaña abierta des… | ✅ | — |
+
+**Estado de los agregados: 41 ✅ · 6 🟡 · 3 ⬜**
+
+---
+
 ## 3. Inventario de pantallas
 
 | Pantalla | Estado | Para quién |

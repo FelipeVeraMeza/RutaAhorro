@@ -34,6 +34,11 @@
 | RF-M1-13 | Un mismo usuario debe poder tener sesión abierta en **más de un dispositivo** a la vez (celular y computador). | M |
 | RF-M1-14 | El administrador debe poder ver **qué usuarios están conectados** y cuándo fue su última actividad. | S |
 | RF-M1-15 | El sistema debe registrar cada inicio y cierre de sesión en la bitácora de auditoría. | S |
+| RF-M1-16 | Al escribir una contraseña (ingreso), el sistema debe avisar si las mayúsculas están activadas. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M1-17 | Tras 5 intentos de ingreso fallidos seguidos, el sistema debe exigir una espera creciente (30 s, 60 s… hasta 5 min) antes de permitir otro intento. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M1-18 | El sistema debe ofrecer recordar el correo de quien ingresa en ese celular (activado por omisión, se puede desmarcar). ([25](25-requerimientos-nuevos.md)) | C |
+| RF-M1-19 | El sistema debe poder bloquear la pantalla tras N minutos sin uso (configurable por celular: nunca, 2, 5, 10, 15 o 30), pidiendo la contraseña de quien la estaba usando para seguir. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M1-20 | En Usuarios, el administrador debe ver qué cuentas siguen con la contraseña temporal que él entregó. ([25](25-requerimientos-nuevos.md)) | S |
 
 **Criterios de aceptación clave**
 
@@ -61,6 +66,13 @@
 | RF-M2-13 | El sistema debe permitir generar e imprimir **etiquetas con código de barras** para productos sin código de fábrica. | S |
 | RF-M2-14 | El sistema debe permitir definir productos vendidos por **peso o fracción** (unidad de medida decimal). | C |
 | RF-M2-15 | El sistema debe permitir duplicar un producto para crear variantes rápidamente. | C |
+| RF-M2-16 | La lista de productos debe poder ordenarse por nombre, precio, stock y últimos modificados. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M2-17 | Quien puede editar precios debe poder cambiar el precio de un producto tocándolo en la lista, sin abrir el formulario completo, con aviso si el cambio es de 30 % o más. ([25](25-requerimientos-nuevos.md)) | M |
+| RF-M2-18 | Productos debe decir cuántos productos tienen datos incompletos (sin código, sin costo, sin mínimo, sin categoría, precio que no termina en 0) y permitir filtrarlos. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M2-19 | El catálogo debe poder exportarse a un archivo que abre Excel (CSV), con lo que la pantalla muestra. No disponible para vendedor. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M2-20 | La búsqueda de productos debe encontrar sin importar tildes ni mayúsculas ("azucar" encuentra "Azúcar"). ([25](25-requerimientos-nuevos.md)) | M |
+| RF-M2-21 | Al poner un precio que no termina en 0, el sistema debe advertir que en efectivo habrá que redondear (Ley 20.956). ([25](25-requerimientos-nuevos.md)) | C |
+| RF-M2-22 | Además de la etiqueta de código de barras, el sistema debe imprimir carteles de precio para la repisa (60 × 35 mm, precio grande, oferta si la hay). ([25](25-requerimientos-nuevos.md)) | S |
 
 ---
 
@@ -79,6 +91,8 @@
 | RF-M3-09 | El sistema debe permitir anular una recepción, revirtiendo stock y costo, dejando ambos movimientos en el kardex. | M |
 | RF-M3-10 | El sistema debe mostrar el historial de compras por proveedor y por producto. | S |
 | RF-M3-11 | El sistema debe permitir generar una **orden de compra sugerida** con los productos bajo stock mínimo. | C |
+| RF-M3-12 | "Qué comprar" debe poder armarse para un proveedor: el de la última recepción de cada producto. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M3-13 | El sistema debe registrar las facturas de proveedores con su fecha de vencimiento y avisar las que vencen en los próximos 7 días, permitiendo marcarlas pagadas. ([25](25-requerimientos-nuevos.md)) | S |
 
 ---
 
@@ -106,6 +120,10 @@
 | RF-M4-18 | El sistema debe alertar los lotes **por vencer** (según días configurables por producto) y los **ya vencidos**, indicando el valor en riesgo. | M |
 | RF-M4-19 | El sistema debe permitir dar de baja un lote vencido como **merma**, con motivo obligatorio. | M |
 | RF-M4-20 | Al anular una venta, las unidades deben volver **al lote exacto** del que salieron. | M |
+| RF-M4-21 | Inventario debe sugerir qué pasar de la bodega a la sala: lo vacío o bajo el mínimo en sala que tiene stock en bodega, hasta el doble del mínimo. ([25](25-requerimientos-nuevos.md)) | M |
+| RF-M4-22 | La toma de inventario debe poder imprimirse como hoja para contar a mano, con espacio para anotar. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M4-23 | Un lote por vencer debe poder ponerse en oferta con un toque desde Inventario (admin y supervisor). ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M4-24 | El Inicio del administrador debe mostrar cuánto se perdió este mes por merma y ajustes, con enlace al detalle. ([25](25-requerimientos-nuevos.md)) | S |
 
 ---
 
@@ -135,6 +153,14 @@
 | RF-M5-20 | El sistema debe permitir dejar una venta **en espera** y retomarla (cliente que va a buscar otro producto). | S |
 | RF-M5-21 | La pantalla del POS debe ser operable **con una sola mano** en un celular de 5 pulgadas. | M |
 | RF-M5-22 | El sistema debe permitir ingresar un producto genérico "venta varia" con monto libre. | C |
+| RF-M5-23 | Una venta pasada debe poder reimprimirse o compartirse, marcada como COPIA. ([25](25-requerimientos-nuevos.md)) | M |
+| RF-M5-24 | Después de agregar o quitar un producto en Vender, el sistema debe ofrecer deshacerlo con un toque. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M5-25 | Con el buscador vacío, Vender debe mostrar los productos que más se venden en ese celular. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M5-26 | Si el monto recibido en efectivo parece un error de tecleo (10 veces el total o más, o sobre $500.000), el sistema debe pedir confirmación antes de cobrar. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M5-27 | Una cantidad de 100 unidades o más (50 kg o más) en una línea debe pedir confirmación. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M5-28 | Cuando se paga todo en efectivo, el total a cobrar debe redondearse a la decena (1–5 baja, 6–9 sube) y el comprobante debe mostrar el ajuste. ([25](25-requerimientos-nuevos.md)) | M |
+| RF-M5-29 | Vender debe decir de cuándo son los precios que muestra (última actualización del catálogo en ese celular) y advertir si pasó más de un día. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M5-30 | El sistema debe permitir registrar una venta "fiada" a un cliente con ficha, llevar su saldo y registrar abonos. ([25](25-requerimientos-nuevos.md)) | C |
 
 ---
 
@@ -154,6 +180,9 @@
 | RF-M6-10 | El `admin` debe poder **forzar el cierre** de una caja olvidada, quedando registrado quién la cerró. | M |
 | RF-M6-11 | El sistema debe alertar si una caja lleva más de X horas abierta (configurable). | S |
 | RF-M6-12 | El sistema debe permitir consultar el historial de cierres con sus diferencias. | M |
+| RF-M6-13 | Al cerrar la caja se debe poder contar por billete y moneda ($20.000 a $10) y que el sistema sume. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M6-14 | Al cerrar la caja, el sistema debe mostrar un resumen imprimible (esperado, contado, diferencia, medios de pago, nota). ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M6-15 | Si la caja propia quedó abierta de un día anterior, el sistema debe advertirlo y mostrar la fecha de apertura. ([25](25-requerimientos-nuevos.md)) | S |
 
 ---
 
@@ -173,6 +202,11 @@
 | RF-M7-10 | El sistema debe mostrar un gráfico de evolución de ventas de los últimos 30 días. | S |
 | RF-M7-11 | El sistema debe ofrecer comparación de ventas contra el mismo período anterior. | C |
 | RF-M7-12 | Los reportes deben respetar la matriz de permisos: un `vendedor` solo ve lo propio y nunca ve costos. | M |
+| RF-M7-13 | Reportes debe mostrar cuánto se vende en cada hora del día, en la zona horaria del local. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M7-14 | Reportes por producto debe clasificar en A (80 % de lo vendido), B (15 %) y C (5 %). ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M7-15 | Reportes debe mostrar las anulaciones y devoluciones del período por persona, con monto y motivo. ([25](25-requerimientos-nuevos.md)) | M |
+| RF-M7-16 | Reportes debe exportar las ventas del período una fila por producto vendido (fecha, folio, producto, cantidad, precio, neto, IVA, medio de pago, cajero). ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M7-17 | El Inicio debe permitir enviar el resumen del día (vendido, ventas, ticket, bajo mínimo, en riesgo) por WhatsApp. ([25](25-requerimientos-nuevos.md)) | C |
 
 ---
 
@@ -186,6 +220,8 @@
 | RF-M8-04 | El sistema debe alertar al administrador ante una diferencia de arqueo mayor a un monto configurable. | S |
 | RF-M8-05 | El sistema debe permitir configurar el correo destinatario y activar/desactivar cada tipo de alerta. | M |
 | RF-M8-06 | El sistema debe soportar notificaciones push en el navegador. | C |
+| RF-M8-07 | El Inicio debe juntar lo que requiere atención: avisos del sistema sin ver, cajas abiertas hace muchas horas y merma del mes, con acción para cada uno. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M8-08 | El sistema debe avisar al administrador y al supervisor de las cajas que llevan abiertas más horas de las configuradas para el local, con quién y desde cuándo. ([25](25-requerimientos-nuevos.md)) | S |
 
 ---
 
@@ -203,6 +239,10 @@
 | RF-M9-08 | El sistema debe permitir configurar datos del local: nombre, logo, moneda, zona horaria, % de descuento máximo por rol. | M |
 | RF-M9-09 | El sistema debe mostrar la **versión** desplegada y un historial de cambios (changelog) accesible al usuario. | M |
 | RF-M9-10 | Las actualizaciones deben aplicarse **sin intervención del cliente** y sin pérdida de datos. | M |
+| RF-M9-11 | El administrador debe poder leer y filtrar la bitácora: quién cambió precios, anuló ventas, ajustó stock o tocó cuentas. ([25](25-requerimientos-nuevos.md)) | M |
+| RF-M9-12 | El sistema debe incluir guías cortas "¿cómo se hace?" para cada rol, con el botón que lleva a hacerlo. ([25](25-requerimientos-nuevos.md)) | S |
+| RF-M9-13 | El administrador debe poder configurar el texto del pie del comprobante (despedida, política de cambios, redes). ([25](25-requerimientos-nuevos.md)) | C |
+| RF-M9-14 | Cada persona debe tener una pantalla "Mi cuenta" con sus datos, cambio de contraseña y las preferencias de ese celular. ([25](25-requerimientos-nuevos.md)) | S |
 
 ---
 

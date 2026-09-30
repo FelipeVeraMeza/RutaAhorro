@@ -58,6 +58,7 @@ todo lo demás es tu contrato de implementación.
 | [22 — Tareas pendientes](22-tareas-pendientes.md) | **Backlog operativo**: qué falta, quién lo desbloquea y en qué orden |
 | [23 — Requerimientos del cuestionario](23-requerimientos-cuestionario.md) | **Respuestas 1–42 del cliente** traducidas a requerimientos, con estado, supuestos y lo que hay que volver a preguntar |
 | [24 — Matriz de requerimientos](24-matriz-requerimientos.md) | **Qué está hecho con evidencia**: cada RF y RNF contra la prueba que lo demuestra. Se regenera con `node tools/matriz.mjs` |
+| [25 — Cincuenta requerimientos nuevos](25-requerimientos-nuevos.md) | Los 50 requerimientos que faltaban (40 RF + 10 RNF), con motivo, criterios de aceptación, prioridad y evidencia. Salen de usar el sistema como dueño, QA y vendedor |
 
 ---
 

@@ -8,9 +8,11 @@ import {
   precioParaCliente, describirCliente, type ClienteConPrecios,
   aplicarCombos, lineSubtotal, type Combo,
   formatCLP, formatCantidad, validarCantidadVenta, admiteDecimales, toUserMessage, construirComprobante,
+  cantidadAtipica,
   type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta, type RegistroDte,
 } from '@rutaahorro/core';
-import { findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO } from '@/lib/offline/catalog';
+import { findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO, ultimaActualizacionCatalogo } from '@/lib/offline/catalog';
+import { contarVendidos, masVendidos } from '@/lib/offline/frecuentes';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { sembrarCatalogoDemo } from '@/lib/demo/seed';
 import { enqueueSale, newClientUuid, syncQueue, respuestaDe } from '@/lib/offline/sync';
@@ -25,7 +27,8 @@ import { Escaner } from './Escaner';
 import { Cobro } from './Cobro';
 import { Comprobante } from './Comprobante';
 
-type Aviso = { tipo: 'ok' | 'error' | 'info'; texto: string } | null;
+/** `deshacer`: lo que se acaba de agregar, para sacarlo con un toque (RF-M5-24). */
+type Aviso = { tipo: 'ok' | 'error' | 'info'; texto: string; deshacer?: { productId: string; cantidad: number } } | null;
 
 /** La línea del carrito para un producto del catálogo del celular. */
 function lineaDesde(p: LocalProduct, quantity: number): CartLine {
@@ -129,11 +132,31 @@ export function PosClient({
 
   const totals = cartTotals(lines);
 
-  const notificar = useCallback((tipo: 'ok' | 'error' | 'info', texto: string) => {
-    setAviso({ tipo, texto });
+  const notificar = useCallback((tipo: 'ok' | 'error' | 'info', texto: string, deshacer?: { productId: string; cantidad: number }) => {
+    setAviso({ tipo, texto, deshacer });
     if (avisoTimer.current) window.clearTimeout(avisoTimer.current);
-    avisoTimer.current = window.setTimeout(() => setAviso(null), 3200);
+    // Con "Deshacer" el aviso dura más: hay que alcanzar a tocarlo.
+    avisoTimer.current = window.setTimeout(() => setAviso(null), deshacer ? 5000 : 3200);
   }, []);
+
+  // RF-M5-25 · los más vendidos en este celular, de un toque.
+  const [frecuentes, setFrecuentes] = useState<LocalProduct[]>([]);
+  const cargarFrecuentes = useCallback(async () => {
+    const ids = masVendidos(8);
+    const ps = await Promise.all(ids.map((id) => db().products.get(id).catch(() => undefined)));
+    setFrecuentes(ps.filter((p): p is LocalProduct => Boolean(p?.isActive)));
+  }, []);
+  // RF-M5-29 · de cuándo son los precios que se están viendo.
+  const [actualizado, setActualizado] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    const leer = () => {
+      void ultimaActualizacionCatalogo().then(setActualizado);
+      void cargarFrecuentes();
+    };
+    leer();
+    window.addEventListener(EVENTO_CATALOGO, leer);
+    return () => window.removeEventListener(EVENTO_CATALOGO, leer);
+  }, [cargarFrecuentes]);
 
   useEffect(() => {
     void configuracionLocal().then(setConfig);
@@ -188,9 +211,21 @@ export function PosClient({
       // no lo tenía: es la pista de que falta ingresar una recepción.
       notificar('info', `${p.name}: el sistema tenía ${Math.max(0, p.stock)}. Se vende igual y se avisa al administrador`);
     } else {
-      notificar('ok', `${p.name} · ${formatCLP(p.salePrice)}`);
+      notificar('ok', `${p.name} · ${formatCLP(p.salePrice)}`, { productId: p.id, cantidad: qty });
     }
   }, [notificar, cambiarCarro]);
+
+  /** RF-M5-24 · el último escaneo fue un error: se saca sin buscar la línea. */
+  function deshacer(d: { productId: string; cantidad: number }) {
+    cambiarCarro((prev) => {
+      const l = prev.find((x) => x.productId === d.productId);
+      if (!l) return prev;
+      return l.quantity - d.cantidad > 0
+        ? setQuantity(prev, d.productId, Math.round((l.quantity - d.cantidad) * 1000) / 1000)
+        : removeFromCart(prev, d.productId);
+    });
+    setAviso(null);
+  }
 
   /** La venta a medio armar vuelve al entrar (sessionStorage, más abajo). */
   const restauradoRef = useRef(false);
@@ -418,6 +453,8 @@ export function PosClient({
     // La venta se confirma de inmediato en pantalla: el cajero no espera a la
     // red ni siquiera cuando hay buena señal (ADR-005). El comprobante que
     // acaba de aparecer ya es el aviso; un toast encima sería ruido.
+    contarVendidos(lines.map((l) => l.productId));
+    void cargarFrecuentes();
     setLines([]);
     // La siguiente venta parte sin cliente: si no, el próximo que pase por
     // la caja pagaría a precio mayorista.
@@ -465,7 +502,14 @@ export function PosClient({
                 : 'bg-blue-50 text-blue-900'
           }`}
         >
-          {aviso.texto}
+          <span className="flex items-center justify-between gap-2">
+            <span>{aviso.texto}</span>
+            {aviso.deshacer && (
+              <button onClick={() => deshacer(aviso.deshacer!)} className="tap -my-2 -mr-2 px-2 font-semibold underline shrink-0">
+                Deshacer
+              </button>
+            )}
+          </span>
         </div>
       )}
 
@@ -495,6 +539,21 @@ export function PosClient({
           <p className="text-xs text-[var(--color-aviso)] mt-1.5">
             El catálogo no está descargado en este dispositivo. Conéctate a internet una vez para bajarlo.
           </p>
+        )}
+        {catalogReady && actualizado !== undefined && <Frescura desde={actualizado} />}
+        {query.trim() === '' && frecuentes.length > 0 && (
+          <div className="mt-2">
+            <p className="text-[11px] text-[var(--texto-suave)] mb-1">Frecuentes en este celular</p>
+            <div className="flex gap-2 overflow-x-auto sin-scrollbar pb-1">
+              {frecuentes.map((p) => (
+                <button key={p.id} onClick={() => agregar(p)}
+                  className="tap shrink-0 max-w-[10rem] px-3 py-1.5 rounded-xl border border-[var(--borde)] bg-white text-left">
+                  <span className="block text-sm font-medium truncate">{p.name}</span>
+                  <span className="block text-xs text-[var(--texto-suave)] num">{formatCLP(p.salePrice)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {query.trim().length >= 2 && results.length === 0 && catalogReady !== false && (
           /^[0-9A-Za-z-]{4,40}$/.test(query.trim()) && /\d{4,}/.test(query.trim()) ? (
@@ -738,6 +797,11 @@ function CantidadDeLinea({ linea, onCambiar, onError }: {
         : `${linea.name}: ${v.error}`);
       return;
     }
+    // RF-M5-27 · 120 panes o 50 kg casi siempre es un dedo de más.
+    if (v.valor !== linea.quantity && cantidadAtipica(v.valor, linea.unidad)
+        && !window.confirm(`¿${formatCantidad(v.valor)} ${admiteDecimales(linea.unidad) ? linea.unidad : 'unidades'} de ${linea.name}? Es una cantidad poco común.`)) {
+      return;
+    }
     if (v.valor !== linea.quantity) onCambiar(v.valor);
   }
   return (
@@ -840,5 +904,23 @@ function ElegirCliente({ onElegir, onCerrar }: {
         </button>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * De cuándo son los precios del celular (RF-M5-29). Con más de un día, en
+ * color de aviso: vendiendo sin internet, un precio viejo se cobra mal.
+ */
+function Frescura({ desde }: { desde: string | null }) {
+  const [ahora, setAhora] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 60_000); return () => clearInterval(t); }, []);
+  if (!desde) return null;
+  const min = Math.max(0, Math.floor((ahora - new Date(desde).getTime()) / 60_000));
+  const texto = min < 2 ? 'recién' : min < 60 ? `hace ${min} min` : min < 1440 ? `hace ${Math.floor(min / 60)} h` : `hace ${Math.floor(min / 1440)} días`;
+  const viejo = min >= 1440;
+  return (
+    <p className={`text-[11px] mt-1 ${viejo ? 'text-[var(--color-aviso)] font-medium' : 'text-[var(--texto-suave)]'}`}>
+      Precios actualizados {texto}{viejo ? ' · conéctate a internet para traer los de hoy' : ''}
+    </p>
   );
 }

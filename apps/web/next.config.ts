@@ -75,6 +75,11 @@ const config: NextConfig = {
           // La cámara se usa para escanear códigos: hay que permitirla
           // explícitamente en el propio origen (RF-M5-01).
           { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' },
+          // RNF-60 · solo por HTTPS de aquí en adelante (el navegador lo
+          // recuerda un año), y ninguna ventana de otro sitio puede tomar
+          // control de esta.
+          { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
         ],
       },
     ];

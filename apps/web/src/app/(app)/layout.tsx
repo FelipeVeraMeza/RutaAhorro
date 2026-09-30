@@ -10,6 +10,7 @@ import { NOMBRE_ROL, LEMA_ROL } from '@/lib/navegacion';
 import { Icono } from '@/components/Icono';
 import { BotonSalir } from '@/components/BotonSalir';
 import { versionCompleta } from '@/lib/novedades';
+import { BloqueoInactividad } from '@/components/BloqueoInactividad';
 
 /**
  * Estructura de la aplicación.
@@ -85,9 +86,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </p>
             </div>
             <div className="flex items-center shrink-0">
-              <a href="/clave" className="tap inline-grid place-items-center text-[var(--texto-suave)]"
-                 title="Cambiar mi contraseña">
-                <Icono nombre="clave" titulo="Cambiar mi contraseña" />
+              <a href="/cuenta" className="tap inline-grid place-items-center text-[var(--texto-suave)]"
+                 title="Mi cuenta">
+                <Icono nombre="cuenta" titulo="Mi cuenta" />
               </a>
               <BotonSalir className="tap inline-flex items-center gap-1.5 px-2 text-sm text-[var(--texto-suave)]">
                 <Icono nombre="salir" tamano={18} /> Salir
@@ -104,6 +105,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
       <BottomNav role={user.role} />
       <SyncCatalogo />
+      <BloqueoInactividad correo={user.email} nombre={user.fullName} demo={DEMO_ACTIVO} />
     </div>
   );
 }

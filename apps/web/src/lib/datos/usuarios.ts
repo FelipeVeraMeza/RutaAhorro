@@ -24,6 +24,8 @@ export interface Usuario {
   activo: boolean;
   ultimaActividad: string | null;
   descuentoMax: number;
+  /** RF-M1-20 · entró (o todavía no) con la contraseña temporal y no la ha cambiado. */
+  claveTemporal?: boolean;
 }
 
 export interface RepositorioUsuarios {
@@ -98,6 +100,7 @@ const repoLocal: RepositorioUsuarios = {
       ultimaActividad: null,          // aún no ha entrado
       descuentoMax: maxDiscountFor(rol as UserRole),
       clave,
+      claveTemporal: true,
     });
     await guardarLocal(us);
   },
@@ -107,6 +110,7 @@ const repoLocal: RepositorioUsuarios = {
     const u = us.find((x) => x.id === id);
     if (!u) throw new Error('NO_ENCONTRADO');
     u.clave = clave;
+    u.claveTemporal = true;
     await guardarLocal(us);
   },
 
@@ -143,6 +147,11 @@ const repoSupabase: RepositorioUsuarios = {
       .select('id, full_name, email, role, is_active, last_seen_at, max_discount_pct')
       .order('full_name');
     if (error) throw error;
+    // Si la ruta falla (sin llave de servicio, sin permiso) la lista sale igual, sin la marca.
+    const temporales = new Set<string>(await fetch('/api/usuarios/estado')
+      .then((r) => (r.ok ? r.json() : { claveTemporal: [] }))
+      .then((j: { claveTemporal?: string[] }) => j.claveTemporal ?? [])
+      .catch(() => []));
     return (data ?? []).map((p) => ({
       id: p.id as string,
       nombre: (p.full_name as string) || 'Sin nombre',
@@ -151,6 +160,7 @@ const repoSupabase: RepositorioUsuarios = {
       activo: Boolean(p.is_active),
       ultimaActividad: p.last_seen_at as string | null,
       descuentoMax: Number(p.max_discount_pct ?? 0),
+      claveTemporal: temporales.has(p.id as string),
     }));
   },
 

@@ -82,7 +82,26 @@ export interface Ajuste {
   usuario: string | null;
 }
 
+/** Una venta, lo mínimo para agruparla por hora (RF-M7-13). */
+export interface VentaCruda { fecha: string; total: number }
+
+/** RF-M7-15 · anulaciones y devoluciones del período, con quién las hizo. */
+export interface ControlAnulaciones {
+  anulaciones: Array<{ folio: number; fecha: string; total: number; motivo: string | null; anulo: string | null; vendio: string | null }>;
+  devoluciones: Array<{ numero: number; fecha: string; monto: number; motivo: string; hizo: string | null; folio: number | null }>;
+}
+
+/** RF-M7-16 · una fila por línea vendida, para el contador. */
+export interface LineaVendida {
+  folio: number; fecha: string; estado: string; documento: string; vendedor: string | null;
+  producto: string; cantidad: number; precioUnitario: number; descuento: number; subtotal: number;
+  totalVenta: number; mediosDePago: string;
+}
+
 export interface RepositorioReportes {
+  ventasCrudas(rango: RangoFechas): Promise<VentaCruda[]>;
+  controlAnulaciones(rango: RangoFechas): Promise<ControlAnulaciones>;
+  ventasDetalladas(rango: RangoFechas): Promise<LineaVendida[]>;
   ventasPorDia(rango: RangoFechas): Promise<VentaPorDia[]>;
   ventasPorProducto(rango: RangoFechas, verCostos: boolean): Promise<VentaPorProducto[]>;
   ventasPorUsuario(rango: RangoFechas): Promise<VentaPorUsuario[]>;
@@ -134,6 +153,41 @@ function semillaDiaria(rango: RangoFechas): VentaPorDia[] {
 }
 
 const repoLocal: RepositorioReportes = {
+  async ventasCrudas(rango) {
+    const { repoVentas } = await import('./ventas');
+    const v = await repoVentas().listar({ ...rango, incluirAnuladas: false, limite: 100_000 });
+    return v.map((x) => ({ fecha: x.fecha, total: x.total }));
+  },
+
+  async controlAnulaciones(rango) {
+    const { repoVentas } = await import('./ventas');
+    const v = await repoVentas().listar({ ...rango, incluirAnuladas: true, limite: 100_000 });
+    return {
+      anulaciones: v.filter((x) => x.anulada).map((x) => ({
+        folio: x.folio, fecha: x.anuladaEn ?? x.fecha, total: x.total, motivo: x.motivoAnulacion, anulo: x.anuladaPor, vendio: x.vendedor,
+      })),
+      devoluciones: [],
+    };
+  },
+
+  async ventasDetalladas(rango) {
+    const { repoVentas } = await import('./ventas');
+    const v = await repoVentas().listar({ ...rango, incluirAnuladas: true, limite: 100_000 });
+    const filas: LineaVendida[] = [];
+    for (const x of v) {
+      const d = await repoVentas().detalle(x.id);
+      for (const l of d?.lineas ?? []) {
+        filas.push({
+          folio: x.folio, fecha: x.fecha, estado: x.anulada ? 'anulada' : 'completada', documento: x.documento.tipo,
+          vendedor: x.vendedor, producto: l.productoNombre, cantidad: l.cantidad, precioUnitario: l.precioUnitario,
+          descuento: l.descuento, subtotal: l.subtotal, totalVenta: x.total,
+          mediosDePago: (d?.pagos ?? []).map((p) => `${p.metodo} ${p.monto}`).join(' + '),
+        });
+      }
+    }
+    return filas;
+  },
+
   async ventasPorDia(rango) {
     // Hoy sale de las ventas hechas de verdad en este navegador, igual que
     // "Vendido hoy" del Inicio: si no, el gráfico y la tarjeta no cuadraban.
@@ -233,7 +287,78 @@ const repoLocal: RepositorioReportes = {
 // Supabase
 // ---------------------------------------------------------------------------
 
+/** Los bordes del rango en la zona del local, como hace Ventas. */
+async function bordes({ desde, hasta }: RangoFechas) {
+  const { configuracionLocal } = await import('./configuracion');
+  const { rangoDeDias } = await import('@rutaahorro/core');
+  return rangoDeDias(desde, hasta, (await configuracionLocal()).zonaHoraria);
+}
+
+/** Todas las filas de una consulta, de a 1.000 (el tope de la API). */
+async function todas<T>(pedir: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+  const salida: T[] = [];
+  for (let desde = 0; desde < 50_000; desde += 1000) {
+    const { data, error } = await pedir(desde, desde + 999);
+    if (error) throw error;
+    salida.push(...(data ?? []));
+    if ((data ?? []).length < 1000) break;
+  }
+  return salida;
+}
+
+const nombre = (x: unknown) => ((x as { full_name?: string } | null)?.full_name) ?? null;
+
 const repoSupabase: RepositorioReportes = {
+  async ventasCrudas(rango) {
+    const r = await bordes(rango);
+    const filas = await todas((a, b) => supabase().from('sales').select('sold_at, total')
+      .eq('status', 'completada').gte('sold_at', r.desde).lt('sold_at', r.hasta).order('sold_at').range(a, b));
+    return filas.map((f) => ({ fecha: f.sold_at as string, total: Number(f.total ?? 0) }));
+  },
+
+  async controlAnulaciones(rango) {
+    const r = await bordes(rango);
+    const [anuladas, devs] = await Promise.all([
+      todas((a, b) => supabase().from('sales')
+        .select('folio, voided_at, total, void_reason, anulo:profiles!sales_voided_by_fkey(full_name), vendio:profiles!sales_sold_by_fkey(full_name)')
+        .eq('status', 'anulada').gte('voided_at', r.desde).lt('voided_at', r.hasta).order('voided_at', { ascending: false }).range(a, b)),
+      todas((a, b) => supabase().from('sale_returns')
+        .select('numero, created_at, monto, motivo, hizo:profiles!sale_returns_created_by_fkey(full_name), venta:sales(folio)')
+        .gte('created_at', r.desde).lt('created_at', r.hasta).order('created_at', { ascending: false }).range(a, b)),
+    ]);
+    return {
+      anulaciones: anuladas.map((f) => ({
+        folio: Number(f.folio), fecha: f.voided_at as string, total: Number(f.total ?? 0),
+        motivo: (f.void_reason as string | null) ?? null, anulo: nombre(f.anulo), vendio: nombre(f.vendio),
+      })),
+      devoluciones: devs.map((f) => ({
+        numero: Number(f.numero), fecha: f.created_at as string, monto: Number(f.monto ?? 0), motivo: f.motivo as string,
+        hizo: nombre(f.hizo), folio: ((f.venta as { folio?: number } | null)?.folio) ?? null,
+      })),
+    };
+  },
+
+  async ventasDetalladas(rango) {
+    const r = await bordes(rango);
+    const ventas = await todas((a, b) => supabase().from('sales')
+      .select('folio, sold_at, total, status, document_type, vendedor:profiles!sales_sold_by_fkey(full_name), sale_items(product_name, quantity, unit_price, discount_amount, subtotal), sale_payments(method, amount)')
+      .gte('sold_at', r.desde).lt('sold_at', r.hasta).order('sold_at').range(a, b));
+    const filas: LineaVendida[] = [];
+    for (const v of ventas) {
+      const medios = ((v.sale_payments ?? []) as Array<{ method: string; amount: number }>).map((p) => `${p.method} ${p.amount}`).join(' + ');
+      for (const l of (v.sale_items ?? []) as Array<Record<string, unknown>>) {
+        filas.push({
+          folio: Number(v.folio), fecha: v.sold_at as string, estado: v.status as string,
+          documento: (v.document_type as string | null) ?? 'boleta', vendedor: nombre(v.vendedor),
+          producto: (l.product_name as string) ?? 'Producto', cantidad: Number(l.quantity ?? 0),
+          precioUnitario: Number(l.unit_price ?? 0), descuento: Number(l.discount_amount ?? 0),
+          subtotal: Number(l.subtotal ?? 0), totalVenta: Number(v.total ?? 0), mediosDePago: medios,
+        });
+      }
+    }
+    return filas;
+  },
+
   async ventasPorDia({ desde, hasta }) {
     const { data, error } = await supabase()
       .from('v_sales_daily')
