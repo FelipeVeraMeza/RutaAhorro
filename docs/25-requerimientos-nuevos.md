@@ -20,15 +20,18 @@ evidencia**. Se agregaron también, en una línea, a 03 y 04, para que la
 
 | Estado | Cantidad |
 |---|:-:|
-| ✅ Hecho y verificado por una prueba o recorrido | 41 |
-| 🟡 Hecho en parte, o hecho sin prueba que lo demuestre | 6 |
-| ⬜ Pendiente (necesita cambios en la base) | 3 |
+| ✅ Hecho y verificado por una prueba o recorrido | 48 |
+| 🟡 Hecho en parte, o hecho sin prueba que lo demuestre | 2 |
+| ⬜ Pendiente (necesita cambios en la base) | 0 |
 | **Total** | **50** |
 
-Los pendientes lo están por una razón concreta: requieren **migraciones** en
-Supabase (tablas nuevas o cambios en `fn_register_sale`), y en esta ronda no se
-aplican migraciones sin revisar el esquema en vivo. Quedan especificados para
-hacerlos en la próxima ronda con base de datos.
+**Actualización 2026-10-01 (ronda 4, v0.5.0).** Los tres pendientes se hicieron
+con dos migraciones nuevas, **0029** (redondeo, fiado y pie del comprobante) y
+**0030** (cuentas por pagar y bodega sin precio), probadas contra un PostgreSQL
+real (`npm run db:test`, 172/172) y en el navegador (`tools/ui/demo-ronda4.mjs`,
+44/44). **No están aplicadas en Supabase:** se aplican después de revisar el
+esquema en vivo (ver HANDOFF). Siguen en 🟡: RF-M5-28 (falta que el contador
+confirme cómo se refleja en la boleta) y RNF-62 (17 de 27 pantallas en la meta).
 
 ### Cómo se verifica
 
@@ -58,11 +61,11 @@ hacerlos en la próxima ronda con base de datos.
 | RF-M2-21 | Aviso de precio sin redondear | Could | ✅ |
 | RF-M2-22 | Cartel de precio de góndola | Should | ✅ |
 | RF-M3-12 | Pedido por proveedor | Should | ✅ |
-| RF-M3-13 | Cuentas por pagar a proveedores | Should | ⬜ |
+| RF-M3-13 | Cuentas por pagar a proveedores | Should | ✅ |
 | RF-M4-21 | Qué reponer en la sala | Must | ✅ |
 | RF-M4-22 | Hoja para contar | Should | ✅ |
 | RF-M4-23 | Oferta para lo que vence | Should | ✅ |
-| RF-M4-24 | Merma del mes | Should | 🟡 |
+| RF-M4-24 | Merma del mes | Should | ✅ |
 | RF-M5-23 | Reimprimir comprobante | Must | ✅ |
 | RF-M5-24 | Deshacer lo último | Should | ✅ |
 | RF-M5-25 | Frecuentes a un toque | Should | ✅ |
@@ -70,20 +73,20 @@ hacerlos en la próxima ronda con base de datos.
 | RF-M5-27 | Cantidad sospechosa | Should | ✅ |
 | RF-M5-28 | Redondeo del efectivo (Ley 20.956) | Must | 🟡 |
 | RF-M5-29 | Frescura de los precios | Should | ✅ |
-| RF-M5-30 | Venta fiada | Could | ⬜ |
+| RF-M5-30 | Venta fiada | Could | ✅ |
 | RF-M6-13 | Arqueo por billete | Should | ✅ |
-| RF-M6-14 | Resumen del cierre | Should | 🟡 |
-| RF-M6-15 | Caja abierta de otro día | Should | 🟡 |
+| RF-M6-14 | Resumen del cierre | Should | ✅ |
+| RF-M6-15 | Caja abierta de otro día | Should | ✅ |
 | RF-M7-13 | Ventas por hora | Should | ✅ |
 | RF-M7-14 | Clasificación ABC | Should | ✅ |
 | RF-M7-15 | Control de anulaciones | Must | ✅ |
 | RF-M7-16 | Ventas línea por línea | Should | ✅ |
 | RF-M7-17 | Resumen del día por WhatsApp | Could | ✅ |
 | RF-M8-07 | Panel "Para revisar" | Should | ✅ |
-| RF-M8-08 | Cajas olvidadas | Should | 🟡 |
+| RF-M8-08 | Cajas olvidadas | Should | ✅ |
 | RF-M9-11 | Leer la bitácora | Must | ✅ |
 | RF-M9-12 | Ayuda por rol | Should | ✅ |
-| RF-M9-13 | Pie del comprobante | Could | ⬜ |
+| RF-M9-13 | Pie del comprobante | Could | ✅ |
 | RF-M9-14 | Mi cuenta | Should | ✅ |
 | RNF-57 | Cada pantalla dice para qué sirve: título con una bajada de una frase,… | Must | ✅ |
 | RNF-58 | Ningún diálogo ni botón queda tapado por la barra inferior del celular… | Must | ✅ |
@@ -282,7 +285,7 @@ hacerlos en la próxima ronda con base de datos.
 - Una lista de facturas por pagar, ordenada por vencimiento, con total adeudado por proveedor.
 - Aviso en Inicio de lo que vence esta semana.
 
-**Prioridad:** Should · **Estado:** ⬜ · **Evidencia:** Pendiente: necesita tabla y migración (no se aplican migraciones sin revisar el esquema en Supabase)
+**Prioridad:** Should · **Estado:** ✅ · **Evidencia:** migración 0030 · tools/pg-test/cuentas-por-pagar.test.mjs (registrar desde la recepción, no duplicar, pagar una vez, pagar con efectivo de la caja = egreso, anular solo admin, bodega registra pero no lee) · tools/ui/demo-ronda4.mjs (pestaña Por pagar, orden por vencimiento, aviso de 7 días en el Inicio, vencimiento al recibir). Pagar con "efectivo de la caja" sale como egreso de la caja de quien paga.
 
 ### M4 · Inventario
 
@@ -333,7 +336,7 @@ hacerlos en la próxima ronda con base de datos.
 - "Pérdidas por merma y ajustes este mes" con monto y cantidad de movimientos.
 - Solo lo ve quien ve costos.
 
-**Prioridad:** Should · **Estado:** 🟡 · **Evidencia:** Implementado en PanelControl; sin recorrido propio (los datos de ejemplo no traen ajustes del mes)
+**Prioridad:** Should · **Estado:** ✅ · **Evidencia:** tools/ui/demo-ronda4.mjs: registra una merma en Inventario y el Inicio muestra "Pérdidas por merma y ajustes este mes" con enlace a Reportes; el supervisor no la ve.
 
 ### M5 · Punto de venta
 
@@ -406,7 +409,7 @@ hacerlos en la próxima ronda con base de datos.
 - La regla está en core con pruebas.
 - Falta: registrar el ajuste en la venta (fn_register_sale y el cuadre de caja) y mostrarlo en el comprobante.
 
-**Prioridad:** Must · **Estado:** 🟡 · **Evidencia:** packages/core/test/operacion.test.ts (la regla); el registro necesita migración
+**Prioridad:** Must · **Estado:** 🟡 · **Evidencia:** hecho y probado — migración 0029 (`fn_redondeo_efectivo`, `sales.ajuste_redondeo`, `fn_register_sale` acepta el total redondeado si todo es efectivo, resumen de caja con el ajuste) · tools/pg-test/redondeo-fiado.test.mjs (la regla de la base = la de core para 0..120; la caja espera lo que entró al cajón; con tarjeta o mezclado no se redondea; el monto exacto de la cola vieja se sigue aceptando) · packages/core/test/comprobante.test.ts · tools/ui/demo-ronda4.mjs (cobro, vuelto, comprobante, copia y caja). **Queda en 🟡** porque falta que el contador confirme el diseño para la boleta: hoy la boleta va por el total exacto (el IVA no cambia) y el redondeo solo afecta el pago en efectivo.
 
 #### RF-M5-29 · Frescura de los precios
 
@@ -431,7 +434,7 @@ hacerlos en la próxima ronda con base de datos.
 - Ficha del cliente con saldo, compras y abonos.
 - El fiado no entra al efectivo esperado de la caja.
 
-**Prioridad:** Could · **Estado:** ⬜ · **Evidencia:** Pendiente: necesita tablas de cuenta corriente y cambio en fn_register_sale
+**Prioridad:** Could · **Estado:** ✅ · **Evidencia:** migración 0029 (`clientes.credito_tope`, `cuenta_cliente_movimientos` inmutable, medio de pago `fiado`, `fn_abonar_cuenta`, `fn_tope_credito`, anular o devolver una venta fiada rebaja la deuda) · tools/pg-test/redondeo-fiado.test.mjs (sin cliente o sobre el tope se rechaza, dos cajas a la vez no pasan juntas el tope, lo fiado no entra al esperado, el abono en efectivo sí) · tools/ui/demo-ronda4.mjs (pantalla Fiado, cobro fiado, tope, abono, caja). Fiar exige conexión (la cuenta se revisa en la base).
 
 ### M6 · Caja
 
@@ -457,7 +460,7 @@ hacerlos en la próxima ronda con base de datos.
 - Tras cerrar aparece el resumen con "Imprimir".
 - Coincide con lo que quedó registrado en la base.
 
-**Prioridad:** Should · **Estado:** 🟡 · **Evidencia:** Implementado; sin recorrido que cierre una caja de ejemplo
+**Prioridad:** Should · **Estado:** ✅ · **Evidencia:** tools/ui/demo-ronda4.mjs: cierra una caja con faltante y el resumen trae "Imprimir", lo esperado, lo contado y el faltante iguales a lo registrado.
 
 #### RF-M6-15 · Caja abierta de otro día
 
@@ -468,7 +471,7 @@ hacerlos en la próxima ronda con base de datos.
 **Criterios de aceptación.**
 - "Esta caja quedó abierta de otro día" con la fecha de apertura y qué hacer.
 
-**Prioridad:** Should · **Estado:** 🟡 · **Evidencia:** Implementado; sin recorrido (la caja de ejemplo siempre es de hoy)
+**Prioridad:** Should · **Estado:** ✅ · **Evidencia:** tools/ui/demo-ronda4.mjs: con una caja abierta hace 30 h, Caja muestra "Esta caja quedó abierta de otro día".
 
 ### M7 · Reportes
 
@@ -553,7 +556,7 @@ hacerlos en la próxima ronda con base de datos.
 - Aparece en "Para revisar" como "Cajas abiertas hace más de N h", con el nombre y la hora de apertura.
 - N sale de la configuración del local (horas de aviso de caja).
 
-**Prioridad:** Should · **Estado:** 🟡 · **Evidencia:** Implementado; sin recorrido (los datos de ejemplo no traen cajas viejas)
+**Prioridad:** Should · **Estado:** ✅ · **Evidencia:** tools/ui/demo-ronda4.mjs: con una caja abierta hace 30 h y aviso a las 12 h, el Inicio la lista. En la maqueta se mira la caja propia (vive en una cookie); en producción se lee `v_cash_sessions_summary` (sin recorrido contra Supabase).
 
 ### M9 · Administración
 
@@ -591,7 +594,7 @@ hacerlos en la próxima ronda con base de datos.
 - Campo en Configuración con límite de caracteres.
 - Aparece en el comprobante y en las copias.
 
-**Prioridad:** Could · **Estado:** ⬜ · **Evidencia:** Pendiente: `tenants.settings` tiene lista blanca de claves en la base; agregar una requiere migración
+**Prioridad:** Could · **Estado:** ✅ · **Evidencia:** migración 0029 (`comprobante_pie` en la lista blanca de `fn_guardar_configuracion`, hasta 160 caracteres) · tools/pg-test/redondeo-fiado.test.mjs · packages/core/test/comprobante.test.ts · tools/ui/demo-ronda4.mjs (Configuración, comprobante y copia).
 
 #### RF-M9-14 · Mi cuenta
 
@@ -668,7 +671,7 @@ hacerlos en la próxima ronda con base de datos.
 
 **Cómo se verifica.** node tools/peso-js.mjs después de compilar
 
-**Estado:** 🟡 · **Evidencia:** tools/peso-js.mjs: 26/26 bajo 270 kB; 10/26 en la meta de 250 kB
+**Estado:** 🟡 · **Evidencia:** tools/peso-js.mjs: 27/27 bajo 270 kB; 17/27 en la meta de 250 kB. El layout de la app ya no carga Supabase ni IndexedDB al pintar (EstadoConexion y SyncCatalogo los traen con import()). Las 10 que faltan (252–264 kB) cargan el cliente completo de Supabase en la página: el siguiente paso es un cliente más liviano (postgrest-js + auth-js, sin realtime ni storage, que el navegador no usa) o cargarlo diferido.
 
 #### RNF-63
 
@@ -712,19 +715,15 @@ hacerlos en la próxima ronda con base de datos.
 
 ---
 
-## Lo que queda para la próxima ronda (con base de datos)
+## Lo que queda para la próxima ronda
 
-1. **RF-M5-28 · Redondeo del efectivo.** La regla ya está probada en core. Falta
-   que `fn_register_sale` guarde el ajuste, que el cuadre de caja lo considere
-   y que el comprobante lo muestre.
-2. **RF-M3-13 · Cuentas por pagar.** Tabla de facturas de proveedor con
-   vencimiento y estado de pago; aviso en Inicio.
-3. **RF-M5-30 · Fiado.** Cuenta corriente por cliente, medio de pago "Fiado"
-   con tope, abonos.
-4. **RF-M9-13 · Pie del comprobante.** Agregar la clave a la lista blanca de
-   `tenants.settings`.
-5. **RNF-62 · Meta de 250 kB.** 16 pantallas están entre 250 y 265 kB. Lo que
-   más pesa es el layout de la app (cliente de Supabase + IndexedDB para
-   vender sin red): candidato a cargarse después de pintar.
-6. Recorridos para **RF-M4-24**, **RF-M6-14**, **RF-M6-15** y **RF-M8-08** con datos de
-   ejemplo que los provoquen (caja de ayer, cierre completo).
+1. **Aplicar 0029 y 0030 en Supabase**, después de revisar el esquema en vivo
+   (ver HANDOFF, "Cómo aplicar 0029 y 0030"). Hasta entonces, en producción no
+   hay redondeo, fiado, pie ni cuentas por pagar, y la pantalla de Fiado y la
+   pestaña Por pagar dan error.
+2. **RF-M5-28 · Confirmar con el contador** que la boleta va por el total
+   exacto y el redondeo solo afecta el pago en efectivo (Ley 20.956 y la
+   circular del SII). Si dice otra cosa, cambia `fn_emitir_dte_venta`, no la
+   caja.
+3. **RNF-62 · Meta de 250 kB** en las 10 pantallas que faltan: cliente de
+   Supabase más liviano o diferido.

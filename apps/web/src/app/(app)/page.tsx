@@ -8,7 +8,7 @@ import { diaLocal } from '@rutaahorro/core';
 import { desdeSettings } from '@/lib/datos/configuracionBase';
 import { VentasHoyDemo } from './VentasHoyDemo';
 import { Tendencia } from '@/components/Tendencia';
-import { PanelControl } from '@/components/PanelControl';
+import { PanelControlDiferido as PanelControl } from '@/components/PanelControlDiferido';
 import { Icono, type NombreIcono } from '@/components/Icono';
 import { enlaceResumenDia } from '@/lib/resumenDia';
 
@@ -192,7 +192,8 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      <PanelControl usuarioId={user.id} verCostos={user.role === 'admin'} />
+      <PanelControl usuarioId={user.id} verCostos={user.role === 'admin'}
+                    verPorPagar={user.role === 'admin' || user.role === 'supervisor'} />
 
       <Tendencia />
 

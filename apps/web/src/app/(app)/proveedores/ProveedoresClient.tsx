@@ -10,16 +10,20 @@ import { useFormatoFecha } from '@/lib/formatoFecha';
 import { Encabezado } from '@/components/Encabezado';
 import { Icono } from '@/components/Icono';
 import { QueComprar } from './QueComprar';
+import { PorPagar } from './PorPagar';
 
 const TIPO_DOC: Record<string, string> = {
   guia: 'Guía', factura: 'Factura', boleta: 'Boleta', sin_documento: 'Sin documento',
 };
 
 
-type Pestana = 'proveedores' | 'recepciones' | 'comprar';
+type Pestana = 'proveedores' | 'recepciones' | 'comprar' | 'pagar';
 
-export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, vistaInicial = 'proveedores' }: {
+export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, vistaInicial = 'proveedores', verPorPagar = false, avisoInicial = null }: {
+  avisoInicial?: { tipo: 'ok' | 'error'; texto: string } | null;
   puedeAnular: boolean;
+  /** RF-M3-13 · admin y supervisor (la tabla solo la leen ellos). */
+  verPorPagar?: boolean;
   local?: string;
   verCostos?: boolean;
   vistaInicial?: Pestana;
@@ -29,6 +33,7 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [recepciones, setRecepciones] = useState<Recepcion[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [pendientesPago, setPendientesPago] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [editando, setEditando] = useState<Proveedor | null>(null);
@@ -89,6 +94,7 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
           ['comprar', 'Qué comprar'],
           ['proveedores', `Proveedores (${proveedores.length})`],
           ['recepciones', `Recepciones (${recepciones.length})`],
+          ...(verPorPagar ? [['pagar', pendientesPago == null ? 'Por pagar' : `Por pagar (${pendientesPago})`] as const] : []),
         ] as const).map(([id, label]) => (
           <button
             key={id}
@@ -106,6 +112,13 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
         ))}
       </div>
 
+      {avisoInicial && (
+        <p role={avisoInicial.tipo === 'error' ? 'alert' : 'status'}
+           className={`text-sm px-3 py-2 rounded-lg mb-3 ${avisoInicial.tipo === 'error' ? 'bg-red-50 text-red-900' : 'bg-marca-100 text-marca-900'}`}>
+          {avisoInicial.texto}
+        </p>
+      )}
+
       {error && (
         <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg mb-3">
           {error}
@@ -113,6 +126,9 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
       )}
 
       {pestana === 'comprar' && <QueComprar local={local} verCostos={verCostos} />}
+      {verPorPagar && pestana === 'pagar' && !cargando && (
+        <PorPagar proveedores={proveedores} puedeAnular={puedeAnular} onCambio={setPendientesPago} />
+      )}
 
       {cargando && pestana !== 'comprar' && <p className="text-sm text-[var(--texto-suave)] py-6 text-center">Cargando…</p>}
 

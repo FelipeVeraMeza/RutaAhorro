@@ -30,8 +30,10 @@ export interface LineaComprobante {
   descuento: number;
   /** Bruto de la línea menos su descuento. Nunca negativo. */
   subtotal: number;
-  /** Lo que se ahorró por una oferta por cantidad (0 si no hubo). */
+  /** Lo que se ahorró por una oferta por cantidad o por el precio del cliente (0 si no hubo). */
   ahorroOferta?: number;
+  /** De dónde sale el ahorro: el papel decía "oferta" también con el precio de cliente. */
+  origenAhorro?: 'oferta' | 'cliente';
   /** El combo que le rebajó la línea (0023), si hubo. Su monto va en `descuento`. */
   combo?: string | null;
 }
@@ -73,6 +75,15 @@ export interface Comprobante {
   pagos: PagoComprobante[];
   vuelto: number;
   /**
+   * RF-M5-28 · Redondeo del efectivo (Ley 20.956): lo cobrado menos el total,
+   * de −5 a +4. 0 si no se redondeó. El total, el neto y el IVA no cambian.
+   */
+  ajusteRedondeo: number;
+  /** Lo que el cliente pagó de verdad: el total más el ajuste. */
+  totalCobrado: number;
+  /** RF-M9-13 · Texto libre del local al pie (política de cambios, redes). */
+  pie: string | null;
+  /**
    * Qué documento corresponde por esta venta: boleta, factura, o el voucher
    * que emite la máquina de tarjetas (reunión 2026-09-19). Determina qué dice
    * el papel; no lo emite ante el SII.
@@ -106,6 +117,8 @@ export interface DatosComprobante {
   opcionesDocumento?: OpcionesDocumento;
   /** Lo que devolvió la base al registrar la venta (0019). */
   dte?: RegistroDte | null;
+  /** RF-M9-13 · `tenants.settings.comprobante_pie`. */
+  pie?: string | null;
 }
 
 /**
@@ -127,6 +140,7 @@ export function construirComprobante(datos: DatosComprobante): Comprobante {
     ahorroOferta: l.precioLista != null
       ? Math.max(clp(l.precioLista * l.quantity) - clp(l.unitPrice * l.quantity), 0)
       : 0,
+    origenAhorro: l.precioCliente != null && l.unitPrice === l.precioCliente ? 'cliente' : 'oferta',
   }));
 
   const bruto = datos.lineas.reduce((s, l) => s + clp(l.unitPrice * l.quantity), 0);
@@ -155,9 +169,17 @@ export function construirComprobante(datos: DatosComprobante): Comprobante {
   const documento: DocumentoVenta =
     datos.documento ?? { tipo: documentoPorOmision(datos.pagos, datos.opcionesDocumento) };
 
+  // RF-M5-28 · Pagado todo en efectivo, lo cobrado puede diferir del total
+  // por el redondeo a la decena. Se deduce de los pagos (que son lo que la
+  // base registró), no se vuelve a calcular: el papel dice lo que pasó.
+  const pagado = datos.pagos.reduce((s, p) => s + clp(p.monto), 0);
+  const todoEfectivo = datos.pagos.length > 0 && datos.pagos.every((p) => p.metodo === 'efectivo');
+  const ajusteRedondeo = todoEfectivo && Math.abs(pagado - total) <= 5 ? pagado - total : 0;
+  const totalCobrado = total + ajusteRedondeo;
+
   const efectivo = datos.pagos.find((p) => p.metodo === 'efectivo');
   const vuelto = efectivo?.recibido != null
-    ? Math.max(clp(efectivo.recibido) - total, 0)
+    ? Math.max(clp(efectivo.recibido) - totalCobrado, 0)
     : 0;
 
   return {
@@ -176,6 +198,9 @@ export function construirComprobante(datos: DatosComprobante): Comprobante {
     ivaPct,
     pagos: datos.pagos,
     vuelto,
+    ajusteRedondeo,
+    totalCobrado,
+    pie: datos.pie?.trim() || null,
     documento,
     dte: datos.dte ?? null,
     esDocumentoTributario: false,
@@ -187,6 +212,7 @@ const NOMBRE_METODO: Record<string, string> = {
   debito: 'Débito',
   credito: 'Crédito',
   transferencia: 'Transferencia',
+  fiado: 'Fiado (a cuenta)',
 };
 
 export function nombreMetodo(metodo: string): string {
@@ -223,7 +249,7 @@ export function comprobanteATexto(c: Comprobante, ancho = 32): string {
 
   for (const l of c.lineas) {
     out.push(fila(`${formatCantidad(l.cantidad)} x ${l.nombre}`.slice(0, ancho - 9), formatCLP(l.subtotal)));
-    if (l.ahorroOferta) out.push(fila(`   oferta ${formatCLP(l.precioUnitario)} c/u`, 'ahorra ' + formatCLP(l.ahorroOferta)));
+    if (l.ahorroOferta) out.push(fila(`   ${l.origenAhorro === 'cliente' ? 'precio cliente' : 'oferta'} ${formatCLP(l.precioUnitario)} c/u`, 'ahorra ' + formatCLP(l.ahorroOferta)));
     if (l.descuento > 0) out.push(fila(l.combo ? `   combo ${l.combo}`.slice(0, ancho - 10) : '   descuento', '-' + formatCLP(l.descuento)));
   }
 
@@ -238,6 +264,10 @@ export function comprobanteATexto(c: Comprobante, ancho = 32): string {
     out.push(fila(`${etiquetaAdicional(a)}`.slice(0, ancho - 10), formatCLP(a.monto)));
   }
   out.push(fila('TOTAL', formatCLP(c.total)));
+  if (c.ajusteRedondeo) {
+    out.push(fila('Redondeo (Ley 20.956)', (c.ajusteRedondeo > 0 ? '+' : '-') + formatCLP(Math.abs(c.ajusteRedondeo))));
+    out.push(fila('Total cobrado', formatCLP(c.totalCobrado)));
+  }
   out.push(separador);
 
   for (const p of c.pagos) {
@@ -245,6 +275,7 @@ export function comprobanteATexto(c: Comprobante, ancho = 32): string {
   }
   if (c.vuelto > 0) out.push(fila('Vuelto', formatCLP(c.vuelto)));
   for (const linea of pieDocumento(c)) { out.push(separador); out.push(linea); }
+  if (c.pie) { out.push(separador); out.push(c.pie); }
 
   return out.join('\n');
 }

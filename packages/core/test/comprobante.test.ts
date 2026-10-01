@@ -159,3 +159,48 @@ describe('versión en texto para compartir', () => {
     expect(texto).not.toContain('Descuento');
   });
 });
+
+describe('RF-M5-28 · redondeo del efectivo en el comprobante', () => {
+  const pan = { productId: 'p', name: 'Pan', unitPrice: 1234, quantity: 1 } as never;
+
+  it('pagado en efectivo redondeado: total exacto, ajuste aparte y vuelto sobre lo cobrado', () => {
+    const c = construirComprobante({ lineas: [pan], pagos: [{ metodo: 'efectivo', monto: 1230, recibido: 2000 }] });
+    expect(c.total).toBe(1234);
+    expect(c.neto + c.iva).toBe(1234);
+    expect(c.ajusteRedondeo).toBe(-4);
+    expect(c.totalCobrado).toBe(1230);
+    expect(c.vuelto).toBe(770);
+    const t = comprobanteATexto(c);
+    expect(t).toMatch(/Redondeo \(Ley 20\.956\)\s+-\$4/);
+    expect(t).toMatch(/Total cobrado\s+\$1\.230/);
+  });
+
+  it('el monto exacto o la tarjeta no muestran redondeo', () => {
+    expect(construirComprobante({ lineas: [pan], pagos: [{ metodo: 'efectivo', monto: 1234 }] }).ajusteRedondeo).toBe(0);
+    const t = construirComprobante({ lineas: [pan], pagos: [{ metodo: 'debito', monto: 1234 }] });
+    expect(t.ajusteRedondeo).toBe(0);
+    expect(comprobanteATexto(t)).not.toMatch(/Redondeo/);
+  });
+
+  it('RF-M9-13 · el pie del local sale al final del texto', () => {
+    const c = construirComprobante({ lineas: [pan], pagos: [{ metodo: 'debito', monto: 1234 }], pie: '  Cambios en 7 días  ' });
+    expect(c.pie).toBe('Cambios en 7 días');
+    expect(comprobanteATexto(c).trimEnd().endsWith('Cambios en 7 días')).toBe(true);
+    expect(construirComprobante({ lineas: [pan], pagos: [], pie: '   ' }).pie).toBeNull();
+  });
+
+  it('RF-M5-30 · el fiado se nombra en el papel', () => {
+    expect(nombreMetodo('fiado')).toBe('Fiado (a cuenta)');
+  });
+});
+
+describe('el ahorro por precio de cliente no se llama "oferta"', () => {
+  it('dice "precio cliente" cuando el precio cobrado es el del cliente', () => {
+    const l = { productId: 'a', name: 'Arroz', unitPrice: 1463, quantity: 1, precioLista: 1590, precioCliente: 1463 } as never;
+    const c = construirComprobante({ lineas: [l], pagos: [{ metodo: 'debito', monto: 1463 }] });
+    expect(c.lineas[0].origenAhorro).toBe('cliente');
+    expect(comprobanteATexto(c)).toMatch(/precio cliente \$1\.463 c\/u/);
+    const o = { productId: 'a', name: 'Arroz', unitPrice: 1400, quantity: 3, precioLista: 1590 } as never;
+    expect(construirComprobante({ lineas: [o], pagos: [] }).lineas[0].origenAhorro).toBe('oferta');
+  });
+});

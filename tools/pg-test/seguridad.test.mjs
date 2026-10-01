@@ -56,6 +56,10 @@ const RPC_PERMITIDAS = [
   // 0026 · facturación
   'fn_activar_emision_sii', 'fn_anular_factura_recibida', 'fn_descartar_factura', 'fn_emitir_factura_manual',
   'fn_estado_emision_sii', 'fn_nota_credito_factura', 'fn_registrar_factura_recibida', 'fn_reintentar_factura',
+  // 0029 · fiado
+  'fn_abonar_cuenta', 'fn_tope_credito',
+  // 0030 · cuentas por pagar
+  'fn_anular_factura_proveedor', 'fn_pagar_factura_proveedor', 'fn_registrar_factura_proveedor',
 ].sort();
 
 test('authenticated solo ejecuta las funciones de negocio, ninguna interna', async () => {

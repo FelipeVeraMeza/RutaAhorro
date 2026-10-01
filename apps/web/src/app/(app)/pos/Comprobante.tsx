@@ -60,7 +60,8 @@ export function Comprobante({
         <div className="px-4 pt-4 pb-3 text-center border-b border-[var(--borde)]">
           {!copia && <p className="text-3xl mb-1" aria-hidden>✅</p>}
           <h2 className="text-base font-semibold">{copia ? 'Copia del comprobante' : 'Venta registrada'}</h2>
-          <p className="text-2xl font-bold mt-1">{formatCLP(datos.total)}</p>
+          {/* Lo que el cliente pagó: con el redondeo del efectivo, si hubo. */}
+          <p className="text-2xl font-bold mt-1">{formatCLP(datos.totalCobrado ?? datos.total)}</p>
         </div>
 
         {/* El ticket. Es lo único que se imprime. */}
@@ -98,7 +99,7 @@ export function Comprobante({
                 </div>
                 {!!l.ahorroOferta && (
                   <div className="flex justify-between gap-2 text-[11px]">
-                    <span>&nbsp;&nbsp;oferta {formatCLP(l.precioUnitario)} c/u</span>
+                    <span>&nbsp;&nbsp;{l.origenAhorro === 'cliente' ? 'precio cliente' : 'oferta'} {formatCLP(l.precioUnitario)} c/u</span>
                     <span>ahorra {formatCLP(l.ahorroOferta)}</span>
                   </div>
                 )}
@@ -128,6 +129,14 @@ export function Comprobante({
               <span>TOTAL</span>
               <span>{formatCLP(datos.total)}</span>
             </div>
+            {/* RF-M5-28 · El total del documento no cambia; el redondeo va aparte. */}
+            {!!datos.ajusteRedondeo && (
+              <>
+                <Fila izq="Redondeo (Ley 20.956)"
+                      der={`${datos.ajusteRedondeo > 0 ? '+' : '-'}${formatCLP(Math.abs(datos.ajusteRedondeo))}`} />
+                <Fila izq="Total cobrado" der={formatCLP(datos.totalCobrado)} />
+              </>
+            )}
 
             <div className="border-t border-dashed border-black my-2" />
 
@@ -145,7 +154,10 @@ export function Comprobante({
 
             {datos.dte && <Timbre dte={datos.dte} />}
 
-            <p className="text-center text-[10px] mt-3">¡Gracias por su compra!</p>
+            {/* RF-M9-13 · El pie que escribió el local, o la despedida de siempre. */}
+            <p className="text-center text-[11px] mt-3 whitespace-pre-line break-words">
+              {datos.pie || '¡Gracias por su compra!'}
+            </p>
           </div>
         </div>
 

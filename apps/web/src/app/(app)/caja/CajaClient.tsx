@@ -422,6 +422,8 @@ export function CajaClient({
           <Fila label="Ventas en efectivo" value={Number(r.cash_sales ?? 0)} />
           {Number(r.cash_in ?? 0) > 0 && <Fila label="Ingresos" value={Number(r.cash_in)} />}
           {Number(r.cash_out ?? 0) > 0 && <Fila label="Egresos" value={-Number(r.cash_out)} />}
+          {/* RF-M5-30 · lo que pagaron clientes de lo que debían. */}
+          {Number(r.abonos_efectivo ?? 0) > 0 && <Fila label="Abonos de fiado en efectivo" value={Number(r.abonos_efectivo)} />}
           <div className="flex justify-between pt-2 mt-2 border-t border-[var(--borde)] font-bold text-base">
             <dt>Debería haber</dt>
             <dd className="num">{formatCLP(esperado)}</dd>
@@ -438,6 +440,7 @@ export function CajaClient({
             pantalla no lo mostraba: al cerrar, el cajero no tenía cómo cuadrar
             lo de la máquina de tarjetas ni las transferencias. */}
         <PorMedioDePago medios={r.by_payment_method} />
+        <NotasDelCuadre resumen={r} />
       </div>
 
       {/* Movimientos */}
@@ -640,6 +643,29 @@ function Fila({ label, value }: { label: string; value: number }) {
   );
 }
 
+/**
+ * RF-M5-28 y RF-M5-30 · Lo que explica por qué "Debería haber" no es la suma
+ * de los totales: el redondeo del efectivo y lo fiado.
+ */
+function NotasDelCuadre({ resumen }: { resumen: Record<string, unknown> }) {
+  const redondeo = Number(resumen.ajuste_redondeo ?? 0);
+  const fiado = Number(resumen.fiado ?? 0);
+  if (!redondeo && !fiado) return null;
+  return (
+    <ul className="mt-3 space-y-1 text-xs text-[var(--texto-suave)]" data-notas-cuadre>
+      {redondeo !== 0 && (
+        <li>
+          Redondeo del efectivo (Ley 20.956): <span className="num">{redondeo > 0 ? '+' : '−'}{formatCLP(Math.abs(redondeo))}</span>.
+          Ya está en las ventas en efectivo: es lo que entró al cajón.
+        </li>
+      )}
+      {fiado > 0 && (
+        <li>Fiado: <span className="num">{formatCLP(fiado)}</span> vendidos a cuenta. No está en el cajón.</li>
+      )}
+    </ul>
+  );
+}
+
 function Metrica({ label, value }: { label: string; value: string }) {
   return (
     <div className="px-2 py-2 rounded-lg bg-[var(--fondo)]">
@@ -706,6 +732,12 @@ function ResumenCierre({ c, onListo }: {
         ))}
         <div className="border-t border-dashed border-black my-1" />
         <p className="flex justify-between"><span>Efectivo inicial</span><span>{formatCLP(Number(c.resumen.opening_amount ?? 0))}</span></p>
+        {Number(c.resumen.abonos_efectivo ?? 0) > 0 && (
+          <p className="flex justify-between"><span>Abonos de fiado</span><span>{formatCLP(Number(c.resumen.abonos_efectivo))}</span></p>
+        )}
+        {Number(c.resumen.ajuste_redondeo ?? 0) !== 0 && (
+          <p className="flex justify-between"><span>Redondeo efectivo</span><span>{Number(c.resumen.ajuste_redondeo) > 0 ? '+' : '-'}{formatCLP(Math.abs(Number(c.resumen.ajuste_redondeo)))}</span></p>
+        )}
         <p className="flex justify-between"><span>Debía haber</span><span>{formatCLP(c.esperado)}</span></p>
         <p className="flex justify-between"><span>Contado</span><span>{formatCLP(c.contado)}</span></p>
         <p className="flex justify-between font-bold"><span>{dif === 0 ? 'Cuadra' : dif < 0 ? 'Faltante' : 'Sobrante'}</span><span>{formatCLP(Math.abs(dif))}</span></p>

@@ -36,6 +36,13 @@ export interface ConfiguracionLocal {
    * Apagado, el POS cobra el precio normal y la base no acepta otro.
    */
   ofertasActivas: boolean;
+  /** RF-M9-13 · Texto al pie del comprobante (hasta 160 caracteres). */
+  comprobantePie: string;
+  /**
+   * RF-M5-28 · Si la base acepta el pago en efectivo redondeado. Lo pone la
+   * migración 0029: antes de aplicarla, cobrar redondeado sería rechazado.
+   */
+  redondeoEfectivo: boolean;
 }
 
 /**
@@ -57,6 +64,8 @@ export const CONFIGURACION_POR_OMISION: ConfiguracionLocal = {
   venderSinStock: false,
   efectivoInicialSugerido: 0,
   ofertasActivas: true,
+  comprobantePie: '',
+  redondeoEfectivo: false,
 };
 
 interface SettingsBD {
@@ -70,6 +79,8 @@ interface SettingsBD {
   vender_sin_stock?: boolean;
   efectivo_inicial_sugerido?: number | string;
   ofertas_activas?: boolean;
+  comprobante_pie?: string;
+  redondeo_efectivo?: boolean;
 }
 
 function numero(valor: unknown, porOmision: number): number {
@@ -107,5 +118,7 @@ export function desdeSettings(settings: unknown): ConfiguracionLocal {
     efectivoInicialSugerido: numero(s.efectivo_inicial_sugerido, CONFIGURACION_POR_OMISION.efectivoInicialSugerido),
     // Igual que `fn_ofertas_rigen`: si nadie lo tocó, rigen.
     ofertasActivas: s.ofertas_activas !== false,
+    comprobantePie: typeof s.comprobante_pie === 'string' ? s.comprobante_pie.slice(0, 160) : '',
+    redondeoEfectivo: s.redondeo_efectivo === true,
   };
 }

@@ -16,6 +16,21 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.5.0',
+    fecha: '2026-10-01',
+    titulo: 'Redondeo del efectivo, fiado y facturas por pagar',
+    cambios: [
+      { para: 'vendedor', texto: 'Cobrar en efectivo redondea a la decena (Ley 20.956): $1.463 se cobra $1.460. El comprobante muestra el total, el redondeo y lo cobrado; la caja cuadra sola.' },
+      { para: 'vendedor', texto: 'Fiado: con un cliente que tiene crédito aparece "Fiado" al cobrar, con cuánto debe y cuánto le queda. Lo fiado no entra a la caja.' },
+      { para: 'vendedor', texto: 'Nueva sección "Fiado": lo que debe cada cliente y "Abonar" cuando paga. Un abono en efectivo entra a tu caja.' },
+      { para: 'todos', texto: 'El comprobante puede llevar al pie el texto del local (política de cambios, redes).' },
+      { para: 'admin', texto: 'Fiado: "Dar crédito a un cliente" con su tope. Configuración: texto al pie del comprobante.' },
+      { para: 'admin', texto: 'Compras → "Por pagar": facturas de proveedores con su vencimiento; al recibir con factura se indica cuándo vence. El Inicio avisa lo que vence esta semana.' },
+      { para: 'admin', texto: 'Pagar una factura "con efectivo de la caja" la registra como egreso de tu caja.' },
+      { para: 'bodega', texto: 'Al recibir mercadería con factura a crédito, indica cuándo vence (30 o 60 días). Bodega ya no puede cambiar precios, tampoco por atrás.' },
+    ],
+  },
+  {
     version: '0.4.0',
     fecha: '2026-09-30',
     titulo: 'Menos errores de tecleo, más control para el dueño',

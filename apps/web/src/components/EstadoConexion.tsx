@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { pendingCount, startAutoSync, syncQueue } from '@/lib/offline/sync';
+
+// RNF-62 · La cola (Supabase + IndexedDB, ~135 kB) se carga después de
+// pintar: el layout la tenía en la primera carga de TODAS las pantallas.
+const cola = () => import('@/lib/offline/sync');
 
 /**
  * Indicador permanente de conexión y ventas por sincronizar (RF-M5-19).
@@ -17,7 +20,10 @@ export function EstadoConexion() {
 
   useEffect(() => {
     setOnline(navigator.onLine);
-    const refresh = () => void pendingCount().then(setPending);
+    let vivo = true;
+    let stop = () => {};
+    let timer = 0;
+    const refresh = () => void cola().then((m) => m.pendingCount()).then((n) => { if (vivo) setPending(n); });
 
     const onOnline = () => { setOnline(true); refresh(); };
     const onOffline = () => setOnline(false);
@@ -25,11 +31,15 @@ export function EstadoConexion() {
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
 
-    const stop = startAutoSync(() => refresh());
-    refresh();
-    const timer = window.setInterval(refresh, 5000);
+    void cola().then(({ startAutoSync }) => {
+      if (!vivo) return;
+      stop = startAutoSync(() => refresh());
+      refresh();
+      timer = window.setInterval(refresh, 5000);
+    });
 
     return () => {
+      vivo = false;
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
       window.clearInterval(timer);
@@ -39,6 +49,7 @@ export function EstadoConexion() {
 
   async function forceSync() {
     setSyncing(true);
+    const { syncQueue, pendingCount } = await cola();
     await syncQueue();
     setPending(await pendingCount());
     setSyncing(false);

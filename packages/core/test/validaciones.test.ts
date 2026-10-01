@@ -83,7 +83,7 @@ describe('códigos de barras', () => {
 describe('mensajes de error en lenguaje del negocio (RNF-20)', () => {
   it('traduce códigos conocidos', () => {
     expect(toUserMessage({ message: 'CAJA_NO_ABIERTA' }))
-      .toBe('Debes abrir caja antes de vender');
+      .toBe('Primero abre tu caja (en Caja → Abrir caja)');
   });
 
   it('nombra el producto concreto cuando falta stock', () => {

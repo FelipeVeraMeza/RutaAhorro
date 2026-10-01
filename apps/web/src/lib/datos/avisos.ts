@@ -63,7 +63,16 @@ export async function marcarAvisosLeidos(ids: string[], usuarioId: string): Prom
 }
 
 export async function cajasOlvidadas(horasAviso: number): Promise<CajaOlvidada[]> {
-  if (DEMO_ACTIVO) return [];
+  if (DEMO_ACTIVO) {
+    // La maqueta tiene una caja por cuenta, en una cookie: si quedó abierta
+    // de hace más horas que el aviso, se muestra igual que en producción.
+    const { leerCajaDemoNavegador, usuarioDemoActual } = await import('../demo/caja');
+    const c = leerCajaDemoNavegador(usuarioDemoActual());
+    const horas = Math.floor((Date.now() - new Date(c.abiertaEn).getTime()) / 3_600_000);
+    return c.abierta && horas >= horasAviso
+      ? [{ id: c.id, nombre: 'Tu caja (maqueta)', abiertaEn: c.abiertaEn, horas }]
+      : [];
+  }
   const limite = new Date(Date.now() - horasAviso * 3_600_000).toISOString();
   const { data, error } = await supabase().from('v_cash_sessions_summary')
     .select('session_id, full_name, opened_at').eq('status', 'abierta').lt('opened_at', limite).order('opened_at');

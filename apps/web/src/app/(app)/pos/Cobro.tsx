@@ -4,13 +4,16 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   formatCLP, change, parseCLP, formatRut, isValidRut,
   documentosDisponibles, validarDocumento, normalizarReceptor, NOMBRE_DOCUMENTO, montoRecibidoAtipico,
+  redondeoEfectivo,
   type TipoDocumento, type DocumentoVenta, type ClienteConPrecios,
 } from '@rutaahorro/core';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { clientesParaVender } from '@/lib/datos/clientes';
+import { cuentaDe, type CuentaCliente } from '@/lib/datos/fiado';
+import { DEMO_ACTIVO } from '@/lib/demo';
 
-type Metodo = 'efectivo' | 'debito' | 'credito' | 'transferencia';
+type Metodo = 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'fiado';
 
 const METODOS: Array<{ id: Metodo; label: string; icon: string }> = [
   { id: 'efectivo',      label: 'Efectivo',      icon: '💵' },
@@ -18,6 +21,8 @@ const METODOS: Array<{ id: Metodo; label: string; icon: string }> = [
   { id: 'credito',       label: 'Crédito',       icon: '💳' },
   { id: 'transferencia', label: 'Transferencia', icon: '📱' },
 ];
+/** RF-M5-30 · solo aparece con un cliente que tiene crédito en el local. */
+const FIADO = { id: 'fiado' as const, label: 'Fiado', icon: '📒' };
 
 /** Qué se le entrega al cliente con cada documento, en sus palabras. */
 const QUE_SE_ENTREGA: Record<TipoDocumento, string> = {
@@ -38,9 +43,11 @@ function sugerencias(total: number): number[] {
 }
 
 export function Cobro({
-  total, tarjetaEmiteDocumento = true, cliente = null, onCancel, onConfirm,
+  total, tarjetaEmiteDocumento = true, redondear = false, cliente = null, onCancel, onConfirm,
 }: {
   total: number;
+  /** RF-M5-28 · `tenants.settings.redondeo_efectivo` (lo pone 0029). */
+  redondear?: boolean;
   /** Del local: `tenants.settings.tarjeta_emite_documento`. */
   tarjetaEmiteDocumento?: boolean;
   /** El cliente elegido en el POS (0022): sus datos llenan la factura. */
@@ -65,6 +72,19 @@ export function Cobro({
   const disponibles = useMemo(
     () => documentosDisponibles(pagos, opciones), [pagos, opciones]);
   const [tipo, setTipo] = useState<TipoDocumento>(disponibles[0]);
+
+  // RF-M5-30 · La cuenta del cliente elegido: si tiene tope, se le puede fiar
+  // hasta lo que le queda. Se lee al abrir el cobro (necesita conexión).
+  const [cuenta, setCuenta] = useState<CuentaCliente | null>(null);
+  useEffect(() => {
+    if (!cliente) return;
+    let vivo = true;
+    void cuentaDe(cliente.id).then((c) => { if (vivo) setCuenta(c); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [cliente]);
+  const conRed = DEMO_ACTIVO || (typeof navigator === 'undefined' || navigator.onLine);
+  const metodos = cuenta && cuenta.tope > 0 ? [...METODOS, FIADO] : METODOS;
+  const fiadoAlcanza = !!cuenta && cuenta.disponible >= total;
   const [rut, setRut] = useState(cliente?.rut ?? '');
   const [razonSocial, setRazonSocial] = useState(cliente?.rut ? cliente.nombre : '');
   const [giro, setGiro] = useState(cliente?.giro ?? '');
@@ -96,17 +116,23 @@ export function Cobro({
   ), [tipo, rut, razonSocial, giro, direccion]);
 
   const revision = validarDocumento(documento, pagos, opciones);
+  // RF-M5-28 · Ley 20.956: todo en efectivo se cobra redondeado a la decena.
+  // El total de la venta (y de la boleta) no cambia; la base guarda el ajuste.
+  const aCobrar = metodo === 'efectivo' && redondear ? redondeoEfectivo(total) : total;
+  const ajuste = aCobrar - total;
   const montoRecibido = parseCLP(recibido) ?? 0;
-  const vuelto = change(montoRecibido, total);
-  const faltante = Math.max(total - montoRecibido, 0);
+  const vuelto = change(montoRecibido, aCobrar);
+  const faltante = Math.max(aCobrar - montoRecibido, 0);
   const puedeConfirmar =
-    (metodo !== 'efectivo' || montoRecibido >= total) && revision.valido;
+    (metodo !== 'efectivo' || montoRecibido >= aCobrar)
+    && (metodo !== 'fiado' || (fiadoAlcanza && conRed))
+    && revision.valido;
 
   // El error del RUT solo se muestra cuando hay algo escrito: marcarlo en rojo
   // antes de que el cajero alcance a teclear es ruido, no ayuda.
   const errorRut = rut.trim() !== '' && !isValidRut(rut) ? 'Revisa el RUT' : null;
 
-  const atipico = metodo === 'efectivo' && montoRecibidoAtipico(montoRecibido, total);
+  const atipico = metodo === 'efectivo' && montoRecibidoAtipico(montoRecibido, aCobrar);
   useEffect(() => { setAtipicoConfirmado(false); }, [recibido, metodo]);
 
   async function confirmar() {
@@ -115,7 +141,7 @@ export function Cobro({
     setEnviando(true);
     const registrada = await onConfirm([
       metodo === 'efectivo'
-        ? { method: 'efectivo', amount: total, received_amount: montoRecibido }
+        ? { method: 'efectivo', amount: aCobrar, received_amount: montoRecibido }
         : { method: metodo, amount: total },
     ], documento).catch(() => false);
     if (!registrada) setEnviando(false);
@@ -128,10 +154,15 @@ export function Cobro({
     <Modal titulo="Cobrar" encabezado="visible" onCerrar={onCancel} bloqueado={enviando}>
       <div className="p-4 pb-6">
 
-        <p className="text-center num text-3xl font-bold mb-4">{formatCLP(total)}</p>
+        <p className="text-center num text-3xl font-bold" aria-live="polite">{formatCLP(aCobrar)}</p>
+        {ajuste !== 0 ? (
+          <p className="text-center text-xs text-[var(--texto-suave)] mb-4" data-redondeo>
+            Total {formatCLP(total)} · redondeo del efectivo {ajuste > 0 ? '+' : '−'}{formatCLP(Math.abs(ajuste))} (Ley 20.956)
+          </p>
+        ) : <div className="mb-4" />}
 
         <div className="grid grid-cols-2 gap-2 mb-4">
-          {METODOS.map((m) => (
+          {metodos.map((m) => (
             <button
               key={m.id}
               onClick={() => setMetodo(m.id)}
@@ -245,7 +276,7 @@ export function Cobro({
             />
 
             <div className="flex gap-2 mt-2 overflow-x-auto sin-scrollbar">
-              {sugerencias(total).map((monto) => (
+              {sugerencias(aCobrar).map((monto) => (
                 <button
                   key={monto}
                   onClick={() => setRecibido(String(monto))}
@@ -271,6 +302,27 @@ export function Cobro({
                 </>
               )}
             </div>
+          </div>
+        )}
+
+        {metodo === 'fiado' && cuenta && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-[var(--fondo)] text-sm" data-fiado>
+            <p>
+              <strong>{cliente?.nombre}</strong> debe <span className="num">{formatCLP(cuenta.saldo)}</span> de un
+              tope de <span className="num">{formatCLP(cuenta.tope)}</span>.
+            </p>
+            {fiadoAlcanza ? (
+              <p className="text-[var(--texto-suave)]">
+                Queda debiendo <span className="num font-semibold">{formatCLP(cuenta.saldo + total)}</span>. No entra a la caja: se cobra con un abono.
+              </p>
+            ) : (
+              <p role="alert" className="text-[var(--color-alerta)]">
+                Le quedan {formatCLP(cuenta.disponible)} de crédito: no alcanza para {formatCLP(total)}.
+              </p>
+            )}
+            {!conRed && (
+              <p role="alert" className="text-[var(--color-alerta)]">Fiar necesita conexión para revisar la cuenta.</p>
+            )}
           </div>
         )}
 

@@ -91,6 +91,13 @@ export const NAVEGACION: ItemNav[] = [
     roles: ['admin', 'supervisor'], enMovil: false,
   },
   {
+    // Cuenta corriente de los clientes con crédito (RF-M5-30, 0029). El
+    // vendedor entra: es quien recibe los abonos en el mostrador.
+    href: '/fiado', label: 'Fiado', labelCorto: 'Fiado', icono: 'fiado',
+    ayuda: 'Lo que deben los clientes con crédito, y sus abonos',
+    roles: ['admin', 'supervisor', 'vendedor'], enMovil: false,
+  },
+  {
     // Factura manual, recibidas y resumen mensual (0026). La boleta sale del POS.
     href: '/facturacion', label: 'Facturación', labelCorto: 'Facturas', icono: 'facturacion',
     ayuda: 'Facturas emitidas y recibidas, y el resumen de IVA del mes',

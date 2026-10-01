@@ -6,23 +6,31 @@ import { formatCLP } from '@rutaahorro/core';
 import { avisosSinLeer, marcarAvisosLeidos, cajasOlvidadas, type Aviso, type CajaOlvidada } from '@/lib/datos/avisos';
 import { repoReportes, hoyLocal } from '@/lib/datos/reportes';
 import { useConfiguracion } from '@/lib/datos/configuracion';
+import { porVencer, type FacturaProveedor } from '@/lib/datos/porPagar';
 import { Icono } from './Icono';
 
 /**
  * Lo que el jefe tiene que mirar además de las ventas: avisos del sistema
  * (RF-M8-07), cajas olvidadas abiertas (RF-M8-08) y cuánto se perdió en
- * mermas este mes (RF-M4-24, solo quien ve costos).
+ * mermas este mes (RF-M4-24, solo quien ve costos), y las facturas de
+ * proveedores que vencen esta semana (RF-M3-13).
  */
-export function PanelControl({ usuarioId, verCostos }: { usuarioId: string; verCostos: boolean }) {
+export function PanelControl({ usuarioId, verCostos, verPorPagar = false }: {
+  usuarioId: string; verCostos: boolean;
+  /** RF-M3-13 · admin y supervisor. */
+  verPorPagar?: boolean;
+}) {
   const { zonaHoraria, horasAvisoCaja } = useConfiguracion();
   const [avisos, setAvisos] = useState<Aviso[] | null>(null);
   const [cajas, setCajas] = useState<CajaOlvidada[]>([]);
   const [merma, setMerma] = useState<{ perdida: number; movimientos: number } | null>(null);
   const [marcando, setMarcando] = useState(false);
+  const [facturas, setFacturas] = useState<Array<FacturaProveedor & { dias: number }>>([]);
 
   useEffect(() => {
     void avisosSinLeer().then(setAvisos).catch(() => setAvisos([]));
     void cajasOlvidadas(horasAvisoCaja).then(setCajas).catch(() => {});
+    if (verPorPagar) void porVencer(zonaHoraria, 7).then(setFacturas).catch(() => {});
     if (verCostos) {
       const hoy = hoyLocal(zonaHoraria);
       void repoReportes().ajustes({ desde: `${hoy.slice(0, 8)}01`, hasta: hoy }).then((a) => setMerma({
@@ -30,7 +38,7 @@ export function PanelControl({ usuarioId, verCostos }: { usuarioId: string; verC
         movimientos: a.filter((x) => x.cantidad < 0).length,
       })).catch(() => {});
     }
-  }, [zonaHoraria, horasAvisoCaja, verCostos]);
+  }, [zonaHoraria, horasAvisoCaja, verCostos, verPorPagar]);
 
   async function marcarLeidos() {
     if (!avisos) return;
@@ -40,7 +48,7 @@ export function PanelControl({ usuarioId, verCostos }: { usuarioId: string; verC
     finally { setMarcando(false); }
   }
 
-  const hayAlgo = (avisos?.length ?? 0) > 0 || cajas.length > 0 || (merma && merma.perdida > 0);
+  const hayAlgo = (avisos?.length ?? 0) > 0 || cajas.length > 0 || (merma && merma.perdida > 0) || facturas.length > 0;
   if (!hayAlgo) return null;
 
   return (
@@ -63,9 +71,33 @@ export function PanelControl({ usuarioId, verCostos }: { usuarioId: string; verC
         </div>
       )}
 
+      {/* RF-M3-13 · lo que vence en los próximos 7 días (o ya venció). */}
+      {facturas.length > 0 && (
+        <div data-por-vencer>
+          <p className="text-xs font-medium text-[var(--texto-suave)] mb-1">
+            Facturas de proveedores por pagar esta semana ({formatCLP(facturas.reduce((s, f) => s + f.monto, 0))})
+          </p>
+          <ul className="space-y-1">
+            {facturas.slice(0, 5).map((f) => (
+              <li key={f.id} className="text-sm flex justify-between gap-2">
+                <span className="min-w-0">
+                  <span className={`insignia ${f.dias <= 0 ? 'insignia-alerta' : 'insignia-aviso'}`}>
+                    {f.dias < 0 ? `Vencida hace ${-f.dias} d` : f.dias === 0 ? 'Vence hoy' : `En ${f.dias} d`}
+                  </span>{' '}{f.proveedor} · N° {f.numero}
+                </span>
+                <span className="num shrink-0">{formatCLP(f.monto)}</span>
+              </li>
+            ))}
+          </ul>
+          <Link href="/proveedores?vista=pagar" prefetch={false} className="tap -my-1 inline-flex items-center text-xs text-marca-700 underline">
+            Ver por pagar
+          </Link>
+        </div>
+      )}
+
       {merma && merma.perdida > 0 && (
         <p className="text-sm flex justify-between gap-2">
-          <span>Pérdidas por merma y ajustes este mes <span className="text-xs text-[var(--texto-suave)]">({merma.movimientos} movimientos)</span></span>
+          <span>Pérdidas por merma y ajustes este mes <span className="text-xs text-[var(--texto-suave)]">({merma.movimientos} {merma.movimientos === 1 ? 'movimiento' : 'movimientos'})</span></span>
           <Link href="/reportes?vista=ajustes" prefetch={false} className="num font-semibold text-[var(--color-alerta)] underline">{formatCLP(merma.perdida)}</Link>
         </p>
       )}

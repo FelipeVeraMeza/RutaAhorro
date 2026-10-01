@@ -448,6 +448,7 @@ export function PosClient({
       cajero,
       ivaPct: config.ivaPct,
       documento,
+      pie: config.comprobantePie,
     }));
 
     // La venta se confirma de inmediato en pantalla: el cajero no espera a la
@@ -732,6 +733,7 @@ export function PosClient({
         <Cobro
           total={totals.total}
           tarjetaEmiteDocumento={config.tarjetaEmiteDocumento}
+          redondear={config.redondeoEfectivo}
           cliente={cliente}
           onCancel={() => setCobrando(false)}
           onConfirm={(payments, documento) =>

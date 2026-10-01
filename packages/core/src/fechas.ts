@@ -67,3 +67,12 @@ export function inicioDelDia(fecha: string, zona: string): string {
 export function rangoDeDias(desde: string, hasta: string, zona: string): { desde: string; hasta: string } {
   return { desde: inicioDelDia(desde, zona), hasta: inicioDelDia(sumarDias(hasta, 1), zona) };
 }
+
+/**
+ * Días que van de `desde` a `hasta` (dos AAAA-MM-DD del local): negativo si
+ * `hasta` ya pasó. Para "vence en 3 días" / "vencida hace 2" (RF-M3-13). Se
+ * cuenta a mediodía UTC para que un cambio de horario no corra un día.
+ */
+export function diasEntre(desde: string, hasta: string): number {
+  return Math.round((Date.parse(`${hasta}T12:00:00Z`) - Date.parse(`${desde}T12:00:00Z`)) / 86_400_000);
+}

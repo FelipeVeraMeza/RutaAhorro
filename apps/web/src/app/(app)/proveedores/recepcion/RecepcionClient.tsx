@@ -6,8 +6,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   formatCLP, parseCLP, validarCantidad, weightedAverageCost, costVariationPct,
-  shouldWarnCostVariation, toUserMessage, diaLocal,
+  shouldWarnCostVariation, toUserMessage, diaLocal, sumarDias,
 } from '@rutaahorro/core';
+import { registrarFacturaProveedor } from '@/lib/datos/porPagar';
 import {
   repoProveedores, buscarParaRecepcion, productoParaRecepcion,
   type Proveedor, type LineaRecepcion,
@@ -68,6 +69,8 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
   const [proveedorId, setProveedorId] = useState('');
   const [tipoDoc, setTipoDoc] = useState('guia');
   const [documento, setDocumento] = useState('');
+  // RF-M3-13 · con factura a crédito, cuándo vence (opcional).
+  const [vence, setVence] = useState('');
 
   const [lineas, setLineas] = useState<LineaRecepcion[]>([]);
   /**
@@ -192,7 +195,22 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
         lineas,
       });
       guardarBorrador(null);
-      router.push(`/proveedores?recibido=${r.id}`);
+      // RF-M3-13 · La factura queda por pagar. La mercadería ya entró: si esto
+      // falla no se reintenta la recepción (la duplicaría); se avisa y se
+      // registra a mano en Por pagar.
+      let aviso = '';
+      if (tipoDoc === 'factura' && vence) {
+        try {
+          await registrarFacturaProveedor({
+            receiptId: r.id, proveedorId: proveedorId || undefined, numero: documento.trim() || undefined,
+            monto: r.total, vence,
+          });
+          aviso = '&aviso=factura_por_pagar';
+        } catch (e) {
+          aviso = `&aviso=factura_no_registrada&detalle=${encodeURIComponent(toUserMessage(e))}`;
+        }
+      }
+      router.push(`/proveedores?recibido=${r.id}${aviso}`);
       router.refresh();
     } catch (e) {
       setError(toUserMessage(e));
@@ -240,6 +258,25 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
             />
           </div>
         </div>
+
+        {/* RF-M3-13 · Factura a crédito: queda en Compras → Por pagar. */}
+        {tipoDoc === 'factura' && (
+          <div>
+            <label htmlFor="vence" className="block text-sm font-medium mb-1.5">Vence el (si es a crédito)</label>
+            <div className="flex flex-wrap gap-2 items-center">
+              <input id="vence" type="date" value={vence} min={hoy()} onChange={(e) => setVence(e.target.value)}
+                     className="tap px-3 py-2 rounded-xl border border-[var(--borde)]" />
+              {[30, 60].map((d) => (
+                <button key={d} type="button" onClick={() => setVence(sumarDias(hoy(), d))} className="btn btn-secundario btn-chico">
+                  {d} días
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-[var(--texto-suave)] mt-1">
+              {vence ? 'Se agrega a las facturas por pagar y el Inicio avisa una semana antes.' : 'Déjalo vacío si se pagó al recibir.'}
+            </p>
+          </div>
+        )}
       </section>
 
       {/* Agregar productos */}

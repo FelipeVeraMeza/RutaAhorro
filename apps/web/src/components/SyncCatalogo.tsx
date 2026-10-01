@@ -1,9 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { syncCatalog } from '@/lib/offline/catalog';
 import { DEMO_ACTIVO } from '@/lib/demo';
-import { sembrarCatalogoDemo } from '@/lib/demo/seed';
 
 /**
  * Replica el catálogo al dispositivo en segundo plano.
@@ -11,6 +9,10 @@ import { sembrarCatalogoDemo } from '@/lib/demo/seed';
  * Corre al entrar y cada 10 minutos. Si falla, no molesta al usuario: el
  * catálogo que ya está en el celular sigue sirviendo, y ese es justamente el
  * punto del modo offline.
+ *
+ * RNF-62 · El código de la sincronización (Supabase + IndexedDB) se carga
+ * después de pintar, con import(): estaba en la primera carga de todas las
+ * pantallas, aunque el catálogo se baja en segundo plano.
  */
 export function SyncCatalogo() {
   useEffect(() => {
@@ -19,11 +21,11 @@ export function SyncCatalogo() {
     const run = () => {
       // En demo no hay Supabase: se siembra el catálogo de ejemplo.
       if (DEMO_ACTIVO) {
-        void sembrarCatalogoDemo().catch(() => {});
+        void import('@/lib/demo/seed').then((m) => m.sembrarCatalogoDemo()).catch(() => {});
         return;
       }
       if (!navigator.onLine) return;
-      void syncCatalog().catch(() => {
+      void import('@/lib/offline/catalog').then((m) => m.syncCatalog()).catch(() => {
         // Silencioso a propósito: no hay nada que el cajero pueda hacer.
       });
     };

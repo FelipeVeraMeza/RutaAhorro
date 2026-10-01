@@ -361,6 +361,7 @@ function OperacionDelLocal({ config, onGuardado, onError }: {
   const [efectivo, setEfectivo] = useState(config.efectivoInicialSugerido ? config.efectivoInicialSugerido.toLocaleString('es-CL') : '');
   const [horas, setHoras] = useState(String(config.horasAvisoCaja));
   const [variacion, setVariacion] = useState(String(config.variacionCostoPct));
+  const [pie, setPie] = useState(config.comprobantePie);
   const [guardando, setGuardando] = useState(false);
 
   async function guardar(cambios: Parameters<typeof guardarConfiguracion>[0], texto: string) {
@@ -435,6 +436,23 @@ function OperacionDelLocal({ config, onGuardado, onError }: {
         <p className="text-xs text-[var(--texto-suave)]">
           El IVA ({config.ivaPct}%) y la zona horaria no se cambian desde acá.
         </p>
+      </div>
+
+      {/* RF-M9-13 · El pie del comprobante. */}
+      <div className="tarjeta p-3 space-y-2">
+        <Campo etiqueta="Texto al pie del comprobante"
+               ayuda={`Política de cambios, redes o una despedida. Sale en cada comprobante y en las copias. ${pie.length}/160`}>
+          {(p) => <textarea {...p} value={pie} maxLength={160} rows={2}
+                            onChange={(e) => setPie(e.target.value)}
+                            placeholder="Cambios dentro de 7 días con el comprobante. ¡Gracias por su compra!"
+                            className="w-full px-3 py-2 rounded-lg border border-[var(--borde)]" />}
+        </Campo>
+        <button
+          disabled={guardando || pie.trim() === config.comprobantePie}
+          onClick={() => void guardar({ comprobante_pie: pie.trim() }, pie.trim() ? 'Pie del comprobante guardado' : 'Pie del comprobante quitado')}
+          className="btn btn-secundario w-full">
+          Guardar pie del comprobante
+        </button>
       </div>
     </section>
   );

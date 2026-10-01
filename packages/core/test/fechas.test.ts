@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { diaLocal, inicioDelDia, rangoDeDias, sumarDias, desfaseMinutos } from '../src/fechas.js';
+import { diaLocal, inicioDelDia, rangoDeDias, sumarDias, desfaseMinutos, diasEntre } from '../src/fechas.js';
 
 const CL = 'America/Santiago';
 
@@ -56,5 +56,22 @@ describe('rango de días', () => {
   it('sumar días cruza meses y años', () => {
     expect(sumarDias('2026-12-31', 1)).toBe('2027-01-01');
     expect(sumarDias('2026-03-01', -1)).toBe('2026-02-28');
+  });
+});
+
+describe('RF-M3-13 · días para que venza una factura', () => {
+  it('cuenta días de calendario, negativo si ya pasó', () => {
+    expect(diasEntre('2026-10-01', '2026-10-08')).toBe(7);
+    expect(diasEntre('2026-10-01', '2026-10-01')).toBe(0);
+    expect(diasEntre('2026-10-03', '2026-10-01')).toBe(-2);
+  });
+  it('no se corre un día con el cambio de horario de Chile', () => {
+    // 2026-09-06: Chile adelanta la hora; el día dura 23 horas.
+    expect(diasEntre('2026-09-05', '2026-09-07')).toBe(2);
+    expect(diasEntre('2026-04-04', '2026-04-06')).toBe(2);
+  });
+  it('vence a 30 días de la emisión cruzando de mes', () => {
+    expect(sumarDias('2026-10-15', 30)).toBe('2026-11-14');
+    expect(diasEntre('2026-10-15', sumarDias('2026-10-15', 30))).toBe(30);
   });
 });

@@ -154,7 +154,9 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
   const [motivo, setMotivo] = useState('');
   const pagoOriginal = venta.pagos[0]?.metodo as Reembolso | undefined;
-  const [reembolso, setReembolso] = useState<Reembolso>(pagoOriginal ?? 'efectivo');
+  // RF-M5-30 · lo fiado no se devuelve en plata: se rebaja de la cuenta (0029).
+  const fiada = venta.pagos.some((p) => p.metodo === 'fiado');
+  const [reembolso, setReembolso] = useState<Reembolso>(fiada ? 'fiado' : pagoOriginal ?? 'efectivo');
   const [error, setError] = useState<string | null>(null);
   const [enCurso, setEnCurso] = useState(false);
 
@@ -240,6 +242,11 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
         </Campo>
         <datalist id="motivos-devolucion">{MOTIVOS.map((m) => <option key={m} value={m} />)}</datalist>
 
+        {fiada ? (
+          <p className="tarjeta p-3 text-sm" data-devolucion-fiada>
+            Esta venta fue <strong>fiada</strong>: lo devuelto se rebaja de lo que debe el cliente, no se le paga en plata.
+          </p>
+        ) : (
         <fieldset>
           <legend className="text-sm font-medium mb-1.5">¿Cómo se le devuelve la plata?</legend>
           <div className="grid grid-cols-2 gap-2">
@@ -259,6 +266,7 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
             <p className="text-xs text-[var(--texto-suave)] mt-1.5">La reversa se hace en la máquina de tarjetas.</p>
           )}
         </fieldset>
+        )}
 
         <div className="tarjeta p-3 flex items-center justify-between">
           <span className="text-sm">Se devuelve</span>

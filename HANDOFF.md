@@ -4,7 +4,106 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-09-30.**
+> **Corte: 2026-10-01.**
+
+---
+
+## CÓMO SEGUIR — corte 2026-10-01 (4ª ronda), léelo antes que todo
+
+**2026-10-01 · Versión 0.5.0: redondeo del efectivo, fiado, cuentas por pagar
+y pie del comprobante.** Dos migraciones nuevas, **0029** y **0030**,
+**NO aplicadas en Supabase** (no se revisó el esquema en vivo desde acá).
+Rama `ccr-464e758c-8kb20a`, creada desde `ccr-ae889cb6-04m007` (a530da6).
+
+**⚠️ Antes de publicar esta versión en Railway, aplicar 0029 y 0030.**
+- La pantalla solo redondea el efectivo si `tenants.settings.redondeo_efectivo`
+  es `true`, y eso lo pone 0029. Así, publicar antes de migrar no rompe las
+  ventas (sin la clave cobra el exacto, como antes). Pero sin migrar, Fiado,
+  Por pagar, el pie del comprobante y el vencimiento al recibir **dan error**.
+- Cómo aplicarlas: revisar en el SQL Editor que `fn_register_sale`,
+  `fn_devolver_venta`, `fn_guardar_configuracion` y `fn_cash_session_summary`
+  sean las de 0023/0019/0021/0002 (0029 las reemplaza con la misma firma) y
+  que `sale_returns_reembolso_check` exista con ese nombre; después pegar
+  0029 y luego 0030 (o `npm run db:bundle`). Las dos son idempotentes.
+- `npm run db:test` las prueba contra un PostgreSQL de verdad. **Como root no
+  corre** (initdb lo rechaza): en este contenedor se corrió como un usuario
+  sin privilegios (`su probador -c "node --test …"`) → **172/172 + 1 TODO**.
+
+**Lo hecho**
+- **RF-M5-28 · Redondeo del efectivo (Ley 20.956).** Pagado todo en efectivo
+  se cobra a la decena (`redondeoEfectivo` en core = `fn_redondeo_efectivo`
+  en la base, probado 0..120). **Diseño:** el total de la venta, su IVA y la
+  boleta quedan EXACTOS; el pago en efectivo registra lo que entró al cajón y
+  la diferencia va en `sales.ajuste_redondeo`. Por eso la caja cuadra sola.
+  La base acepta también el monto exacto (cola sin conexión de antes). Cobro
+  muestra "Total $1.463 · redondeo −$3", el comprobante y la copia muestran
+  TOTAL, Redondeo y Total cobrado, y la caja el ajuste del turno.
+  **Queda 🟡: falta que el contador confirme el diseño** (ver Decisiones).
+- **RF-M5-30 · Fiado.** Pantalla nueva **Fiado** (admin, supervisor,
+  vendedor): lo que debe cada cliente, "Abonar" y movimientos; admin y
+  supervisor dan el crédito (tope). En Vender, con un cliente con tope,
+  aparece "Fiado" al cobrar con cuánto debe y cuánto le queda. La cuenta es
+  inmutable (`cuenta_cliente_movimientos`: cargo, abono, anulación,
+  devolución). Lo fiado **no** entra al efectivo esperado; un abono en
+  efectivo **sí** (a la caja de quien lo recibe). Anular una venta fiada
+  (disparador) o devolverla (`fn_devolver_venta` con reembolso `fiado`)
+  rebaja la deuda; devolver en plata una venta fiada se rechaza. Fiar exige
+  conexión. El tope se bloquea por fila: dos cajas a la vez no lo pasan.
+- **RF-M3-13 · Cuentas por pagar.** Compras → **Por pagar** (admin y
+  supervisor): facturas por vencimiento, lo vencido en rojo, total por
+  proveedor, "Registrar factura", "Pagada" (con "Efectivo de la caja" sale
+  como egreso de la caja) y "Anular" (solo admin, no si está pagada). Al
+  recibir con factura se indica cuándo vence (30/60 días) y queda sola en Por
+  pagar. El Inicio avisa lo que vence en 7 días. Bodega la registra al recibir
+  pero no lista lo adeudado.
+- **RF-M9-13 · Pie del comprobante** en Configuración (160 caracteres), sale
+  en el comprobante, la copia y el texto de WhatsApp.
+- **Bodega no cambia precios, ahora en la base** (0030, disparador
+  `trg_bodega_sin_precio`): vale por cualquier camino; el costo de la
+  recepción sí se recalcula.
+- **Recorridos que faltaban** (RF-M4-24, RF-M6-14, RF-M6-15, RF-M8-08):
+  `tools/ui/demo-ronda4.mjs` provoca cada caso (merma registrada, caja abierta
+  hace 30 h escrita en la cookie de la maqueta, cierre con faltante). Para
+  M8-08 la maqueta mira la caja propia (la cookie); producción sigue leyendo
+  `v_cash_sessions_summary`.
+- **RNF-62:** `EstadoConexion` y `SyncCatalogo` cargan Supabase e IndexedDB
+  con `import()` después de pintar, y "Para revisar" del Inicio es diferido.
+  **17/27 pantallas en la meta** (antes 10/26), 27/27 bajo 270 kB.
+- **Defectos encontrados de pasada:** el comprobante llamaba "oferta" al
+  precio de cliente (ahora "precio cliente"); "1 movimientos" en el Inicio;
+  `CAJA_NO_ABIERTA` decía "antes de vender" también al abonar o pagar.
+
+**Verificado:** core **437** (+8) · typecheck · `db:check` (140 cuerpos) ·
+`db:test` **172/172** como usuario sin privilegios (nuevas:
+`redondeo-fiado.test.mjs` 11, `cuentas-por-pagar.test.mjs` 5; las dos más
+importantes se vieron fallar al quitar el bloqueo del tope y la regla del
+redondeo) · build de producción · `peso-js` 27/27 · `demo-ronda4.mjs`
+**44/44** · `demo-ronda3` 45/45 · `demo-ronda2` 15/15 · `demo-flujo` 18/18 ·
+`demo-datos` 11/11 · `demo-roles` **184** pantallas (23 rutas × 4 roles × 2
+anchos, con /fiado) sin errores, desbordes ni controles sin nombre ·
+`sin-red` 5/5 (compilado en demo, puerto 3006). Recorridos con Chromium:
+`CHROME_PATH=/opt/pw-browsers/chromium`.
+**No se corrió contra Supabase ni Railway.**
+
+**Decisiones del negocio que tomé y hay que confirmar**
+1. **Contador (RF-M5-28):** boleta por el total exacto; el redondeo solo en
+   el pago en efectivo. Si el contador dice que la boleta va redondeada, se
+   cambia `fn_emitir_dte_venta`, no la caja.
+2. **Fiado:** tope por cliente (0 = no se le fía, máx. $5.000.000), lo
+   ponen admin y supervisor; el vendedor fía hasta el tope y recibe abonos;
+   no se abona más de lo que se debe (sin saldo a favor).
+3. **Por pagar:** la ven y pagan admin y supervisor (el supervisor ya veía
+   los totales de las recepciones); anular solo admin.
+
+**Pendiente, en orden:** aplicar 0029 y 0030 · confirmar lo de arriba ·
+RNF-62 en las 10 pantallas de 252–264 kB (todas cargan supabase-js completo
+con realtime y storage, que el navegador no usa: probar postgrest-js +
+auth-js o cargarlo diferido) · lo de antes (SUPABASE_SECRET_KEY en Railway,
+`db:cuentas`, recorridos contra Railway, RF-M5-08/10 con el contador,
+RF-M10-03 aviso de edición simultánea). La configuración del local no se
+guarda para usarla sin conexión (sin red se usan los valores por omisión: IVA
+19 %, sin redondeo); guardarla en el celular respetando la regla 18 es una
+mejora pendiente.
 
 ---
 
@@ -1289,6 +1388,10 @@ esperar ningún trámite.
     pre-borrar la nueva donde se define la vieja, para que reinstalar funcione.
     Ya pasó tres veces: `fn_adjust_stock` (0014), `fn_register_sale` (0015) y
     `fn_create_product` (0016). Lo encuentra `db:test`, no leer el SQL.
+23. **La pantalla no se adelanta a la base.** Cada push a main publica, y la
+    migración se aplica a mano: una regla nueva del cobro que la base vieja
+    rechazaría (el redondeo de 0029) se enciende con una clave que pone la
+    misma migración (`redondeo_efectivo`), nunca solo con el código nuevo.
 
 ---
 

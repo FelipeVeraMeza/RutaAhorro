@@ -25,7 +25,9 @@ export interface CajaDemo {
   id: string;
   apertura: number;
   abiertaEn: string;
-  ventas: { n: number; total: number; porMedio: Record<string, number> };
+  ventas: { n: number; total: number; porMedio: Record<string, number>; redondeo?: number };
+  /** Abonos de fiado recibidos en efectivo en esta caja (0029). */
+  abonos?: number;
   movs: MovimientoDemo[];
   cierres: CierreDemo[];
 }
@@ -62,10 +64,14 @@ export function resumenCajaDemo(c: CajaDemo) {
   const cash_sales = c.ventas.porMedio.efectivo ?? 0;
   const cash_in = suma(c.movs, 'ingreso');
   const cash_out = suma(c.movs, 'egreso');
+  const abonos_efectivo = c.abonos ?? 0;
   return {
     opening_amount: c.apertura,
-    cash_sales, cash_in, cash_out,
-    expected_amount: c.apertura + cash_sales + cash_in - cash_out,
+    cash_sales, cash_in, cash_out, abonos_efectivo,
+    ajuste_redondeo: c.ventas.redondeo ?? 0,
+    fiado: c.ventas.porMedio.fiado ?? 0,
+    // Igual que fn_cash_session_summary (0029): lo fiado no está en el cajón.
+    expected_amount: c.apertura + cash_sales + cash_in - cash_out + abonos_efectivo,
     sales_count: c.ventas.n,
     sales_total: c.ventas.total,
     average_ticket: c.ventas.n ? Math.round(c.ventas.total / c.ventas.n) : 0,
@@ -83,6 +89,10 @@ export function usuarioDemoActual(): string {
     if (typeof cuenta.id === 'string') return cuenta.id;
   } catch { /* sin cuenta propia: la de ejemplo del rol */ }
   return `demo-${galleta('demo_rol') ?? 'admin'}`;
+}
+
+export function leerCajaDemoNavegador(usuario: string): CajaDemo {
+  return leerEnNavegador(usuario);
 }
 
 function leerEnNavegador(usuario: string): CajaDemo {
@@ -104,7 +114,7 @@ export const cajaDemo = {
     if (c.abierta) return { error: { message: 'CAJA_YA_ABIERTA' } };
     escribir({
       ...c, abierta: true, id: `caja-${Date.now()}`, apertura: monto, abiertaEn: new Date().toISOString(),
-      ventas: { n: 0, total: 0, porMedio: {} }, movs: [],
+      ventas: { n: 0, total: 0, porMedio: {}, redondeo: 0 }, movs: [], abonos: 0,
     });
     return { error: null };
   },
@@ -130,6 +140,14 @@ export const cajaDemo = {
     return { error: null };
   },
 
+  /** Un abono de fiado en efectivo entra al cajón de quien lo recibe. */
+  abono(usuario: string, monto: number): { error: { message: string } | null } {
+    const c = leerEnNavegador(usuario);
+    if (!c.abierta) return { error: { message: 'CAJA_NO_ABIERTA' } };
+    escribir({ ...c, abonos: (c.abonos ?? 0) + monto });
+    return { error: null };
+  },
+
   /** Cada venta de la maqueta suma a la caja abierta de quien la cobró. */
   registrarVenta(usuario: string, total: number, pagos: Array<{ method: string; amount: number }>) {
     try {
@@ -138,6 +156,10 @@ export const cajaDemo = {
       c.ventas.n += 1;
       c.ventas.total += total;
       for (const p of pagos) c.ventas.porMedio[p.method] = (c.ventas.porMedio[p.method] ?? 0) + p.amount;
+      // RF-M5-28 · pagado todo en efectivo, lo cobrado menos el total.
+      if (pagos.length && pagos.every((p) => p.method === 'efectivo')) {
+        c.ventas.redondeo = (c.ventas.redondeo ?? 0) + pagos.reduce((s, p) => s + p.amount, 0) - total;
+      }
       escribir(c);
     } catch { /* la venta vale igual; la caja de la maqueta no la suma */ }
   },

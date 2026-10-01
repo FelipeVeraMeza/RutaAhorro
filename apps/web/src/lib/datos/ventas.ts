@@ -9,6 +9,7 @@ import { DEMO_ACTIVO } from '../demo';
 import { db, type QueuedSale } from '../offline/db';
 import { DEMO_PRODUCTOS } from '../demo/data';
 import { cajaDemo, usuarioDemoActual } from '../demo/caja';
+import { cargoFiadoDemo, anulacionFiadoDemo } from './fiado';
 
 /**
  * Historial de ventas y anulación (RF-M5-15).
@@ -78,7 +79,7 @@ export interface VentaDetallada extends Venta {
   devoluciones: Devolucion[];
 }
 
-export type Reembolso = 'efectivo' | 'transferencia' | 'debito' | 'credito';
+export type Reembolso = 'efectivo' | 'transferencia' | 'debito' | 'credito' | 'fiado';
 
 export interface ResultadoDevolucion {
   numero: number;
@@ -136,6 +137,7 @@ export const ETIQUETA_PAGO: Record<string, string> = {
   debito: 'Débito',
   credito: 'Crédito',
   transferencia: 'Transferencia',
+  fiado: 'Fiado (no entra a la caja)',
 };
 
 // ---------------------------------------------------------------------------
@@ -155,6 +157,7 @@ interface VentaDemo {
   motivoAnulacion: string | null;
   anuladaEn: string | null;
   documento?: DocumentoVenta;
+  clienteId?: string | null;
 }
 
 async function leerVentasDemo(): Promise<VentaDemo[]> {
@@ -212,10 +215,17 @@ export async function registrarVentaDemo(v: QueuedSale): Promise<void> {
     pagos: v.payments.map((p) => ({ metodo: p.method, monto: p.amount })),
     total: v.total,
     documento: v.documento,
+    clienteId: v.clienteId ?? null,
     anulada: false,
     motivoAnulacion: null,
     anuladaEn: null,
   });
+  // RF-M5-30 · lo fiado deja su cargo en la cuenta del cliente.
+  const fiado = v.payments.filter((p) => p.method === 'fiado').reduce((s, p) => s + p.amount, 0);
+  if (fiado > 0) {
+    if (!v.clienteId) throw new Error('FIADO_SIN_CLIENTE');
+    await cargoFiadoDemo(v.clienteId, fiado, ventas[ventas.length - 1].folio);
+  }
   cajaDemo.registrarVenta(usuarioDemoActual(), v.total, v.payments);
   for (const i of v.items) {
     const p = await db().products.get(i.product_id);
@@ -293,6 +303,8 @@ const repoLocal: RepositorioVentas = {
 
     v.anulada = true;
     v.motivoAnulacion = motivo.trim();
+    const fiado = v.pagos.filter((p) => p.metodo === 'fiado').reduce((s, p) => s + p.monto, 0);
+    if (fiado > 0 && v.clienteId) await anulacionFiadoDemo(v.clienteId, fiado, v.folio);
     v.anuladaEn = new Date().toISOString();
 
     // El stock vuelve, igual que en producción: si anular no devolviera las

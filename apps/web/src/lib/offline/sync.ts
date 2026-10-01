@@ -101,11 +101,20 @@ export async function syncQueue(): Promise<SyncResult> {
     // ver el indicador de "por sincronizar" y cómo se vacía.
     if (DEMO_ACTIVO) {
       for (const sale of queue) {
-        await registrarVentaDemo(sale);
+        try {
+          await registrarVentaDemo(sale);
+        } catch (e) {
+          // Igual que un rechazo de la base: queda con su error en la cola.
+          result.failed++;
+          await db().saleQueue.update(sale.clientUuid, {
+            status: 'error', attempts: sale.attempts + 1, lastError: (e as Error).message,
+          });
+          continue;
+        }
         await db().saleQueue.delete(sale.clientUuid);
         result.sent++;
       }
-      result.remaining = 0;
+      result.remaining = await pendingCount();
       return result;
     }
 

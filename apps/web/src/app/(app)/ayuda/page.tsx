@@ -21,11 +21,18 @@ const GUIAS: Guia[] = [
     'Escanea el código o escribe parte del nombre. Sin tildes también encuentra.',
     'Toca la cantidad para cambiarla. Si te equivocas, "Deshacer" recupera la línea quitada.',
     'Cobrar → elige el medio de pago y, en efectivo, escribe cuánto te pasaron: el vuelto sale solo.',
+    'En efectivo el total se redondea a la decena (Ley 20.956): $1.463 se cobra $1.460. El comprobante lo explica.',
     'Si se cae internet, sigue vendiendo: la venta se envía sola cuando vuelve.',
   ] },
   { titulo: 'Reimprimir o compartir un comprobante', roles: CAJA, ir: { href: '/ventas', texto: 'Ir a Ventas' }, pasos: [
     'En Ventas, toca la venta.',
     '"Reimprimir o compartir el comprobante": sale marcado como COPIA.',
+  ] },
+  { titulo: 'Fiar y recibir abonos', roles: CAJA, ir: { href: '/fiado', texto: 'Ir a Fiado' }, pasos: [
+    'En Vender, elige al cliente ("Elegir cliente"). Si tiene crédito, al cobrar aparece "Fiado".',
+    'Se ve cuánto debe y cuánto le queda; si no alcanza, cobra con otro medio.',
+    'Cuando paga: Fiado → "Abonar". En efectivo, la plata entra a tu caja.',
+    'El crédito (tope) lo da el administrador o el supervisor en Fiado.',
   ] },
   { titulo: 'Cerrar la caja', roles: CAJA, ir: { href: '/caja', texto: 'Ir a Caja' }, pasos: [
     'Cuenta el efectivo. "Contar por billete" suma por ti.',
@@ -54,8 +61,14 @@ const GUIAS: Guia[] = [
   ] },
   { titulo: 'Recibir mercadería', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/proveedores', texto: 'Ir a Proveedores' }, pasos: [
     'Proveedores → Recepción: elige el proveedor y escanea lo que llegó.',
+    'Con factura a crédito, indica cuándo vence (30 o 60 días): queda en "Por pagar".',
     'Confirma: el stock sube y el costo queda registrado.',
     '"Qué comprar" arma el pedido por proveedor y lo manda por WhatsApp.',
+  ] },
+  { titulo: 'Pagar facturas de proveedores', roles: MANDO, ir: { href: '/proveedores?vista=pagar', texto: 'Ir a Por pagar' }, pasos: [
+    'Compras → "Por pagar": las facturas ordenadas por vencimiento; lo vencido sale en rojo.',
+    'El Inicio avisa lo que vence en los próximos 7 días.',
+    '"Pagada" → cómo se pagó. Con "Efectivo de la caja" sale como egreso de tu caja.',
   ] },
   { titulo: 'Anular o devolver una venta', roles: MANDO, ir: { href: '/ventas', texto: 'Ir a Ventas' }, pasos: [
     'Ventas → toca la venta → Anular (todo) o Devolver (algunos productos).',

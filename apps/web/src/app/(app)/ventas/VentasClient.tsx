@@ -42,7 +42,7 @@ const POR_PAGINA = 50;
  * La copia del comprobante de una venta pasada (RF-M5-23), con lo que quedó
  * guardado en la base: no se recalcula nada, se reproduce.
  */
-function copiaDe(v: VentaDetallada, local: string, ivaPct: number): DatosComprobante {
+function copiaDe(v: VentaDetallada, local: string, ivaPct: number, pie: string | null): DatosComprobante {
   const lineas = v.lineas.map((l) => ({
     nombre: l.productoNombre, cantidad: l.cantidad, precioUnitario: l.precioUnitario,
     descuento: l.descuento, subtotal: l.subtotal,
@@ -54,10 +54,21 @@ function copiaDe(v: VentaDetallada, local: string, ivaPct: number): DatosComprob
     descuento: lineas.reduce((s, l) => s + l.descuento, 0) + v.descuento,
     total: v.total, iva: v.iva, neto: v.total - v.iva, adicionales: [], totalAdicionales: 0, ivaPct,
     pagos: v.pagos.map((p) => ({ metodo: p.metodo, monto: p.monto })), vuelto: 0,
+    // RF-M5-28 · Lo cobrado en efectivo es lo que registró la base; la
+    // diferencia con el total es el redondeo.
+    ...ajusteDe(v),
+    pie,
     documento: v.documento,
     dte: v.documentos.find((d) => d.tipo !== 61) ?? null,
     esDocumentoTributario: false,
   };
+}
+
+function ajusteDe(v: VentaDetallada) {
+  const pagado = v.pagos.reduce((s, p) => s + p.monto, 0);
+  const todoEfectivo = v.pagos.length > 0 && v.pagos.every((p) => p.metodo === 'efectivo');
+  const ajusteRedondeo = todoEfectivo && Math.abs(pagado - v.total) <= 5 ? pagado - v.total : 0;
+  return { ajusteRedondeo, totalCobrado: v.total + ajusteRedondeo };
 }
 
 export function VentasClient({ puedeAnular, soloPropias = false, local = '' }: {
@@ -87,7 +98,7 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '' }: {
   const [verDoc, setVerDoc] = useState<RegistroDte | null>(null);
   const [devolviendo, setDevolviendo] = useState<VentaDetallada | null>(null);
   const [copia, setCopia] = useState<DatosComprobante | null>(null);
-  const { ivaPct } = useConfiguracion();
+  const { ivaPct, comprobantePie } = useConfiguracion();
   const [motivo, setMotivo] = useState('');
   const [enCurso, setEnCurso] = useState(false);
 
@@ -415,7 +426,7 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '' }: {
               </div>
             )}
 
-            <button onClick={() => { setCopia(copiaDe(detalle, local, ivaPct)); setDetalle(null); }}
+            <button onClick={() => { setCopia(copiaDe(detalle, local, ivaPct, comprobantePie || null)); setDetalle(null); }}
               className="btn btn-secundario w-full">
               Reimprimir o compartir el comprobante
             </button>

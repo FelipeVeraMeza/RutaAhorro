@@ -36,7 +36,8 @@ async function leer(): Promise<ConfiguracionLocal> {
   if (DEMO_ACTIVO) {
     const { getMeta } = await import('../offline/db');
     const guardada = await getMeta(CLAVE_DEMO);
-    return guardada ? desdeSettings(JSON.parse(guardada)) : CONFIGURACION_POR_OMISION;
+    // La maqueta se comporta como una base con 0029 aplicada.
+    return desdeSettings({ redondeo_efectivo: true, ...(guardada ? JSON.parse(guardada) : {}) });
   }
 
   const { data, error } = await supabase().from('tenants').select('settings').maybeSingle();
@@ -92,6 +93,8 @@ export interface CambiosConfiguracion {
   efectivo_inicial_sugerido?: number;
   cash_alert_hours?: number;
   cost_variation_alert_pct?: number;
+  /** RF-M9-13 · 0029. */
+  comprobante_pie?: string;
 }
 
 export async function guardarConfiguracion(cambios: CambiosConfiguracion): Promise<ConfiguracionLocal> {

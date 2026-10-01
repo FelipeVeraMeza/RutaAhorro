@@ -40,6 +40,7 @@ const TRAZOS = {
   bitacora: 'M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z|m9 12 2 2 4-4',
   cuenta: 'c12,8,4|M4 21a8 8 0 0 1 16 0',
   candado: 'r5,11,14,10,2|M8 11V7a4 4 0 0 1 8 0v4',
+  fiado: 'M5 3h12a2 2 0 0 1 2 2v16H7a2 2 0 0 1-2-2z|M9 8h6|M9 12h6|M9 16h3|M5 17a2 2 0 0 1 2-2h12',
 } as const;
 
 export type NombreIcono = keyof typeof TRAZOS;
