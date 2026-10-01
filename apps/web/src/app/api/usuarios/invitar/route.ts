@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const actor = await getCurrentUser();
 
   // Doble verificación: la interfaz ya lo oculta, pero ocultar no es seguridad.
-  if (!actor || actor.role !== 'admin') {
+  if (!actor || !actor.isActive || actor.role !== 'admin') {
     return NextResponse.json(
       { error: { code: 'SIN_PERMISO', message: 'No tienes permiso para invitar usuarios' } },
       { status: 403 },

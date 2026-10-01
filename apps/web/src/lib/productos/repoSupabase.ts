@@ -302,13 +302,24 @@ export const repoSupabase: RepositorioProductos = {
           categoriaId = cat.id;
         }
 
-        const { data: previo } = fila.sku
+        let { data: previo } = fila.sku
           ? await supabase()
               .from('products')
               .select('id, product_barcodes(barcode)')
               .eq('sku', fila.sku)
               .maybeSingle()
           : { data: null };
+        // Sin SKU (o SKU nuevo), el código de barras identifica al producto:
+        // una planilla del proveedor sin SKU fallaba fila por fila con
+        // "ese código ya está en otro producto" en vez de actualizar.
+        if (!previo && fila.codigo_barras) {
+          const { data: cod } = await supabase().from('product_barcodes')
+            .select('product_id').eq('barcode', fila.codigo_barras).maybeSingle();
+          if (cod) {
+            ({ data: previo } = await supabase().from('products')
+              .select('id, product_barcodes(barcode)').eq('id', cod.product_id as string).maybeSingle());
+          }
+        }
 
         if (previo) {
           // Una planilla que actualiza precios no trae columna de código de

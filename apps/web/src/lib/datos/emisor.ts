@@ -41,10 +41,14 @@ export async function leerEmisor(): Promise<Emisor | null> {
 
 export async function guardarEmisor(e: Emisor): Promise<void> {
   if (DEMO_ACTIVO) throw new Error('NO_DISPONIBLE_EN_DEMO');
+  // "47.11.00" o "471100 " llegaban a la base como texto y el cast a número
+  // fallaba con un error genérico. Se aceptan los puntos y espacios del SII.
+  const acteco = e.acteco.replace(/[.\s]/g, '');
+  if (acteco && !/^\d{1,6}$/.test(acteco)) throw new Error('ACTECO_INVALIDO');
   const { error } = await supabase().rpc('fn_guardar_emisor', {
     p_datos: {
       rut: e.rut, razon_social: e.razonSocial, giro: e.giro,
-      acteco: e.acteco.trim() || null, direccion: e.direccion, comuna: e.comuna,
+      acteco: acteco || null, direccion: e.direccion, comuna: e.comuna,
       ciudad: e.ciudad.trim() || null, ambiente: 'simulacion',
     },
   });

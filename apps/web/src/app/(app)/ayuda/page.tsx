@@ -110,7 +110,7 @@ export default async function AyudaPage() {
       </div>
       <p className="text-sm text-[var(--texto-suave)] mt-5">
         ¿No está lo que buscas? Pregúntale al administrador del local. Lo nuevo de cada versión está en{' '}
-        <Link href="/novedades" className="underline">Novedades</Link>.
+        <Link href="/novedades" className="underline inline-flex items-center min-h-[44px]">Novedades</Link>.
       </p>
     </div>
   );

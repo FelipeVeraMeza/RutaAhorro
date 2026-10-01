@@ -8,7 +8,7 @@ import { clienteAdmin, respuestaError } from '@/lib/supabase/admin';
  */
 export async function GET() {
   const actor = await getCurrentUser();
-  if (!actor || actor.role !== 'admin') {
+  if (!actor || !actor.isActive || actor.role !== 'admin') {
     return respuestaError('SIN_PERMISO', 'Solo el administrador ve el estado de las cuentas', 403);
   }
   const admin = clienteAdmin();

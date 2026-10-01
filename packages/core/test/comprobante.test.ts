@@ -123,6 +123,14 @@ describe('fecha legible', () => {
   it('no revienta con una fecha inválida', () => {
     expect(fechaComprobante('no es fecha')).toBe('');
   });
+
+  it('usa la hora del local, no la del celular (regla 17)', () => {
+    // 01:31 UTC del 16 es 22:31 del 15 en Santiago (UTC−3 en septiembre).
+    expect(fechaComprobante('2026-09-16T01:31:00Z', 'America/Santiago')).toBe('15-09-2026 22:31');
+    expect(comprobanteATexto(construirComprobante({
+      lineas: [linea('a', 1000)], pagos: efectivo(1000), fecha: '2026-09-16T01:31:00Z',
+    }), 32, 'America/Santiago')).toContain('15-09-2026 22:31');
+  });
 });
 
 describe('versión en texto para compartir', () => {

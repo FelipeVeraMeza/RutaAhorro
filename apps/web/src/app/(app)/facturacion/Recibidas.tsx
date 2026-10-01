@@ -110,6 +110,9 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
   const [notas, setNotas] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Registrada pero sin quedar en Por pagar: "Guardar" otra vez la volvía a
+  // registrar. Desde ahí el botón solo cierra.
+  const [yaRegistrada, setYaRegistrada] = useState(false);
 
   useEffect(() => { void repoProveedores().listar().then(setProveedores).catch(() => {}); }, []);
   // La lista llega después de abrir: un RUT escrito antes no se reconocía
@@ -149,6 +152,7 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
   }
 
   async function guardar() {
+    if (yaRegistrada) { onHecho(); return; }
     setError(null);
     if (!isValidRut(rut)) { setError('El RUT del proveedor no es válido'); return; }
     if (!razon.trim()) { setError('Falta la razón social'); return; }
@@ -169,6 +173,7 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
           // Ya estaba (se registró al recibir la mercadería): no es un error.
           if (!/FACTURA_PROVEEDOR_DUPLICADA/.test(String((e as { message?: string })?.message ?? e))) {
             setError(`La factura quedó registrada, pero no en Por pagar: ${toUserMessage(e)}. Regístrala en Compras → Por pagar.`);
+            setYaRegistrada(true);
             setGuardando(false);
             return;
           }
@@ -257,7 +262,7 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
         {error && <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
         <button onClick={() => void guardar()} disabled={guardando}
                 className="tap w-full rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50">
-          {guardando ? 'Guardando…' : 'Registrar'}
+          {guardando ? 'Guardando…' : yaRegistrada ? 'Cerrar' : 'Registrar'}
         </button>
       </div>
     </Modal>

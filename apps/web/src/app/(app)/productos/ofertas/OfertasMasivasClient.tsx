@@ -133,7 +133,7 @@ export function OfertasMasivasClient({ esAdmin }: { esAdmin: boolean }) {
         : '';
       setAviso({
         tipo: 'ok',
-        texto: `Oferta "desde ${oferta.tramo.desde}, ${describirTramo(oferta.tramo)}" aplicada a ${r.aplicados} ${r.aplicados === 1 ? 'producto' : 'productos'}.${saltados}`,
+        texto: `Oferta "desde ${String(oferta.tramo.desde).replace('.', ',')}, ${describirTramo(oferta.tramo)}" aplicada a ${r.aplicados} ${r.aplicados === 1 ? 'producto' : 'productos'}.${saltados}`,
       });
       setMarcados(new Set());
       await cargar();

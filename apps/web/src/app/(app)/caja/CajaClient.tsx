@@ -278,7 +278,13 @@ export function CajaClient({
               <label htmlFor="contado" className="block text-sm font-medium">
                 Efectivo contado
               </label>
-              <button type="button" onClick={() => setPorBillete((v) => !v)} aria-pressed={porBillete}
+              <button type="button" aria-pressed={porBillete}
+                // Al pasar a contar por billete, el total parte de los billetes
+                // (antes mostraba lo escrito a mano como si fuera el conteo).
+                onClick={() => {
+                  if (!porBillete) setContado(String(totalArqueo(Object.fromEntries(Object.entries(billetes).map(([k, v]) => [k, Number(v || 0)])))));
+                  setPorBillete((v) => !v);
+                }}
                 className="tap -my-2 px-2 text-sm text-marca-700 underline">
                 {porBillete ? 'Escribir el total' : 'Contar por billete'}
               </button>
@@ -476,6 +482,12 @@ export function CajaClient({
                 />
               )}
             </Campo>
+            {vistaMovimiento === 'egreso' && mov.valido && mov.valor > esperado && (
+              <p role="status" className="text-xs text-[var(--color-aviso)] bg-amber-50 px-3 py-2 rounded-lg">
+                En la caja debería haber {formatCLP(esperado)}: sacar {formatCLP(mov.valor)} deja el cierre en negativo.
+                Revisa el monto.
+              </p>
+            )}
             <Campo etiqueta="Motivo" obligatorio>
               {(p) => (
                 <input
@@ -551,7 +563,9 @@ export function CajaClient({
       </div>
 
       <button
-        onClick={() => setCerrando(true)}
+        // El "debería haber" venía de cuando se abrió la pantalla: con ventas
+        // hechas después en Vender, el cierre comparaba contra un esperado viejo.
+        onClick={() => { setCerrando(true); router.refresh(); }}
         className="tap w-full py-3.5 rounded-xl border-2 border-marca-500 text-marca-700 font-bold"
       >
         Cerrar caja

@@ -27,7 +27,7 @@ function servicio() {
 export async function POST(request: Request) {
   const actor = await getCurrentUser();
   // Doble verificación: la pantalla ya lo oculta, pero ocultar no es seguridad.
-  if (!actor || actor.role !== 'admin') return error('SIN_PERMISO', 'Solo el administrador guarda las claves del SII', 403);
+  if (!actor || !actor.isActive || actor.role !== 'admin') return error('SIN_PERMISO', 'Solo el administrador guarda las claves del SII', 403);
 
   const llave = process.env.SII_CLAVE_CIFRADO;
   const admin = servicio();
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
 /** Borrar las credenciales apaga la emisión real (fn_emision_sii_activa las exige). */
 export async function DELETE() {
   const actor = await getCurrentUser();
-  if (!actor || actor.role !== 'admin') return error('SIN_PERMISO', 'Solo el administrador borra las claves del SII', 403);
+  if (!actor || !actor.isActive || actor.role !== 'admin') return error('SIN_PERMISO', 'Solo el administrador borra las claves del SII', 403);
   const admin = servicio();
   if (!admin) return error('SIN_CONFIGURAR', 'El servidor no está configurado', 500);
   const { error: e } = await admin.from('sii_credenciales').delete().eq('tenant_id', actor.tenantId);

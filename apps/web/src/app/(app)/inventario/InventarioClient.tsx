@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  formatCLP, formatCantidad, validarCantidadStock, sugerirReposicion, toUserMessage, textoVencimiento, cantidadConUnidad,
+  formatCLP, formatCantidad, diaLocal, validarCantidadStock, sugerirReposicion, toUserMessage, textoVencimiento, cantidadConUnidad,
 } from '@rutaahorro/core';
 import { repoProductos, type Producto } from '@/lib/productos';
 import {
@@ -13,7 +13,7 @@ import {
 } from '@/lib/datos/inventario';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
-import { useFormatoFecha } from '@/lib/formatoFecha';
+import { useFormatoFecha, diaCorto } from '@/lib/formatoFecha';
 import { Encabezado, EstadoVacio } from '@/components/Encabezado';
 import { Icono } from '@/components/Icono';
 
@@ -34,7 +34,7 @@ export function InventarioClient({
   /** Admin y supervisor: un lote por vencer se puede poner en oferta (RF-M4-23). */
   puedeOfertar?: boolean;
 }) {
-  const { fechaHora } = useFormatoFecha();
+  const { fechaHora, zona } = useFormatoFecha();
   const [vista, setVista] = useState<Vista>('stock');
   const [productos, setProductos] = useState<Producto[]>([]);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
@@ -497,7 +497,7 @@ export function InventarioClient({
             <Icono nombre="descargar" tamano={16} /> Imprimir hoja para contar ({ETIQUETA_UBICACION[ubicacionToma].toLowerCase()})
           </button>
           <div id="hoja-conteo" aria-hidden>
-            <h2 style={{ fontSize: 14, fontWeight: 700 }}>Hoja de conteo · {ETIQUETA_UBICACION[ubicacionToma]} · {new Date().toLocaleDateString('es-CL')}</h2>
+            <h2 style={{ fontSize: 14, fontWeight: 700 }}>Hoja de conteo · {ETIQUETA_UBICACION[ubicacionToma]} · {diaCorto(diaLocal(new Date(), zona))}</h2>
             <p style={{ fontSize: 10, margin: '2px 0 6px' }}>Contó: ______________________ · Revisó: ______________________</p>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead><tr>
@@ -649,7 +649,7 @@ export function InventarioClient({
               {verCostos && <> Son {formatCLP(dandoDeBaja.valorEnRiesgo)} al costo.</>}
             </p>
 
-            <Campo etiqueta="Motivo" ayuda="Queda escrito en el historial.">
+            <Campo etiqueta="Motivo" obligatorio ayuda="Queda escrito en el historial.">
               {(props) => (
                 <input
                   {...props}

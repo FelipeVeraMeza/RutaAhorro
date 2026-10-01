@@ -55,7 +55,7 @@ export function ImportarClient() {
     setAviso(null);
     if (file.size > MAX_BYTES) {
       setError(
-        `El archivo pesa ${(file.size / 1024 / 1024).toFixed(1)} MB y el máximo son 4 MB. ` +
+        `El archivo pesa ${(file.size / 1024 / 1024).toLocaleString('es-CL', { maximumFractionDigits: 1 })} MB y el máximo son 4 MB. ` +
         'Divídelo en varias planillas y súbelas una por una.',
       );
       return;

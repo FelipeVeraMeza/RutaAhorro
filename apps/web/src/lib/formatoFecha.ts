@@ -38,6 +38,18 @@ export function formatoFechaHora(iso: string, zona: string): string {
   return `${v('day')}-${v('month')} ${v('hour')}:${v('minute')}`;
 }
 
+/**
+ * "2026-09-30 22:50", para planillas: "30-09 22:50" no lleva año, y un
+ * contador que exporta un rango de diciembre a enero no podía ordenarlo.
+ */
+export function formatoFechaHoraPlanilla(iso: string, zona: string): string {
+  const p = new Intl.DateTimeFormat('en-GB', {
+    year: 'numeric', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: zona,
+  }).formatToParts(new Date(iso));
+  const v = (t: string) => p.find((x) => x.type === t)?.value ?? '';
+  return `${v('year')}-${v('month')}-${v('day')} ${v('hour')}:${v('minute')}`;
+}
+
 export function useFormatoFecha() {
   const { zonaHoraria: zona } = useConfiguracion();
   return useMemo(() => ({
@@ -45,6 +57,7 @@ export function useFormatoFecha() {
     hora: (iso: string) => formatoHora(iso, zona),
     fecha: (iso: string) => formatoFecha(iso, zona),
     fechaHora: (iso: string) => formatoFechaHora(iso, zona),
+    fechaHoraPlanilla: (iso: string) => formatoFechaHoraPlanilla(iso, zona),
   }), [zona]);
 }
 

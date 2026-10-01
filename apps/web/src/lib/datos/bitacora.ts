@@ -89,6 +89,8 @@ function detalle(accion: string, entidad: string | null, antes: Record<string, u
 
 export async function leerBitacora(desde: string, hasta: string, accion: string | null): Promise<EntradaBitacora[]> {
   if (DEMO_ACTIVO) {
+    // La fila de ejemplo respeta el filtro: antes salía con "Anulaciones" elegido.
+    if (accion && accion.split(':')[0] !== 'price_change') return [];
     return [{ id: 'demo-1', fecha: new Date().toISOString(), quien: 'Felipe Vera', accion: 'price_change', nombre: ACCIONES.price_change, texto: '$1.490 → $1.590 · Arroz grado 1 · 1 kg' }];
   }
   const { zonaHoraria } = await configuracionLocal();

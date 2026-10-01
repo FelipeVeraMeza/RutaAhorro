@@ -143,4 +143,13 @@ describe('errores del alta de producto (fn_create_product)', () => {
   it('no deja pasar un código sin traducir como si fuera mensaje al usuario', () => {
     expect(toUserMessage('ALGO_QUE_NO_EXISTE')).not.toContain('ALGO_QUE_NO_EXISTE');
   });
+
+  it('traduce los códigos con dígitos y los que solo lanza la base (ronda 6)', () => {
+    // El patrón cortaba en el dígito: "OFERTA_SIN_FECHAS_DESDE_" no existía.
+    expect(toUserMessage({ message: 'OFERTA_SIN_FECHAS_DESDE_1' }))
+      .toBe(ERROR_MESSAGES.OFERTA_SIN_FECHAS_DESDE_1);
+    expect(errorCode({ message: 'OFERTA_SIN_FECHAS_DESDE_1' })).toBe('OFERTA_SIN_FECHAS_DESDE_1');
+    expect(toUserMessage('FACTURA_NO_EN_EMISION')).not.toContain('FACTURA_NO_EN_EMISION');
+    expect(ERROR_MESSAGES.FACTURA_NO_EN_EMISION).toBeTruthy();
+  });
 });

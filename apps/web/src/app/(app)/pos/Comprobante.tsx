@@ -1,4 +1,5 @@
 'use client';
+import { useFormatoFecha } from '@/lib/formatoFecha';
 
 import { useState } from 'react';
 import {
@@ -27,7 +28,8 @@ export function Comprobante({
   copia?: boolean;
 }) {
   const [copiado, setCopiado] = useState(false);
-  const texto = comprobanteATexto(datos);
+  const { zona } = useFormatoFecha();
+  const texto = comprobanteATexto(datos, 32, zona);
 
   async function compartir() {
     // La API nativa abre el selector del sistema: WhatsApp, correo, lo que
@@ -85,7 +87,7 @@ export function Comprobante({
               ))}
             </div>
 
-            <p>{fechaComprobante(datos.fecha)}</p>
+            <p>{fechaComprobante(datos.fecha, zona)}</p>
             <p>
               {datos.folio != null
                 ? `Venta N° ${datos.folio}`

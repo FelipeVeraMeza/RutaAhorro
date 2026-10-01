@@ -220,11 +220,18 @@ export function nombreMetodo(metodo: string): string {
 }
 
 /** "15-09-2026 20:31" — el formato que la gente lee en un ticket. */
-export function fechaComprobante(iso: string): string {
+export function fechaComprobante(iso: string, zona?: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  if (!zona) return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  // Con la zona del local (regla 17): un celular con otra zona imprimía
+  // otra hora, y de noche otro día, en el comprobante del cliente.
+  const partes = new Intl.DateTimeFormat('en-GB', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: zona,
+  }).formatToParts(d);
+  const v = (t: string) => partes.find((x) => x.type === t)?.value ?? '';
+  return `${v('day')}-${v('month')}-${v('year')} ${v('hour')}:${v('minute')}`;
 }
 
 /**
@@ -233,7 +240,7 @@ export function fechaComprobante(iso: string): string {
  * Se alinea a un ancho fijo porque WhatsApp respeta el monoespaciado dentro de
  * ```bloques```, y un ticket desalineado se lee como un error del sistema.
  */
-export function comprobanteATexto(c: Comprobante, ancho = 32): string {
+export function comprobanteATexto(c: Comprobante, ancho = 32, zona?: string): string {
   const fila = (izq: string, der: string) => {
     const espacio = Math.max(ancho - izq.length - der.length, 1);
     return izq + ' '.repeat(espacio) + der;
@@ -243,7 +250,7 @@ export function comprobanteATexto(c: Comprobante, ancho = 32): string {
   const out: string[] = [];
   if (c.local) out.push(c.local);
   for (const linea of encabezadoDocumento(c)) out.push(linea);
-  out.push(fechaComprobante(c.fecha) + (c.folio != null ? `  N° ${c.folio}` : ''));
+  out.push(fechaComprobante(c.fecha, zona) + (c.folio != null ? `  N° ${c.folio}` : ''));
   if (c.cajero) out.push(`Atendió: ${c.cajero}`);
   out.push(separador);
 

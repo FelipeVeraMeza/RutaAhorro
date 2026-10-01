@@ -47,13 +47,20 @@ export function PorPagar({ proveedores, puedeAnular, onCambio }: {
 
   const hoy = diaLocal(new Date(), zonaHoraria);
   const pendientes = useMemo(() => facturas.filter((f) => !f.pagadaEn && !f.anulada), [facturas]);
+  const todasPagadas = useMemo(() => facturas.filter((f) => f.pagadaEn && !f.anulada).length, [facturas]);
   const pagadas = useMemo(() => facturas.filter((f) => f.pagadaEn && !f.anulada)
     .sort((a, b) => (b.pagadaEn ?? '').localeCompare(a.pagadaEn ?? '')).slice(0, 30), [facturas]);
   const totalPendiente = pendientes.reduce((s, f) => s + f.monto, 0);
   const porProveedor = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const f of pendientes) m.set(f.proveedor, (m.get(f.proveedor) ?? 0) + f.monto);
-    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+    // Por proveedor (su id), no por nombre: dos con el mismo nombre se sumaban
+    // en una sola fila.
+    const m = new Map<string, { nombre: string; monto: number }>();
+    for (const f of pendientes) {
+      const x = m.get(f.proveedorId) ?? { nombre: f.proveedor, monto: 0 };
+      x.monto += f.monto;
+      m.set(f.proveedorId, x);
+    }
+    return [...m.entries()].sort((a, b) => b[1].monto - a[1].monto);
   }, [pendientes]);
 
   async function listo(texto: string) {
@@ -86,8 +93,8 @@ export function PorPagar({ proveedores, puedeAnular, onCambio }: {
         </div>
         {porProveedor.length > 1 && (
           <ul className="mt-2 text-xs text-[var(--texto-suave)] space-y-0.5" aria-label="Adeudado por proveedor">
-            {porProveedor.map(([p, m]) => (
-              <li key={p} className="flex justify-between gap-2"><span className="truncate">{p}</span><span className="num">{formatCLP(m)}</span></li>
+            {porProveedor.map(([id, x]) => (
+              <li key={id} className="flex justify-between gap-2"><span className="truncate">{x.nombre}</span><span className="num">{formatCLP(x.monto)}</span></li>
             ))}
           </ul>
         )}
@@ -134,7 +141,8 @@ export function PorPagar({ proveedores, puedeAnular, onCambio }: {
       {pagadas.length > 0 && (
         <div>
           <button onClick={() => setVerPagadas((v) => !v)} aria-expanded={verPagadas} className="btn btn-fantasma btn-chico">
-            {verPagadas ? 'Ocultar' : 'Ver'} pagadas ({pagadas.length})
+            {/* Se muestran las 30 más recientes: con 45 pagadas decía "(30)". */}
+            {verPagadas ? 'Ocultar' : 'Ver'} pagadas ({todasPagadas > pagadas.length ? `las ${pagadas.length} últimas de ${todasPagadas}` : todasPagadas})
           </button>
           {verPagadas && (
             <ul className="tarjeta divide-y divide-[var(--borde)] mt-2 text-sm" aria-label="Facturas pagadas">
@@ -172,7 +180,10 @@ function NuevaFactura({ proveedores, hoy, onCerrar, onListo }: {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const v = validarMonto(monto, { etiqueta: 'monto', maximo: 100_000_000 });
-  const listo = proveedorId && numero.trim() && v.valido && v.valor > 0 && vence;
+  // Como en Facturas recibidas: una factura no puede venir emitida mañana
+  // (un año mal tecleado la dejaba "por vencer" en otra fecha).
+  const emitidaFutura = !!emitida && emitida > hoy;
+  const listo = proveedorId && numero.trim() && v.valido && v.valor > 0 && vence && !emitidaFutura;
 
   async function guardar() {
     if (!listo || enviando) return;
@@ -209,8 +220,8 @@ function NuevaFactura({ proveedores, hoy, onCerrar, onListo }: {
           </Campo>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <Campo etiqueta="Emitida el">
-            {(p) => <input {...p} type="date" value={emitida} onChange={(e) => setEmitida(e.target.value)}
+          <Campo etiqueta="Emitida el" error={emitidaFutura ? 'No puede ser una fecha futura' : null}>
+            {(p) => <input {...p} type="date" value={emitida} max={hoy} onChange={(e) => setEmitida(e.target.value)}
                            className="tap w-full px-2 rounded-lg border border-[var(--borde)]" />}
           </Campo>
           <Campo etiqueta="Vence el" obligatorio>

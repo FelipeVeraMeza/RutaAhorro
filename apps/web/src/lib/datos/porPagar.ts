@@ -37,6 +37,8 @@ export interface FacturaProveedor {
   pagadaEn: string | null;
   metodo: MetodoPagoProveedor | null;
   anulada: boolean;
+  /** La recepción de la que viene (solo la maqueta lo guarda aquí). */
+  receiptId?: string | null;
 }
 
 export interface NuevaFactura {
@@ -120,7 +122,7 @@ const demo: typeof base = {
     lista.push({
       id, proveedorId, proveedor: provs.find((p) => p.id === proveedorId)?.nombre ?? 'Proveedor',
       numero: numero!.trim(), emitida: f.emitida ?? null, vence: f.vence, monto, nota: f.nota?.trim() || null,
-      pagadaEn: null, metodo: null, anulada: false,
+      pagadaEn: null, metodo: null, anulada: false, receiptId: f.receiptId ?? null,
     });
     await guardar(lista);
     return id;
@@ -149,6 +151,18 @@ const demo: typeof base = {
     await guardar(lista);
   },
 };
+
+/**
+ * En la maqueta, anular una recepción anula su factura si no está pagada
+ * (como fn_void_receipt en 0031). Devuelve true si ya estaba pagada.
+ */
+export async function anularPorRecepcionDemo(receiptId: string, motivo: string): Promise<boolean> {
+  const lista = await leer();
+  const propias = lista.filter((x) => x.receiptId === receiptId && !x.anulada);
+  for (const f of propias) if (!f.pagadaEn) { f.anulada = true; f.nota = `Recepción anulada: ${motivo.trim()}`; }
+  await guardar(lista);
+  return propias.some((f) => f.pagadaEn);
+}
 
 const repo = () => (DEMO_ACTIVO ? demo : base);
 export const facturasProveedor = () => repo().listar();

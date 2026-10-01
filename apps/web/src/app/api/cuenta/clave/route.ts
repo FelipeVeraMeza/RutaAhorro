@@ -18,6 +18,13 @@ export async function POST(request: Request) {
     return respuestaError('CLAVE_CORTA', `La contraseña necesita al menos ${MINIMO_CLAVE} caracteres`, 400);
   }
 
+  // Sin la llave de servicio no se puede borrar la marca de contraseña
+  // temporal: la clave cambiaría y la persona volvería a /clave para siempre.
+  const admin = clienteAdmin();
+  if (yo.debeCambiarClave && !admin) {
+    return respuestaError('SERVIDOR_SIN_LLAVE', 'El servidor no tiene configurada la llave de Supabase (SUPABASE_SECRET_KEY)', 500);
+  }
+
   const client = await createClient();
   const { error } = await client.auth.updateUser({ password: clave });
   if (error) {
@@ -29,7 +36,6 @@ export async function POST(request: Request) {
     return respuestaError(msg[0], msg[1], 400);
   }
 
-  const admin = clienteAdmin();
   if (admin) {
     await admin.auth.admin.updateUserById(yo.id, { app_metadata: { debe_cambiar_clave: false } });
   }

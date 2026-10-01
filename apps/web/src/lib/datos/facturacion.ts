@@ -1,6 +1,6 @@
 'use client';
 
-import { resumenFactura, type RegistroDte } from '@rutaahorro/core';
+import { resumenFactura, diaLocal, type RegistroDte } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import { getMeta, setMeta } from '../offline/db';
@@ -326,7 +326,8 @@ async function leerDemo(): Promise<Demo> {
 }
 const guardarDemo = (d: Demo) => setMeta(CLAVE_DEMO, JSON.stringify(d));
 const mesDe = (fecha: string) => fecha.slice(0, 7);
-const hoy = () => new Date().toLocaleDateString('en-CA');
+// El día del local (regla 17), no el del celular.
+const hoy = async () => diaLocal(new Date(), (await (await import('./configuracion')).configuracionLocal()).zonaHoraria);
 
 const demoRepo: RepositorioFacturacion = {
   async emitidas(mes) { return (await leerDemo()).facturas.filter((f) => mesDe(f.fechaEmision) === mes); },
@@ -340,7 +341,7 @@ const demoRepo: RepositorioFacturacion = {
     const numero = d.facturas.length + 1;
     const factura: Factura = {
       id: f.clientUuid, numero, modo: 'simulacion', estado: 'emitida', receptor: f.receptor, formaPago: f.formaPago,
-      fechaEmision: hoy(), observaciones: f.observaciones ?? null, neto: r.neto, iva: r.iva, ivaPct: 19,
+      fechaEmision: await hoy(), observaciones: f.observaciones ?? null, neto: r.neto, iva: r.iva, ivaPct: 19,
       impuestosAdicionales: r.totalAdicionales, total: r.total, folio: numero, dte: null,
       lineas: f.lineas.map((l, i) => ({ id: `${f.clientUuid}-${i}`, linea: i + 1, productId: l.productId ?? null, nombre: l.nombre,
         descripcion: l.descripcion ?? null, unidad: null, cantidad: l.cantidad, precio: l.precio, descuento: l.descuento ?? 0,

@@ -138,6 +138,8 @@ export const ERROR_MESSAGES: Record<string, string> = {
   FACTURA_YA_PAGADA: 'Esa factura ya está pagada',
   FACTURA_ANULADA: 'Esa factura está anulada',
   RECEPCION_NO_ENCONTRADA: 'No se encontró esa recepción',
+  ACTECO_INVALIDO: 'El código de actividad económica son solo números (hasta 6), como 471100',
+  FACTURA_NO_EN_EMISION: 'Esa factura ya no está esperando respuesta del SII. Recarga para ver cómo quedó',
   // Cuentas con contraseña temporal (/api/usuarios/crear y /clave)
   SIN_CONEXION: 'No hay conexión con el servidor. Revisa internet y vuelve a intentar',
   CLAVE_CORTA: 'La contraseña necesita al menos 8 caracteres',
@@ -165,7 +167,7 @@ export function toUserMessage(error: unknown): string {
       ? error
       : ((error as { message?: string }).message ?? '');
 
-  const match = raw.match(/([A-Z_]{4,})(?::\s*(.*))?/);
+  const match = raw.match(/([A-Z][A-Z0-9_]{3,})(?::\s*(.*))?/);
   if (match) {
     const [, code, detail] = match;
     const base = ERROR_MESSAGES[code];
@@ -212,6 +214,6 @@ export function toUserMessage(error: unknown): string {
 
 export function errorCode(error: unknown): string | null {
   const raw = typeof error === 'string' ? error : ((error as { message?: string })?.message ?? '');
-  const match = raw.match(/([A-Z_]{4,})/);
+  const match = raw.match(/([A-Z][A-Z0-9_]{3,})/);
   return match && ERROR_MESSAGES[match[1]] ? match[1] : null;
 }

@@ -57,7 +57,7 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
   const [porHora, setPorHora] = useState<ReturnType<typeof ventasPorHora>>([]);
   const [control, setControl] = useState<ControlAnulaciones | null>(null);
   const [exportandoDetalle, setExportandoDetalle] = useState(false);
-  const { fechaHora } = useFormatoFecha();
+  const { fechaHora, fechaHoraPlanilla } = useFormatoFecha();
 
   const [ordenProductos, setOrdenProductos] = useState<'monto' | 'unidades'>('monto');
   const [cargando, setCargando] = useState(true);
@@ -110,7 +110,7 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
       const filas = await repoReportes().ventasDetalladas(rango);
       exportar('Ventas detalladas', filas, [
         { titulo: 'folio', valor: (f) => f.folio },
-        { titulo: 'fecha', valor: (f) => fechaHora(f.fecha) },
+        { titulo: 'fecha', valor: (f) => fechaHoraPlanilla(f.fecha) },
         { titulo: 'estado', valor: (f) => f.estado },
         { titulo: 'documento', valor: (f) => f.documento },
         { titulo: 'vendedor', valor: (f) => f.vendedor ?? '' },
@@ -456,7 +456,7 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
               ], [
                 { titulo: 'tipo', valor: (f) => f.tipo },
                 { titulo: 'folio', valor: (f) => f.n },
-                { titulo: 'fecha', valor: (f) => fechaHora(f.fecha) },
+                { titulo: 'fecha', valor: (f) => fechaHoraPlanilla(f.fecha) },
                 { titulo: 'monto', valor: (f) => f.monto },
                 { titulo: 'motivo', valor: (f) => f.motivo },
                 { titulo: 'hecha_por', valor: (f) => f.quien },

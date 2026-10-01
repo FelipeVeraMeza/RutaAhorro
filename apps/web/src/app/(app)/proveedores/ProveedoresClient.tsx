@@ -41,6 +41,7 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
   const [anulando, setAnulando] = useState<Recepcion | null>(null);
   const [motivo, setMotivo] = useState('');
   const [anulacionEnCurso, setAnulacionEnCurso] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -64,7 +65,10 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
     // celular lento mandan dos anulaciones de la misma recepción.
     setAnulacionEnCurso(true);
     try {
-      await repoProveedores().anularRecepcion(anulando.id, motivo.trim());
+      const { facturaYaPagada } = await repoProveedores().anularRecepcion(anulando.id, motivo.trim());
+      setAviso(facturaYaPagada
+        ? 'Recepción anulada. Su factura ya estaba pagada: queda como pagada; pide la nota de crédito al proveedor.'
+        : 'Recepción anulada: se sacó el stock, el costo volvió al de antes y su factura por pagar (si tenía) quedó anulada.');
       setAnulando(null); setMotivo('');
       await cargar();
     } catch (e) {
@@ -117,6 +121,10 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
            className={`text-sm px-3 py-2 rounded-lg mb-3 ${avisoInicial.tipo === 'error' ? 'bg-red-50 text-red-900' : 'bg-marca-100 text-marca-900'}`}>
           {avisoInicial.texto}
         </p>
+      )}
+
+      {aviso && (
+        <p role="status" className="text-sm px-3 py-2 rounded-lg mb-3 bg-marca-100 text-marca-900">{aviso}</p>
       )}
 
       {error && (
@@ -243,8 +251,9 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
           <div className="p-5 space-y-3">
             <h2 className="font-semibold">Anular recepción</h2>
             <p className="text-sm text-[var(--texto-suave)]">
-              Se devolverá el stock al valor anterior. La recepción no se borra: queda
-              registrada como anulada junto con el motivo.
+              Se saca del stock lo que entró, el costo promedio vuelve al de antes y,
+              si tiene una factura por pagar sin pagar, se anula con ella. La recepción
+              no se borra: queda registrada como anulada junto con el motivo.
             </p>
             <Campo etiqueta="Motivo" obligatorio>
               {(p) => (

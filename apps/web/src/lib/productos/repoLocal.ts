@@ -306,11 +306,17 @@ export const repoLocal: RepositorioProductos = {
         }
 
         // Si el SKU ya existe, se actualiza en vez de duplicar.
-        const existente = fila.sku
+        let existente = fila.sku
           ? (await db().products.toArray()).find(
               (p) => p.sku && normalizeSearch(p.sku) === normalizeSearch(fila.sku!),
             )
           : undefined;
+        // Sin SKU, el código de barras identifica al producto: una planilla
+        // del proveedor no trae SKU y cada fila fallaba con "código en uso".
+        if (!existente && fila.codigo_barras) {
+          const b = await db().barcodes.get(fila.codigo_barras);
+          if (b) existente = await db().products.get(b.productId);
+        }
 
         if (existente) {
           // Sin código en la fila no se tocan los códigos del producto: una

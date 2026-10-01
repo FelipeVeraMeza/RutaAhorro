@@ -36,6 +36,8 @@ interface Borrador {
   proveedorId: string;
   tipoDoc: string;
   documento: string;
+  /** El vencimiento de la factura por pagar (antes se perdía al volver). */
+  vence?: string;
   lineas: LineaRecepcion[];
 }
 
@@ -98,15 +100,15 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
   useEffect(() => {
     const b = leerBorrador(usuarioId);
     if (b) {
-      setProveedorId(b.proveedorId); setTipoDoc(b.tipoDoc); setDocumento(b.documento);
+      setProveedorId(b.proveedorId); setTipoDoc(b.tipoDoc); setDocumento(b.documento); setVence(b.vence ?? '');
       setLineas(b.lineas);
       setAviso(`Se recuperó la recepción que estabas cargando (${b.lineas.length} ${b.lineas.length === 1 ? 'producto' : 'productos'})`);
     }
     setRestaurado(true);
   }, [usuarioId]);
   useEffect(() => {
-    if (restaurado) guardarBorrador({ usuario: usuarioId, proveedorId, tipoDoc, documento, lineas });
-  }, [restaurado, usuarioId, proveedorId, tipoDoc, documento, lineas]);
+    if (restaurado) guardarBorrador({ usuario: usuarioId, proveedorId, tipoDoc, documento, vence, lineas });
+  }, [restaurado, usuarioId, proveedorId, tipoDoc, documento, vence, lineas]);
 
   const agregar = useCallback((p: {
     productId: string; nombre: string; perecible: boolean;
@@ -371,7 +373,13 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <p className="text-sm font-medium min-w-0 truncate">{l.nombre}</p>
                   <button
-                    onClick={() => setLineas((p) => p.filter((x) => x.productId !== l.productId))}
+                    onClick={() => {
+                      // El texto escrito se olvida con la línea: al volver a
+                      // agregarla mostraba la cantidad vieja pero contaba 1.
+                      setLineas((p) => p.filter((x) => x.productId !== l.productId));
+                      setCantidadTexto(({ [l.productId]: _c, ...resto }) => resto);
+                      setCostoTexto(({ [l.productId]: _k, ...resto }) => resto);
+                    }}
                     className="tap px-2 text-sm text-[var(--color-alerta)] shrink-0"
                     aria-label={`Quitar ${l.nombre}`}
                   >
@@ -505,7 +513,7 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-[var(--texto-suave)]">
                 {lineas.length} {lineas.length === 1 ? 'producto' : 'productos'}
-                <button type="button" onClick={() => { if (window.confirm('¿Quitar todos los productos de esta recepción?')) { setLineas([]); setCantidadTexto({}); } }}
+                <button type="button" onClick={() => { if (window.confirm('¿Quitar todos los productos de esta recepción?')) { setLineas([]); setCantidadTexto({}); setCostoTexto({}); } }}
                   className="tap ml-2 px-2 text-xs underline">Vaciar</button>
               </span>
               <span className="num text-xl font-bold">{formatCLP(total)}</span>

@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  diaLocal,
   formatCLP, etiquetaSvg, generateInternalBarcode, toUserMessage, admiteDecimales,
 } from '@rutaahorro/core';
 import { repoProductos, type Producto } from '@/lib/productos';
 import { Encabezado } from '@/components/Encabezado';
+import { useFormatoFecha, diaCorto } from '@/lib/formatoFecha';
 
 /**
  * Impresión de etiquetas con código de barra (RF-M2-13).
@@ -85,16 +87,22 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
     setGenerando(p.id);
     setError(null);
     try {
-      const usados = productos
+      // Del catálogo COMPLETO, desactivados incluidos: con una búsqueda
+      // escrita la lista visible es parcial, y el "siguiente" chocaba con el
+      // código de un producto que no se estaba viendo.
+      const todos = await repoProductos().listar({ soloActivos: false }, false);
+      const usados = todos
         .flatMap((x) => x.codigos)
         .filter((c) => /^200\d{10}$/.test(c))
         .map((c) => Number(c.slice(3, 12)));
-      const siguiente = (usados.length > 0 ? Math.max(...usados) : 0) + 1;
+      let siguiente = (usados.length > 0 ? Math.max(...usados) : 0) + 1;
 
       let codigo = generateInternalBarcode(siguiente);
-      // Red de seguridad por si otro usuario asignó uno en paralelo.
-      if (await repoProductos().codigoEnUso(codigo, p.id)) {
-        codigo = generateInternalBarcode(siguiente + Math.floor(Math.random() * 500) + 1);
+      // Red de seguridad por si otro usuario asignó uno en paralelo: se
+      // prueba el siguiente hasta encontrar uno libre (antes, un solo intento).
+      for (let i = 0; i < 20 && await repoProductos().codigoEnUso(codigo, p.id); i++) {
+        siguiente += 1;
+        codigo = generateInternalBarcode(siguiente);
       }
 
       await repoProductos().actualizar(p.id, {
@@ -277,7 +285,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
                       onClick={() => cambiarCantidad(p.id, -1)}
                       disabled={n === 0}
                       aria-label={`Una etiqueta menos de ${p.nombre}`}
-                      className="tap w-9 h-9 rounded-lg border border-[var(--borde)] disabled:opacity-30"
+                      className="tap w-11 h-11 rounded-lg border border-[var(--borde)] disabled:opacity-30"
                     >
                       −
                     </button>
@@ -285,7 +293,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
                     <button
                       onClick={() => cambiarCantidad(p.id, 1)}
                       aria-label={`Una etiqueta más de ${p.nombre}`}
-                      className="tap w-9 h-9 rounded-lg border border-[var(--borde)]"
+                      className="tap w-11 h-11 rounded-lg border border-[var(--borde)]"
                     >
                       +
                     </button>
@@ -359,6 +367,9 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
  * para que salga del mismo tamaño en cualquier impresora.
  */
 function CartelGondola({ p }: { p: Producto }) {
+  // El día del local (regla 17), como en el resto: antes salía en la zona y
+  // el formato del celular ("1/10/2026").
+  const { zona } = useFormatoFecha();
   const porUnidad = admiteDecimales(p.unidad) ? `el ${p.unidad}` : null;
   return (
     <div className="etiqueta" style={{
@@ -373,7 +384,7 @@ function CartelGondola({ p }: { p: Producto }) {
       </p>
       <p style={{ fontSize: '2.4mm', margin: 0, display: 'flex', justifyContent: 'space-between' }}>
         <span>{p.codigos[0] ?? p.sku ?? ''}</span>
-        <span>{new Date().toLocaleDateString('es-CL')}</span>
+        <span>{diaCorto(diaLocal(new Date(), zona))}</span>
       </p>
     </div>
   );

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatCLP, formatCantidad, toUserMessage, validarMonto, validarCantidadVenta, isValidRut, formatRut,
-  resumenFactura, precioConIva, cantidadConUnidad, type LineaFactura, coincide
+  resumenFactura, precioConIva, cantidadConUnidad, type LineaFactura, coincide, formatPct
 } from '@rutaahorro/core';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
@@ -47,6 +47,8 @@ interface Borrador {
   observaciones: string;
   modo: ModoPrecio;
   lineas: LineaForm[];
+  /** El identificador anti-duplicado de esta factura: sobrevive a recargar. */
+  clientUuid?: string;
 }
 
 const CLAVE_BORRADOR = 'facturacion:borrador';
@@ -109,6 +111,9 @@ export function NuevaFactura({ usuarioId, base, onEmitida }: {
         if (b && b.usuario === usuarioId) {
           setClienteId(b.clienteId); setReceptor(b.receptor); setFormaPago(b.formaPago);
           setObservaciones(b.observaciones); setModo(b.modo); setLineas(b.lineas);
+          // Si la emisión se cortó y se recargó, se reintenta con el MISMO
+          // identificador: la base reconoce la factura y no emite otra.
+          if (b.clientUuid) setClientUuid(b.clientUuid);
         }
       } catch { /* sin borrador */ }
     }
@@ -120,10 +125,10 @@ export function NuevaFactura({ usuarioId, base, onEmitida }: {
     if (!listo.current) return;
     try {
       sessionStorage.setItem(CLAVE_BORRADOR, JSON.stringify({
-        usuario: usuarioId, clienteId, receptor, formaPago, observaciones, modo, lineas,
+        usuario: usuarioId, clienteId, receptor, formaPago, observaciones, modo, lineas, clientUuid,
       } satisfies Borrador));
     } catch { /* sin almacenamiento: el borrador vive solo en memoria */ }
-  }, [usuarioId, clienteId, receptor, formaPago, observaciones, modo, lineas]);
+  }, [usuarioId, clienteId, receptor, formaPago, observaciones, modo, lineas, clientUuid]);
 
   // ------------------------------------------------------------ cálculos
   const calculadas = lineas.map((l) => {
@@ -133,7 +138,7 @@ export function NuevaFactura({ usuarioId, base, onEmitida }: {
     const precio = modo === 'neto' ? precioConIva(pr.valor, ivaPct, l.tasa) : pr.valor;
     const linea: LineaFactura = {
       productId: l.productId, nombre: l.nombre, cantidad: cant.valor, precio, descuento: desc.valor,
-      tasaAdicional: l.tasa, nombreAdicional: l.tasa ? `Imp. adicional ${l.tasa}%` : null,
+      tasaAdicional: l.tasa, nombreAdicional: l.tasa ? `Imp. adicional ${formatPct(l.tasa)}` : null,
     };
     return { l, cant, pr, desc, precio, linea };
   });

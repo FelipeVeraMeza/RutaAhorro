@@ -264,27 +264,33 @@ const repoLocal: RepositorioReportes = {
       .sort((a, b) => b.valorCosto - a.valorCosto);
   },
 
-  async ajustes() {
+  async ajustes({ desde, hasta }) {
     // Los ajustes de demo salen del kardex local, que sí es real: lo que se
-    // ajustó en la pantalla de Inventario aparece acá.
+    // ajustó en la pantalla de Inventario aparece acá. Con el día del local y
+    // el costo de CADA producto: antes se usaba el del primero que hubiera,
+    // y salían todos los días, sin mirar el rango elegido.
     const { db } = await import('../offline/db');
+    const { configuracionLocal } = await import('./configuracion');
+    const { zonaHoraria } = await configuracionLocal();
     const raw = await db().meta.get('demo:movimientos');
     const movs = raw?.value
       ? (JSON.parse(raw.value) as Array<{
-          fecha: string; tipo: string; productoNombre: string;
+          fecha: string; tipo: string; productoId?: string; productoNombre: string;
           cantidad: number; motivo: string | null; usuario: string | null;
         }>)
       : [];
     const costos = JSON.parse((await db().meta.get('demo:costos'))?.value ?? '{}') as Record<string, number>;
     return movs
       .filter((m) => ['ajuste_positivo', 'ajuste_negativo', 'merma', 'toma_inventario'].includes(m.tipo))
-      .map((m) => ({
-        fecha: m.fecha,
+      .map((m) => ({ m, dia: diaLocal(new Date(m.fecha), zonaHoraria) }))
+      .filter(({ dia }) => dia >= desde && dia <= hasta)
+      .map(({ m, dia }) => ({
+        fecha: dia,
         tipo: m.tipo,
         productoNombre: m.productoNombre,
         cantidad: m.cantidad,
         motivo: m.motivo,
-        impacto: Math.round(m.cantidad * (Object.values(costos)[0] ?? 0)),
+        impacto: Math.round(m.cantidad * (m.productoId ? costos[m.productoId] ?? 0 : 0)),
         usuario: m.usuario,
       }));
   },

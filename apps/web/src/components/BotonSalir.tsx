@@ -19,7 +19,15 @@ const DialogosSalir = dynamic(() => import('./DialogosSalir').then((m) => m.Dial
  * También borra las pantallas que el celular guardó para funcionar sin red:
  * la siguiente persona no debe ver la del anterior.
  */
-export function BotonSalir({ className, children }: { className?: string; children: React.ReactNode }) {
+export function BotonSalir({ className, children, sinPreguntar = false }: {
+  className?: string; children: React.ReactNode;
+  /**
+   * Sale directo. Desde la pantalla de bloqueo los diálogos quedaban DEBAJO
+   * (z-50 contra z-100): "Es otra persona: salir" no hacía nada visible si la
+   * caja seguía abierta. Las ventas sin enviar no se pierden igual.
+   */
+  sinPreguntar?: boolean;
+}) {
   const form = useRef<HTMLFormElement>(null);
   const [pendientes, setPendientes] = useState(0);
   const [enviando, setEnviando] = useState(false);
@@ -37,6 +45,7 @@ export function BotonSalir({ className, children }: { className?: string; childr
 
   async function alPedirSalir(e: React.FormEvent) {
     e.preventDefault();
+    if (sinPreguntar) { await salir(); return; }
     try {
       const { pendingCount } = await import('@/lib/offline/sync');
       const n = await pendingCount();

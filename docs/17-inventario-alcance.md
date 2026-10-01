@@ -153,7 +153,7 @@ De los **101 requerimientos funcionales**:
 | M3-06 | Recalcular costo promedio ponderado | ✅ | Probado, incluidos stock cero y negativo |
 | M3-07 | Cargar recepción escaneando | ⬜ | El lector existe, falta la pantalla |
 | M3-08 | Advertir variación de costo | ✅ | Aviso en la pantalla de recepción |
-| M3-09 | Anular recepción | ✅ | `fn_void_receipt` invocada desde la app |
+| M3-09 | Anular recepción | ✅ | `fn_void_receipt` invocada desde la app. **2026-10-01 (docs/27, N° 64–66):** no rebajaba el lote, no devolvía el costo promedio ni anulaba la factura por pagar; corregido en 0031 (`anular-recepcion.test.mjs`), **sin aplicar en Supabase** |
 | M3-10 | Historial de compras por proveedor | ⬜ | — |
 | M3-11 | Orden de compra sugerida | ✅ | Compras → Qué comprar: hasta el doble del mínimo, WhatsApp, copiar, Excel (`compras.ts`, 2026-09-30) |
 
@@ -179,7 +179,7 @@ De los **101 requerimientos funcionales**:
 | M4-12 | Consultar kardex con filtros | 🟡 | Hay pantalla, pero **sin filtros**: 80 movimientos fijos, sin filtrar por producto, fecha ni tipo |
 | M4-13 | Stock por ubicación | ✅ | Bodega y sala (0014). Probado en base y navegador |
 | M4-14 | Marcar producto como perecible | ✅ | Desde el formulario de producto |
-| M4-15 | Exigir vencimiento al recepcionar | ✅ | Validado en base y pedido en la pantalla |
+| M4-15 | Exigir vencimiento al recepcionar | ✅ | Validado en base y pedido en la pantalla. **2026-10-01 (docs/27, N° 67):** en la base, recibir un perecible fallaba con REGISTRO_INMUTABLE (el disparador del kardex rechazaba anotar el lote); corregido en 0031 y probado (`anular-recepcion.test.mjs`), **sin aplicar en Supabase** |
 | M4-16 | Stock por lote | ✅ | **Corregido 2026-09-17:** figuraba como visible en Stock y no lo estaba. La base sí lo mantenía; ninguna pantalla leía `v_stock_by_lot` ni `v_expiring_lots`. Hoy hay pestaña Lotes |
 | M4-17 | Consumo FEFO automático | ✅ | Probado: no descuenta dos veces del mismo lote |
 | M4-18 | Alertas de vencimiento | ✅ | Vista + trabajo del worker + pantalla |
@@ -336,7 +336,7 @@ base y solo se ven parcialmente en Inicio.
 | RF | Ítem | Estado | Falta |
 |---|---|:--:|---|
 | M1-16 | Aviso de Bloq Mayús | ✅ | — |
-| M1-17 | Pausa tras intentos fallidos | ✅ | — |
+| M1-17 | Pausa tras intentos fallidos | ✅ | Ingreso. **2026-10-01 (docs/27, N° 62):** la pantalla de bloqueo por inactividad no pausaba; ahora sí (30 s × n cada 5 fallos) — 🟡 sin prueba propia para el bloqueo |
 | M1-18 | Recordar el correo | ✅ | — |
 | M1-19 | Bloqueo por inactividad | ✅ | — |
 | M1-20 | Contraseña temporal sin cambiar | ✅ | — |

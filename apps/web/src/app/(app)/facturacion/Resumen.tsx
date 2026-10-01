@@ -47,8 +47,10 @@ export function Resumen() {
     const a = document.createElement('a');
     a.href = url;
     a.download = nombreArchivoReporte('Compras y ventas por mes');
-    a.click();
-    URL.revokeObjectURL(url);
+    // Como en Reportes: revocar la URL en la misma vuelta que el clic
+    // cancela la descarga en Safari de iPhone.
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   if (error) return <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>;

@@ -22,6 +22,7 @@ export function BitacoraClient() {
   useEffect(() => {
     let vivo = true;
     setFilas(null);
+    setError(null); // antes el error de una consulta quedaba pegado sobre las siguientes
     void leerBitacora(desde, hasta, accion || null)
       .then((f) => { if (vivo) setFilas(f); })
       .catch((e) => { if (vivo) { setError(toUserMessage(e)); setFilas([]); } });

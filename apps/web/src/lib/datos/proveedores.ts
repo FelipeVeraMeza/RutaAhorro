@@ -55,6 +55,8 @@ export interface Recepcion {
   total: number;
   estado: 'confirmada' | 'anulada';
   lineas: number;
+  /** Solo la maqueta: lo recibido y el costo de antes, para poder anularla. */
+  detalle?: Array<{ productId: string; cantidad: number; costo: number; costoAntes: number }>;
 }
 
 export interface RepositorioProveedores {
@@ -69,7 +71,8 @@ export interface RepositorioProveedores {
     documento: string | null;
     lineas: LineaRecepcion[];
   }): Promise<{ id: string; total: number }>;
-  anularRecepcion(id: string, motivo: string): Promise<void>;
+  /** Devuelve si su factura por pagar ya estaba pagada (y por eso no se anuló). */
+  anularRecepcion(id: string, motivo: string): Promise<{ facturaYaPagada: boolean }>;
 }
 
 // --------------------------------------------------------------- demo local
@@ -137,9 +140,11 @@ const repoLocal: RepositorioProveedores = {
     // Sube el stock y recalcula el costo promedio, igual que fn_confirm_receipt
     const costos = JSON.parse((await db().meta.get('demo:costos'))?.value ?? '{}') as Record<string, number>;
 
+    const detalle: NonNullable<Recepcion['detalle']> = [];
     for (const l of lineas) {
       const prod = await db().products.get(l.productId);
       if (!prod) continue;
+      detalle.push({ productId: l.productId, cantidad: l.cantidad, costo: l.costoUnitario, costoAntes: costos[l.productId] ?? 0 });
 
       const nuevoCosto = weightedAverageCost({
         currentStock: prod.stock,
@@ -163,20 +168,40 @@ const repoLocal: RepositorioProveedores = {
       proveedorNombre: proveedores.find((p) => p.id === proveedorId)?.nombre ?? null,
       documento, tipoDocumento,
       fecha: new Date().toISOString(),
-      total, estado: 'confirmada', lineas: lineas.length,
+      total, estado: 'confirmada', lineas: lineas.length, detalle,
     });
     await guardarJson(KEY_REC, rs);
 
     return { id, total };
   },
 
-  async anularRecepcion(id) {
+  // Como fn_void_receipt (0031): saca el stock, devuelve el costo promedio y
+  // anula la factura por pagar si no se pagó.
+  async anularRecepcion(id, motivo) {
     const rs = await leerJson<Recepcion[]>(KEY_REC, []);
     const r = rs.find((x) => x.id === id);
     if (!r) throw new Error('NO_ENCONTRADO');
     if (r.estado === 'anulada') throw new Error('RECEPCION_YA_ANULADA');
+    const costos = JSON.parse((await db().meta.get('demo:costos'))?.value ?? '{}') as Record<string, number>;
+    for (const l of r.detalle ?? []) {
+      const prod = await db().products.get(l.productId);
+      if (!prod) continue;
+      if (prod.stock < l.cantidad) throw new Error('STOCK_INSUFICIENTE');
+    }
+    for (const l of r.detalle ?? []) {
+      const prod = await db().products.get(l.productId);
+      if (!prod) continue;
+      const queda = prod.stock - l.cantidad;
+      const actual = costos[l.productId] ?? 0;
+      const resto = actual * prod.stock - l.cantidad * l.costo;
+      costos[l.productId] = queda > 0 && resto >= 0 ? Math.round(resto / queda) : l.costoAntes;
+      await db().products.put({ ...prod, stock: queda, updatedAt: new Date().toISOString() });
+    }
+    await db().meta.put({ key: 'demo:costos', value: JSON.stringify(costos) });
     r.estado = 'anulada';
     await guardarJson(KEY_REC, rs);
+    const { anularPorRecepcionDemo } = await import('./porPagar');
+    return { facturaYaPagada: await anularPorRecepcionDemo(id, motivo) };
   },
 };
 
@@ -270,11 +295,13 @@ const repoSupabase: RepositorioProveedores = {
   },
 
   async anularRecepcion(id, motivo) {
-    const { error } = await supabase().rpc('fn_void_receipt', {
+    const { data, error } = await supabase().rpc('fn_void_receipt', {
       p_receipt_id: id, p_reason: motivo,
     });
     if (error) throw error;
     void syncCatalog().catch(() => {});
+    // Antes de 0031 la respuesta no traía la marca: se toma como "no pagada".
+    return { facturaYaPagada: (data as { factura_ya_pagada?: boolean } | null)?.factura_ya_pagada === true };
   },
 };
 

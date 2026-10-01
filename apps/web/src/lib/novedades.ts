@@ -16,6 +16,22 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.5.2',
+    fecha: '2026-10-01',
+    titulo: 'Segunda revisión por rol: 50 arreglos más',
+    cambios: [
+      { para: 'bodega', texto: 'Recibir mercadería: recuerda el vencimiento de la factura si sales a medio cargar; quitar un producto y volver a agregarlo parte en 1. Recibir productos con vencimiento ya no falla al guardar.' },
+      { para: 'admin', texto: 'Anular una recepción saca el stock, deja el lote y el costo promedio como antes y anula su factura por pagar (si ya estaba pagada, lo avisa).' },
+      { para: 'admin', texto: 'Por pagar: no acepta una fecha de emisión futura; el total por proveedor ya no junta a dos con el mismo nombre. Facturas recibidas: no se registra dos veces si falló lo de Por pagar.' },
+      { para: 'admin', texto: 'Clientes: revisa el correo y no duplica al cliente si hay que guardar de nuevo. Fiado: "Dar crédito" explica que primero se agrega el cliente.' },
+      { para: 'admin', texto: 'Reportes: las planillas llevan la fecha con año. Configuración: dice por qué no se puede guardar con 0 horas o 0 %; el código de actividad se acepta con puntos ("47.11.00").' },
+      { para: 'vendedor', texto: 'Caja: el cierre se compara con lo que debería haber ahora (no cuando abriste la pantalla); avisa un egreso mayor que lo que hay; contar por billete parte en $0.' },
+      { para: 'vendedor', texto: 'El comprobante y las ventas sin registrar muestran el día y la hora del local, aunque el celular tenga otra zona.' },
+      { para: 'todos', texto: 'La pantalla bloqueada pausa después de 5 contraseñas malas, y "Es otra persona: salir" sale de inmediato. Botones chicos más grandes para el dedo (44 px).' },
+      { para: 'todos', texto: 'Devolver, anular y dar de baja un lote marcan el motivo como obligatorio; una cantidad mal escrita al devolver se avisa.' },
+    ],
+  },
+  {
     version: '0.5.1',
     fecha: '2026-10-01',
     titulo: 'Revisión por rol: 49 arreglos',

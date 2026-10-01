@@ -8,6 +8,68 @@
 
 ---
 
+## CÓMO SEGUIR — corte 2026-10-01 (6ª ronda: 50 errores más), léelo antes que todo
+
+**2026-10-01 · Versión 0.5.2.** Pedido: "Sigamos buscando 50 errores más y
+cuando termines sube las actualizaciones". Se siguió la numeración (51 a 100)
+y se paró en el 100. **El detalle está en
+[docs/27](docs/27-revision-por-rol-50-errores-mas.md).** Los 50 corregidos.
+
+**Lo más importante para el que siga**
+- **Migración nueva 0031 (sin aplicar en Supabase)**, después de 0029 y 0030:
+  - **N° 67, crítico:** en la base real, recibir CUALQUIER producto con
+    vencimiento fallaba con `REGISTRO_INMUTABLE`. `fn_confirm_receipt`
+    (0006/0012) anota el lote en el movimiento del kardex con un UPDATE y el
+    disparador de 0003 lo rechazaba. 0031 cambia el disparador de
+    `inventory_movements` por `fn_kardex_inmutable()`, que deja pasar SOLO
+    `lot_id` de null a un valor (sin tocar nada más); el resto sigue
+    rechazado (ADR-006). Nunca se vio porque las pruebas recibían productos
+    sin vencimiento. **Si alguien recibe perecibles en producción hoy, falla.**
+  - **N° 64 a 66:** `fn_void_receipt` (misma firma) ahora rebaja el lote,
+    devuelve el costo promedio y anula la factura por pagar no pagada;
+    responde `factura_ya_pagada`.
+  - Antes de aplicarla: revisar el esquema en vivo (que `fn_void_receipt` y
+    `trg_movements_immutable` sean los de 0012/0003).
+- **Rutas del servidor (N° 51):** exigen `actor.isActive`. Un admin
+  desactivado con la sesión abierta ya no crea cuentas ni cambia claves.
+- **core:** `toUserMessage`/`errorCode` leen códigos con dígitos
+  (`OFERTA_SIN_FECHAS_DESDE_1` caía en el genérico, N° 71).
+  `fechaComprobante(iso, zona)` y `comprobanteATexto(c, ancho, zona)` aceptan
+  la zona del local (N° 89). Mensajes nuevos: `FACTURA_NO_EN_EMISION`,
+  `ACTECO_INVALIDO`.
+- `formatoFechaHoraPlanilla` (lib/formatoFecha) para fechas con año en las
+  planillas exportadas (N° 82).
+- `.btn-chico` mide 44 px (RNF-16, N° 57): los encabezados se ven un poco más
+  altos, es a propósito.
+
+**Encontrados después del 100, sin corregir** (por la regla de parar):
+1. **Maqueta: el catálogo se vuelve a sembrar en cada carga de página**
+   (`SyncCatalogo` → `sembrarCatalogoDemo()` borra y recarga con el stock de
+   ejemplo). Todo lo que mueve stock en la maqueta se pierde al recargar.
+   Por eso `demo-ronda6` no comprueba el stock de la maqueta. Arreglo
+   propuesto: sembrar solo si está vacío o cambió la versión de los datos.
+2. **Maqueta: "Devolver productos" abre vacío** (la maqueta no lleva
+   devoluciones y sus líneas no traen id). Esconder el botón o decirlo.
+
+**Verificado:** core **446** · typecheck · `db:check` (142 cuerpos) ·
+`db:test` **176/176** (+1 TODO previo; como usuario sin privilegios), con
+`anular-recepcion.test.mjs` nuevo, visto fallar antes de la corrección (regla
+16) · `demo-ronda6.mjs` **14/14** (nuevo; 65, 68 y 99 vistos fallar con el
+código anterior) · `demo-ronda5` 22/22 · `demo-ronda4` 44/44 · `demo-ronda3` 45/45 ·
+`demo-ronda2` 15/15 · `demo-flujo` 19/19 · `demo-datos` 11/11 ·
+`demo-roles` 184 pantallas sin errores, desbordes ni controles sin nombre ·
+`sin-red` 5/5 · build · `peso-js` 27/27 bajo 270 kB y **12/27 en la meta de
+250** (antes 13: una pantalla más quedó apenas sobre 250).
+**No se corrió contra Supabase ni Railway.**
+
+**Sin prueba propia (🟡):** los que en docs/27 dicen "typecheck y recorridos
+existentes", entre ellos 51–53 y 62 (necesitan Supabase o un recorrido del
+bloqueo). Pendientes de antes sin cambios: aplicar 0029, 0030 y ahora 0031;
+la pregunta N° 13 (costo con o sin IVA); el contador (redondeo en la boleta);
+RNF-62; SUPABASE_SECRET_KEY en Railway.
+
+---
+
 ## CÓMO SEGUIR — corte 2026-10-01 (5ª ronda: revisión por rol), léelo antes que todo
 
 **2026-10-01 · Versión 0.5.1.** Pedido: "revisa el sistema como lo usaría cada

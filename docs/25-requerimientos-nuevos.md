@@ -40,6 +40,13 @@ ocho buscadores; los dos quedaron corregidos y demostrados en
 `tools/ui/demo-ronda5.mjs`. También ajustó RF-M5-28: la devolución en efectivo
 de una venta redondeada devuelve lo que se pagó (`redondeo-fiado.test.mjs`).
 
+**Actualización 2026-10-01 (ronda 6, v0.5.2).** La segunda revisión por rol
+([27](27-revision-por-rol-50-errores-mas.md), errores 51 a 100) tocó RF-M3-13:
+anular una recepción ahora anula su factura por pagar si no está pagada (0031,
+`anular-recepcion.test.mjs`, **sin aplicar en Supabase**), y en Por pagar no
+se acepta una fecha de emisión futura (`demo-ronda6.mjs`). RF-M5-30 (fiado):
+"Dar crédito" ya no queda desactivado sin explicación.
+
 ### Cómo se verifica
 
 - `npm test -w @rutaahorro/core` — las reglas (redondeo, montos y cantidades

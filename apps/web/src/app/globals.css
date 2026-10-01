@@ -173,7 +173,7 @@ html[data-letra='grande'] { font-size: 118.75%; }
   }
   .btn:disabled { opacity: 0.45; cursor: not-allowed; }
   .btn-grande { min-height: 52px; font-size: 1.0625rem; }
-  .btn-chico { min-height: 36px; padding: 0.375rem 0.75rem; font-size: 0.875rem; font-weight: 500; }
+  .btn-chico { min-height: 44px; /* RNF-16: chico de letra, no de dedo */ padding: 0.375rem 0.75rem; font-size: 0.875rem; font-weight: 500; }
   .btn-primario { background: var(--color-marca-500); color: #fff; }
   .btn-primario:not(:disabled):hover, .btn-primario:not(:disabled):active { background: var(--color-marca-600); }
   .btn-secundario { background: var(--superficie); color: var(--texto); border-color: var(--borde); }

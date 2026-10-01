@@ -190,7 +190,7 @@ export function PrecioClient({ usuarioId = '', puedeVender = false, puedeCrearPr
             .map((t) => (
               <p key={`${t.desde}-${t.vigenteHasta ?? ''}`}
                  className="mt-2 inline-block mx-1 px-3 py-1 rounded-full bg-marca-100 text-marca-900 text-sm font-semibold num">
-                🏷️ Desde {t.desde}: {formatCLP(t.precio)} c/u
+                🏷️ Desde {cantidadConUnidad(t.desde, elegido.unit)}: {formatCLP(t.precio)} {admiteDecimales(elegido.unit) ? `el ${elegido.unit}` : 'c/u'}
                 {t.vigenteHasta && <span className="font-normal"> · hasta el {t.vigenteHasta.split('-').reverse().join('-')}</span>}
               </p>
             ))}

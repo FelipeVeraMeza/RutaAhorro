@@ -121,6 +121,9 @@ function FichaCliente({ cliente, onCerrar, onGuardado }: {
   const [buscarProd, setBuscarProd] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  // Si el cliente nuevo se creó pero sus precios no se guardaron, reintentar
+  // tiene que actualizar ESE cliente: antes "Guardar" de nuevo creaba otro.
+  const [creadoId, setCreadoId] = useState<string | null>(null);
 
   useEffect(() => {
     void repoProductos().listar({ soloActivos: true, limite: 5000 }, false).then(setProductos).catch(() => {});
@@ -147,6 +150,9 @@ function FichaCliente({ cliente, onCerrar, onGuardado }: {
     setError(null);
     if (!d.nombre.trim()) { setError('El cliente necesita un nombre o razón social'); return; }
     if (errorRut) { setError(errorRut); return; }
+    if (d.email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim())) {
+      setError('Revisa el correo: le falta la @ o el dominio (ej.: ventas@empresa.cl)'); return;
+    }
     if (!vPct.valido) { setError(`% de rebaja: ${vPct.error}`); return; }
     const numeros: Record<string, number> = {};
     for (const [id, v] of Object.entries(precios)) {
@@ -164,7 +170,8 @@ function FichaCliente({ cliente, onCerrar, onGuardado }: {
         descuentoPct: pct.trim() ? vPct.valor : 0,
       };
       const repo = repoClientes();
-      const id = await repo.guardar(cliente?.id ?? null, datos);
+      const id = await repo.guardar(cliente?.id ?? creadoId, datos);
+      if (!cliente) setCreadoId(id);
       const antes = cliente?.precios ?? {};
       const cambiaron = Object.keys(numeros).length !== Object.keys(antes).length
         || Object.entries(numeros).some(([k, v]) => antes[k] !== v);

@@ -17,7 +17,7 @@ const ROLES = ['admin', 'supervisor', 'vendedor', 'bodega'] as const;
  */
 export async function POST(request: Request) {
   const actor = await getCurrentUser();
-  if (!actor || actor.role !== 'admin') {
+  if (!actor || !actor.isActive || actor.role !== 'admin') {
     return respuestaError('SIN_PERMISO', 'Solo el administrador crea cuentas', 403);
   }
 

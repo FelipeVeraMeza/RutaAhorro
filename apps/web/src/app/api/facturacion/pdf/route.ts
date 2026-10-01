@@ -11,7 +11,7 @@ import { createClient, getCurrentUser } from '@/lib/supabase/server';
  */
 export async function GET(request: Request) {
   const actor = await getCurrentUser();
-  if (!actor || (actor.role !== 'admin' && actor.role !== 'supervisor')) {
+  if (!actor || !actor.isActive || (actor.role !== 'admin' && actor.role !== 'supervisor')) {
     return NextResponse.json({ error: { code: 'SIN_PERMISO', message: 'Sin permiso' } }, { status: 403 });
   }
   const id = new URL(request.url).searchParams.get('id') ?? '';

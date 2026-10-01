@@ -40,8 +40,10 @@ export function DocumentoTributario({ doc, onCerrar, pdfUrl }: {
     const a = document.createElement('a');
     a.href = url;
     a.download = `DTE-T${doc.tipo}-F${doc.folio}${simulado ? '-SIMULADO' : ''}.xml`;
-    a.click();
-    URL.revokeObjectURL(url);
+    // Como en Reportes: revocar la URL en la misma vuelta que el clic
+    // cancela la descarga en Safari de iPhone.
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   return (
@@ -169,6 +171,13 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
     .filter((x) => x.v.valido && x.v.valor > 0)
     .map((x) => ({ id: x.id, cantidad: x.v.valor })), [cantidades, lineas]);
 
+  // Una cantidad mal escrita ("2x", "-1") se ignoraba en silencio y se
+  // devolvía solo lo demás.
+  const malEscrita = lineas.find((l) => {
+    const t = cantidades[l.id!] ?? '';
+    return t.trim() !== '' && !validarCantidad(t, { permiteVacio: true, maximo: 1_000_000 }).valido;
+  });
+
   const devueltoAntes = venta.devoluciones.reduce((s, d) => s + d.monto, 0);
   let estimado = 0;
   let errorCantidad: string | null = null;
@@ -180,7 +189,8 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
       : 0;
   } catch {
     errorCantidad = 'Hay una cantidad mayor que lo que queda por devolver';
-  }  // RF-M5-28 · En efectivo no hay monedas de $1: se devuelve redondeado, como
+  }
+  if (malEscrita) errorCantidad = `Revisa la cantidad de ${malEscrita.productoNombre}`;  // RF-M5-28 · En efectivo no hay monedas de $1: se devuelve redondeado, como
   // hace la base (0029). La nota de crédito sigue por el monto exacto.
   const aDevolver = reembolso === 'efectivo' ? redondeoEfectivo(estimado) : estimado;
 
@@ -237,7 +247,7 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
           })}
         </ul>
 
-        <Campo etiqueta="Motivo" ayuda="Va en la nota de crédito y en el historial.">
+        <Campo etiqueta="Motivo" obligatorio ayuda="Va en la nota de crédito y en el historial.">
           {(p) => (
             <input {...p} value={motivo} onChange={(e) => setMotivo(e.target.value)} list="motivos-devolucion"
                    className="tap w-full px-3 rounded-xl border border-[var(--borde)]" />

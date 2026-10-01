@@ -2,6 +2,7 @@
 
 import { formatCLP, toUserMessage } from '@rutaahorro/core';
 import { Modal } from './Modal';
+import { useFormatoFecha } from '@/lib/formatoFecha';
 import type { QueuedSale } from '@/lib/offline/db';
 
 /**
@@ -14,6 +15,9 @@ export function VentasConError({ ventas, reintentando, onReintentar, onCerrar }:
   onReintentar: () => void;
   onCerrar: () => void;
 }) {
+  // Día y hora del local: una venta rechazada puede ser de ayer, y solo con la
+  // hora (y en la zona del celular) no se sabía cuál era.
+  const { fechaHora } = useFormatoFecha();
   return (
     <Modal titulo="Ventas sin registrar" encabezado="visible" onCerrar={onCerrar}>
       <div className="p-4 space-y-3 text-sm">
@@ -25,7 +29,7 @@ export function VentasConError({ ventas, reintentando, onReintentar, onCerrar }:
           {ventas.map((v) => (
             <li key={v.clientUuid} className="p-3">
               <p className="font-medium num">
-                {new Date(v.soldAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}
+                {fechaHora(v.soldAt)}
                 {' · '}{formatCLP(v.total)} · {v.items.length} {v.items.length === 1 ? 'producto' : 'productos'}
               </p>
               <p className="text-xs text-[var(--texto-suave)]">{v.items.map((i) => i.name).join(', ')}</p>

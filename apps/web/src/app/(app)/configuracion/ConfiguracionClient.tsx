@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatCLP, toUserMessage, validarMonto, validarCantidad, etiquetaAdicional,
-  IMPUESTOS_ADICIONALES_CHILE, coincide
+  IMPUESTOS_ADICIONALES_CHILE, coincide, diaLocal
 } from '@rutaahorro/core';
 import { repoPrecios, type ImpuestoAdicional } from '@/lib/datos/precios';
 import {
-  configuracionLocal, guardarConfiguracion, type ConfiguracionLocal,
+  configuracionLocal, guardarConfiguracion, useConfiguracion, type ConfiguracionLocal,
 } from '@/lib/datos/configuracion';
 import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
 import { Modal } from '@/components/Modal';
@@ -379,30 +379,17 @@ function OperacionDelLocal({ config, onGuardado, onError }: {
   const vHoras = validarCantidad(horas, { maximo: 72 });
   const vVar = validarCantidad(variacion, { maximo: 100 });
 
-  const Interruptor = ({ valor, clave, titulo, detalle }: {
-    valor: boolean; clave: 'vender_sin_stock' | 'tarjeta_emite_documento' | 'ofertas_activas'; titulo: string; detalle: string;
-  }) => (
-    <label className="tarjeta p-3 flex items-start gap-3 cursor-pointer">
-      <input type="checkbox" checked={valor} disabled={guardando}
-             onChange={(e) => void guardar({ [clave]: e.target.checked }, `${titulo}: ${e.target.checked ? 'sí' : 'no'}`)}
-             className="mt-0.5 w-5 h-5 accent-[var(--color-marca-500)]" />
-      <span className="text-sm">
-        <strong className="block">{titulo}</strong>
-        <span className="text-[var(--texto-suave)]">{detalle}</span>
-      </span>
-    </label>
-  );
 
   return (
     <section aria-labelledby="t-local" className="space-y-3">
       <h2 id="t-local" className="font-semibold">Cómo opera el local</h2>
-      <Interruptor valor={config.venderSinStock} clave="vender_sin_stock"
+      <Interruptor guardando={guardando} guardar={guardar} valor={config.venderSinStock} clave="vender_sin_stock"
                    titulo="Cualquier cajero vende aunque el sistema diga que no hay stock"
                    detalle="Se vende lo que está en la repisa y al administrador le llega la alerta de stock negativo." />
-      <Interruptor valor={config.tarjetaEmiteDocumento} clave="tarjeta_emite_documento"
+      <Interruptor guardando={guardando} guardar={guardar} valor={config.tarjetaEmiteDocumento} clave="tarjeta_emite_documento"
                    titulo="La máquina de tarjetas emite el documento"
                    detalle="Con tarjeta se entrega el voucher de la máquina y no se emite boleta. Desmarcar si la máquina no está integrada." />
-      <Interruptor valor={config.ofertasActivas} clave="ofertas_activas"
+      <Interruptor guardando={guardando} guardar={guardar} valor={config.ofertasActivas} clave="ofertas_activas"
                    titulo="Rigen las ofertas y promociones"
                    detalle="Desmarcar para cobrar el precio normal en todo el local sin borrar ninguna oferta. Los celulares se enteran al entrar a vender o en 10 minutos." />
       <Link href="/productos/ofertas" className="tap flex items-center justify-between tarjeta px-3 text-sm font-medium">
@@ -415,11 +402,11 @@ function OperacionDelLocal({ config, onGuardado, onError }: {
           {(p) => <input {...p} inputMode="numeric" value={efectivo} onChange={(e) => setEfectivo(e.target.value)}
                          className="tap w-40 px-3 py-2 rounded-lg border border-[var(--borde)] num text-right" />}
         </Campo>
-        <Campo etiqueta="Avisar una caja abierta después de (horas)" error={!vHoras.valido ? vHoras.error : null}>
+        <Campo etiqueta="Avisar una caja abierta después de (horas)" error={!vHoras.valido ? vHoras.error : vHoras.valor < 1 ? 'Tiene que ser al menos 1 hora' : null}>
           {(p) => <input {...p} inputMode="numeric" value={horas} onChange={(e) => setHoras(e.target.value)}
                          className="tap w-24 px-3 py-2 rounded-lg border border-[var(--borde)] num text-right" />}
         </Campo>
-        <Campo etiqueta="Avisar si el costo de compra cambia más de (%)" error={!vVar.valido ? vVar.error : null}>
+        <Campo etiqueta="Avisar si el costo de compra cambia más de (%)" error={!vVar.valido ? vVar.error : vVar.valor < 1 ? 'Tiene que ser al menos 1 %' : null}>
           {(p) => <input {...p} inputMode="numeric" value={variacion} onChange={(e) => setVariacion(e.target.value)}
                          className="tap w-24 px-3 py-2 rounded-lg border border-[var(--borde)] num text-right" />}
         </Campo>
@@ -455,6 +442,31 @@ function OperacionDelLocal({ config, onGuardado, onError }: {
         </button>
       </div>
     </section>
+  );
+}
+
+/**
+ * Fuera del componente que lo usa: definido adentro, cada render era un
+ * componente nuevo, la casilla se volvía a montar al guardar y quien usa
+ * teclado o lector de pantalla perdía el foco (quedaba al inicio de la página).
+ */
+function Interruptor({ valor, clave, titulo, detalle, guardando, guardar }: {
+  valor: boolean; clave: 'vender_sin_stock' | 'tarjeta_emite_documento' | 'ofertas_activas'; titulo: string; detalle: string;
+  guardando: boolean;
+  guardar: (cambios: Parameters<typeof guardarConfiguracion>[0], texto: string) => Promise<void>;
+}) {
+  return (
+    <label className="tarjeta p-3 flex items-start gap-3 cursor-pointer">
+      {/* aria-disabled y no disabled: desactivarla mientras guarda también
+          le quitaba el foco. */}
+      <input type="checkbox" checked={valor} aria-disabled={guardando || undefined}
+             onChange={(e) => { if (!guardando) void guardar({ [clave]: e.target.checked }, `${titulo}: ${e.target.checked ? 'sí' : 'no'}`); }}
+             className="mt-0.5 w-5 h-5 accent-[var(--color-marca-500)]" />
+      <span className="text-sm">
+        <strong className="block">{titulo}</strong>
+        <span className="text-[var(--texto-suave)]">{detalle}</span>
+      </span>
+    </label>
   );
 }
 
@@ -532,6 +544,7 @@ function DatosEmisor({ onGuardado, onError }: {
  * en un formato que se abre sin este sistema.
  */
 function MisDatos() {
+  const { zonaHoraria } = useConfiguracion();
   const [progreso, setProgreso] = useState<string | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
   async function descargar() {
@@ -540,7 +553,8 @@ function MisDatos() {
     try {
       const r = await armarRespaldo((h, t) => setProgreso(`Leyendo ${h} de ${t} tablas…`));
       const filas = Object.values(r.tablas).reduce((s, t) => s + t.length, 0);
-      descargarJson(`rutaahorro-datos-${r.exportado_en.slice(0, 10)}.json`, r);
+      // El día del local (regla 17): con el de UTC, de noche el archivo decía mañana.
+      descargarJson(`rutaahorro-datos-${diaLocal(new Date(r.exportado_en), zonaHoraria)}.json`, r);
       const omitidas = Object.keys(r.omitidas).length;
       setResultado(`Listo: ${filas.toLocaleString('es-CL')} registros de ${Object.keys(r.tablas).length} tablas.` +
         (omitidas ? ` ${omitidas} no se pudieron leer (van anotadas en el archivo).` : ''));

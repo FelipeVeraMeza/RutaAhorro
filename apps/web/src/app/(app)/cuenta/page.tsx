@@ -43,8 +43,8 @@ export default async function CuentaPage() {
       <section className="tarjeta p-4 text-sm" aria-labelledby="t-mas">
         <h2 id="t-mas" className="font-semibold mb-2">Más</h2>
         <ul className="space-y-2">
-          <li><Link className="underline" href="/ayuda">Ayuda: cómo se hace cada cosa</Link></li>
-          <li><Link className="underline" href="/novedades">Novedades</Link>
+          <li><Link className="underline inline-flex items-center min-h-[44px]" href="/ayuda">Ayuda: cómo se hace cada cosa</Link></li>
+          <li><Link className="underline inline-flex items-center min-h-[44px]" href="/novedades">Novedades</Link>
             <span className="text-[var(--texto-suave)] num"> · versión {versionCompleta()}</span></li>
         </ul>
       </section>

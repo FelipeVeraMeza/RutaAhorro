@@ -501,7 +501,7 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
               Si el producto tiene lotes, vuelve a los lotes exactos de los que salió.
             </p>
 
-            <Campo etiqueta="Motivo" ayuda="Queda escrito en la venta y en el historial.">
+            <Campo etiqueta="Motivo" obligatorio ayuda="Queda escrito en la venta y en el historial.">
               {(props) => (
                 <input
                   {...props}

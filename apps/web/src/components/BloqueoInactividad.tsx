@@ -63,6 +63,11 @@ export function BloqueoInactividad({ correo, nombre, demo }: { correo: string | 
   const [clave, setClave] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [verificando, setVerificando] = useState(false);
+  // RF-M1-17 también acá: el ingreso pausa tras 5 fallos, el bloqueo dejaba
+  // probar sin límite (y sin red, contra la huella guardada en el celular).
+  const [fallos, setFallos] = useState(0);
+  const [esperaHasta, setEsperaHasta] = useState(0);
+  const [, refrescar] = useState(0);
   const ultima = useRef(Date.now());
 
   useEffect(() => {
@@ -99,6 +104,7 @@ export function BloqueoInactividad({ correo, nombre, demo }: { correo: string | 
   async function desbloquear(e: React.FormEvent) {
     e.preventDefault();
     if (!correo || !clave) return;
+    if (Date.now() < esperaHasta) return;
     setVerificando(true);
     setError(null);
     const r = await verificar(correo, clave, demo);
@@ -109,6 +115,15 @@ export function BloqueoInactividad({ correo, nombre, demo }: { correo: string | 
       setClave('');
       setBloqueado(false);
     } else {
+      if (r === 'mal') {
+        const n = fallos + 1;
+        setFallos(n);
+        if (n % 5 === 0) {
+          const hasta = Date.now() + 30_000 * (n / 5);
+          setEsperaHasta(hasta);
+          const t = window.setInterval(() => { refrescar((x) => x + 1); if (Date.now() >= hasta) window.clearInterval(t); }, 1000);
+        }
+      }
       setError(r === 'mal'
         ? 'Contraseña incorrecta.'
         : 'Sin internet no se puede revisar la contraseña (este celular aún no la conoce). Conéctate o sal y entra de nuevo.');
@@ -130,10 +145,11 @@ export function BloqueoInactividad({ correo, nombre, demo }: { correo: string | 
           className="w-full rounded-xl border border-[var(--borde)] px-3 py-2.5 mb-2"
           value={clave} onChange={(e) => setClave(e.target.value)} placeholder="Contraseña" />
         {error && <p role="alert" className="text-sm text-[var(--color-alerta)] mb-2">{error}</p>}
-        <button type="submit" className="btn btn-primario w-full" disabled={verificando || !clave}>
-          {verificando ? 'Revisando…' : 'Desbloquear'}
+        <button type="submit" className="btn btn-primario w-full" disabled={verificando || !clave || Date.now() < esperaHasta}>
+          {verificando ? 'Revisando…' : Date.now() < esperaHasta
+            ? `Espera ${Math.ceil((esperaHasta - Date.now()) / 1000)} s` : 'Desbloquear'}
         </button>
-        <BotonSalir className="btn btn-secundario w-full mt-2">Es otra persona: salir</BotonSalir>
+        <BotonSalir sinPreguntar className="btn btn-secundario w-full mt-2">Es otra persona: salir</BotonSalir>
       </form>
     </div>
   );

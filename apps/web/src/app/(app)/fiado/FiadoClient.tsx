@@ -7,6 +7,7 @@ import {
   NOMBRE_MOVIMIENTO, signoMovimiento,
   type CuentaCliente, type MovimientoCuenta, type MetodoAbono,
 } from '@/lib/datos/fiado';
+import Link from 'next/link';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { Encabezado } from '@/components/Encabezado';
@@ -72,7 +73,7 @@ export function FiadoClient({ puedeDarCredito }: { puedeDarCredito: boolean }) {
         icono="fiado"
         descripcion="Lo que deben los clientes con crédito. Se fía desde Vender eligiendo al cliente; acá se registran los abonos."
         acciones={puedeDarCredito && (
-          <button onClick={() => setEligiendo(true)} className="btn btn-primario btn-chico" disabled={sinCredito.length === 0}>
+          <button onClick={() => setEligiendo(true)} className="btn btn-primario btn-chico">
             Dar crédito a un cliente
           </button>
         )}
@@ -149,6 +150,14 @@ export function FiadoClient({ puedeDarCredito }: { puedeDarCredito: boolean }) {
       {topeDe && <Tope cuenta={topeDe} onCerrar={() => setTopeDe(null)} onListo={listo} />}
       {eligiendo && (
         <Modal titulo="Dar crédito a un cliente" encabezado="visible" onCerrar={() => setEligiendo(false)}>
+          {/* Antes el botón quedaba desactivado sin decir por qué, y el
+              mensaje de la lista vacía mandaba justo a ese botón. */}
+          {sinCredito.length === 0 && (
+            <p className="p-4 text-sm">
+              No hay clientes sin crédito para elegir. Primero agrégalo en{' '}
+              <Link href="/clientes" prefetch={false} className="underline inline-flex items-center min-h-[44px]">Clientes</Link>.
+            </p>
+          )}
           <ul className="p-4 space-y-2">
             {sinCredito.map((c) => (
               <li key={c.clienteId}>

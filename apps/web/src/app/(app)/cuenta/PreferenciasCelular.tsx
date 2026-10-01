@@ -41,7 +41,7 @@ export function PreferenciasCelular() {
       </fieldset>
 
       <label className="block text-sm font-medium" htmlFor="bloqueo">Bloquear la pantalla si nadie la usa</label>
-      <select id="bloqueo" className="mt-1.5 w-full max-w-xs rounded-xl border border-[var(--borde)] px-3 py-2"
+      <select id="bloqueo" className="tap mt-1.5 w-full max-w-xs rounded-xl border border-[var(--borde)] px-3 py-2"
         value={pref.bloqueoMin} onChange={(e) => cambiar({ bloqueoMin: Number(e.target.value) })}>
         {BLOQUEOS.map((m) => (
           <option key={m} value={m}>{m === 0 ? 'Nunca' : `Después de ${m} minutos`}</option>
