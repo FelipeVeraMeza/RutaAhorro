@@ -86,15 +86,26 @@ await p.getByRole('button', { name: 'Abrir caja' }).click();
 await p.waitForTimeout(2000);
 check((await h1()) === 'Caja abierta', 'caja reabierta');
 
-// 6. salir
+/** Salir, pasando el aviso de caja abierta si aparece. */
+async function salir() {
+  await p.getByRole('button', { name: 'Salir' }).click();
+  const igual = p.getByRole('button', { name: 'Salir igual (sigo después)' });
+  await igual.waitFor({ timeout: 2500 }).then(() => igual.click(), () => {});
+  await p.waitForURL('**/login').catch(() => {});
+}
+
+// 6. salir: con la caja abierta, avisa antes (RF-M8-08)
 await p.getByRole('button', { name: 'Salir' }).click();
+await p.waitForTimeout(800);
+check(/Tu caja sigue abierta/.test(await p.locator('body').innerText()), 'salir con la caja abierta avisa');
+await p.getByRole('button', { name: 'Salir igual (sigo después)' }).click();
 await p.waitForURL('**/login', { timeout: 15000 }).catch(() => {});
 check(new URL(p.url()).pathname === '/login', 'Salir vuelve a /login');
 
 // 7. bodega entra a inventario
 await entrar('bodega@demo.cl', 'demo1234');
 check(new URL(p.url()).pathname === '/inventario', `bodega entra a Inventario (${new URL(p.url()).pathname})`);
-await p.getByRole('button', { name: 'Salir' }).click(); await p.waitForURL('**/login').catch(() => {});
+await salir();
 
 // 8. admin crea cuenta con clave temporal
 await entrar('admin@demo.cl', 'demo1234');
@@ -109,7 +120,7 @@ await p.waitForTimeout(1200);
 const tu = await p.locator('main').innerText();
 check(/Cuenta de Ana Cajera creada/.test(tu) && tu.includes('ana12345'), 'admin ve las credenciales de la cuenta nueva');
 await p.screenshot({ path: SP + '/a-usuarios.png', fullPage: true });
-await p.getByRole('button', { name: 'Salir' }).click(); await p.waitForURL('**/login').catch(() => {});
+await salir();
 await entrar('ana@demo.cl', 'ana12345');
 check(new URL(p.url()).pathname === '/pos', 'la cuenta nueva entra al POS');
 check((await p.locator('body').innerText()).includes('Ana Cajera'), 'con su nombre');

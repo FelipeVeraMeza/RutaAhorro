@@ -117,12 +117,12 @@ $$;
 -- Saldo de cada cliente con cuenta, para la lista y el POS.
 drop view if exists v_cuenta_clientes;
 create view v_cuenta_clientes with (security_invoker = true) as
-select c.tenant_id, c.id as cliente_id, c.nombre, c.credito_tope,
+select c.tenant_id, c.id as cliente_id, c.nombre, c.credito_tope, c.is_active,
        coalesce(sum(case m.tipo when 'cargo' then m.monto else -m.monto end), 0)::integer as saldo,
        max(m.created_at) filter (where m.tipo = 'abono') as ultimo_abono,
        max(m.created_at) filter (where m.tipo = 'cargo') as ultimo_cargo
   from clientes c left join cuenta_cliente_movimientos m on m.cliente_id = c.id
- group by c.tenant_id, c.id, c.nombre, c.credito_tope;
+ group by c.tenant_id, c.id, c.nombre, c.credito_tope, c.is_active;
 
 -- ---------------------------------------------------------------------------
 -- fn_tope_credito — cuánto se le puede fiar a un cliente
@@ -746,6 +746,7 @@ declare
   v_fiado     integer := 0;
   v_cliente   uuid;
   v_saldo     integer;
+  v_efectivo  integer;
 begin
   if not is_active_user() or v_role not in ('admin', 'supervisor') then
     raise exception 'SIN_PERMISO_DEVOLVER' using errcode = '42501';
@@ -881,9 +882,16 @@ begin
    where id = v_ret;
   perform set_config('ra.devolucion', '', true);
 
-  if p_reembolso = 'efectivo' and v_total > 0 then
+  -- 0029 · RF-M5-28 · En efectivo se devuelve redondeado, como se cobra: no
+  -- hay monedas de $1. Y si se devuelve la venta entera de una sola vez, lo
+  -- que se pagó: una venta de $1.463 cobrada $1.460 no se devuelve $1.463.
+  -- La nota de crédito sigue por el monto exacto.
+  v_efectivo := case when v_es_total and v_devuelto = 0 and v_sale.ajuste_redondeo <> 0
+                     then v_total + v_sale.ajuste_redondeo
+                     else fn_redondeo_efectivo(v_total) end;
+  if p_reembolso = 'efectivo' and v_efectivo > 0 then
     insert into cash_movements (tenant_id, cash_session_id, type, amount, reason, created_by)
-    values (v_tenant, v_session, 'egreso', v_total,
+    values (v_tenant, v_session, 'egreso', v_efectivo,
             'Devolución N° ' || v_numero || ' · venta folio ' || v_sale.folio || ' · ' || trim(p_motivo), v_user);
   end if;
 
@@ -919,6 +927,7 @@ begin
                              'es_total', v_es_total, 'nota_credito', v_nc->'folio'));
 
   return jsonb_build_object('devolucion_id', v_ret, 'numero', v_numero, 'monto', v_total,
+                            'efectivo_devuelto', case when p_reembolso = 'efectivo' then v_efectivo else 0 end,
                             'es_total', v_es_total, 'reembolso', p_reembolso, 'nota_credito', v_nc);
 end $$;
 

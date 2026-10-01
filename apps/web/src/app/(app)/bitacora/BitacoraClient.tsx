@@ -62,7 +62,7 @@ export function BitacoraClient() {
           {filas.map((f) => (
             <li key={f.id} className="px-4 py-2.5">
               <p className="text-sm">
-                <span className="insignia insignia-neutra mr-1.5">{ACCIONES[f.accion] ?? f.accion}</span>
+                <span className="insignia insignia-neutra mr-1.5">{f.nombre}</span>
                 {f.texto}
               </p>
               <p className="text-xs text-[var(--texto-suave)] mt-0.5">{fechaHora(f.fecha)} · {f.quien ?? 'Sistema'}</p>

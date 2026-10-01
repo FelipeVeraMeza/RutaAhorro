@@ -204,11 +204,18 @@ const repoLocal: RepositorioReportes = {
   },
 
   async ventasPorProducto(rango, verCostos) {
-    const dias = Math.max(1, semillaDiaria(rango).length);
+    const semilla = semillaDiaria(rango);
+    const dias = Math.max(1, semilla.length);
+    // Lo vendido por producto suma lo mismo que Ventas en el período: antes
+    // Productos decía $1.011.800 y Ventas $4.799.869 para los mismos 30 días.
+    const base = DEMO_PRODUCTOS.map((_, i) => Math.max(1, Math.round(((i * 7) % 11) + 2) * Math.ceil(dias / 7)));
+    const totalBase = base.reduce((s, u, i) => s + u * DEMO_PRODUCTOS[i].sale_price, 0);
+    const totalVentas = semilla.reduce((s, d) => s + d.total, 0);
+    const escala = totalBase > 0 && totalVentas > 0 ? totalVentas / totalBase : 1;
     return DEMO_PRODUCTOS.map((p, i) => {
       // Determinista a propósito: el mismo producto vende lo mismo en cada
       // recarga. Números que bailan solos hacen dudar del reporte entero.
-      const unidades = Math.max(1, Math.round(((i * 7) % 11) + 2) * Math.ceil(dias / 7));
+      const unidades = Math.max(1, Math.round(base[i] * escala));
       const ingresos = unidades * p.sale_price;
       const costo = unidades * p.avg_cost;
       return {

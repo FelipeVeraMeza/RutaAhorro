@@ -12,7 +12,12 @@ import { enlaceResumenDia } from '@/lib/resumenDia';
  * hicieron en el POS de este navegador. Antes era un número fijo
  * ($187.450): se vendía y no se movía.
  */
-export function VentasHoyDemo({ bajoMinimo, enRiesgo }: { bajoMinimo: number; enRiesgo: number }) {
+export function VentasHoyDemo({ bajoMinimo, enRiesgo, local }: {
+  bajoMinimo: number;
+  /** Solo para quien ve costos (QA-41). */
+  enRiesgo?: number;
+  local?: string;
+}) {
   const { zonaHoraria } = useConfiguracion();
   const [r, setR] = useState<{ total: number; n: number } | null>(null);
 
@@ -33,7 +38,7 @@ export function VentasHoyDemo({ bajoMinimo, enRiesgo }: { bajoMinimo: number; en
         <Tarjeta label="Ticket prom." value={r ? formatCLP(ticket) : '…'} />
       </div>
       {r && (
-        <a href={enlaceResumenDia({ total, ventas: n, ticket, bajoMinimo, enRiesgo })}
+        <a href={enlaceResumenDia({ local, total, ventas: n, ticket, bajoMinimo, enRiesgo })}
            target="_blank" rel="noopener noreferrer"
            className="tap inline-flex items-center gap-1.5 text-sm font-medium text-marca-700 underline mt-1">
           Enviar el resumen de hoy por WhatsApp

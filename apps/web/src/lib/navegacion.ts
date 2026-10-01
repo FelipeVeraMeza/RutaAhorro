@@ -68,8 +68,10 @@ export const NAVEGACION: ItemNav[] = [
     roles: ['admin', 'supervisor', 'bodega'], enMovil: true,
   },
   {
-    href: '/proveedores', label: 'Proveedores', labelCorto: 'Prov.', icono: 'proveedores',
-    ayuda: 'Proveedores, recepción de mercadería y qué comprar',
+    // "Compras", como dice el título de la pantalla: el menú decía
+    // "Proveedores" y se llegaba a una pantalla llamada "Compras".
+    href: '/proveedores', label: 'Compras', labelCorto: 'Compras', icono: 'proveedores',
+    ayuda: 'Proveedores, recibir mercadería, qué comprar y facturas por pagar',
     roles: ['admin', 'supervisor', 'bodega'], enMovil: false,
   },
   {

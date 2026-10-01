@@ -16,6 +16,24 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.5.1',
+    fecha: '2026-10-01',
+    titulo: 'Revisión por rol: 49 arreglos',
+    cambios: [
+      { para: 'vendedor', texto: 'Vender: "Quitar" ofrece "Deshacer"; "Vaciar" también quita al cliente; avisa al agregar o subir con "+" lo que no se podrá cobrar por stock.' },
+      { para: 'vendedor', texto: 'Vender y Consultar precio avisan si el producto tiene un lote vencido. La búsqueda muestra el precio del cliente elegido.' },
+      { para: 'vendedor', texto: 'Si la venta no se puede registrar, el motivo aparece dentro de "Cobrar". Un monto con coma ("20000,5") ya no se lee como $200.005.' },
+      { para: 'vendedor', texto: 'Sin internet: si una venta no se pudo registrar al volver la conexión, la barra de arriba dice cuál y por qué.' },
+      { para: 'vendedor', texto: 'Al salir con la caja abierta, el sistema lo recuerda y ofrece ir a cerrarla.' },
+      { para: 'todos', texto: 'Las búsquedas de clientes, fiado, combos y facturas encuentran sin tildes. Fechas, porcentajes y cantidades se escriben igual en todos los celulares.' },
+      { para: 'todos', texto: 'El menú dice "Compras" (antes "Proveedores"), como la pantalla.' },
+      { para: 'admin', texto: 'Inicio: la comparación con la semana pasada es "a esta hora", ya no contra el día completo. La Bitácora dice qué se cambió en configuración, clientes, combos, fiado y facturas.' },
+      { para: 'admin', texto: 'Usuarios: cambiar el rol o desactivar pide confirmar. Facturación → Recibidas: "vence el" deja la factura también en Por pagar.' },
+      { para: 'supervisor', texto: 'El Inicio y el resumen por WhatsApp ya no muestran el valor al costo de lo que vence. "Anular" solo aparece en ventas del día.' },
+      { para: 'bodega', texto: 'Inventario y recepción no aceptan medias unidades ("2,5 botellas"); un costo mal escrito se avisa en vez de guardarse. Con la bodega vacía el botón dice "Mover".' },
+    ],
+  },
+  {
     version: '0.5.0',
     fecha: '2026-10-01',
     titulo: 'Redondeo del efectivo, fiado y facturas por pagar',

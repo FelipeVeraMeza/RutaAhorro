@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import {
   formatCLP, formatCantidad, toUserMessage, NOMBRE_DTE, construirXmlDte, desdeRegistro, montosDevolucion,
-  validarCantidad, type RegistroDte, type TipoDte,
+  validarCantidad, type RegistroDte, type TipoDte, redondeoEfectivo
 } from '@rutaahorro/core';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
@@ -180,7 +180,10 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
       : 0;
   } catch {
     errorCantidad = 'Hay una cantidad mayor que lo que queda por devolver';
-  }
+  }  // RF-M5-28 · En efectivo no hay monedas de $1: se devuelve redondeado, como
+  // hace la base (0029). La nota de crédito sigue por el monto exacto.
+  const aDevolver = reembolso === 'efectivo' ? redondeoEfectivo(estimado) : estimado;
+
 
   const todo = () => setCantidades(Object.fromEntries(lineas.map((l) => [l.id!, String(quedan(l.id!)).replace('.', ',')])));
 
@@ -218,7 +221,7 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm truncate">{l.productoNombre}</span>
                   <span className="block text-xs text-[var(--texto-suave)] num">
-                    Vendidas {l.cantidad}{l.devuelto ? ` · ya devueltas ${l.devuelto}` : ''} · quedan {q}
+                    Vendidas {formatCantidad(l.cantidad)}{l.devuelto ? ` · ya devueltas ${formatCantidad(l.devuelto)}` : ''} · quedan {formatCantidad(q)}
                   </span>
                 </span>
                 <input
@@ -270,7 +273,7 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
 
         <div className="tarjeta p-3 flex items-center justify-between">
           <span className="text-sm">Se devuelve</span>
-          <span className="text-xl font-bold num">{formatCLP(estimado)}</span>
+          <span className="text-xl font-bold num">{formatCLP(aDevolver)}</span>
         </div>
         {venta.documentos.some((d) => Number(d.tipo) !== 61) && (
           <p className="text-xs text-[var(--texto-suave)]">Se emite una nota de crédito que corrige la boleta o factura.</p>
@@ -282,7 +285,7 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
           disabled={enCurso || !pedido.length || !!errorCantidad || !motivo.trim()}
           className="tap w-full py-3.5 rounded-xl bg-[var(--color-alerta)] text-white font-bold disabled:opacity-50"
         >
-          {enCurso ? 'Devolviendo…' : `Devolver ${formatCLP(estimado)}`}
+          {enCurso ? 'Devolviendo…' : `Devolver ${formatCLP(aDevolver)}`}
         </button>
       </div>
     </Modal>

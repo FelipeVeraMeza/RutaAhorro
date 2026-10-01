@@ -31,6 +31,8 @@ export interface CuentaCliente {
   /** Lo que todavía se le puede fiar. */
   disponible: number;
   ultimoAbono: string | null;
+  /** Un cliente desactivado no se elige en Vender ni recibe crédito nuevo. */
+  activo: boolean;
 }
 
 export interface MovimientoCuenta {
@@ -53,8 +55,8 @@ export const NOMBRE_MOVIMIENTO: Record<TipoMovimiento, string> = {
 /** Lo que cada movimiento le hace a la deuda: el cargo la sube, el resto la baja. */
 export const signoMovimiento = (t: TipoMovimiento) => (t === 'cargo' ? 1 : -1);
 
-const cuenta = (clienteId: string, nombre: string, tope: number, saldo: number, ultimoAbono: string | null): CuentaCliente => ({
-  clienteId, nombre, tope, saldo, disponible: Math.max(tope - saldo, 0), ultimoAbono,
+const cuenta = (clienteId: string, nombre: string, tope: number, saldo: number, ultimoAbono: string | null, activo = true): CuentaCliente => ({
+  clienteId, nombre, tope, saldo, disponible: Math.max(tope - saldo, 0), ultimoAbono, activo,
 });
 
 // ---------------------------------------------------------------------------
@@ -63,11 +65,11 @@ const cuenta = (clienteId: string, nombre: string, tope: number, saldo: number, 
 const base = {
   async cuentas(): Promise<CuentaCliente[]> {
     const { data, error } = await supabase().from('v_cuenta_clientes')
-      .select('cliente_id, nombre, credito_tope, saldo, ultimo_abono').order('nombre');
+      .select('cliente_id, nombre, credito_tope, saldo, ultimo_abono, is_active').order('nombre');
     if (error) throw error;
     return (data ?? []).map((r) => cuenta(
       r.cliente_id as string, r.nombre as string, Number(r.credito_tope ?? 0), Number(r.saldo ?? 0),
-      (r.ultimo_abono as string) ?? null));
+      (r.ultimo_abono as string) ?? null, r.is_active !== false));
   },
   async movimientos(clienteId: string): Promise<MovimientoCuenta[]> {
     const { data, error } = await supabase().from('cuenta_cliente_movimientos')
@@ -120,13 +122,13 @@ async function agregarDemo(m: Omit<MovDemo, 'id' | 'fecha'>) {
 
 const demo: typeof base = {
   async cuentas() {
-    const clientes = await leer<Array<{ id: string; nombre: string }>>(CLAVE_CLIENTES, []);
+    const clientes = await leer<Array<{ id: string; nombre: string; activo?: boolean }>>(CLAVE_CLIENTES, []);
     const topes = await leer<Record<string, number>>(CLAVE_TOPES, {});
     const movs = await leer<MovDemo[]>(CLAVE_MOVS, []);
     return clientes.map((c) => {
       const propios = movs.filter((m) => m.clienteId === c.id);
       const saldo = propios.reduce((s, m) => s + signoMovimiento(m.tipo) * m.monto, 0);
-      return cuenta(c.id, c.nombre, topes[c.id] ?? 0, saldo, propios.find((m) => m.tipo === 'abono')?.fecha ?? null);
+      return cuenta(c.id, c.nombre, topes[c.id] ?? 0, saldo, propios.find((m) => m.tipo === 'abono')?.fecha ?? null, c.activo !== false);
     }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   },
   async movimientos(clienteId) {

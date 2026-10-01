@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  formatCLP, formatCantidad, validarCantidad, sugerirReposicion, toUserMessage, textoVencimiento, cantidadConUnidad,
+  formatCLP, formatCantidad, validarCantidadStock, sugerirReposicion, toUserMessage, textoVencimiento, cantidadConUnidad,
 } from '@rutaahorro/core';
 import { repoProductos, type Producto } from '@/lib/productos';
 import {
@@ -103,7 +103,7 @@ export function InventarioClient({
   async function reponerMarcados() {
     const lista = sugeridos
       .filter((s) => !sinReponer.has(s.id))
-      .map((s) => ({ s, v: validarCantidad(aMover[s.id] ?? String(s.mover), { maximo: s.bodega }) }))
+      .map((s) => ({ s, v: validarCantidadStock(aMover[s.id] ?? String(s.mover), s.unidad, { maximo: s.bodega }) }))
       .filter((x) => x.v.valido && x.v.valor > 0);
     if (lista.length === 0) return;
     setError(null);
@@ -140,8 +140,8 @@ export function InventarioClient({
    */
   const aplicables = Object.entries(conteo)
     .map(([productoId, texto]) => {
-      const v = validarCantidad(texto, { permiteVacio: true });
       const producto = productos.find((p) => p.id === productoId);
+      const v = validarCantidadStock(texto, producto?.unidad, { permiteVacio: true });
       return { productoId, texto, v, producto };
     })
     .filter((x) => x.texto.trim() !== '');
@@ -268,9 +268,9 @@ export function InventarioClient({
                            puede vender ahora o hay que ir a buscarlo. */}
                       <p className="text-xs num mt-0.5">
                         <span className={p.stockSala <= 0 ? 'text-[var(--color-alerta)] font-medium' : ''}>
-                          A la vista {p.stockSala}
+                          A la vista {formatCantidad(p.stockSala)}
                         </span>
-                        <span className="text-[var(--texto-suave)]"> · guardado en bodega {p.stockBodega}</span>
+                        <span className="text-[var(--texto-suave)]"> · guardado en bodega {formatCantidad(p.stockBodega)}</span>
                         {p.stockSala <= 0 && p.stockBodega > 0 && (
                           <span className="text-[var(--color-aviso)]"> · hay que reponer</span>
                         )}
@@ -282,7 +282,9 @@ export function InventarioClient({
                           onClick={() => setReponiendo(p)}
                           className="tap px-3 py-1.5 text-xs rounded-lg border border-marca-500 text-marca-700"
                         >
-                          Reponer
+                          {/* Con la bodega vacía no hay qué reponer: el botón
+                              decía "Reponer" y abría pasar de la sala a la bodega. */}
+                          {p.stockBodega > 0 ? 'Reponer' : 'Mover'}
                         </button>
                       )}
                       {puedeAjustar && (
@@ -471,7 +473,7 @@ export function InventarioClient({
                       <p className={`num font-semibold ${
                         m.cantidad < 0 ? 'text-[var(--color-alerta)]' : 'text-marca-700'
                       }`}>
-                        {m.cantidad > 0 ? '+' : ''}{m.cantidad}
+                        {m.cantidad > 0 ? '+' : ''}{formatCantidad(m.cantidad)}
                       </p>
                       <p className="text-[11px] text-[var(--texto-suave)] num">saldo {m.saldo}</p>
                     </div>
@@ -539,7 +541,7 @@ export function InventarioClient({
           <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden mb-4">
             {productos.map((p) => {
               const valor = conteo[p.id] ?? '';
-              const v = validarCantidad(valor, { permiteVacio: true });
+              const v = validarCantidadStock(valor, p.unidad, { permiteVacio: true });
               const sistema = enUbicacion(p, ubicacionToma);
               const dif = valor.trim() === '' || !v.valido ? null : v.valor - sistema;
               return (
@@ -715,7 +717,7 @@ function DialogoAjuste({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const v = validarCantidad(cantidad, { maximo: 1_000_000 });
+  const v = validarCantidadStock(cantidad, producto.unidad, { maximo: 1_000_000 });
   const delta = v.valido ? v.valor - actual : 0;
 
   async function guardar() {
@@ -951,7 +953,7 @@ function DialogoReponer({
   const [cantidad, setCantidad] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const v = validarCantidad(cantidad, { maximo: 1_000_000 });
+  const v = validarCantidadStock(cantidad, producto.unidad, { maximo: 1_000_000 });
 
   async function guardar() {
     setError(null);
@@ -973,16 +975,16 @@ function DialogoReponer({
   }
 
   return (
-    <Modal titulo={`Reponer ${producto.nombre}`} encabezado="visible" onCerrar={onCancelar} bloqueado={guardando}>
+    <Modal titulo={`${hacia === 'sala' ? 'Reponer' : 'Guardar en bodega'} ${producto.nombre}`} encabezado="visible" onCerrar={onCancelar} bloqueado={guardando}>
       <div className="p-5 space-y-3">
         <div className="grid grid-cols-2 gap-2 text-center">
           <div className="tarjeta p-3">
             <p className="text-[11px] text-[var(--texto-suave)]">Guardado en bodega</p>
-            <p className="num text-lg font-bold">{producto.stockBodega}</p>
+            <p className="num text-lg font-bold">{formatCantidad(producto.stockBodega)}</p>
           </div>
           <div className="tarjeta p-3">
             <p className="text-[11px] text-[var(--texto-suave)]">A la vista</p>
-            <p className="num text-lg font-bold">{producto.stockSala}</p>
+            <p className="num text-lg font-bold">{formatCantidad(producto.stockSala)}</p>
           </div>
         </div>
 

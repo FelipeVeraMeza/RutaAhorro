@@ -18,12 +18,20 @@ export interface EntradaBitacora {
   fecha: string;
   quien: string | null;
   accion: string;
+  /** Qué se hizo, en palabras: "Factura de proveedor pagada". */
+  nombre: string;
   texto: string;
 }
 
+/**
+ * Qué se hizo. La clave es la acción o "acción:entidad": las funciones de la
+ * base escriben "editar" o "crear" para cosas distintas (la configuración, un
+ * cliente, un combo), y la bitácora mostraba "editar" a secas, sin decir qué.
+ */
 export const ACCIONES: Record<string, string> = {
   price_change: 'Cambio de precio',
   sale_void: 'Venta anulada',
+  devolucion: 'Devolución de venta',
   receipt_void: 'Recepción anulada',
   stock_adjustment: 'Ajuste de stock',
   cash_force_close: 'Caja cerrada por otro',
@@ -31,25 +39,57 @@ export const ACCIONES: Record<string, string> = {
   user_create: 'Usuario creado',
   user_activate: 'Usuario reactivado',
   user_deactivate: 'Usuario desactivado',
+  'editar:configuracion': 'Configuración cambiada',
+  'crear:cliente': 'Cliente creado',
+  'editar:cliente': 'Cliente cambiado',
+  'precios:cliente': 'Precios de cliente',
+  'editar:cliente_credito': 'Crédito de cliente (fiado)',
+  'crear:combo': 'Combo creado',
+  'editar:combo': 'Combo cambiado',
+  ofertas: 'Ofertas de productos',
+  'crear:factura_proveedor': 'Factura de proveedor registrada',
+  'pagar:factura_proveedor': 'Factura de proveedor pagada',
+  'anular:factura_proveedor': 'Factura de proveedor anulada',
+  factura_manual: 'Factura emitida',
+  nota_credito: 'Nota de crédito',
+  factura_recibida: 'Factura recibida registrada',
+  'anular:facturas_recibidas': 'Factura recibida anulada',
+  'editar:dte_emisor': 'Datos del emisor',
+  emision_sii: 'Emisión ante el SII',
 };
 
-function detalle(accion: string, antes: Record<string, unknown> | null, despues: Record<string, unknown> | null): string {
+/** El nombre de una entrada, por acción y entidad. */
+export function nombreAccion(accion: string, entidad?: string | null): string {
+  return ACCIONES[`${accion}:${entidad ?? ''}`] ?? ACCIONES[accion] ?? accion;
+}
+
+const lista = (v: unknown) => (v && typeof v === 'object' ? Object.keys(v as object).join(', ') : '');
+
+function detalle(accion: string, entidad: string | null, antes: Record<string, unknown> | null, despues: Record<string, unknown> | null): string {
   const a = antes ?? {}, d = despues ?? {};
   switch (accion) {
     case 'price_change': return `${formatCLP(Number(a.sale_price ?? 0))} → ${formatCLP(Number(d.sale_price ?? 0))}`;
     case 'sale_void': return `${formatCLP(Number(a.total ?? 0))}${d.reason ? ` · ${d.reason}` : ''}`;
+    case 'devolucion': return `N° ${d.devolucion ?? '?'} · ${formatCLP(Number(d.monto ?? 0))}${d.reembolso ? ` en ${d.reembolso}` : ''}`;
     case 'receipt_void': return String(d.reason ?? '');
     case 'stock_adjustment': return `${a.quantity ?? '?'} → ${d.quantity ?? '?'}${d.reason ? ` · ${d.reason}` : ''}`;
     case 'cash_force_close': return String(d.notes ?? '');
     case 'role_change': return `${a.role ?? '?'} → ${d.role ?? '?'}`;
     case 'user_create': return `${d.email ?? ''} (${d.role ?? ''})`;
-    default: return '';
   }
+  if (entidad === 'cliente_credito') return `tope ${formatCLP(Number(a.credito_tope ?? 0))} → ${formatCLP(Number(d.credito_tope ?? 0))}`;
+  if (entidad === 'factura_proveedor') {
+    return [d.numero ? `N° ${d.numero}` : '', d.monto != null ? formatCLP(Number(d.monto)) : '', d.motivo ? String(d.motivo) : '']
+      .filter(Boolean).join(' · ');
+  }
+  if (entidad === 'configuracion') return lista(d);
+  if (entidad === 'cliente' || entidad === 'combo') return String(d.nombre ?? '');
+  return '';
 }
 
 export async function leerBitacora(desde: string, hasta: string, accion: string | null): Promise<EntradaBitacora[]> {
   if (DEMO_ACTIVO) {
-    return [{ id: 'demo-1', fecha: new Date().toISOString(), quien: 'Felipe Vera', accion: 'price_change', texto: '$1.490 → $1.590 · Arroz grado 1 · 1 kg' }];
+    return [{ id: 'demo-1', fecha: new Date().toISOString(), quien: 'Felipe Vera', accion: 'price_change', nombre: ACCIONES.price_change, texto: '$1.490 → $1.590 · Arroz grado 1 · 1 kg' }];
   }
   const { zonaHoraria } = await configuracionLocal();
   const r = rangoDeDias(desde, hasta, zonaHoraria);
@@ -57,7 +97,11 @@ export async function leerBitacora(desde: string, hasta: string, accion: string 
     .select('id, action, entity_type, entity_id, old_values, new_values, created_at, quien:profiles!audit_log_user_id_fkey(full_name)')
     .gte('created_at', r.desde).lt('created_at', r.hasta)
     .order('created_at', { ascending: false }).limit(300);
-  if (accion) q = q.eq('action', accion);
+  if (accion) {
+    const [acc, ent] = accion.split(':');
+    q = q.eq('action', acc);
+    if (ent) q = q.eq('entity_type', ent);
+  }
   const { data, error } = await q;
   if (error) throw error;
   // El registro guarda el id del producto, no su nombre: se busca aparte.
@@ -69,12 +113,14 @@ export async function leerBitacora(desde: string, hasta: string, accion: string 
   }
   return (data ?? []).map((e) => {
     const producto = e.entity_type === 'products' ? nombres.get(e.entity_id as string) : undefined;
-    const texto = detalle(e.action as string, e.old_values as Record<string, unknown> | null, e.new_values as Record<string, unknown> | null);
+    const texto = detalle(e.action as string, (e.entity_type as string) ?? null,
+      e.old_values as Record<string, unknown> | null, e.new_values as Record<string, unknown> | null);
     return {
       id: e.id as string,
       fecha: e.created_at as string,
       quien: ((e.quien as { full_name?: string } | null)?.full_name) ?? null,
       accion: e.action as string,
+      nombre: nombreAccion(e.action as string, e.entity_type as string),
       texto: producto ? `${producto} · ${texto}` : texto,
     };
   });

@@ -221,8 +221,8 @@ if (await mas.count()) {
   await mas.click();
   await a.getByRole('dialog').waitFor({ timeout: 5000 });
   const menu = await a.getByRole('dialog').innerText();
-  ok('RNF-16', /Proveedores/.test(menu) && /Ventas/.test(menu) && /Reportes/.test(menu) && /Usuarios/.test(menu),
-    'lleva a Proveedores, Ventas, Reportes y Usuarios', menu.replace(/\n+/g, ' · '));
+  ok('RNF-16', /Compras/.test(menu) && /Ventas/.test(menu) && /Reportes/.test(menu) && /Usuarios/.test(menu),
+    'lleva a Compras, Ventas, Reportes y Usuarios', menu.replace(/\n+/g, ' · '));
   await a.getByRole('dialog').getByRole('link', { name: /Reportes/ }).click();
   await a.waitForURL((u) => u.pathname === '/reportes', { timeout: 20000 })
     .then(() => ok('RNF-16', true, 'tocar una sección del menú navega de verdad'),

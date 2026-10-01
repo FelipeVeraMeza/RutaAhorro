@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatCLP, formatCantidad, toUserMessage, validarMonto, validarCantidadVenta, isValidRut, formatRut,
-  resumenFactura, precioConIva, cantidadConUnidad, type LineaFactura,
+  resumenFactura, precioConIva, cantidadConUnidad, type LineaFactura, coincide
 } from '@rutaahorro/core';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
@@ -189,7 +189,7 @@ export function NuevaFactura({ usuarioId, base, onEmitida }: {
     const q = busquedaCliente.trim().toLowerCase();
     if (q.length < 2) return [];
     const r = soloRut(q);
-    return clientes.filter((c) => c.nombre.toLowerCase().includes(q) || (r.length >= 3 && soloRut(c.rut).includes(r))).slice(0, 6);
+    return clientes.filter((c) => coincide(c.nombre, q) || (r.length >= 3 && soloRut(c.rut).includes(r))).slice(0, 6);
   }, [busquedaCliente, clientes]);
 
   // ------------------------------------------------------------ líneas

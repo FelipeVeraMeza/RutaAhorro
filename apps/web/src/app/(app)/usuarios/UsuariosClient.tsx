@@ -57,6 +57,10 @@ export function UsuariosClient({ miId }: { miId: string }) {
   const [enviando, setEnviando] = useState(false);
   const [credenciales, setCredenciales] = useState<Credenciales | null>(null);
   const [restableciendo, setRestableciendo] = useState<Usuario | null>(null);
+  // RNF-19 · Cambiar el rol o desactivar se confirma: un toque de más dejaba
+  // a un cajero sin poder entrar en medio del turno, o a un vendedor con
+  // permisos de administrador.
+  const [confirmando, setConfirmando] = useState<{ titulo: string; texto: string; boton: string; hacer: () => Promise<void> } | null>(null);
   const [claveNueva, setClaveNueva] = useState('');
 
   const cargar = useCallback(async () => {
@@ -225,7 +229,15 @@ export function UsuariosClient({ miId }: { miId: string }) {
                 <div className="flex flex-wrap items-center gap-2 mt-2.5">
                   <select
                     value={u.rol}
-                    onChange={(e) => void accion(() => repoUsuarios().cambiarRol(u.id, e.target.value as Rol))}
+                    onChange={(e) => {
+                      const nuevo = e.target.value as Rol;
+                      setConfirmando({
+                        titulo: `¿${NOMBRE_ROL[nuevo]}?`,
+                        texto: `${u.nombre} pasa de ${NOMBRE_ROL[u.rol]} a ${NOMBRE_ROL[nuevo]}: desde su próxima pantalla ve y puede hacer lo de ese rol.`,
+                        boton: `Sí, pasar a ${NOMBRE_ROL[nuevo]}`,
+                        hacer: () => repoUsuarios().cambiarRol(u.id, nuevo),
+                      });
+                    }}
                     className="tap px-2.5 py-1.5 rounded-lg border border-[var(--borde)] bg-white text-xs"
                     aria-label={`Rol de ${u.nombre}`}
                   >
@@ -244,9 +256,14 @@ export function UsuariosClient({ miId }: { miId: string }) {
                   )}
 
                   <button
-                    onClick={() => void accion(() =>
-                      u.activo ? repoUsuarios().desactivar(u.id) : repoUsuarios().reactivar(u.id),
-                    )}
+                    onClick={() => (u.activo
+                      ? setConfirmando({
+                        titulo: `¿Desactivar a ${u.nombre}?`,
+                        texto: 'No podrá entrar desde ningún celular. Sus ventas y movimientos se conservan a su nombre. Si tiene la caja abierta, ciérrala antes desde Caja.',
+                        boton: 'Sí, desactivar',
+                        hacer: () => repoUsuarios().desactivar(u.id),
+                      })
+                      : void accion(() => repoUsuarios().reactivar(u.id)))}
                     className={`tap px-3 py-1.5 text-xs rounded-lg border ${
                       u.activo
                         ? 'border-[var(--borde)] text-[var(--color-alerta)]'
@@ -402,6 +419,16 @@ export function UsuariosClient({ miId }: { miId: string }) {
               className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50">
               {enviando ? 'Guardando…' : 'Poner contraseña temporal'}
             </button>
+          </div>
+        </Modal>
+      )}
+      {confirmando && (
+        <Modal titulo={confirmando.titulo} encabezado="visible" onCerrar={() => setConfirmando(null)}>
+          <div className="p-5 space-y-3">
+            <p className="text-sm">{confirmando.texto}</p>
+            <button className="btn btn-primario w-full" onClick={() => {
+              const c = confirmando; setConfirmando(null); void accion(c.hacer);
+            }}>{confirmando.boton}</button>
           </div>
         </Modal>
       )}

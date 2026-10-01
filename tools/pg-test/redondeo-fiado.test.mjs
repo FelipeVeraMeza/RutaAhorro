@@ -196,3 +196,22 @@ test('RF-M5-28 · un local nuevo nace con el redondeo encendido (la pantalla lo 
   const r = await intentar(rpc(adm, 'fn_guardar_configuracion', { p_cambios: { redondeo_efectivo: false } }));
   assert.match(r.error, /CONFIGURACION_INVALIDA/);
 });
+
+test('RF-M5-28 · devolver en efectivo una venta redondeada devuelve lo que se pagó', async () => {
+  const { pan, adm } = await mostrador();
+  // 1.234 cobrado 1.230 (ajuste −4).
+  const v = await rpc(adm, 'fn_register_sale', venta(pan, 1, [{ method: 'efectivo', amount: 1230 }]));
+  const r = await rpc(adm, 'fn_devolver_venta', { p_sale_id: v.sale_id, p_items: null, p_motivo: 'No lo quiso', p_reembolso: 'efectivo' });
+  assert.equal(r.monto, 1234, 'la nota de crédito va por el total exacto');
+  assert.equal(r.efectivo_devuelto, 1230, 'pero en plata se devuelve lo que pagó');
+  const res = await resumenCaja(adm);
+  assert.equal(res.cash_out, 1230);
+  assert.equal(res.expected_amount, 10000, 'la caja vuelve a lo que tenía');
+
+  // Una devolución parcial en efectivo también va a la decena: no hay monedas de $1.
+  const v2 = await rpc(adm, 'fn_register_sale', venta(pan, 3, [{ method: 'efectivo', amount: 3700 }]));
+  const { rows: [linea] } = await banco.su.query('select id from sale_items where sale_id = $1', [v2.sale_id]);
+  const r2 = await rpc(adm, 'fn_devolver_venta', { p_sale_id: v2.sale_id, p_items: [{ sale_item_id: linea.id, cantidad: 1 }], p_motivo: 'Una mala', p_reembolso: 'efectivo' });
+  assert.equal(r2.efectivo_devuelto % 10, 0);
+  assert.equal(r2.efectivo_devuelto, redondeoEfectivo(r2.monto));
+});

@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { formatCLP, toUserMessage, validarMonto, isValidRut, formatRut, diaLocal } from '@rutaahorro/core';
+import { formatCLP, toUserMessage, validarMonto, isValidRut, formatRut, diaLocal, coincide, sumarDias } from '@rutaahorro/core';
+import { registrarFacturaProveedor } from '@/lib/datos/porPagar';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { useFormatoFecha, diaCorto } from '@/lib/formatoFecha';
@@ -97,6 +98,10 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
   const [tipo, setTipo] = useState<TipoRecibida>(33);
   const [folio, setFolio] = useState('');
   const [fecha, setFecha] = useState(hoy);
+  // RF-M3-13 · Si es a crédito, queda también en Compras → Por pagar: antes
+  // la misma factura se escribía dos veces (acá para el IVA y allá para el
+  // vencimiento).
+  const [vence, setVence] = useState('');
   const [neto, setNeto] = useState('');
   const [exento, setExento] = useState('');
   const [iva, setIva] = useState('');
@@ -127,7 +132,7 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
   const sugerencias = useMemo(() => {
     const q = razon.trim().toLowerCase();
     if (supplierId || q.length < 2) return [];
-    return proveedores.filter((p) => p.nombre.toLowerCase().includes(q)).slice(0, 5);
+    return proveedores.filter((p) => coincide(p.nombre, q)).slice(0, 5);
   }, [razon, proveedores, supplierId]);
 
   function elegir(p: Proveedor) {
@@ -152,10 +157,23 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
     if (total <= 0) { setError('El documento no puede sumar $0'); return; }
     setGuardando(true);
     try {
-      await repoFacturacion().registrarRecibida({
+      const r = await repoFacturacion().registrarRecibida({
         supplierId, rutEmisor: formatRut(rut), razonSocial: razon.trim(), tipo, folio: vFolio, fechaEmision: fecha,
         neto: vNeto.valor, exento: vExento.valor, iva: vIva.valor, otrosImpuestos: vOtros.valor, notas: notas.trim() || null,
       });
+      const proveedor = r.supplierId ?? supplierId;
+      if (vence && tipo !== 61 && proveedor) {
+        try {
+          await registrarFacturaProveedor({ proveedorId: proveedor, numero: String(vFolio), monto: total, emitida: fecha, vence });
+        } catch (e) {
+          // Ya estaba (se registró al recibir la mercadería): no es un error.
+          if (!/FACTURA_PROVEEDOR_DUPLICADA/.test(String((e as { message?: string })?.message ?? e))) {
+            setError(`La factura quedó registrada, pero no en Por pagar: ${toUserMessage(e)}. Regístrala en Compras → Por pagar.`);
+            setGuardando(false);
+            return;
+          }
+        }
+      }
       onHecho();
     } catch (e) {
       setError(toUserMessage(e));
@@ -202,9 +220,21 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
             {(p) => <input {...p} inputMode="numeric" value={folio} onChange={(e) => setFolio(e.target.value)} className={`${c} num`} />}
           </Campo>
         </div>
-        <Campo etiqueta="Fecha de emisión">
-          {(p) => <input {...p} type="date" value={fecha} max={hoy} onChange={(e) => setFecha(e.target.value)} className={c} />}
-        </Campo>
+        <div className="grid grid-cols-2 gap-3">
+          <Campo etiqueta="Fecha de emisión">
+            {(p) => <input {...p} type="date" value={fecha} max={hoy} onChange={(e) => setFecha(e.target.value)} className={c} />}
+          </Campo>
+          {tipo !== 61 && (
+            <Campo etiqueta="Vence el (si es a crédito)" ayuda={vence ? 'Queda en Compras → Por pagar' : undefined}>
+              {(p) => <input {...p} type="date" value={vence} min={fecha} onChange={(e) => setVence(e.target.value)} className={c} />}
+            </Campo>
+          )}
+        </div>
+        {tipo !== 61 && !vence && (
+          <button type="button" onClick={() => setVence(sumarDias(fecha || hoy, 30))} className="btn btn-secundario btn-chico">
+            A crédito: vence en 30 días
+          </button>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Campo etiqueta="Neto" error={vNeto.valido ? null : vNeto.error}>
             {(p) => <input {...p} inputMode="numeric" value={neto} onChange={(e) => setNeto(e.target.value)} className={`${c} num text-right`} />}

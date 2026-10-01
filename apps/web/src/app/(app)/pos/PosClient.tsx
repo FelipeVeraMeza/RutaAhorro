@@ -9,7 +9,7 @@ import {
   aplicarCombos, lineSubtotal, type Combo,
   formatCLP, formatCantidad, validarCantidadVenta, admiteDecimales, toUserMessage, construirComprobante,
   cantidadAtipica,
-  type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta, type RegistroDte,
+  type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta, type RegistroDte, coincide
 } from '@rutaahorro/core';
 import { findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO, ultimaActualizacionCatalogo } from '@/lib/offline/catalog';
 import { contarVendidos, masVendidos } from '@/lib/offline/frecuentes';
@@ -28,7 +28,12 @@ import { Cobro } from './Cobro';
 import { Comprobante } from './Comprobante';
 
 /** `deshacer`: lo que se acaba de agregar, para sacarlo con un toque (RF-M5-24). */
-type Aviso = { tipo: 'ok' | 'error' | 'info'; texto: string; deshacer?: { productId: string; cantidad: number } } | null;
+type Aviso = {
+  tipo: 'ok' | 'error' | 'info'; texto: string;
+  deshacer?: { productId: string; cantidad: number };
+  /** RF-M5-24 · la línea que se acaba de quitar, para devolverla con "Deshacer". */
+  recuperar?: CartLine;
+} | null;
 
 /** La línea del carrito para un producto del catálogo del celular. */
 function lineaDesde(p: LocalProduct, quantity: number): CartLine {
@@ -126,18 +131,32 @@ export function PosClient({
   const [results, setResults] = useState<LocalProduct[]>([]);
   const [aviso, setAviso] = useState<Aviso>(null);
   const [cobrando, setCobrando] = useState(false);
+  // El motivo por el que la venta no se registró, DENTRO del diálogo de
+  // cobro: el aviso de la pantalla quedaba detrás del diálogo y el cajero
+  // tocaba "Confirmar" sin ver por qué no pasaba nada.
+  const [errorCobro, setErrorCobro] = useState<string | null>(null);
   const [comprobante, setComprobante] = useState<DatosComprobante | null>(null);
   const [catalogReady, setCatalogReady] = useState<boolean | null>(null);
   const avisoTimer = useRef<number | null>(null);
 
   const totals = cartTotals(lines);
 
-  const notificar = useCallback((tipo: 'ok' | 'error' | 'info', texto: string, deshacer?: { productId: string; cantidad: number }) => {
-    setAviso({ tipo, texto, deshacer });
+  const notificar = useCallback((tipo: 'ok' | 'error' | 'info', texto: string, deshacer?: { productId: string; cantidad: number }, recuperar?: CartLine) => {
+    setAviso({ tipo, texto, deshacer, recuperar });
     if (avisoTimer.current) window.clearTimeout(avisoTimer.current);
     // Con "Deshacer" el aviso dura más: hay que alcanzar a tocarlo.
-    avisoTimer.current = window.setTimeout(() => setAviso(null), deshacer ? 5000 : 3200);
+    avisoTimer.current = window.setTimeout(() => setAviso(null), deshacer || recuperar ? 5000 : 3200);
   }, []);
+
+  /**
+   * RF-M5-24 · Sacar una línea (Quitar, o "−" hasta cero) ofrece "Deshacer",
+   * como dice Ayuda. Antes solo se podía deshacer lo agregado: una línea
+   * quitada por error había que volver a buscarla y a contar.
+   */
+  const quitarLinea = useCallback((l: CartLine) => {
+    cambiarCarro((p) => removeFromCart(p, l.productId));
+    notificar('info', `Se quitó ${l.name}`, undefined, l);
+  }, [cambiarCarro, notificar]);
 
   // RF-M5-25 · los más vendidos en este celular, de un toque.
   const [frecuentes, setFrecuentes] = useState<LocalProduct[]>([]);
@@ -204,18 +223,37 @@ export function PosClient({
     // queda en bodega, se avisa y se vende igual (decisión 2026-09-19).
     const enCarro = (linesRef.current.find((l) => l.productId === p.id)?.quantity ?? 0) + qty;
     const sala = p.stockSala ?? p.stock;
-    if (enCarro > sala && (p.stockBodega ?? 0) > 0) {
-      notificar('info', `${p.name}: a la vista quedan ${Math.max(0, sala)} · hay ${p.stockBodega} en bodega, conviene reponer`);
+    // Vender alimentos vencidos está prohibido (Reglamento Sanitario): si el
+    // producto tiene un lote vencido, que el cajero mire la fecha antes de
+    // entregarlo. No se bloquea: puede que en la repisa ya no quede de ese lote.
+    if (p.venceProximo && p.venceProximo < diaLocal(new Date(), zonaRef.current)) {
+      notificar('error', `${p.name}: hay un lote vencido el ${p.venceProximo.split('-').reverse().join('-')}. Revisa la fecha antes de entregarlo`,
+        { productId: p.id, cantidad: qty });
+    } else if (enCarro > sala && (p.stockBodega ?? 0) > 0) {
+      notificar('info', `${p.name}: a la vista quedan ${formatCantidad(Math.max(0, sala))} · hay ${formatCantidad(p.stockBodega ?? 0)} en bodega, conviene reponer`);
     } else if (enCarro > p.stock && venderSinStockRef.current) {
       // Se vende igual (respuesta 13), pero quien cobra sabe que el sistema
       // no lo tenía: es la pista de que falta ingresar una recepción.
       notificar('info', `${p.name}: el sistema tenía ${Math.max(0, p.stock)}. Se vende igual y se avisa al administrador`);
+    } else if (enCarro > p.stock && !puedeForzarStock) {
+      // Antes decía "✓" y la venta recién fallaba al cobrar, con el cliente
+      // esperando. Se agrega igual (puede ser un error del sistema), pero se
+      // dice ahora lo que va a pasar.
+      notificar('error', `${p.name}: el sistema tiene ${Math.max(0, p.stock)}. Así no se podrá cobrar: pide a un supervisor que lo revise`,
+        { productId: p.id, cantidad: qty });
     } else {
-      notificar('ok', `${p.name} · ${formatCLP(p.salePrice)}`, { productId: p.id, cantidad: qty });
+      // El precio que se va a cobrar: el del cliente elegido si es menor.
+      const precio = precioParaCliente(p.id, p.salePrice, clienteRef.current) ?? p.salePrice;
+      notificar('ok', `${p.name} · ${formatCLP(Math.min(precio, p.salePrice))}`, { productId: p.id, cantidad: qty });
     }
-  }, [notificar, cambiarCarro]);
+  }, [notificar, cambiarCarro, puedeForzarStock]);
 
   /** RF-M5-24 · el último escaneo fue un error: se saca sin buscar la línea. */
+  function recuperarLinea(l: CartLine) {
+    cambiarCarro((prev) => addToCart(prev, l));
+    setAviso(null);
+  }
+
   function deshacer(d: { productId: string; cantidad: number }) {
     cambiarCarro((prev) => {
       const l = prev.find((x) => x.productId === d.productId);
@@ -382,7 +420,7 @@ export function PosClient({
     if (!puedeForzarStock && !config.venderSinStock) {
       const falta = lines.find((l) => typeof l.stockAvailable === 'number' && l.quantity > l.stockAvailable);
       if (falta) {
-        notificar('error', `No hay stock suficiente de ${falta.name}: en el local quedan ${Math.max(0, falta.stockAvailable ?? 0)}. Un supervisor puede autorizar la venta.`);
+        setErrorCobro(`No hay stock suficiente de ${falta.name}: en el local quedan ${Math.max(0, falta.stockAvailable ?? 0)}. Un supervisor puede autorizar la venta.`);
         return false;
       }
     }
@@ -422,7 +460,7 @@ export function PosClient({
         // No quedó registrada: se saca de la cola y el carrito se conserva
         // para corregir y volver a cobrar.
         await db().saleQueue.delete(clientUuid);
-        notificar('error', toUserMessage(fila.lastError ?? ''));
+        setErrorCobro(toUserMessage(fila.lastError ?? ''));
         return false;
       }
       registrada = respuestaDe(clientUuid) as typeof registrada;
@@ -505,8 +543,10 @@ export function PosClient({
         >
           <span className="flex items-center justify-between gap-2">
             <span>{aviso.texto}</span>
-            {aviso.deshacer && (
-              <button onClick={() => deshacer(aviso.deshacer!)} className="tap -my-2 -mr-2 px-2 font-semibold underline shrink-0">
+            {(aviso.deshacer || aviso.recuperar) && (
+              <button
+                onClick={() => (aviso.recuperar ? recuperarLinea(aviso.recuperar) : deshacer(aviso.deshacer!))}
+                className="tap -my-2 -mr-2 px-2 font-semibold underline shrink-0">
                 Deshacer
               </button>
             )}
@@ -596,11 +636,11 @@ export function PosClient({
                       </span>
                     )}
                     <span className="block text-xs text-[var(--texto-suave)] num">
-                      A la vista {p.stockSala ?? p.stock}{typeof p.stockBodega === 'number' && ` · en bodega ${p.stockBodega}`}
+                      A la vista {formatCantidad(p.stockSala ?? p.stock)}{typeof p.stockBodega === 'number' && ` · en bodega ${formatCantidad(p.stockBodega)}`}
                       {p.tracksExpiry && ' · perecible'}
                     </span>
                   </span>
-                  <span className="num font-semibold whitespace-nowrap">{formatCLP(p.salePrice)}</span>
+                  <PrecioResultado precio={p.salePrice} cliente={cliente ? precioParaCliente(p.id, p.salePrice, cliente) : null} />
                 </button>
               </li>
             ))}
@@ -670,7 +710,9 @@ export function PosClient({
                 <div className="flex items-center gap-2 mt-2">
                   <button
                     aria-label={`Quitar una unidad de ${l.name}`}
-                    onClick={() => cambiarCarro((p) => setQuantity(p, l.productId, l.quantity - 1))}
+                    onClick={() => (l.quantity - 1 <= 0
+                      ? quitarLinea(l)
+                      : cambiarCarro((p) => setQuantity(p, l.productId, l.quantity - 1)))}
                     className="tap w-11 h-11 rounded-lg border border-[var(--borde)] text-xl font-bold active:bg-gray-100"
                   >
                     −
@@ -682,13 +724,21 @@ export function PosClient({
                   />
                   <button
                     aria-label={`Agregar una unidad de ${l.name}`}
-                    onClick={() => cambiarCarro((p) => setQuantity(p, l.productId, l.quantity + 1))}
+                    onClick={() => {
+                      cambiarCarro((p) => setQuantity(p, l.productId, l.quantity + 1));
+                      // Lo mismo que al escanear: pasar el stock se dice ahora, no al cobrar.
+                      if (typeof l.stockAvailable === 'number' && l.quantity + 1 > l.stockAvailable
+                          && !puedeForzarStock && !config.venderSinStock) {
+                        notificar('error', `${l.name}: el sistema tiene ${Math.max(0, l.stockAvailable)}. Así no se podrá cobrar`);
+                      }
+                    }}
                     className="tap w-11 h-11 rounded-lg border border-[var(--borde)] text-xl font-bold active:bg-gray-100"
                   >
                     +
                   </button>
                   <button
-                    onClick={() => cambiarCarro((p) => removeFromCart(p, l.productId))}
+                    onClick={() => quitarLinea(l)}
+                    aria-label={`Quitar ${l.name} de la venta`}
                     className="tap ml-auto px-3 text-sm text-[var(--color-alerta)]"
                   >
                     Quitar
@@ -720,7 +770,7 @@ export function PosClient({
               Vaciar
             </button>
             <button
-              onClick={() => setCobrando(true)}
+              onClick={() => { setErrorCobro(null); setCobrando(true); }}
               className="tap flex-1 py-3.5 rounded-xl bg-marca-500 text-white font-bold text-base active:bg-marca-600"
             >
               Cobrar
@@ -735,9 +785,10 @@ export function PosClient({
           tarjetaEmiteDocumento={config.tarjetaEmiteDocumento}
           redondear={config.redondeoEfectivo}
           cliente={cliente}
-          onCancel={() => setCobrando(false)}
+          onCancel={() => { setCobrando(false); setErrorCobro(null); }}
+          error={errorCobro}
           onConfirm={(payments, documento) =>
-            confirmarVenta(payments, documento).catch((e) => { notificar('error', toUserMessage(e)); return false; })
+            confirmarVenta(payments, documento).catch((e) => { setErrorCobro(toUserMessage(e)); return false; })
           }
         />
       )}
@@ -754,7 +805,7 @@ export function PosClient({
               Se quitan {lines.length} {lines.length === 1 ? 'producto' : 'productos'} del carrito ({formatCLP(totals.total)}).
             </p>
             <button
-              onClick={() => { setLines([]); setConfirmandoVaciar(false); }}
+              onClick={() => { setLines([]); elegirCliente(null); setConfirmandoVaciar(false); }}
               className="tap w-full py-3.5 rounded-xl bg-[var(--color-alerta)] text-white font-bold"
             >
               Sí, vaciar
@@ -773,6 +824,19 @@ export function PosClient({
         <Comprobante datos={comprobante} onCerrar={() => setComprobante(null)} />
       )}
     </div>
+  );
+}
+
+/** El precio en la búsqueda: con un cliente elegido, el suyo (y el normal tachado). */
+function PrecioResultado({ precio, cliente }: { precio: number; cliente: number | null }) {
+  if (cliente == null || cliente >= precio) {
+    return <span className="num font-semibold whitespace-nowrap">{formatCLP(precio)}</span>;
+  }
+  return (
+    <span className="num whitespace-nowrap text-right">
+      <s className="block text-xs text-[var(--texto-suave)]">{formatCLP(precio)}</s>
+      <span className="font-semibold text-marca-700">{formatCLP(cliente)}</span>
+    </span>
   );
 }
 
@@ -874,7 +938,7 @@ function ElegirCliente({ onElegir, onCerrar }: {
   const q = busqueda.trim().toLowerCase();
   const soloRut = q.replace(/[^0-9k]/g, '');
   const visibles = (clientes ?? []).filter((c) => !q
-    || c.nombre.toLowerCase().includes(q)
+    || coincide(c.nombre, q)
     || (soloRut.length >= 3 && (c.rut ?? '').toLowerCase().replace(/[^0-9k]/g, '').includes(soloRut)));
   return (
     <Modal titulo="Cliente de la venta" encabezado="visible" onCerrar={onCerrar}>
@@ -918,7 +982,7 @@ function Frescura({ desde }: { desde: string | null }) {
   useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 60_000); return () => clearInterval(t); }, []);
   if (!desde) return null;
   const min = Math.max(0, Math.floor((ahora - new Date(desde).getTime()) / 60_000));
-  const texto = min < 2 ? 'recién' : min < 60 ? `hace ${min} min` : min < 1440 ? `hace ${Math.floor(min / 60)} h` : `hace ${Math.floor(min / 1440)} días`;
+  const texto = min < 2 ? 'recién' : min < 60 ? `hace ${min} min` : min < 1440 ? `hace ${Math.floor(min / 60)} h` : min < 2880 ? 'hace 1 día' : `hace ${Math.floor(min / 1440)} días`;
   const viejo = min >= 1440;
   return (
     <p className={`text-[11px] mt-1 ${viejo ? 'text-[var(--color-aviso)] font-medium' : 'text-[var(--texto-suave)]'}`}>

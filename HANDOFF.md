@@ -8,7 +8,64 @@
 
 ---
 
-## CÓMO SEGUIR — corte 2026-10-01 (4ª ronda), léelo antes que todo
+## CÓMO SEGUIR — corte 2026-10-01 (5ª ronda: revisión por rol), léelo antes que todo
+
+**2026-10-01 · Versión 0.5.1.** Pedido: "revisa el sistema como lo usaría cada
+rol, busca errores… cuando encuentres 50 errores paras". Se paró en el 50.
+**El detalle está en [docs/26](docs/26-revision-por-rol-50-errores.md)**: qué
+pasaba, quién lo ve, gravedad y con qué se verificó. 49 corregidos y 1 es una
+pregunta de negocio (N° 13, abajo). Lo de la 4ª ronda (0029/0030 sin aplicar
+en Supabase) sigue igual; esta ronda **modificó 0029** (todavía no aplicada,
+así que se puede):
+- `fn_devolver_venta`: en efectivo devuelve redondeado, y la venta entera
+  devuelve lo que se pagó (N° 39). Responde `efectivo_devuelto`.
+- `v_cuenta_clientes` trae `is_active` (N° 27).
+
+**Lo más importante para el que siga**
+- **N° 47 · `validarMonto` (core) aceptaba "20000,5" como $200.005 y "1.5" como
+  $15.** Ahora rechaza la coma y los puntos que no separan miles. Afecta a
+  TODOS los campos de dinero: si una pantalla deja de aceptar algo que antes
+  aceptaba, es esto, y está bien.
+- Reglas nuevas en core: **`validarCantidadStock(texto, unidad)`** para
+  inventario (ajuste, toma, reponer, recepción, stock inicial, qué comprar):
+  entera para lo que se cuenta. `coincide(texto, busqueda)` para buscar sin
+  tildes. `formatPct` para porcentajes. `minutoDelDia`/`totalHastaMinuto`
+  para comparar "a esta hora".
+- **El catálogo del celular trae `venceProximo`** (el lote con stock que vence
+  antes) para avisar lo vencido en Vender y Consultar precio (N° 15). Lee
+  `product_lots`, que todos los roles pueden leer (RLS `lots_read`).
+- **La cola sin conexión muestra las ventas rechazadas** con su motivo
+  (`ventasConError` en `offline/sync.ts`, barra roja arriba) (N° 29).
+- **"Salir" pregunta si la caja propia sigue abierta**
+  (`lib/datos/cajaAbierta.ts`) (N° 37). Los recorridos que salen con la caja
+  abierta pasan ese aviso.
+- El menú dice **"Compras"** (antes "Proveedores"); `documento-venta.mjs` ya
+  lo busca así.
+
+**Pregunta de negocio abierta (N° 13): ¿el costo se ingresa con o sin IVA?**
+El margen se calcula `(precio − costo) / precio` con el precio CON IVA. Si el
+costo es neto (como en la factura del proveedor), el margen que ve el dueño
+incluye el IVA: $2.490 con costo neto $1.850 muestra 25,7 % y deja 11,6 %.
+
+**Verificado:** core **444** · typecheck · `db:check` · `db:test` **174/174**
+(+1 TODO; como usuario sin privilegios) · `demo-ronda5.mjs` **22/22** (nuevo)
+· `demo-ronda4` 44/44 · `demo-ronda3` 45/45 · `demo-ronda2` 15/15 ·
+`demo-flujo` 19/19 · `demo-datos` 11/11 · `demo-roles` 184 pantallas sin
+errores, desbordes ni controles sin nombre · `sin-red` 5/5 · build ·
+`peso-js` 27/27 bajo 270 kB pero **13/27 en la meta de 250** (antes 17): las
+correcciones sumaron 1 a 2 kB por pantalla y cuatro quedaron en 251 kB. Ojo:
+`lib/demo/data.ts` llega al layout por el cartel de la maqueta; si importa
+core, core entra a TODAS las pantallas (pasó en esta ronda y se corrigió).
+**No se corrió contra Supabase ni Railway.**
+
+**No se revisó a fondo** (se paró en 50): Facturación → Nueva factura y
+Emisor SII, Etiquetas, Importar, Mi cuenta y el bloqueo, Ofertas masivas.
+Pendientes de la 4ª ronda sin cambios: aplicar 0029 y 0030, el contador
+(redondeo en la boleta), RNF-62 en 10 pantallas, SUPABASE_SECRET_KEY, etc.
+
+---
+
+## CÓMO SEGUIR — corte 2026-10-01 (4ª ronda)
 
 **2026-10-01 · Versión 0.5.0: redondeo del efectivo, fiado, cuentas por pagar
 y pie del comprobante.** Dos migraciones nuevas, **0029** y **0030**,

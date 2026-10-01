@@ -68,3 +68,24 @@ export function textoVariacion(pct: number | null): string | null {
 
 export const sumaTotales = (puntos: readonly PuntoDia[]) =>
   puntos.reduce((s, p) => ({ total: s.total + p.total, ventas: s.ventas + p.ventas }), { total: 0, ventas: 0 });
+
+/** Minutos desde la medianoche del local (0 a 1439) para un instante. */
+export function minutoDelDia(instante: Date | string, zona: string): number {
+  const d = typeof instante === 'string' ? new Date(instante) : instante;
+  const partes = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: zona })
+    .formatToParts(d);
+  const h = Number(partes.find((p) => p.type === 'hour')?.value ?? 0);
+  const m = Number(partes.find((p) => p.type === 'minute')?.value ?? 0);
+  return h * 60 + m;
+}
+
+/**
+ * RF-M7-11 · Lo vendido en un día hasta cierta hora del local. El Inicio
+ * comparaba lo que va de hoy (a las 10:00, la mañana) con el mismo día de la
+ * semana pasada COMPLETO, y marcaba "−84 %" todos los días antes del cierre.
+ */
+export function totalHastaMinuto(
+  ventas: ReadonlyArray<{ fecha: string; total: number }>, hastaMinuto: number, zona: string,
+): number {
+  return ventas.reduce((s, v) => (minutoDelDia(v.fecha, zona) <= hastaMinuto ? s + v.total : s), 0);
+}

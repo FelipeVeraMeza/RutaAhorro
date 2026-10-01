@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   clp, formatCLP, parseCLP, taxIncluded, netAmount,
-  margin, marginPct, change,
+  margin, marginPct, change, formatPct, coincide, validarCantidadStock, validarMonto,
 } from '../src/money.js';
 
 describe('clp', () => {
@@ -85,5 +85,50 @@ describe('vuelto', () => {
 
   it('nunca es negativo si el cliente paga de menos', () => {
     expect(change(5000, 7450)).toBe(0);
+  });
+});
+
+describe('formatPct', () => {
+  it('coma decimal y espacio antes del signo', () => {
+    expect(formatPct(25.7)).toBe('25,7 %');
+    expect(formatPct(30)).toBe('30 %');
+    expect(formatPct(-3.25)).toBe('-3,3 %');
+  });
+});
+
+describe('RF-M2-20 · coincide sin tildes', () => {
+  it('ignora tildes y mayúsculas en los dos lados', () => {
+    expect(coincide('José Muñoz', 'jose')).toBe(true);
+    expect(coincide('Azúcar · 1 kg', 'AZUCAR')).toBe(true);
+    expect(coincide('Azucar', 'azúcar')).toBe(true);
+    expect(coincide('Pan', 'queso')).toBe(false);
+    expect(coincide(null, '')).toBe(true);
+  });
+});
+
+describe('validarCantidadStock', () => {
+  it('entera para lo que se cuenta, con decimales para lo que se pesa', () => {
+    expect(validarCantidadStock('2,5', 'unidad').valido).toBe(false);
+    expect(validarCantidadStock('3', 'unidad').valor).toBe(3);
+    expect(validarCantidadStock('2,5', 'kg').valor).toBe(2.5);
+    expect(validarCantidadStock('0', 'unidad').valido).toBe(true);
+    expect(validarCantidadStock('', 'unidad', { permiteVacio: true }).valido).toBe(true);
+  });
+});
+
+describe('validarMonto no adivina decimales ni miles mal puestos', () => {
+  it('rechaza coma decimal y puntos que no separan miles', () => {
+    expect(validarMonto('20000,5').valido).toBe(false);
+    expect(validarMonto('1990,5').error).toMatch(/sin decimales/);
+    expect(validarMonto('1.5').valido).toBe(false);
+    expect(validarMonto('12abc').valido).toBe(false);
+  });
+  it('acepta lo que la gente escribe de verdad', () => {
+    expect(validarMonto('1.990').valor).toBe(1990);
+    expect(validarMonto('$ 1.990').valor).toBe(1990);
+    expect(validarMonto('$5.000').valor).toBe(5000);
+    expect(validarMonto('1990').valor).toBe(1990);
+    expect(validarMonto('1.234.567').valor).toBe(1234567);
+    expect(validarMonto(' 20 000 ').valor).toBe(20000);
   });
 });

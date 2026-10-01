@@ -25,10 +25,17 @@ export function formatoFecha(iso: string, zona: string): string {
   return new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', timeZone: zona });
 }
 
+/**
+ * "30-09 22:50". Armado a mano: `toLocaleString('es-CL')` da "30-09, 22:50"
+ * en Node y "30/9, 22:50" en Chrome, así que el mismo dato salía distinto en
+ * Ventas que en el Inicio, y el HTML del servidor no calzaba al hidratar.
+ */
 export function formatoFechaHora(iso: string, zona: string): string {
-  return new Date(iso).toLocaleString('es-CL', {
+  const p = new Intl.DateTimeFormat('en-GB', {
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: zona,
-  });
+  }).formatToParts(new Date(iso));
+  const v = (t: string) => p.find((x) => x.type === t)?.value ?? '';
+  return `${v('day')}-${v('month')} ${v('hour')}:${v('minute')}`;
 }
 
 export function useFormatoFecha() {

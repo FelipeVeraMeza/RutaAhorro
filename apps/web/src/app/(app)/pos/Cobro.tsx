@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  formatCLP, change, parseCLP, formatRut, isValidRut,
+  formatCLP, change, validarMonto, formatRut, isValidRut,
   documentosDisponibles, validarDocumento, normalizarReceptor, NOMBRE_DOCUMENTO, montoRecibidoAtipico,
   redondeoEfectivo,
   type TipoDocumento, type DocumentoVenta, type ClienteConPrecios,
@@ -43,9 +43,11 @@ function sugerencias(total: number): number[] {
 }
 
 export function Cobro({
-  total, tarjetaEmiteDocumento = true, redondear = false, cliente = null, onCancel, onConfirm,
+  total, tarjetaEmiteDocumento = true, redondear = false, cliente = null, onCancel, onConfirm, error = null,
 }: {
   total: number;
+  /** Por qué no se registró la venta (stock, rechazo de la base). Se muestra acá adentro. */
+  error?: string | null;
   /** RF-M5-28 · `tenants.settings.redondeo_efectivo` (lo pone 0029). */
   redondear?: boolean;
   /** Del local: `tenants.settings.tarjeta_emite_documento`. */
@@ -120,7 +122,9 @@ export function Cobro({
   // El total de la venta (y de la boleta) no cambia; la base guarda el ajuste.
   const aCobrar = metodo === 'efectivo' && redondear ? redondeoEfectivo(total) : total;
   const ajuste = aCobrar - total;
-  const montoRecibido = parseCLP(recibido) ?? 0;
+  // validarMonto y no parseCLP (regla 9): "20000,5" se leía $200.005.
+  const vRecibido = validarMonto(recibido, { etiqueta: 'monto recibido', permiteVacio: true, maximo: 10_000_000 });
+  const montoRecibido = vRecibido.valido ? vRecibido.valor : 0;
   const vuelto = change(montoRecibido, aCobrar);
   const faltante = Math.max(aCobrar - montoRecibido, 0);
   const puedeConfirmar =
@@ -287,6 +291,9 @@ export function Cobro({
               ))}
             </div>
 
+            {recibido.trim() !== '' && !vRecibido.valido && (
+              <p role="alert" className="text-sm text-[var(--color-alerta)] mt-2">{vRecibido.error}</p>
+            )}
             <div className="mt-3 px-4 py-3 rounded-xl bg-[var(--fondo)] flex items-center justify-between">
               {faltante > 0 ? (
                 <>
@@ -331,6 +338,10 @@ export function Cobro({
             ¿Recibiste <strong className="num">{formatCLP(montoRecibido)}</strong>? Es mucho más que el total: revisa que
             no sobre un cero. {atipicoConfirmado ? 'Toca otra vez para confirmar.' : ''}
           </p>
+        )}
+
+        {error && (
+          <p role="alert" className="text-sm text-red-900 bg-red-50 px-3 py-2 rounded-lg mb-3">{error}</p>
         )}
 
         {/* Por qué no se puede confirmar, antes de que lo intente. */}

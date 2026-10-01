@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   formatCLP, formatRut, isValidRut, toUserMessage, validarCantidad, validarMonto,
-  describirCliente, precioParaCliente,
+  describirCliente, precioParaCliente, coincide
 } from '@rutaahorro/core';
 import { repoClientes, type Cliente, type DatosCliente } from '@/lib/datos/clientes';
 import { repoProductos, type Producto } from '@/lib/productos';
@@ -41,7 +41,7 @@ export function ClientesClient() {
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     const soloRut = q.replace(/[^0-9k]/g, '');
-    return clientes.filter((c) => !q || c.nombre.toLowerCase().includes(q)
+    return clientes.filter((c) => !q || coincide(c.nombre, q)
       || (soloRut.length >= 3 && (c.rut ?? '').toLowerCase().replace(/[^0-9k]/g, '').includes(soloRut)));
   }, [clientes, busqueda]);
 
@@ -129,7 +129,7 @@ function FichaCliente({ cliente, onCerrar, onGuardado }: {
   const candidatos = useMemo(() => {
     const q = buscarProd.trim().toLowerCase();
     if (q.length < 2) return [];
-    return productos.filter((p) => !(p.id in precios) && p.nombre.toLowerCase().includes(q)).slice(0, 8);
+    return productos.filter((p) => !(p.id in precios) && coincide(p.nombre, q)).slice(0, 8);
   }, [productos, buscarProd, precios]);
 
   const vPct = validarCantidad(pct, { permiteVacio: true, maximo: 99.99 });

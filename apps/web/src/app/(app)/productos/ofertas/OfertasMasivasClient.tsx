@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   formatCLP, toUserMessage, validarMonto, validarCantidad, validarTramos,
-  precioDelTramo, describirTramo, type TramoPrecio,
+  precioDelTramo, describirTramo, type TramoPrecio, coincide
 } from '@rutaahorro/core';
 import { repoPrecios } from '@/lib/datos/precios';
 import { useConfiguracion } from '@/lib/datos/configuracion';
@@ -101,7 +101,7 @@ export function OfertasMasivasClient({ esAdmin }: { esAdmin: boolean }) {
     const q = busqueda.trim().toLowerCase();
     return productos.filter((p) =>
       (!categoriaId || p.categoriaId === categoriaId)
-      && (!q || p.nombre.toLowerCase().includes(q))
+      && (!q || coincide(p.nombre, q))
       && (!soloConOferta || (ofertas.get(p.id)?.length ?? 0) > 0));
   }, [productos, categoriaId, busqueda, soloConOferta, ofertas]);
 

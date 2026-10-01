@@ -1,7 +1,7 @@
 'use client';
 
 import { db, normalizeSearch, asegurarDueno, setMeta, type LocalProduct } from '../offline/db';
-import { DEMO_PRODUCTOS } from './data';
+import { DEMO_PRODUCTOS, DEMO_LOTES } from './data';
 
 /**
  * Carga el catálogo de ejemplo en IndexedDB.
@@ -27,6 +27,7 @@ export async function sembrarCatalogoDemo(): Promise<number> {
     unit: p.unit,
     categoryId: p.categoria,
     tracksExpiry: p.tracks_expiry,
+    venceProximo: DEMO_LOTES.filter((l) => l.product_id === p.id).map((l) => l.expiry_date).sort()[0] ?? null,
     stock: p.stock,
     minStock: p.min_stock,
     isActive: true,

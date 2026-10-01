@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { formatCLP, toUserMessage, validarMonto } from '@rutaahorro/core';
+import { formatCLP, toUserMessage, validarMonto, coincide } from '@rutaahorro/core';
 import {
   cuentasClientes, movimientosCuenta, abonarCuenta, fijarTopeCredito,
   NOMBRE_MOVIMIENTO, signoMovimiento,
@@ -53,10 +53,11 @@ export function FiadoClient({ puedeDarCredito }: { puedeDarCredito: boolean }) {
     .sort((a, b) => b.saldo - a.saldo || a.nombre.localeCompare(b.nombre, 'es')), [cuentas]);
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    return conCuenta.filter((c) => !q || c.nombre.toLowerCase().includes(q));
+    return conCuenta.filter((c) => !q || coincide(c.nombre, q));
   }, [conCuenta, busqueda]);
   const totalAdeudado = conCuenta.reduce((s, c) => s + c.saldo, 0);
-  const sinCredito = cuentas.filter((c) => c.tope === 0 && c.saldo === 0);
+  // Solo clientes activos: uno desactivado no se puede elegir en Vender.
+  const sinCredito = cuentas.filter((c) => c.activo && c.tope === 0 && c.saldo === 0);
 
   async function listo(texto: string) {
     setAbonando(null); setTopeDe(null); setEligiendo(false);

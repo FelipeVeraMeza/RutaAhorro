@@ -59,7 +59,14 @@ export function Comprobante({
       <div className="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl max-h-[92vh] flex flex-col">
         <div className="px-4 pt-4 pb-3 text-center border-b border-[var(--borde)]">
           {!copia && <p className="text-3xl mb-1" aria-hidden>✅</p>}
-          <h2 className="text-base font-semibold">{copia ? 'Copia del comprobante' : 'Venta registrada'}</h2>
+          {/* Sin folio es una venta hecha sin internet: está guardada en el
+              celular, todavía no en el sistema. Decir "registrada" era falso. */}
+          <h2 className="text-base font-semibold">
+            {copia ? 'Copia del comprobante' : datos.folio == null ? 'Venta guardada en este celular' : 'Venta registrada'}
+          </h2>
+          {!copia && datos.folio == null && (
+            <p className="text-xs text-[var(--texto-suave)]">Se envía sola cuando vuelva internet.</p>
+          )}
           {/* Lo que el cliente pagó: con el redondeo del efectivo, si hubo. */}
           <p className="text-2xl font-bold mt-1">{formatCLP(datos.totalCobrado ?? datos.total)}</p>
         </div>

@@ -75,7 +75,7 @@ check((await p.locator('main').innerText()).includes('Se recuperó la recepción
 // --- inventario: nombre completo y "Mover todo"
 await p.goto(BASE + '/inventario', { waitUntil: 'networkidle' }); await p.waitForTimeout(800);
 check((await p.locator('main').innerText()).includes('Aceite vegetal · 900 ml'), 'inventario muestra el nombre completo en 360 px');
-await p.getByRole('button', { name: 'Reponer' }).first().click();
+await p.getByRole('button', { name: /^(Reponer|Mover)$/ }).first().click();
 check(await p.getByRole('button', { name: /Mover todo/ }).count() === 1, 'reponer ofrece "Mover todo"');
 await p.screenshot({ path: SP + '/d-inventario.png' });
 await p.context().close();

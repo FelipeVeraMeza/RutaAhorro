@@ -84,6 +84,8 @@ export type Reembolso = 'efectivo' | 'transferencia' | 'debito' | 'credito' | 'f
 export interface ResultadoDevolucion {
   numero: number;
   monto: number;
+  /** RF-M5-28 · Lo que salió del cajón: redondeado, o lo que se pagó si fue la venta entera. */
+  efectivoDevuelto?: number;
   esTotal: boolean;
   notaCredito: RegistroDte | null;
 }
@@ -137,7 +139,8 @@ export const ETIQUETA_PAGO: Record<string, string> = {
   debito: 'Débito',
   credito: 'Crédito',
   transferencia: 'Transferencia',
-  fiado: 'Fiado (no entra a la caja)',
+  // "Cobrado por medio de pago" no puede sumar lo fiado como si se hubiera cobrado.
+  fiado: 'Fiado (por cobrar)',
 };
 
 // ---------------------------------------------------------------------------
@@ -198,9 +201,11 @@ async function leerVentasDemo(): Promise<VentaDemo[]> {
  * la venta al "sincronizarla" y no quedaba en ninguna parte: se cobraba en el
  * POS y no aparecía ni en Ventas ni en Inicio.
  */
-export async function registrarVentaDemo(v: QueuedSale): Promise<void> {
+/** Devuelve el folio, como fn_register_sale: el comprobante lo imprime. */
+export async function registrarVentaDemo(v: QueuedSale): Promise<number> {
   const ventas = await leerVentasDemo();
-  if (ventas.some((x) => x.id === `venta-${v.clientUuid}`)) return;
+  const ya = ventas.find((x) => x.id === `venta-${v.clientUuid}`);
+  if (ya) return ya.folio;
   ventas.push({
     id: `venta-${v.clientUuid}`,
     folio: Math.max(0, ...ventas.map((x) => x.folio)) + 1,
@@ -232,6 +237,7 @@ export async function registrarVentaDemo(v: QueuedSale): Promise<void> {
     if (p) await db().products.put({ ...p, stock: p.stock - i.quantity, updatedAt: new Date().toISOString() });
   }
   await db().meta.put({ key: KEY_VENTAS, value: JSON.stringify(ventas) });
+  return ventas[ventas.length - 1].folio;
 }
 
 function aVenta(v: VentaDemo): Venta {
@@ -502,8 +508,8 @@ const repoSupabase: RepositorioVentas = {
       p_reembolso: reembolso,
     });
     if (error) throw error;
-    const r = data as { numero: number; monto: number; es_total: boolean; nota_credito: RegistroDte | null };
-    return { numero: Number(r.numero), monto: r.monto, esTotal: r.es_total, notaCredito: r.nota_credito };
+    const r = data as { numero: number; monto: number; es_total: boolean; nota_credito: RegistroDte | null; efectivo_devuelto?: number };
+    return { numero: Number(r.numero), monto: r.monto, esTotal: r.es_total, notaCredito: r.nota_credito, efectivoDevuelto: r.efectivo_devuelto };
   },
 
   async anular(id, motivo) {

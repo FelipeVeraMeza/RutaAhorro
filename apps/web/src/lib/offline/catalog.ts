@@ -87,10 +87,21 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
     r[u.ubicacion as 'sala' | 'bodega'] = Number(u.quantity ?? 0);
     porUbicacion.set(u.product_id as string, r);
   }
+  // Lotes con stock, para avisar en Vender lo vencido. Completo cada vez,
+  // como el stock: un lote cambia sin tocar el producto.
+  const { data: lotes } = await client.from('product_lots')
+    .select('product_id, expiry_date').eq('is_active', true).gt('quantity', 0);
+  const vence = new Map<string, string>();
+  for (const l of lotes ?? []) {
+    const id = l.product_id as string;
+    const d = l.expiry_date as string;
+    if (d && (!vence.has(id) || d < vence.get(id)!)) vence.set(id, d);
+  }
   const conUbicacion = <T extends LocalProduct>(p: T): T => ({
     ...p,
     stockSala: porUbicacion.get(p.id)?.sala ?? 0,
     stockBodega: porUbicacion.get(p.id)?.bodega ?? 0,
+    venceProximo: vence.get(p.id) ?? null,
   });
 
   // --- Ofertas e impuestos adicionales (0018) ---

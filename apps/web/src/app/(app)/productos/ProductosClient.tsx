@@ -1,10 +1,12 @@
 'use client';
 
+import { configuracionLocal } from '@/lib/datos/configuracion';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  formatCLP, formatCantidad, marginPct, toUserMessage, cantidadConUnidad, aCSV,
-  calidadCatalogo, TEXTO_PROBLEMA, precioConRedondeo, validarMonto, type ProblemaCatalogo,
+  formatCLP, formatCantidad, marginPct, formatPct, toUserMessage, cantidadConUnidad, aCSV,
+  calidadCatalogo, TEXTO_PROBLEMA, precioConRedondeo, validarMonto, type ProblemaCatalogo, diaLocal
 } from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
 import { Modal } from '@/components/Modal';
@@ -179,7 +181,7 @@ export function ProductosClient({
   }, [productos, orden, revisando, calidad]);
 
   /** RF-M2-19 · el catálogo en Excel, con lo que la pantalla muestra. */
-  function exportar() {
+  async function exportar() {
     const csv = aCSV(visibles, [
       { titulo: 'nombre', valor: (p) => p.nombre },
       { titulo: 'codigo_interno', valor: (p) => p.sku ?? '' },
@@ -197,7 +199,8 @@ export function ProductosClient({
     ]);
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
-    a.href = url; a.download = `catalogo-${new Date().toISOString().slice(0, 10)}.csv`;
+    // El día del local (regla 17): desde las 21:00 el archivo salía con la fecha de mañana.
+    a.href = url; a.download = `catalogo-${diaLocal(new Date(), (await configuracionLocal()).zonaHoraria)}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 0);
   }
@@ -372,7 +375,7 @@ export function ProductosClient({
                     )}
                     {puedeVerCostos && typeof p.costoPromedio === 'number' && p.costoPromedio > 0 && (
                       <p className="text-xs text-[var(--texto-suave)] num">
-                        costo {formatCLP(p.costoPromedio)} · {marginPct(p.precioVenta, p.costoPromedio)}%
+                        costo {formatCLP(p.costoPromedio)} · margen {formatPct(marginPct(p.precioVenta, p.costoPromedio))}
                       </p>
                     )}
                   </div>
@@ -610,7 +613,7 @@ function CambiarPrecio({ producto, onCerrar, onGuardado }: {
         </label>
         {v.valido && Math.abs(variacion) >= 30 && (
           <p className="text-xs text-[var(--color-aviso)] bg-amber-50 px-3 py-2 rounded-lg">
-            ⚠ Es un cambio de {variacion > 0 ? '+' : ''}{variacion} %. Revisa que no falte o sobre un cero.
+            ⚠ Es un cambio de {variacion > 0 ? '+' : ''}{formatPct(variacion)}. Revisa que no falte o sobre un cero.
           </p>
         )}
         {v.valido && precioConRedondeo(v.valor) && (

@@ -201,8 +201,13 @@ export function PrecioClient({ usuarioId = '', puedeVender = false, puedeCrearPr
               ? <span className="text-[var(--color-alerta)]">🔴 Sin stock</span>
               : <>🟢 Quedan {cantidadConUnidad(elegido.stock, elegido.unit)}</>}
             {typeof elegido.stockSala === 'number' &&
-              ` · a la vista ${elegido.stockSala}`}
+              ` · a la vista ${cantidadConUnidad(elegido.stockSala, elegido.unit)}`}
           </p>
+          {elegido.venceProximo && elegido.venceProximo < diaLocal(new Date(), zonaHoraria) && (
+            <p role="alert" className="text-xs mt-2 text-[var(--color-alerta)]">
+              ⚠ Hay un lote vencido el {elegido.venceProximo.split('-').reverse().join('-')}: revisa la fecha antes de venderlo.
+            </p>
+          )}
           {puedeVender && (
             <div className="mt-4 pt-4 border-t border-[var(--borde)] text-left">
               <div className="flex items-end gap-2">

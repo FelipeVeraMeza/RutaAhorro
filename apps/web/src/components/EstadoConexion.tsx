@@ -1,6 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+import type { QueuedSale } from '@/lib/offline/db';
+
+// El detalle (diálogo y mensajes) se carga solo si hay ventas rechazadas:
+// esta barra está en el layout de todas las pantallas (RNF-62).
+const VentasConError = dynamic(() => import('./VentasConError').then((m) => m.VentasConError), { ssr: false });
 
 // RNF-62 · La cola (Supabase + IndexedDB, ~135 kB) se carga después de
 // pintar: el layout la tenía en la primera carga de TODAS las pantallas.
@@ -17,13 +23,18 @@ export function EstadoConexion() {
   const [online, setOnline] = useState(true);
   const [pending, setPending] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [conError, setConError] = useState<QueuedSale[]>([]);
+  const [viendoErrores, setViendoErrores] = useState(false);
 
   useEffect(() => {
     setOnline(navigator.onLine);
     let vivo = true;
     let stop = () => {};
     let timer = 0;
-    const refresh = () => void cola().then((m) => m.pendingCount()).then((n) => { if (vivo) setPending(n); });
+    const refresh = () => void cola().then(async (m) => {
+      const [n, errores] = await Promise.all([m.pendingCount(), m.ventasConError()]);
+      if (vivo) { setPending(n); setConError(errores); }
+    });
 
     const onOnline = () => { setOnline(true); refresh(); };
     const onOffline = () => setOnline(false);
@@ -49,15 +60,34 @@ export function EstadoConexion() {
 
   async function forceSync() {
     setSyncing(true);
-    const { syncQueue, pendingCount } = await cola();
+    const { syncQueue, pendingCount, ventasConError } = await cola();
     await syncQueue();
     setPending(await pendingCount());
+    setConError(await ventasConError());
     setSyncing(false);
   }
 
   // Todo en orden y conectado: no se muestra nada. Un cartel verde permanente
   // se vuelve invisible y roba espacio de pantalla.
   if (online && pending === 0) return null;
+
+  // Ventas que la base rechazó: se dice cuántas y por qué, no "por sincronizar".
+  if (online && conError.length > 0) {
+    return (
+      <>
+        <button type="button" onClick={() => setViendoErrores(true)}
+          className="w-full px-4 py-2 text-xs font-medium flex items-center justify-center gap-2 bg-red-50 text-red-900">
+          <span aria-hidden>⚠️</span>
+          <span className="num">{conError.length} {conError.length === 1 ? 'venta no se pudo registrar' : 'ventas no se pudieron registrar'}</span>
+          <span className="underline">ver por qué</span>
+        </button>
+        {viendoErrores && (
+          <VentasConError ventas={conError} reintentando={syncing}
+                          onReintentar={() => void forceSync()} onCerrar={() => setViendoErrores(false)} />
+        )}
+      </>
+    );
+  }
 
   const offlineStyle = !online;
 

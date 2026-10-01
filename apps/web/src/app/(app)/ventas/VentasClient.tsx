@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { formatCLP, toUserMessage, NOMBRE_DOCUMENTO, type Comprobante as DatosComprobante } from '@rutaahorro/core';
+import { formatCLP, formatCantidad, diaLocal, toUserMessage, NOMBRE_DOCUMENTO, type Comprobante as DatosComprobante } from '@rutaahorro/core';
 import { Comprobante } from '../pos/Comprobante';
 import { useConfiguracion } from '@/lib/datos/configuracion';
 import {
@@ -71,8 +71,10 @@ function ajusteDe(v: VentaDetallada) {
   return { ajusteRedondeo, totalCobrado: v.total + ajusteRedondeo };
 }
 
-export function VentasClient({ puedeAnular, soloPropias = false, local = '' }: {
+export function VentasClient({ puedeAnular, soloPropias = false, local = '', anulaSoloDeHoy = false }: {
   puedeAnular: boolean;
+  /** El supervisor anula solo las del día (fn_void_sale); antes veía el botón y la base lo rechazaba. */
+  anulaSoloDeHoy?: boolean;
   /** Nombre del local, para la copia del comprobante. */
   local?: string;
   /** Vendedor: la base le entrega solo las suyas; la pantalla lo dice. */
@@ -361,7 +363,7 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '' }: {
                   <span className="min-w-0">
                     <span className="block truncate">{l.productoNombre}</span>
                     <span className="text-xs text-[var(--texto-suave)] num">
-                      {l.cantidad} × {formatCLP(l.precioUnitario)}
+                      {formatCantidad(l.cantidad)} × {formatCLP(l.precioUnitario)}
                       {l.descuento > 0 && ` · desc. ${formatCLP(l.descuento)}`}
                     </span>
                   </span>
@@ -391,6 +393,8 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '' }: {
               <p className="text-xs text-[var(--texto-suave)]">
                 Pagado con {detalle.pagos.map((p) =>
                   `${ETIQUETA_PAGO[p.metodo] ?? p.metodo} ${formatCLP(p.monto)}`).join(' + ')}
+                {/* RF-M5-28 · sin esto, "Total $1.463 · pagado $1.460" parecía un error. */}
+                {ajusteDe(detalle).ajusteRedondeo !== 0 && ` (redondeo del efectivo ${ajusteDe(detalle).ajusteRedondeo > 0 ? '+' : '−'}${formatCLP(Math.abs(ajusteDe(detalle).ajusteRedondeo))})`}
               </p>
             )}
 
@@ -442,7 +446,12 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '' }: {
 
             {/* Con boleta o factura, o con devoluciones, no se anula: se devuelve
                 con nota de crédito (0019). */}
-            {puedeAnular && !detalle.anulada && detalle.documentos.length === 0 && detalle.devoluciones.length === 0 && (
+            {puedeAnular && anulaSoloDeHoy && !detalle.anulada && detalle.documentos.length === 0
+              && detalle.devoluciones.length === 0 && diaLocal(detalle.fecha, zona) !== hoyLocal(zona) && (
+              <p className="text-xs text-[var(--texto-suave)]">Es de otro día: solo el administrador puede anularla.</p>
+            )}
+            {puedeAnular && !detalle.anulada && detalle.documentos.length === 0 && detalle.devoluciones.length === 0
+              && (!anulaSoloDeHoy || diaLocal(detalle.fecha, zona) === hoyLocal(zona)) && (
               <button
                 onClick={() => { setAnulando(detalle); setMotivo(''); }}
                 className="tap w-full py-3 rounded-xl border border-[var(--color-alerta)] text-[var(--color-alerta)] font-medium"
@@ -464,6 +473,7 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '' }: {
           onHecho={async (r) => {
             setDevolviendo(null);
             setExito(`Devolución N° ${r.numero} por ${formatCLP(r.monto)}` +
+              (r.efectivoDevuelto && r.efectivoDevuelto !== r.monto ? ` · en efectivo se devolvieron ${formatCLP(r.efectivoDevuelto)} (redondeo)` : '') +
               (r.notaCredito ? ` · ${nombreDocumento(r.notaCredito)}` : ''));
             const actualizado = await repoVentas().detalle(devolviendo.id).catch(() => null);
             setDetalle(actualizado);

@@ -5,8 +5,8 @@ import { Encabezado } from '@/components/Encabezado';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  formatCLP, parseCLP, validarCantidad, weightedAverageCost, costVariationPct,
-  shouldWarnCostVariation, toUserMessage, diaLocal, sumarDias,
+  formatCLP, weightedAverageCost, costVariationPct,
+  shouldWarnCostVariation, toUserMessage, diaLocal, sumarDias, formatPct, formatCantidad, validarCantidadStock, validarMonto
 } from '@rutaahorro/core';
 import { registrarFacturaProveedor } from '@/lib/datos/porPagar';
 import {
@@ -83,6 +83,9 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
    * se deriva con `validarCantidad`, que sí entiende la coma.
    */
   const [cantidadTexto, setCantidadTexto] = useState<Record<string, string>>({});
+  // El costo como se escribió: con parseCLP "1990,5" se leía 19905 (regla 9),
+  // y un costo 10 veces mayor arrastraba el costo promedio sin aviso.
+  const [costoTexto, setCostoTexto] = useState<Record<string, string>>({});
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState<Awaited<ReturnType<typeof buscarParaRecepcion>>>([]);
   const [escaneando, setEscaneando] = useState(false);
@@ -107,7 +110,7 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
 
   const agregar = useCallback((p: {
     productId: string; nombre: string; perecible: boolean;
-    costoAnterior: number; stock: number;
+    costoAnterior: number; stock: number; unidad?: string;
   }) => {
     setLineas((prev) => {
       if (prev.some((l) => l.productId === p.productId)) {
@@ -122,6 +125,7 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
         costoAnterior: p.costoAnterior,
         stock: p.stock,
         perecible: p.perecible,
+        unidad: p.unidad,
         lote: '',
         vencimiento: '',
       }];
@@ -186,6 +190,12 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
 
   async function confirmar() {
     setError(null);
+    // Antes se confirmaba y recién después decía que la factura no quedó por
+    // pagar: con la mercadería ya ingresada, no había cómo corregirlo acá.
+    if (tipoDoc === 'factura' && vence && (!proveedorId || !documento.trim())) {
+      setError('Para dejar la factura por pagar, elige el proveedor y escribe el N° de la factura (o borra el vencimiento).');
+      return;
+    }
     setGuardando(true);
     try {
       const r = await repoProveedores().confirmarRecepcion({
@@ -322,7 +332,7 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
                   <span className="min-w-0">
                     <span className="block text-sm truncate">{r.nombre}</span>
                     <span className="block text-xs text-[var(--texto-suave)] num">
-                      stock {r.stock}{r.perecible && ' · perecible'}
+                      stock {formatCantidad(r.stock)}{r.perecible && ' · perecible'}
                     </span>
                   </span>
                   <span className="text-xs text-[var(--texto-suave)] num whitespace-nowrap">
@@ -382,9 +392,8 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
                       onChange={(e) => {
                         const texto = e.target.value;
                         setCantidadTexto((p) => ({ ...p, [l.productId]: texto }));
-                        actualizar(l.productId, {
-                          cantidad: validarCantidad(texto, { permiteVacio: true, maximo: 1_000_000 }).valor,
-                        });
+                        const v = validarCantidadStock(texto, l.unidad, { permiteVacio: true, maximo: 1_000_000 });
+                        actualizar(l.productId, { cantidad: v.valido ? v.valor : 0 });
                       }}
                       className="tap w-full px-3 py-2 rounded-lg border border-[var(--borde)] num text-right"
                     />
@@ -394,14 +403,27 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
                     <input
                       inputMode="numeric"
                       aria-label={`Costo unitario de ${l.nombre}`}
-                      value={l.costoUnitario}
-                      onChange={(e) => actualizar(l.productId, { costoUnitario: parseCLP(e.target.value) ?? 0 })}
+                      value={costoTexto[l.productId] ?? String(l.costoUnitario)}
+                      onChange={(e) => {
+                        const texto = e.target.value;
+                        setCostoTexto((p) => ({ ...p, [l.productId]: texto }));
+                        const v = validarMonto(texto, { etiqueta: 'costo', maximo: 50_000_000 });
+                        // Inválido queda en −1: no se puede confirmar y se dice por qué.
+                        actualizar(l.productId, { costoUnitario: v.valido ? v.valor : -1 });
+                      }}
                       className={`tap w-full px-3 py-2 rounded-lg border num text-right ${
                         l.costoUnitario === 0 ? 'border-[var(--color-aviso)]' : 'border-[var(--borde)]'
                       }`}
                     />
                   </div>
                 </div>
+
+                {(() => {
+                  const vc = validarCantidadStock(cantidadTexto[l.productId] ?? String(l.cantidad), l.unidad, { maximo: 1_000_000 });
+                  const vm = validarMonto(costoTexto[l.productId] ?? String(l.costoUnitario), { etiqueta: 'costo', maximo: 50_000_000 });
+                  const msg = !vc.valido ? `Cantidad: ${vc.error}` : vc.valor <= 0 ? 'La cantidad tiene que ser mayor que cero' : !vm.valido ? vm.error : null;
+                  return msg ? <p role="alert" className="text-xs text-[var(--color-alerta)] mt-2">{msg}</p> : null;
+                })()}
 
                 {/* M-6: confirmar con costo 0 deja el costo promedio, el margen
                     y el inventario valorizado en cero sin que nadie lo note. */}
@@ -415,7 +437,7 @@ export function RecepcionClient({ usuarioId = '' }: { usuarioId?: string }) {
                 {/* RF-M3-08: advertir variación de costo antes de confirmar */}
                 {alerta && l.costoAnterior > 0 && (
                   <p className="text-xs text-[var(--color-aviso)] bg-amber-50 px-2.5 py-1.5 rounded-lg mt-2">
-                    ⚠ El costo cambió {variacion > 0 ? '+' : ''}{variacion}% respecto de{' '}
+                    ⚠ El costo cambió {variacion > 0 ? '+' : ''}{formatPct(variacion)} respecto de{' '}
                     {formatCLP(l.costoAnterior)}. Verifica que esté bien.
                   </p>
                 )}

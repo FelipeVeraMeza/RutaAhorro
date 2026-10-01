@@ -50,10 +50,17 @@ export const DEMO_PRODUCTOS: DemoProducto[] = [
 ];
 
 /** Fecha relativa a hoy, para que los vencimientos siempre se vean realistas. */
+/**
+ * El día del local dentro de `dias` (regla 17). Con `toISOString().slice(0, 10)`
+ * desde las 21:00 de Chile ya era mañana en UTC, y "vence mañana" salía con
+ * la fecha de pasado mañana.
+ */
 function enDias(dias: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + dias);
-  return d.toISOString().slice(0, 10);
+  // Sin importar core: este módulo llega al layout (por el cartel de la
+  // maqueta) y core le sumaba 20 kB a todas las pantallas (RNF-62).
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+  const [y, m, d] = hoy.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + dias)).toISOString().slice(0, 10);
 }
 
 export interface DemoLote {

@@ -13,7 +13,8 @@ export function enlaceResumenDia(r: {
     `Vendido: ${formatCLP(r.total)} en ${r.ventas} ${r.ventas === 1 ? 'venta' : 'ventas'}`,
     `Ticket promedio: ${formatCLP(r.ticket)}`,
   ];
-  if (r.bajoMinimo) lineas.push(`Bajo stock mínimo: ${r.bajoMinimo} productos`);
-  if (r.enRiesgo) lineas.push(`Por vencer: ${formatCLP(r.enRiesgo)} en riesgo`);
+  if (r.bajoMinimo) lineas.push(`Bajo stock mínimo: ${r.bajoMinimo} ${r.bajoMinimo === 1 ? 'producto' : 'productos'}`);
+  // Al costo: solo va si quien lo manda puede ver costos (lo decide quien llama).
+  if (r.enRiesgo) lineas.push(`Por vencer: ${formatCLP(r.enRiesgo)} al costo en riesgo`);
   return `https://wa.me/?text=${encodeURIComponent(lineas.join('\n'))}`;
 }

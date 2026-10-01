@@ -128,10 +128,12 @@ export const cajaDemo = {
     return { error: null };
   },
 
-  async cerrar(usuario: string, nombre: string, contado: number): Resultado {
+  async cerrar(usuario: string, nombre: string, contado: number, nota = ''): Resultado {
     const c = leerEnNavegador(usuario);
     if (!c.abierta) return { error: { message: 'CAJA_YA_CERRADA' } };
     const r = resumenCajaDemo(c);
+    // Igual que fn_close_cash_session: descuadrada no se cierra sin explicar.
+    if (contado !== r.expected_amount && !nota.trim()) return { error: { message: 'MOTIVO_REQUERIDO' } };
     c.cierres.unshift({
       session_id: c.id, full_name: nombre, opened_at: c.abiertaEn, closed_at: new Date().toISOString(),
       difference: contado - r.expected_amount, sales_total: c.ventas.total,

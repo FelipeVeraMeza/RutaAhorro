@@ -47,6 +47,7 @@ export default async function DashboardPage() {
   let porVencer: FilaVencimiento[] = [];
   let masBajoStock = 0;
   let masPorVencer = 0;
+  let nombreLocal = DEMO_ACTIVO ? 'Almacén RutaAhorro' : '';
   // Los tres errores se ignoraban en silencio, y el panel mostraba ceros. Un
   // problema de red se veía exactamente igual que un día sin ventas: el dueño
   // leía "Vendido hoy $0" y creía que no se había vendido nada.
@@ -86,7 +87,8 @@ export default async function DashboardPage() {
       .order('days_to_expiry', { ascending: true })
       .limit(TOPE_PANEL);
     const pVentas = (async () => {
-      const { data: local } = await client.from('tenants').select('settings').eq('id', user.tenantId).maybeSingle();
+      const { data: local } = await client.from('tenants').select('settings, name').eq('id', user.tenantId).maybeSingle();
+      nombreLocal = (local?.name as string | undefined) ?? '';
       const hoy = diaLocal(new Date(), desdeSettings(local?.settings).zonaHoraria);
       return client
         .from('v_sales_daily')
@@ -138,6 +140,9 @@ export default async function DashboardPage() {
   }
 
   const enRiesgo = porVencer.reduce((s, l) => s + Number(l.value_at_risk ?? 0), 0);
+  // El valor en riesgo es al COSTO: solo lo ve quien ve costos (el supervisor
+  // no, igual que en Reportes e Inventario).
+  const verCostos = user.role === 'admin';
   const primerNombre = user.fullName.split(' ')[0] || 'bienvenido';
 
   return (
@@ -177,14 +182,19 @@ export default async function DashboardPage() {
       )}
 
       {/* En la maqueta las ventas viven en el navegador y el servidor no las ve */}
-      {DEMO_ACTIVO ? <VentasHoyDemo bajoMinimo={bajoStock.length + masBajoStock} enRiesgo={enRiesgo} /> : (
+      {DEMO_ACTIVO ? <VentasHoyDemo bajoMinimo={bajoStock.length + masBajoStock} local={nombreLocal}
+        enRiesgo={verCostos && masPorVencer === 0 ? enRiesgo : undefined} /> : (
         <div>
           <div className="grid grid-cols-3 gap-2">
             <Tarjeta label="Vendido hoy" value={formatCLP(total)} />
             <Tarjeta label="Ventas" value={String(cantidadVentas)} />
             <Tarjeta label="Ticket prom." value={formatCLP(ticket)} />
           </div>
-          <a href={enlaceResumenDia({ total, ventas: cantidadVentas, ticket, bajoMinimo: bajoStock.length + masBajoStock, enRiesgo })}
+          <a href={enlaceResumenDia({
+               local: nombreLocal, total, ventas: cantidadVentas, ticket, bajoMinimo: bajoStock.length + masBajoStock,
+               // El supervisor no ve costos: su resumen no lleva el valor de lo que vence.
+               enRiesgo: verCostos && masPorVencer === 0 ? enRiesgo : undefined,
+             })}
              target="_blank" rel="noopener noreferrer"
              className="tap inline-flex items-center gap-1.5 text-sm font-medium text-marca-700 underline mt-1">
             Enviar el resumen de hoy por WhatsApp
@@ -201,9 +211,12 @@ export default async function DashboardPage() {
         <section className="tarjeta p-4">
           <div className="flex items-baseline justify-between mb-2">
             <h2 className="font-semibold text-sm">Vencimientos</h2>
-            <span className="text-xs text-[var(--color-aviso)] num">
-              {formatCLP(enRiesgo)} en riesgo
-            </span>
+            {verCostos && (
+              <span className="text-xs text-[var(--color-aviso)] num">
+                {/* Suma los lotes de la lista, no todos: decirlo cuando hay más. */}
+                {formatCLP(enRiesgo)} al costo{masPorVencer > 0 ? ` en estos ${porVencer.length}` : ' en riesgo'}
+              </span>
+            )}
           </div>
           <ul className="divide-y divide-[var(--borde)] text-sm">
             {porVencer.map((l) => (
@@ -217,9 +230,11 @@ export default async function DashboardPage() {
                     {' · '}{cantidadConUnidad(Number(l.quantity), l.unit)}
                   </span>
                 </span>
-                <span className="num whitespace-nowrap">
-                  {formatCLP(Number(l.value_at_risk ?? 0))}
-                </span>
+                {verCostos && (
+                  <span className="num whitespace-nowrap">
+                    {formatCLP(Number(l.value_at_risk ?? 0))}
+                  </span>
+                )}
               </li>
             ))}
           </ul>

@@ -3,7 +3,7 @@ import { Icono } from '@/components/Icono';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  formatCLP, toUserMessage, aCSV, nombreArchivoReporte, type ColumnaCSV,
+  formatCLP, formatCantidad, formatPct, toUserMessage, aCSV, nombreArchivoReporte, type ColumnaCSV,
   periodoAnterior, variacionPct, serieCompleta, diasEnRango, ventasPorHora, clasificacionABC,
 } from '@rutaahorro/core';
 import { useFormatoFecha } from '@/lib/formatoFecha';
@@ -329,7 +329,7 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
               resumen={verCostos ? [
                 ['Ingresos', formatCLP(ingresoTotal)],
                 ['Utilidad', formatCLP(utilidadTotal)],
-                ['Margen', ingresoTotal > 0 ? `${Math.round((utilidadTotal / ingresoTotal) * 100)}%` : '—'],
+                ['Margen', ingresoTotal > 0 ? formatPct((utilidadTotal / ingresoTotal) * 100, 0) : '—'],
               ] : [['Ingresos', formatCLP(ingresoTotal)]]}
             >
               <p className="text-xs text-[var(--texto-suave)] mb-2">
@@ -361,9 +361,9 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
                         {p.nombre}
                       </p>
                       <p className="text-xs text-[var(--texto-suave)] num">
-                        {p.unidades} vendidas
+                        {formatCantidad(p.unidades)} {p.unidades === 1 ? 'vendida' : 'vendidas'}
                         {verCostos && typeof p.utilidad === 'number' && p.ingresos > 0 && (
-                          <> · margen {Math.round((p.utilidad / p.ingresos) * 100)}%</>
+                          <> · margen {formatPct((p.utilidad / p.ingresos) * 100, 0)}</>
                         )}
                       </p>
                     </div>
@@ -529,7 +529,7 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
                     <div className="min-w-0">
                       <p className="text-sm truncate">{p.nombre}</p>
                       <p className="text-xs text-[var(--texto-suave)] num">
-                        {p.cantidad} en existencia
+                        {formatCantidad(p.cantidad)} en existencia
                         {p.categoria && ` · ${p.categoria}`}
                       </p>
                     </div>
@@ -566,7 +566,7 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
                     <div className="min-w-0">
                       <p className="text-sm truncate">{p.nombre}</p>
                       <p className="text-xs text-[var(--texto-suave)] num">
-                        {p.cantidad} en existencia · {p.diasSinVender} días sin venderse
+                        {formatCantidad(p.cantidad)} en existencia · {p.diasSinVender} días sin venderse
                       </p>
                     </div>
                     {verCostos && (
@@ -617,7 +617,7 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
                         <p className={`num font-semibold text-sm ${
                           a.cantidad < 0 ? 'text-[var(--color-alerta)]' : 'text-marca-700'
                         }`}>
-                          {a.cantidad > 0 ? '+' : ''}{a.cantidad}
+                          {a.cantidad > 0 ? '+' : ''}{formatCantidad(a.cantidad)}
                         </p>
                         {verCostos && (
                           <p className="text-[11px] num text-[var(--texto-suave)]">

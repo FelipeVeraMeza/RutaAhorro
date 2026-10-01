@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { formatCLP, toUserMessage, validarCantidad, validarMonto, validarCombo } from '@rutaahorro/core';
+import { formatCLP, toUserMessage, validarMonto, validarCombo, coincide, validarCantidadVenta } from '@rutaahorro/core';
 import { repoCombos, type ComboEditable } from '@/lib/datos/combos';
 import { useConfiguracion } from '@/lib/datos/configuracion';
 import { repoProductos, type Producto } from '@/lib/productos';
@@ -134,11 +134,13 @@ function EditarCombo({ combo, productos, onCerrar, onGuardado }: {
   const candidatos = useMemo(() => {
     const q = buscar.trim().toLowerCase();
     if (q.length < 2) return [];
-    return productos.filter((p) => !items.some((i) => i.productId === p.id) && p.nombre.toLowerCase().includes(q)).slice(0, 8);
+    return productos.filter((p) => !items.some((i) => i.productId === p.id) && coincide(p.nombre, q)).slice(0, 8);
   }, [productos, buscar, items]);
 
   const vPrecio = validarMonto(precio, { etiqueta: 'precio del combo', permiteCero: false, maximo: 50_000_000 });
-  const cantidades = items.map((i) => validarCantidad(i.cantidad, { maximo: 100_000 }));
+  // Un producto que se vende por unidad no entra "1,5" al combo: con
+  // validarCantidad a secas se aceptaba y el combo no se aplicaba nunca bien.
+  const cantidades = items.map((i) => validarCantidadVenta(i.cantidad, porId.get(i.productId)?.unidad));
   const normal = Math.round(items.reduce((s, i, k) =>
     s + (porId.get(i.productId)?.precioVenta ?? 0) * (cantidades[k].valido ? cantidades[k].valor : 0), 0));
 

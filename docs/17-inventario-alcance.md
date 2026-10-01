@@ -380,7 +380,7 @@ base y solo se ven parcialmente en Inicio.
 | RNF-59 | El sistema debe ofrecer letra grande (≈ 19 px de base) por c… | ✅ | — |
 | RNF-60 | La aplicación debe responder con Strict-Transport-Security (… | ✅ | — |
 | RNF-61 | Todo botón, enlace y campo debe tener un nombre accesible (t… | ✅ | — |
-| RNF-62 | El JavaScript de la primera carga de cada pantalla, sumando… | 🟡 | tools/peso-js.mjs: 27/27 bajo 270 kB; 17/27 en la meta de 250 kB (el layout ya no carga Supabase ni IndexedDB) |
+| RNF-62 | El JavaScript de la primera carga de cada pantalla, sumando… | 🟡 | tools/peso-js.mjs: 27/27 bajo 270 kB; 13/27 en la meta de 250 kB (eran 17 en la ronda 4; las correcciones de docs/26 sumaron 1–2 kB y cuatro quedaron en 251) |
 | RNF-63 | Una venta a medio armar no debe perderse al recargar la pági… | ✅ | — |
 | RNF-64 | Con letra grande y en un ancho de 320 px (equivalente a 200… | ✅ | — |
 | RNF-65 | Todas las horas se muestran en formato de 24 horas (09:15, 1… | ✅ | — |

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatCLP, toUserMessage, validarMonto, validarCantidad, etiquetaAdicional,
-  IMPUESTOS_ADICIONALES_CHILE,
+  IMPUESTOS_ADICIONALES_CHILE, coincide
 } from '@rutaahorro/core';
 import { repoPrecios, type ImpuestoAdicional } from '@/lib/datos/precios';
 import {
@@ -269,7 +269,7 @@ function AsignarProductos({ impuesto, onCerrar, onGuardado }: {
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return productos.filter((p) =>
-      (!categoriaId || p.categoriaId === categoriaId) && (!q || p.nombre.toLowerCase().includes(q)));
+      (!categoriaId || p.categoriaId === categoriaId) && (!q || coincide(p.nombre, q)));
   }, [productos, categoriaId, busqueda]);
 
   const alternar = (id: string) => setMarcados((m) => {

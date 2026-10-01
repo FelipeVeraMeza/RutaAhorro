@@ -4,8 +4,8 @@ import { Icono } from '@/components/Icono';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  formatCLP, formatCantidad, marginPct, isValidEan, normalizeBarcode, toUserMessage,
-  validarMonto, validarCantidad, cantidadConUnidad, diaLocal, precioConRedondeo,
+  formatCLP, formatCantidad, marginPct, formatPct, isValidEan, normalizeBarcode, toUserMessage,
+  validarMonto, validarCantidad, cantidadConUnidad, diaLocal, precioConRedondeo, validarCantidadStock
 } from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto, type CambioPrecio } from '@/lib/productos';
 import { useFormatoFecha } from '@/lib/formatoFecha';
@@ -143,8 +143,8 @@ export function FormularioProducto({
   const vPrecio = validarMonto(precio, { etiqueta: 'precio de venta', permiteCero: false, maximo: 50_000_000 });
   const vCosto = validarMonto(costo, { etiqueta: 'costo', permiteVacio: true, maximo: 50_000_000 });
   const vStockMinimo = validarCantidad(stockMinimo, { permiteVacio: true, maximo: 1_000_000 });
-  const vStockSala = validarCantidad(stockSala, { permiteVacio: true, maximo: 1_000_000 });
-  const vStockBodega = validarCantidad(stockBodega, { permiteVacio: true, maximo: 1_000_000 });
+  const vStockSala = validarCantidadStock(stockSala, unidad, { permiteVacio: true, maximo: 1_000_000 });
+  const vStockBodega = validarCantidadStock(stockBodega, unidad, { permiteVacio: true, maximo: 1_000_000 });
   const vDiasAlerta = validarCantidad(diasAlerta, { permiteVacio: true, maximo: 3650 });
 
   const precioNum = vPrecio.valor;
@@ -394,7 +394,7 @@ export function FormularioProducto({
                 margen < 0 ? 'bg-red-50 text-red-900' : 'bg-marca-50 text-marca-900'
               }`}>
                 Margen: <strong className="num">{formatCLP(precioNum - costoNum)}</strong>
-                {' '}({margen}%)
+                {' '}({formatPct(margen)})
                 {margen < 0 && ' · estás vendiendo bajo el costo'}
               </p>
             )}

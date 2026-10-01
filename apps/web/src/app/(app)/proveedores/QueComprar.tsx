@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   sugerirCompra, costoEstimado, textoPedido, formatCLP, formatCantidad, toUserMessage, aCSV,
-  type LineaSugerida,
+  type LineaSugerida, validarCantidadStock
 } from '@rutaahorro/core';
 import { repoProductos } from '@/lib/productos';
 import { ultimoProveedorPorProducto } from '@/lib/datos/proveedores';
@@ -44,9 +44,12 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
   [lineas, proveedorElegido, proveedorDe]);
   const pedido = useMemo(() => enVista
     .filter((l) => !fuera.has(l.id))
-    .map((l) => {
-      const n = Number((cantidades[l.id] ?? '').replace(',', '.'));
-      return cantidades[l.id] !== undefined && Number.isFinite(n) && n > 0 ? { ...l, pedir: n } : l;
+    .flatMap((l) => {
+      // Lo escrito manda: con 0, vacío o mal escrito antes se mandaba igual la
+      // cantidad sugerida, y el proveedor traía lo que no se pidió.
+      if (cantidades[l.id] === undefined) return [l];
+      const v = validarCantidadStock(cantidades[l.id], l.unidad);
+      return v.valido && v.valor > 0 ? [{ ...l, pedir: v.valor }] : [];
     }), [enVista, fuera, cantidades]);
 
   const proveedores = useMemo(() => {
@@ -126,6 +129,9 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
                   onChange={(e) => setCantidades((c) => ({ ...c, [l.id]: e.target.value }))}
                   aria-label={`Cantidad a pedir de ${l.nombre}`}
                   className="tap w-20 px-2 rounded-lg border border-[var(--borde)] num text-right" />
+                {incluido && cantidades[l.id] !== undefined && !(validarCantidadStock(cantidades[l.id], l.unidad).valor > 0) && (
+                  <span role="alert" className="block text-[11px] text-[var(--color-alerta)] max-w-[7rem]">No va en el pedido</span>
+                )}
               </label>
             </li>
           );

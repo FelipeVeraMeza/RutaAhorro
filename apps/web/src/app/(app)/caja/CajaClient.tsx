@@ -3,7 +3,7 @@ import { Icono } from '@/components/Icono';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCLP, validarMonto, toUserMessage, DENOMINACIONES_CLP, totalArqueo } from '@rutaahorro/core';
+import { formatCLP, validarMonto, toUserMessage, DENOMINACIONES_CLP, totalArqueo, diaLocal as diaDelLocal } from '@rutaahorro/core';
 import { supabase } from '@/lib/supabase/client';
 import { Campo } from '@/components/Campo';
 import { Modal } from '@/components/Modal';
@@ -45,7 +45,7 @@ export function CajaClient({
   /** Cajas abiertas de otras personas. Vacío si quien mira no puede cerrarlas. */
   cajasAjenas?: CajaAjena[];
 }) {
-  const { hora, fecha } = useFormatoFecha();
+  const { hora, fecha, zona } = useFormatoFecha();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -369,7 +369,7 @@ export function CajaClient({
               onClick={async () => {
                 const ok = await accion(() =>
                   DEMO_ACTIVO
-                    ? cajaDemo.cerrar(usuarioId, nombre, cont.valor)
+                    ? cajaDemo.cerrar(usuarioId, nombre, cont.valor, nota.trim())
                     : supabase().rpc('fn_close_cash_session', {
                         p_session_id: session.id,
                         p_counted_amount: cont.valor,
@@ -393,7 +393,9 @@ export function CajaClient({
 
   // ---------------------------------------------------------------- abierta
   const r = resumen ?? {};
-  const deOtroDia = hoyLocal !== null && diaLocal(session.opened_at) !== hoyLocal;
+  // El día del LOCAL (regla 17), no el del navegador: un celular con otra
+  // zona marcaba "de otro día" una caja abierta hoy en la mañana.
+  const deOtroDia = hoyLocal !== null && diaDelLocal(session.opened_at, zona) !== diaDelLocal(new Date(), zona);
   return (
     <div className="px-4 py-5 space-y-4">
       <div className="tarjeta p-4">
@@ -638,7 +640,8 @@ function Fila({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex justify-between">
       <dt className="text-[var(--texto-suave)]">{label}</dt>
-      <dd className="num">{formatCLP(value)}</dd>
+      {/* "$-5.000" no se lee como una salida: va con el signo adelante, igual que en Movimientos. */}
+      <dd className="num">{value < 0 ? `−${formatCLP(-value)}` : formatCLP(value)}</dd>
     </div>
   );
 }

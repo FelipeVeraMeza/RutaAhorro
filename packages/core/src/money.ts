@@ -131,6 +131,20 @@ export function validarMonto(entrada: string, opciones: OpcionesMonto = {}): Mon
     return { valido: false, valor: 0, error: `El ${etiqueta} tiene que ser un número` };
   }
 
+  // Los pesos no llevan decimales y el punto separa miles. parseCLP borra todo
+  // lo que no es dígito, así que "1990,5" se leía 19.905 y "1.5" se leía 15:
+  // un costo o un monto recibido diez veces mayor, sin aviso.
+  const limpio = texto.replace(/^\$\s*/, '').replace(/\s+/g, '');
+  if (/,/.test(limpio)) {
+    return { valido: false, valor: 0, error: `Los pesos van sin decimales: escribe el ${etiqueta} sin coma` };
+  }
+  if (/[^\d.\-]/.test(limpio)) {
+    return { valido: false, valor: 0, error: `El ${etiqueta} tiene que ser un número` };
+  }
+  if (limpio.includes('.') && !/^-?\d{1,3}(\.\d{3})+$/.test(limpio)) {
+    return { valido: false, valor: 0, error: `Revisa el ${etiqueta}: el punto separa miles (1.990)` };
+  }
+
   const valor = parseCLP(texto);
   if (valor === null || !Number.isFinite(valor)) {
     return { valido: false, valor: 0, error: `El ${etiqueta} tiene que ser un número` };
@@ -234,4 +248,43 @@ export function validarCantidadVenta(
     return { valido: false, valor: 0, error: 'Hasta 3 decimales: 0,125 sí, 0,1255 no' };
   }
   return { valido: true, valor: Math.round(milesimas) / 1000, error: null };
+}
+
+/**
+ * Un porcentaje como se escribe en Chile: "25,7 %", con coma decimal. El
+ * margen de Productos salía "25.7%": con punto, en un país donde el punto
+ * separa miles, 25.7 se puede leer veinticinco mil.
+ */
+export function formatPct(valor: number, decimales = 1): string {
+  return `${valor.toLocaleString('es-CL', { maximumFractionDigits: decimales })} %`;
+}
+
+/** Texto para comparar en una búsqueda: minúsculas y sin tildes ("José" → "jose"). */
+export function textoBusqueda(texto: string | null | undefined): string {
+  return (texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+/**
+ * RF-M2-20 · ¿`texto` contiene lo buscado, sin importar tildes ni mayúsculas?
+ * Productos y Vender ya lo hacían; los buscadores de clientes, combos,
+ * ofertas, facturas y fiado no: "jose" no encontraba a "José".
+ */
+export function coincide(texto: string | null | undefined, busqueda: string): boolean {
+  return textoBusqueda(texto).includes(textoBusqueda(busqueda));
+}
+
+/**
+ * Una cantidad de inventario (ajuste, toma, traspaso): como `validarCantidad`
+ * (acepta cero y vacío según las opciones), pero entera para lo que se cuenta
+ * por unidad. Se aceptaba "2,5 botellas" en un ajuste o en un conteo, y el
+ * stock quedaba con medias botellas que nadie puede vender.
+ */
+export function validarCantidadStock(
+  entrada: string,
+  unidad: string | null | undefined,
+  opciones: { permiteVacio?: boolean; permiteCero?: boolean; maximo?: number } = {},
+): MontoValidado {
+  const v = validarCantidad(entrada, opciones);
+  if (!v.valido || admiteDecimales(unidad) || Number.isInteger(v.valor)) return v;
+  return { valido: false, valor: 0, error: 'Este producto se cuenta entero: escribe 1, 2, 3…' };
 }

@@ -33,6 +33,13 @@ real (`npm run db:test`, 172/172) y en el navegador (`tools/ui/demo-ronda4.mjs`,
 esquema en vivo (ver HANDOFF). Siguen en 🟡: RF-M5-28 (falta que el contador
 confirme cómo se refleja en la boleta) y RNF-62 (17 de 27 pantallas en la meta).
 
+**Actualización 2026-10-01 (ronda 5, v0.5.1).** La revisión por rol
+([26](26-revision-por-rol-50-errores.md)) encontró que RF-M5-24 (Deshacer) no
+cubría "Quitar" aunque Ayuda lo decía, y que RF-M2-20 (sin tildes) faltaba en
+ocho buscadores; los dos quedaron corregidos y demostrados en
+`tools/ui/demo-ronda5.mjs`. También ajustó RF-M5-28: la devolución en efectivo
+de una venta redondeada devuelve lo que se pagó (`redondeo-fiado.test.mjs`).
+
 ### Cómo se verifica
 
 - `npm test -w @rutaahorro/core` — las reglas (redondeo, montos y cantidades
@@ -671,7 +678,7 @@ confirme cómo se refleja en la boleta) y RNF-62 (17 de 27 pantallas en la meta)
 
 **Cómo se verifica.** node tools/peso-js.mjs después de compilar
 
-**Estado:** 🟡 · **Evidencia:** tools/peso-js.mjs: 27/27 bajo 270 kB; 17/27 en la meta de 250 kB. El layout de la app ya no carga Supabase ni IndexedDB al pintar (EstadoConexion y SyncCatalogo los traen con import()). Las 10 que faltan (252–264 kB) cargan el cliente completo de Supabase en la página: el siguiente paso es un cliente más liviano (postgrest-js + auth-js, sin realtime ni storage, que el navegador no usa) o cargarlo diferido.
+**Estado:** 🟡 · **Evidencia:** tools/peso-js.mjs: 27/27 bajo 270 kB; 13/27 en la meta de 250 kB (17/27 en la ronda 4; las correcciones de la ronda 5 sumaron 1–2 kB y cuatro pantallas quedaron en 251 kB). El layout de la app ya no carga Supabase ni IndexedDB al pintar (EstadoConexion y SyncCatalogo los traen con import()). Las 10 que faltan (252–264 kB) cargan el cliente completo de Supabase en la página: el siguiente paso es un cliente más liviano (postgrest-js + auth-js, sin realtime ni storage, que el navegador no usa) o cargarlo diferido.
 
 #### RNF-63
 

@@ -64,6 +64,15 @@ export async function pendingSales(): Promise<QueuedSale[]> {
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
+/**
+ * Las ventas que la base rechazó al sincronizar, con el motivo. Antes
+ * quedaban contadas como "por sincronizar" para siempre y nadie veía por qué:
+ * la plata estaba en el cajón y la venta no, y el arqueo no cuadraba.
+ */
+export async function ventasConError(): Promise<QueuedSale[]> {
+  return (await pendingSales()).filter((s) => s.status === 'error');
+}
+
 export interface SyncResult {
   sent: number;
   duplicated: number;
@@ -102,7 +111,9 @@ export async function syncQueue(): Promise<SyncResult> {
     if (DEMO_ACTIVO) {
       for (const sale of queue) {
         try {
-          await registrarVentaDemo(sale);
+          // La maqueta también entrega el folio: el comprobante decía
+          // "N° pendiente de sincronizar" en una venta ya registrada.
+          respuestas.set(sale.clientUuid, { folio: await registrarVentaDemo(sale) });
         } catch (e) {
           // Igual que un rechazo de la base: queda con su error en la cola.
           result.failed++;

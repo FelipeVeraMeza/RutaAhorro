@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   serieCompleta, periodoAnterior, variacionPct, textoVariacion, diasEnRango, sumaTotales,
+  minutoDelDia, totalHastaMinuto,
 } from '../src/tendencia.js';
 import { sugerirCompra, costoEstimado, textoPedido } from '../src/compras.js';
 
@@ -73,5 +74,22 @@ describe('RF-M3-11 · orden de compra sugerida', () => {
     expect(t.split('\n')[0]).toBe('Pedido de RutaAhorro:');
     expect(t).toContain('• 3,6 kg · Queso');
     expect(t).toContain('• 24 · Leche');
+  });
+});
+
+describe('RF-M7-11 · hoy se compara hasta la misma hora', () => {
+  const CL = 'America/Santiago';
+  it('minutoDelDia usa la hora del local, no la de UTC', () => {
+    // 13:30 UTC en octubre (horario de verano, UTC−3) = 10:30 en Santiago.
+    expect(minutoDelDia('2026-10-07T13:30:00Z', CL)).toBe(10 * 60 + 30);
+  });
+  it('suma solo lo vendido hasta esa hora', () => {
+    const ventas = [
+      { fecha: '2026-09-30T12:00:00Z', total: 1000 }, // 09:00
+      { fecha: '2026-09-30T13:30:00Z', total: 2000 }, // 10:30
+      { fecha: '2026-09-30T22:00:00Z', total: 5000 }, // 19:00
+    ];
+    expect(totalHastaMinuto(ventas, 10 * 60 + 30, CL)).toBe(3000);
+    expect(totalHastaMinuto(ventas, 23 * 60 + 59, CL)).toBe(8000);
   });
 });

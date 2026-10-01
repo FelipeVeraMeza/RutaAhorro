@@ -17,6 +17,8 @@ export default async function VentasPage() {
   return (
     <VentasClient
       puedeAnular={user.role === 'admin' || user.role === 'supervisor'}
+      // fn_void_sale: el supervisor anula solo ventas del día.
+      anulaSoloDeHoy={user.role === 'supervisor'}
       soloPropias={user.role === 'vendedor'}
       local={local}
     />

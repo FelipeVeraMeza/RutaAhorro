@@ -59,8 +59,8 @@ const GUIAS: Guia[] = [
     '"Imprimir hoja para contar" si prefieres contar en papel.',
     'Escribe lo contado; el sistema muestra la diferencia antes de guardar.',
   ] },
-  { titulo: 'Recibir mercadería', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/proveedores', texto: 'Ir a Proveedores' }, pasos: [
-    'Proveedores → Recepción: elige el proveedor y escanea lo que llegó.',
+  { titulo: 'Recibir mercadería', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/proveedores/recepcion', texto: 'Recibir mercadería' }, pasos: [
+    'Compras → "Recibir mercadería": elige el proveedor y escanea lo que llegó.',
     'Con factura a crédito, indica cuándo vence (30 o 60 días): queda en "Por pagar".',
     'Confirma: el stock sube y el costo queda registrado.',
     '"Qué comprar" arma el pedido por proveedor y lo manda por WhatsApp.',
@@ -75,12 +75,12 @@ const GUIAS: Guia[] = [
     'Siempre se pide el motivo; queda en la Bitácora y en Reportes → Anulaciones.',
   ] },
   { titulo: 'Crear una cuenta para alguien del personal', roles: ['admin'], ir: { href: '/usuarios', texto: 'Ir a Usuarios' }, pasos: [
-    'Usuarios → "Nueva cuenta": nombre, correo, rol y una contraseña temporal.',
+    'Usuarios → "Crear cuenta": nombre, correo, rol y una contraseña temporal.',
     'Al entrar por primera vez se le pide cambiarla.',
     'Si alguien deja el local, desactiva su cuenta (no se borra, para no perder su historial).',
   ] },
   { titulo: 'Ver quién hizo qué', roles: ['admin'], ir: { href: '/bitacora', texto: 'Ir a la Bitácora' }, pasos: [
-    'Bitácora: cambios de precio, anulaciones, ajustes de stock y cambios de cuentas, con fecha y persona.',
+    'Bitácora: cambios de precio, anulaciones, devoluciones, ajustes de stock, configuración, crédito de clientes, facturas de proveedores y cambios de cuentas, con fecha y persona.',
   ] },
   { titulo: 'Sacar las ventas para el contador', roles: ['admin'], ir: { href: '/reportes', texto: 'Ir a Reportes' }, pasos: [
     'Reportes → elige el período → "Exportar ventas línea por línea".',

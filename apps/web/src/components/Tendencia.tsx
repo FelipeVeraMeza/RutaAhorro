@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
   formatCLP, serieCompleta, periodoAnterior, variacionPct, textoVariacion, sumaTotales, sumarDias,
+  minutoDelDia, totalHastaMinuto,
   type PuntoDia,
 } from '@rutaahorro/core';
 import { repoReportes, hoyLocal } from '@/lib/datos/reportes';
@@ -30,7 +31,7 @@ export function Variacion({ pct, contra }: { pct: number | null; contra: string 
  */
 export function Tendencia() {
   const { zonaHoraria } = useConfiguracion();
-  const [datos, setDatos] = useState<{ serie: PuntoDia[]; anterior: PuntoDia[] } | null>(null);
+  const [datos, setDatos] = useState<{ serie: PuntoDia[]; anterior: PuntoDia[]; semanaPasadaHastaAhora: number | null } | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -38,13 +39,21 @@ export function Tendencia() {
     const desde = sumarDias(hoy, -29);
     const previo = periodoAnterior(desde, hoy);
     let vivo = true;
-    void repoReportes().ventasPorDia({ desde: previo.desde, hasta: hoy })
-      .then((filas) => {
+    const semanaPasada = sumarDias(hoy, -7);
+    const ahora = minutoDelDia(new Date(), zonaHoraria);
+    void Promise.all([
+      repoReportes().ventasPorDia({ desde: previo.desde, hasta: hoy }),
+      // El mismo día de la semana pasada, pero solo hasta la hora de ahora.
+      repoReportes().ventasCrudas({ desde: semanaPasada, hasta: semanaPasada })
+        .then((v) => totalHastaMinuto(v, ahora, zonaHoraria)).catch(() => null),
+    ])
+      .then(([filas, semanaPasadaHastaAhora]) => {
         if (!vivo) return;
         const puntos = filas.map((f) => ({ fecha: f.fecha, total: f.total, ventas: f.ventas }));
         setDatos({
           serie: serieCompleta(puntos, desde, hoy),
           anterior: serieCompleta(puntos, previo.desde, previo.hasta),
+          semanaPasadaHastaAhora,
         });
       })
       .catch(() => { if (vivo) setError(true); });
@@ -73,8 +82,9 @@ export function Tendencia() {
       </div>
       <div className="flex flex-col gap-1 mt-1 mb-3">
         <Variacion pct={variacionPct(actual.total, antes.total)} contra="los 30 días anteriores" />
-        {haceUnaSemana && (
-          <Variacion pct={variacionPct(hoy.total, haceUnaSemana.total)} contra={`el ${diaSemana} pasado (hoy)`} />
+        {haceUnaSemana && datos.semanaPasadaHastaAhora != null && (
+          <Variacion pct={variacionPct(hoy.total, datos.semanaPasadaHastaAhora)}
+                     contra={`el ${diaSemana} pasado a esta hora`} />
         )}
       </div>
       <GraficoVentas puntos={datos.serie} />

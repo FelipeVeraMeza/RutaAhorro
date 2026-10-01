@@ -40,6 +40,8 @@ export interface LineaRecepcion {
    */
   stock: number;
   perecible: boolean;
+  /** Para validar la cantidad: entera si se cuenta por unidad. */
+  unidad?: string;
   lote?: string;
   vencimiento?: string;
 }
@@ -320,11 +322,12 @@ export async function productoParaRecepcion(
 
 function paraRecepcion(p: {
   id: string; nombre: string; perecible: boolean;
-  costoPromedio?: number; stock: number;
+  costoPromedio?: number; stock: number; unidad?: string;
 }) {
   return {
     productId: p.id,
     nombre: p.nombre,
+    unidad: p.unidad ?? 'unidad',
     perecible: p.perecible,
     costoAnterior: p.costoPromedio ?? 0,
     stock: p.stock,

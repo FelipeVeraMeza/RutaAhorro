@@ -1,7 +1,11 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Modal } from './Modal';
+import dynamic from 'next/dynamic';
+
+// Los diálogos se cargan solo al tocar "Salir" con algo pendiente: el botón
+// está en el layout de todas las pantallas (RNF-62).
+const DialogosSalir = dynamic(() => import('./DialogosSalir').then((m) => m.DialogosSalir), { ssr: false });
 
 /**
  * Cerrar sesión (RF-M1-07), avisando si quedan ventas sin enviar.
@@ -19,6 +23,8 @@ export function BotonSalir({ className, children }: { className?: string; childr
   const form = useRef<HTMLFormElement>(null);
   const [pendientes, setPendientes] = useState(0);
   const [enviando, setEnviando] = useState(false);
+  // Salir con la caja abierta es como nace una caja olvidada (RF-M8-08).
+  const [cajaAbierta, setCajaAbierta] = useState(false);
 
   async function salir() {
     try {
@@ -36,6 +42,14 @@ export function BotonSalir({ className, children }: { className?: string; childr
       const n = await pendingCount();
       if (n > 0) { setPendientes(n); return; }
     } catch { /* sin IndexedDB no hay cola que revisar */ }
+    await revisarCajaYSalir();
+  }
+
+  async function revisarCajaYSalir() {
+    try {
+      const { miCajaAbierta } = await import('@/lib/datos/cajaAbierta');
+      if (await miCajaAbierta()) { setPendientes(0); setCajaAbierta(true); return; }
+    } catch { /* sin red no se puede saber: no impide salir */ }
     await salir();
   }
 
@@ -58,29 +72,14 @@ export function BotonSalir({ className, children }: { className?: string; childr
       <form ref={form} action="/api/logout" method="post" onSubmit={(e) => void alPedirSalir(e)}>
         <button className={className}>{children}</button>
       </form>
-      {pendientes > 0 && (
-        <Modal titulo="Hay ventas sin enviar" encabezado="visible" onCerrar={() => setPendientes(0)} bloqueado={enviando}>
-          <div className="p-5 space-y-3">
-            <p className="text-sm">
-              {pendientes === 1 ? 'Una venta hecha' : `${pendientes} ventas hechas`} sin internet todavía no
-              {pendientes === 1 ? ' llegó' : ' llegaron'} al sistema.
-            </p>
-            <p className="text-sm text-[var(--texto-suave)]">
-              No se pierden: quedan en este celular y se envían cuando vuelvas a entrar con tu cuenta.
-              Pero hasta entonces no aparecen en tu caja ni en los reportes.
-            </p>
-            <button onClick={() => void enviarYSalir()} disabled={enviando}
-              className="btn btn-primario w-full">
-              {enviando ? 'Enviando…' : 'Enviarlas ahora y salir'}
-            </button>
-            <button onClick={() => void salir()} disabled={enviando} className="btn btn-secundario w-full">
-              Salir igual
-            </button>
-            <button onClick={() => setPendientes(0)} disabled={enviando} className="btn btn-fantasma w-full">
-              Seguir trabajando
-            </button>
-          </div>
-        </Modal>
+      {(pendientes > 0 || cajaAbierta) && (
+        <DialogosSalir
+          pendientes={pendientes} cajaAbierta={cajaAbierta} enviando={enviando}
+          onEnviarYSalir={() => void enviarYSalir()}
+          onSalirIgual={() => void revisarCajaYSalir()}
+          onSalirConCaja={() => void salir()}
+          onSeguir={() => { setPendientes(0); setCajaAbierta(false); }}
+        />
       )}
     </>
   );

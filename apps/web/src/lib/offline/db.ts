@@ -39,6 +39,12 @@ export interface LocalProduct {
   impuestoId?: string | null;
   tasaAdicional?: number;
   impuestoNombre?: string | null;
+  /**
+   * El vencimiento más próximo de los lotes con stock (AAAA-MM-DD), o null.
+   * Vender avisa si ya pasó: la venta se descuenta del lote más viejo
+   * (fn_consume_lots), así que el vencido "se vendía" sin que nadie lo viera.
+   */
+  venceProximo?: string | null;
 }
 
 export interface LocalBarcode {
