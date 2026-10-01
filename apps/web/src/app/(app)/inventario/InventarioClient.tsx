@@ -3,21 +3,21 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  formatCLP, formatCantidad, diaLocal, validarCantidadStock, sugerirReposicion, toUserMessage, textoVencimiento, cantidadConUnidad,
+  formatCLP, formatCantidad, diaLocal, validarCantidadStock, toUserMessage, textoVencimiento, cantidadConUnidad,
 } from '@rutaahorro/core';
 import { repoProductos, type Producto } from '@/lib/productos';
 import {
-  repoInventario, ETIQUETA_MOVIMIENTO, ETIQUETA_ESTADO_LOTE, MOTIVOS_SUGERIDOS, ETIQUETA_UBICACION,
-  dondeOcurrio, UBICACION_EN_FRASE,
-  type Movimiento, type Lote, type Ubicacion,
+  repoInventario, ETIQUETA_MOVIMIENTO, ETIQUETA_ESTADO_LOTE, MOTIVOS_SUGERIDOS,
+  dondeOcurrio,
+  type Movimiento, type Lote,
 } from '@/lib/datos/inventario';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { useFormatoFecha, diaCorto } from '@/lib/formatoFecha';
-import { Encabezado, EstadoVacio } from '@/components/Encabezado';
+import { Encabezado } from '@/components/Encabezado';
 import { Icono } from '@/components/Icono';
 
-type Vista = 'stock' | 'reponer' | 'lotes' | 'kardex' | 'toma';
+type Vista = 'stock' | 'lotes' | 'kardex' | 'toma';
 
 const fecha = (iso: string) =>
   new Date(`${iso}T12:00:00`).toLocaleDateString('es-CL', {
@@ -49,16 +49,8 @@ export function InventarioClient({
   const [bajaEnCurso, setBajaEnCurso] = useState(false);
 
   const [ajustando, setAjustando] = useState<Producto | null>(null);
-  const [reponiendo, setReponiendo] = useState<Producto | null>(null);
-  // La toma se hace por ubicación: se cuenta la sala o la bodega, no el total.
-  const [ubicacionToma, setUbicacionToma] = useState<Ubicacion>('sala');
-  const enUbicacion = (p: Producto, u: Ubicacion) => (u === 'sala' ? p.stockSala : p.stockBodega);
   const [conteo, setConteo] = useState<Record<string, string>>({});
   const [aplicandoToma, setAplicandoToma] = useState(false);
-  // RF-M4-21 · reposición en lote: cuánto mover de cada uno y cuáles no.
-  const [aMover, setAMover] = useState<Record<string, string>>({});
-  const [sinReponer, setSinReponer] = useState<Set<string>>(new Set());
-  const [reponiendoTodo, setReponiendoTodo] = useState<string | null>(null);
   const [revisandoToma, setRevisandoToma] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -96,35 +88,6 @@ export function InventarioClient({
     }).catch(() => {});
   }, [puedeAjustar, verCostos]);
 
-  const sugeridos = sugerirReposicion(productos.filter((p) => p.activo).map((p) => ({
-    id: p.id, nombre: p.nombre, sala: p.stockSala, bodega: p.stockBodega, minimo: p.stockMinimo, unidad: p.unidad,
-  })));
-
-  async function reponerMarcados() {
-    const lista = sugeridos
-      .filter((s) => !sinReponer.has(s.id))
-      .map((s) => ({ s, v: validarCantidadStock(aMover[s.id] ?? String(s.mover), s.unidad, { maximo: s.bodega }) }))
-      .filter((x) => x.v.valido && x.v.valor > 0);
-    if (lista.length === 0) return;
-    setError(null);
-    let hechos = 0;
-    try {
-      for (const { s, v } of lista) {
-        setReponiendoTodo(`Reponiendo ${hechos + 1} de ${lista.length}…`);
-        await repoInventario().reponer({ productoId: s.id, cantidad: v.valor, desde: 'bodega', hacia: 'sala', motivo: 'Reposición en lote' });
-        hechos++;
-      }
-      setExito(`${hechos} ${hechos === 1 ? 'producto pasó' : 'productos pasaron'} de la bodega a la sala`);
-      setAMover({}); setSinReponer(new Set());
-      await cargar();
-    } catch (e) {
-      setError(`${hechos ? `Se repusieron ${hechos}; ` : ''}${toUserMessage(e)}`);
-      await cargar();
-    } finally {
-      setReponiendoTodo(null);
-    }
-  }
-
   const valorTotal = productos.reduce(
     (s, p) => s + Math.round(p.stock * (p.costoPromedio ?? 0)), 0,
   );
@@ -157,7 +120,7 @@ export function InventarioClient({
     setAplicandoToma(true);
     setError(null);
     try {
-      const r = await repoInventario().aplicarToma(items, ubicacionToma);
+      const r = await repoInventario().aplicarToma(items);
       setExito(
         r.diferencias === 0
           ? 'El conteo cuadró con el sistema: no hubo diferencias'
@@ -179,13 +142,12 @@ export function InventarioClient({
       <Encabezado
         titulo="Inventario"
         icono="inventario"
-        descripcion="Cuánto hay y dónde: a la vista (se vende) o en bodega (hay que reponer). Ajustes, lotes y conteo."
+        descripcion="Cuánto hay en la bodega, lo que vence, los movimientos y el conteo."
       />
 
       <div className="flex gap-2 mb-4 overflow-x-auto sin-scrollbar" role="tablist">
         {([
           ['stock', 'Stock'],
-          ['reponer', `Qué reponer${sugeridos.length ? ` (${sugeridos.length})` : ''}`],
           ['lotes', 'Lotes'],
           ['kardex', 'Movimientos'],
           ...(puedeAjustar ? [['toma', 'Toma de inventario'] as const] : []),
@@ -259,34 +221,13 @@ export function InventarioClient({
                         : 'text-[var(--texto-suave)]'
                       }`}>
                         {agotado ? '🔴 Agotado' : bajo ? '🟠 Bajo' : '🟢 Normal'}
-                        {' · '}Total {cantidadConUnidad(p.stock, p.unidad)}
-                        {p.stockMinimo > 0 && ` (mín. ${p.stockMinimo})`}
+                        {' · '}En bodega {formatCantidad(p.stock)}
+                        {p.stockMinimo > 0 && ` (mín. ${formatCantidad(p.stockMinimo)})`}
                         {verCostos && typeof p.costoPromedio === 'number' &&
                           ` · ${formatCLP(Math.round(p.stock * p.costoPromedio))}`}
                       </p>
-                      {/* En palabras, no en jerga: lo que importa es si se
-                           puede vender ahora o hay que ir a buscarlo. */}
-                      <p className="text-xs num mt-0.5">
-                        <span className={p.stockSala <= 0 ? 'text-[var(--color-alerta)] font-medium' : ''}>
-                          A la vista {formatCantidad(p.stockSala)}
-                        </span>
-                        <span className="text-[var(--texto-suave)]"> · guardado en bodega {formatCantidad(p.stockBodega)}</span>
-                        {p.stockSala <= 0 && p.stockBodega > 0 && (
-                          <span className="text-[var(--color-aviso)]"> · hay que reponer</span>
-                        )}
-                      </p>
                     </div>
                     <div className="flex gap-1.5 shrink-0 self-end sm:self-auto">
-                      {(p.stockBodega > 0 || p.stockSala > 0) && (
-                        <button
-                          onClick={() => setReponiendo(p)}
-                          className="tap px-3 py-1.5 text-xs rounded-lg border border-marca-500 text-marca-700"
-                        >
-                          {/* Con la bodega vacía no hay qué reponer: el botón
-                              decía "Reponer" y abría pasar de la sala a la bodega. */}
-                          {p.stockBodega > 0 ? 'Reponer' : 'Mover'}
-                        </button>
-                      )}
                       {puedeAjustar && (
                         <button
                           onClick={() => setAjustando(p)}
@@ -300,59 +241,6 @@ export function InventarioClient({
                 );
               })}
             </ul>
-          )}
-        </>
-      )}
-
-      {/* ------------------------------------------------------ QUÉ REPONER */}
-      {vista === 'reponer' && (
-        <>
-          <p className="text-sm text-[var(--texto-suave)] mb-3">
-            Lo que en la sala está vacío o bajo su mínimo y tiene en la bodega. Se sugiere llevar la
-            sala al doble del mínimo; cambia la cantidad si quieres y repón todo de una vez.
-          </p>
-          {cargando ? (
-            <p className="text-sm text-[var(--texto-suave)] text-center py-6">Cargando…</p>
-          ) : sugeridos.length === 0 ? (
-            <EstadoVacio icono="listo" titulo="La sala está surtida"
-              texto="Cuando algo se acabe a la vista y quede en bodega, aparece acá." />
-          ) : (
-            <>
-              <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden mb-3">
-                {sugeridos.map((s) => {
-                  const incluido = !sinReponer.has(s.id);
-                  return (
-                    <li key={s.id} className={`px-3 py-2.5 flex items-center gap-3 ${incluido ? '' : 'opacity-50'}`}>
-                      <input type="checkbox" checked={incluido} className="w-5 h-5 shrink-0" aria-label={`Reponer ${s.nombre}`}
-                        onChange={() => setSinReponer((x) => { const n = new Set(x); if (n.has(s.id)) n.delete(s.id); else n.add(s.id); return n; })} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">{s.nombre}</p>
-                        <p className="text-xs num text-[var(--texto-suave)]">
-                          <span className={`insignia ${s.sala <= 0 ? 'insignia-alerta' : 'insignia-aviso'}`}>
-                            {s.sala <= 0 ? 'Vacío a la vista' : 'Bajo en sala'}
-                          </span>{' '}
-                          a la vista {formatCantidad(s.sala)} · en bodega {formatCantidad(s.bodega)}
-                        </p>
-                      </div>
-                      <label className="shrink-0 text-right">
-                        <span className="block text-[11px] text-[var(--texto-suave)]">Pasar</span>
-                        <input inputMode="decimal" disabled={!incluido} value={aMover[s.id] ?? formatCantidad(s.mover)}
-                          onChange={(e) => setAMover((m) => ({ ...m, [s.id]: e.target.value }))}
-                          aria-label={`Cuánto pasar a la sala de ${s.nombre}`}
-                          className="tap w-20 px-2 rounded-lg border border-[var(--borde)] num text-right" />
-                      </label>
-                    </li>
-                  );
-                })}
-              </ul>
-              <button onClick={() => void reponerMarcados()} disabled={reponiendoTodo !== null || sugeridos.every((s) => sinReponer.has(s.id))}
-                className="btn btn-primario w-full">
-                {reponiendoTodo ?? `Reponer ${sugeridos.filter((s) => !sinReponer.has(s.id)).length} productos`}
-              </button>
-              <p className="text-[11px] text-[var(--texto-suave)] mt-2">
-                Cada reposición queda en el historial como traspaso, con tu nombre. No cambia el total ni el costo.
-              </p>
-            </>
           )}
         </>
       )}
@@ -494,10 +382,10 @@ export function InventarioClient({
           </p>
           {/* RF-M4-22 · contar con papel y lápiz, y después anotarlo acá. */}
           <button onClick={() => window.print()} className="btn btn-secundario btn-chico mb-3 no-imprimir">
-            <Icono nombre="descargar" tamano={16} /> Imprimir hoja para contar ({ETIQUETA_UBICACION[ubicacionToma].toLowerCase()})
+            <Icono nombre="descargar" tamano={16} /> Imprimir hoja para contar
           </button>
           <div id="hoja-conteo" aria-hidden>
-            <h2 style={{ fontSize: 14, fontWeight: 700 }}>Hoja de conteo · {ETIQUETA_UBICACION[ubicacionToma]} · {diaCorto(diaLocal(new Date(), zona))}</h2>
+            <h2 style={{ fontSize: 14, fontWeight: 700 }}>Hoja de conteo · {diaCorto(diaLocal(new Date(), zona))}</h2>
             <p style={{ fontSize: 10, margin: '2px 0 6px' }}>Contó: ______________________ · Revisó: ______________________</p>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead><tr>
@@ -508,28 +396,13 @@ export function InventarioClient({
               <tbody>
                 {[...productos].filter((p) => p.activo).sort((a, b) => (a.categoriaNombre ?? '').localeCompare(b.categoriaNombre ?? '', 'es') || a.nombre.localeCompare(b.nombre, 'es')).map((p) => (
                   <tr key={p.id}>
-                    <td style={{ borderBottom: '1px solid #bbb', padding: '4px 2px' }}>{p.nombre}{p.unidad !== 'unidad' ? ` (${p.unidad})` : ''}</td>
+                    <td style={{ borderBottom: '1px solid #bbb', padding: '4px 2px' }}>{p.nombre}</td>
                     <td style={{ borderBottom: '1px solid #bbb', padding: '4px 2px' }}>{p.codigos[0] ?? p.sku ?? ''}</td>
                     <td style={{ borderBottom: '1px solid #bbb' }} />
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-
-          <div className="flex gap-2 mb-3" role="radiogroup" aria-label="Dónde estás contando">
-            {(['sala', 'bodega'] as const).map((u) => (
-              <button
-                key={u} role="radio" aria-checked={ubicacionToma === u}
-                disabled={validos.length > 0}
-                onClick={() => setUbicacionToma(u)}
-                className={`tap flex-1 py-2.5 rounded-xl text-sm border disabled:opacity-60 ${
-                  ubicacionToma === u ? 'border-marca-500 bg-marca-50 font-medium' : 'border-[var(--borde)] bg-white'
-                }`}
-              >
-                Contando: {ETIQUETA_UBICACION[u]}
-              </button>
-            ))}
           </div>
 
           <input
@@ -542,14 +415,14 @@ export function InventarioClient({
             {productos.map((p) => {
               const valor = conteo[p.id] ?? '';
               const v = validarCantidadStock(valor, p.unidad, { permiteVacio: true });
-              const sistema = enUbicacion(p, ubicacionToma);
+              const sistema = p.stock;
               const dif = valor.trim() === '' || !v.valido ? null : v.valor - sistema;
               return (
                 <li key={p.id} className="px-4 py-2.5 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm truncate">{p.nombre}</p>
                     <p className="text-xs text-[var(--texto-suave)] num">
-                      Sistema ({ubicacionToma}): {cantidadConUnidad(sistema, p.unidad)}
+                      Sistema: {formatCantidad(sistema)}
                       {dif !== null && dif !== 0 && (
                         <span className={dif < 0 ? 'text-[var(--color-alerta)]' : 'text-[var(--color-aviso)]'}>
                           {' · '}{dif > 0 ? '+' : ''}{dif}
@@ -562,7 +435,7 @@ export function InventarioClient({
                     )}
                   </div>
                   <input
-                    inputMode="decimal" value={valor}
+                    inputMode="numeric" value={valor}
                     onChange={(e) => setConteo((c) => ({ ...c, [p.id]: e.target.value }))}
                     placeholder="—"
                     className="tap w-20 px-2 py-2 rounded-lg border border-[var(--borde)] num text-right shrink-0"
@@ -596,25 +469,12 @@ export function InventarioClient({
           filas={validos.map((x) => ({
             nombre: x.producto?.nombre ?? 'Producto',
             unidad: x.producto?.unidad ?? '',
-            sistema: x.producto ? enUbicacion(x.producto, ubicacionToma) : 0,
+            sistema: x.producto?.stock ?? 0,
             contado: x.v.valor,
           }))}
           aplicando={aplicandoToma}
           onConfirmar={() => void aplicarToma()}
           onCancelar={() => setRevisandoToma(false)}
-        />
-      )}
-
-      {reponiendo && (
-        <DialogoReponer
-          producto={reponiendo}
-          onListo={(texto) => {
-            setReponiendo(null);
-            setExito(texto);
-            void cargar();
-            setTimeout(() => setExito(null), 6000);
-          }}
-          onCancelar={() => setReponiendo(null)}
         />
       )}
 
@@ -709,9 +569,8 @@ function DialogoAjuste({
   onListo: () => void;
   onCancelar: () => void;
 }) {
-  const [ubicacion, setUbicacion] = useState<Ubicacion>('sala');
-  const actual = ubicacion === 'sala' ? producto.stockSala : producto.stockBodega;
-  const [cantidad, setCantidad] = useState(String(producto.stockSala));
+  const actual = producto.stock;
+  const [cantidad, setCantidad] = useState(String(producto.stock));
   const [motivo, setMotivo] = useState('');
   const [esMerma, setEsMerma] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -733,7 +592,6 @@ function DialogoAjuste({
         nuevaCantidad: v.valor,
         tipo: esMerma ? 'merma' : delta > 0 ? 'ajuste_positivo' : 'ajuste_negativo',
         motivo: motivo.trim(),
-        ubicacion,
       });
       onListo();
     } catch (e) {
@@ -751,32 +609,15 @@ function DialogoAjuste({
       bloqueado={guardando}
     >
       <div className="p-5 space-y-3">
-        <div className="flex gap-2" role="radiogroup" aria-label="Dónde contaste">
-          {(['sala', 'bodega'] as const).map((u) => (
-            <button
-              key={u} role="radio" aria-checked={ubicacion === u}
-              onClick={() => {
-                setUbicacion(u);
-                setCantidad(String(u === 'sala' ? producto.stockSala : producto.stockBodega));
-              }}
-              className={`tap flex-1 py-2.5 rounded-xl text-sm border ${
-                ubicacion === u ? 'border-marca-500 bg-marca-50 font-medium' : 'border-[var(--borde)]'
-              }`}
-            >
-              {ETIQUETA_UBICACION[u]}
-            </button>
-          ))}
-        </div>
-
         <Campo
           etiqueta="Cantidad real"
-          ayuda={`En ${ETIQUETA_UBICACION[ubicacion].toLowerCase()} el sistema tiene ${cantidadConUnidad(actual, producto.unidad)}. Total del local: ${cantidadConUnidad(producto.stock, producto.unidad)}.`}
+          ayuda={`El sistema tiene ${formatCantidad(actual)} en la bodega.`}
           error={cantidad.trim() !== '' && !v.valido ? v.error : null}
         >
           {(p) => (
             <input
               {...p}
-              inputMode="decimal" value={cantidad} onChange={(e) => setCantidad(e.target.value)}
+              inputMode="numeric" value={cantidad} onChange={(e) => setCantidad(e.target.value)}
               className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] num text-right text-lg"
               autoFocus
             />
@@ -784,7 +625,7 @@ function DialogoAjuste({
         </Campo>
         {delta !== 0 && v.valido && (
           <p className={`text-sm num ${delta < 0 ? 'text-[var(--color-alerta)]' : 'text-marca-700'}`}>
-            {delta > 0 ? 'Se sumarán' : 'Se restarán'} {Math.abs(delta)} {producto.unidad}
+            {delta > 0 ? 'Se sumarán' : 'Se restarán'} {cantidadConUnidad(Math.abs(delta), 'unidad')}
           </p>
         )}
 
@@ -931,113 +772,6 @@ function RevisionToma({
             Seguir contando
           </button>
         </div>
-      </div>
-    </Modal>
-  );
-}
-
-/**
- * Reponer la sala desde la bodega, o devolver a la bodega. Es un traspaso: no
- * cambia el total del local ni el costo, y queda en el historial.
- */
-function DialogoReponer({
-  producto, onListo, onCancelar,
-}: {
-  producto: Producto;
-  onListo: (texto: string) => void;
-  onCancelar: () => void;
-}) {
-  const [hacia, setHacia] = useState<Ubicacion>(producto.stockBodega > 0 ? 'sala' : 'bodega');
-  const desde: Ubicacion = hacia === 'sala' ? 'bodega' : 'sala';
-  const disponible = desde === 'bodega' ? producto.stockBodega : producto.stockSala;
-  const [cantidad, setCantidad] = useState('');
-  const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const v = validarCantidadStock(cantidad, producto.unidad, { maximo: 1_000_000 });
-
-  async function guardar() {
-    setError(null);
-    if (!v.valido) { setError(v.error); return; }
-    if (v.valor <= 0) { setError('Indica cuántas unidades vas a mover'); return; }
-    if (v.valor > disponible) {
-      setError(`En ${ETIQUETA_UBICACION[desde].toLowerCase()} hay ${cantidadConUnidad(disponible, producto.unidad)}`);
-      return;
-    }
-    setGuardando(true);
-    try {
-      await repoInventario().reponer({ productoId: producto.id, cantidad: v.valor, desde, hacia });
-      onListo(`${cantidadConUnidad(v.valor, producto.unidad)} de ${producto.nombre} pasaron a ${UBICACION_EN_FRASE[hacia]}`);
-    } catch (e) {
-      setError(toUserMessage(e));
-    } finally {
-      setGuardando(false);
-    }
-  }
-
-  return (
-    <Modal titulo={`${hacia === 'sala' ? 'Reponer' : 'Guardar en bodega'} ${producto.nombre}`} encabezado="visible" onCerrar={onCancelar} bloqueado={guardando}>
-      <div className="p-5 space-y-3">
-        <div className="grid grid-cols-2 gap-2 text-center">
-          <div className="tarjeta p-3">
-            <p className="text-[11px] text-[var(--texto-suave)]">Guardado en bodega</p>
-            <p className="num text-lg font-bold">{formatCantidad(producto.stockBodega)}</p>
-          </div>
-          <div className="tarjeta p-3">
-            <p className="text-[11px] text-[var(--texto-suave)]">A la vista</p>
-            <p className="num text-lg font-bold">{formatCantidad(producto.stockSala)}</p>
-          </div>
-        </div>
-
-        <div className="flex gap-2" role="radiogroup" aria-label="Hacia dónde">
-          {(['sala', 'bodega'] as const).map((u) => (
-            <button
-              key={u} role="radio" aria-checked={hacia === u}
-              onClick={() => { setHacia(u); setError(null); }}
-              className={`tap flex-1 py-2.5 rounded-xl text-sm border ${
-                hacia === u ? 'border-marca-500 bg-marca-50 font-medium' : 'border-[var(--borde)]'
-              }`}
-            >
-              {u === 'sala' ? 'Dejar a la vista' : 'Guardar en bodega'}
-            </button>
-          ))}
-        </div>
-
-        <Campo
-          etiqueta="Cantidad a mover"
-          ayuda={`Disponible en ${UBICACION_EN_FRASE[desde]}: ${cantidadConUnidad(disponible, producto.unidad)}.`}
-          error={cantidad.trim() !== '' && !v.valido ? v.error : null}
-        >
-          {(p) => (
-            <input
-              {...p}
-              inputMode="decimal" value={cantidad} onChange={(e) => setCantidad(e.target.value)}
-              placeholder="0"
-              className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] num text-right text-lg"
-              autoFocus
-            />
-          )}
-        </Campo>
-
-        {disponible > 0 && (
-          <button type="button" onClick={() => setCantidad(formatCantidad(disponible))}
-            className="tap w-full rounded-xl border border-[var(--borde)] text-sm">
-            Mover todo ({cantidadConUnidad(disponible, producto.unidad)})
-          </button>
-        )}
-
-        {error && (
-          <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>
-        )}
-
-        <button
-          onClick={() => void guardar()} disabled={guardando || cantidad.trim() === '' || !v.valido}
-          className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50"
-        >
-          {guardando ? 'Moviendo…' : 'Registrar traspaso'}
-        </button>
-        <p className="text-[11px] text-[var(--texto-suave)]">
-          No cambia el total del local ni el costo. Queda en el historial con tu nombre.
-        </p>
       </div>
     </Modal>
   );

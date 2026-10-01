@@ -6,12 +6,13 @@ import { DEMO_ACTIVO } from '../demo';
 import { getMeta, setMeta } from '../offline/db';
 
 /**
- * Clientes y precio por cliente (0022, RQ-07, RQ-20, RQ-21).
+ * Clientes (0022, RQ-20, RQ-21): para la factura y el fiado.
  *
- * En producción se escriben con `fn_guardar_cliente` y
- * `fn_guardar_precios_cliente` (las tablas no tienen política de escritura,
- * regla 14). Para vender, la lista viaja al celular junto con el catálogo
- * (`syncClientes`), así el POS elige al cliente sin conexión.
+ * En producción se escriben con `fn_guardar_cliente` (la tabla no tiene
+ * política de escritura, regla 14). Para vender, la lista viaja al celular
+ * junto con el catálogo (`syncClientes`), así el POS elige al cliente sin
+ * conexión. Desde 0032 un cliente no tiene precio propio: lo que tuviera
+ * guardado (% y precios especiales) no se lee ni viaja al POS.
  */
 export interface Cliente {
   id: string;
@@ -22,21 +23,18 @@ export interface Cliente {
   comuna: string | null;
   telefono: string | null;
   email: string | null;
+  /** Sin efecto desde 0032; al guardar se escribe 0. */
   descuentoPct: number;
   notas: string | null;
   activo: boolean;
-  /** Precio especial de cada unidad, por id de producto. */
-  precios: Record<string, number>;
 }
 
-export type DatosCliente = Omit<Cliente, 'id' | 'precios'>;
+export type DatosCliente = Omit<Cliente, 'id'>;
 
 export interface RepositorioClientes {
   listar(): Promise<Cliente[]>;
   /** Crea (sin id) o cambia un cliente. Devuelve su id. */
   guardar(id: string | null, datos: DatosCliente): Promise<string>;
-  /** Reemplaza los precios especiales del cliente. */
-  guardarPrecios(id: string, precios: Record<string, number>): Promise<void>;
 }
 
 const CLAVE_VENDER = 'catalog:clientes';
@@ -52,17 +50,8 @@ async function leerDeBase(soloActivos: boolean): Promise<Cliente[]> {
     .select('id, rut, nombre, giro, direccion, comuna, telefono, email, descuento_pct, notas, is_active')
     .order('nombre');
   if (soloActivos) q = q.eq('is_active', true);
-  const [{ data, error }, { data: precios, error: e2 }] = await Promise.all([
-    q, supabase().from('cliente_precios').select('cliente_id, product_id, precio'),
-  ]);
+  const { data, error } = await q;
   if (error) throw error;
-  if (e2) throw e2;
-  const porCliente = new Map<string, Record<string, number>>();
-  for (const p of precios ?? []) {
-    const m = porCliente.get(p.cliente_id as string) ?? {};
-    m[p.product_id as string] = Number(p.precio);
-    porCliente.set(p.cliente_id as string, m);
-  }
   return (data ?? []).map((r) => ({
     id: r.id as string,
     rut: (r.rut as string) ?? null,
@@ -75,13 +64,13 @@ async function leerDeBase(soloActivos: boolean): Promise<Cliente[]> {
     descuentoPct: Number(r.descuento_pct ?? 0),
     notas: (r.notas as string) ?? null,
     activo: Boolean(r.is_active),
-    precios: porCliente.get(r.id as string) ?? {},
   }));
 }
 
 const paraVender = (c: Cliente): ClienteConPrecios => ({
   id: c.id, nombre: c.nombre, rut: c.rut, giro: c.giro, direccion: c.direccion,
-  descuentoPct: c.descuentoPct, precios: c.precios,
+  // 0032 · El POS no aplica precio por cliente: no viaja.
+  descuentoPct: 0, precios: {},
 });
 
 /** Baja al celular los clientes activos, para elegirlos en el POS sin conexión. */
@@ -107,14 +96,6 @@ const supabaseRepo: RepositorioClientes = {
     void syncClientes().catch(() => {});
     return data as string;
   },
-  async guardarPrecios(id, precios) {
-    const { error } = await supabase().rpc('fn_guardar_precios_cliente', {
-      p_cliente_id: id,
-      p_precios: Object.entries(precios).map(([product_id, precio]) => ({ product_id, precio })),
-    });
-    if (error) throw error;
-    void syncClientes().catch(() => {});
-  },
 };
 
 // ---------------------------------------------------------------------------
@@ -136,14 +117,9 @@ const demoRepo: RepositorioClientes = {
       throw new Error('CLIENTE_RUT_DUPLICADO');
     }
     const nuevoId = id ?? crypto.randomUUID();
-    const previo = lista.find((c) => c.id === id);
-    const fila: Cliente = { ...datos, id: nuevoId, precios: previo?.precios ?? {} };
+    const fila: Cliente = { ...datos, id: nuevoId };
     await setMeta(CLAVE_DEMO, JSON.stringify(id ? lista.map((c) => (c.id === id ? fila : c)) : [...lista, fila]));
     return nuevoId;
-  },
-  async guardarPrecios(id, precios) {
-    const lista = await demoLista();
-    await setMeta(CLAVE_DEMO, JSON.stringify(lista.map((c) => (c.id === id ? { ...c, precios } : c))));
   },
 };
 

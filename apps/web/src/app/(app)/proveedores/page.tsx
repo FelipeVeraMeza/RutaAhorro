@@ -12,7 +12,11 @@ export default async function ProveedoresPage({ searchParams }: {
   const user = await exigirRol(['admin', 'supervisor', 'bodega']);
   const { vista, aviso, detalle } = await searchParams;
   // Lo que pasó con la factura de la recepción recién confirmada (RF-M3-13).
-  const avisoRecepcion = aviso === 'factura_por_pagar'
+  const avisoRecepcion = (aviso === 'recibida' || aviso === 'recibida_pendiente') && detalle
+    // Lo que pasó al recibir (pago, por pagar, libro de compras), armado por
+    // Recibir mercadería. Con algo pendiente, en color de aviso.
+    ? { tipo: aviso === 'recibida' ? 'ok' as const : 'error' as const, texto: detalle.slice(0, 600) }
+    : aviso === 'factura_por_pagar'
     ? { tipo: 'ok' as const, texto: 'Mercadería recibida. La factura quedó en Por pagar con su vencimiento.' }
     : aviso === 'factura_no_registrada'
       ? { tipo: 'error' as const, texto: `La mercadería quedó recibida, pero la factura no se registró por pagar${detalle ? `: ${detalle.slice(0, 160)}` : ''}. Regístrala en Por pagar.` }

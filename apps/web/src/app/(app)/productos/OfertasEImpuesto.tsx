@@ -96,10 +96,11 @@ export function OfertasEImpuesto({
   return (
     <>
       <section className="rounded-xl border border-[var(--borde)] p-3" aria-labelledby="titulo-ofertas">
-        <h3 id="titulo-ofertas" className="font-semibold text-sm">Ofertas por cantidad</h3>
+        <h3 id="titulo-ofertas" className="font-semibold text-sm">Precio por mayor y ofertas</h3>
         <p className="text-xs text-[var(--texto-suave)] mt-0.5 mb-3">
-          Ej.: desde 3 unidades a $1.400 c/u. Al llevar 3 o más, <strong>todas</strong> las unidades
-          quedan a ese precio. Con fechas, es una promoción.
+          Precio por mayor: desde 3 unidades a $1.400 c/u. Al llevar 3 o más, <strong>todas</strong> las
+          unidades quedan a ese precio; con 2, precio normal. Es del producto, vale para cualquier
+          cliente. Con fechas, es una promoción.
         </p>
 
         <ul className="space-y-3">
@@ -120,7 +121,7 @@ export function OfertasEImpuesto({
                   <label className="flex-1 min-w-0">
                     <span className="block text-xs mb-1">Desde (unidades)</span>
                     <input
-                      inputMode="decimal" value={f.desde}
+                      inputMode="numeric" value={f.desde}
                       onChange={(e) => cambiar(f.clave, { desde: e.target.value })}
                       aria-label={`Oferta ${i + 1}: desde cuántas unidades`}
                       className="tap w-full px-3 py-2 rounded-lg border border-[var(--borde)] bg-white num text-right"

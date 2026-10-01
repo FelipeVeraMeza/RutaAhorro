@@ -4,8 +4,7 @@
  * Lo delicado: el POS reparte el ahorro del combo como descuento de las
  * líneas, y un cajero con tope 0 % tiene que poder cobrarlo. Pero solo lo
  * que el combo ahorra de verdad, calculado por la base: ni un peso más, ni
- * con el combo incompleto, ni con las ofertas apagadas, ni sumado al precio
- * de cliente.
+ * con el combo incompleto, ni con las ofertas apagadas.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -79,14 +78,14 @@ test('con las ofertas apagadas no hay combo; lo vendido sin conexión antes de a
   assert.ok((await intentar(rpc(caj, 'fn_register_sale', venta([[beb, 2, 1200, 218], [pan, 1, 1000, 182]], { soldAt: antes })))).ok);
 });
 
-test('no se suma al precio de cliente: con 20 % el combo ya no ahorra nada', async () => {
+test('con un cliente elegido el combo se cobra igual: el cliente ya no tiene precio propio (0032)', async () => {
   const { beb, pan, adm, caj } = await mostrador();
+  // Un cliente que quedó con 20 % guardado de antes de 0032.
   const cli = await rpc(adm, 'fn_guardar_cliente', { p_id: null, p_datos: { nombre: 'Mayorista', descuento_pct: 20 } });
-  // 2 × $960 + $800 = $2.720, menos que el combo de $3.000.
   const doc = { document: { cliente_id: cli } };
-  assert.ok((await intentar(rpc(caj, 'fn_register_sale', venta([[beb, 2, 960], [pan, 1, 800]], doc)))).ok);
-  const encima = await intentar(rpc(caj, 'fn_register_sale', venta([[beb, 2, 960, 100], [pan, 1, 800]], doc)));
-  assert.equal(encima.ok, false, 'sumó un descuento de combo al precio de cliente');
+  assert.ok((await intentar(rpc(caj, 'fn_register_sale', venta([[beb, 2, 1200, 218], [pan, 1, 1000, 182]], doc)))).ok);
+  const al20 = await intentar(rpc(caj, 'fn_register_sale', venta([[beb, 2, 960], [pan, 1, 800]], doc)));
+  assert.equal(al20.ok, false, 'cobró el 20 % del cliente');
 });
 
 test('solo admin y supervisor arman combos, y un combo tiene que ser un combo', async () => {

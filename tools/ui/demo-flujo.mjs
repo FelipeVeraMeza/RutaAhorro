@@ -8,7 +8,8 @@
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 const BASE = process.env.RA_BASE ?? 'http://localhost:3000';
-const SP = new URL('./.capturas/demo', import.meta.url).pathname;
+// En Windows, pathname trae "/C:/...": sin la barra inicial, mkdir arma "C:C:...".
+const SP = new URL('./.capturas/demo', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 mkdirSync(SP, { recursive: true });
 const nav = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'msedge' });
 const ctx = await nav.newContext({ viewport: { width: 360, height: 780 } });

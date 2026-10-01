@@ -8,7 +8,74 @@
 
 ---
 
-## CÓMO SEGUIR — corte 2026-10-01 (6ª ronda: 50 errores más), léelo antes que todo
+## CÓMO SEGUIR — corte 2026-10-01 (tarde, sesión local: 0032), léelo antes que todo
+
+**Nada de esto está en GitHub ni en Supabase.** Felipe sube él al final
+("no subas nada, yo lo subo"). Antes de su push hay que aplicar en Supabase
+**0029, 0030, 0031 y 0032**, en ese orden (`npm run db:instalar` y
+`npm run db:aplicar -- --aplicar`): Railway despliega `main` apenas llega, y el
+código nuevo con la base vieja rompe fiado, por pagar, recepción de perecibles y
+todo lo de abajo. Al 2026-10-01 la base real **no tiene ninguna de las cuatro**
+(revisado consultando sus tablas y funciones).
+
+**Decisiones de Felipe del 2026-10-01** (cambian la visión, no son detalles):
+1. **Una sola bodega.** Sin sala/bodega ni "reponer": nadie registraba los
+   traspasos. 0032 pasa lo de la bodega a la sala con un traspaso en el kardex
+   y fuerza todo movimiento a 'sala' (la pantalla dice "bodega"). Ajuste y toma
+   ignoran la ubicación pedida: si no, "dejar en 7" en la bodega vacía sumaba 7.
+   `fn_transfer_stock` responde `UNA_SOLA_BODEGA`.
+2. **Todo por unidad.** Sin kg/litro/ml: disparador en `products` y
+   `CANTIDAD_ENTERA` en `sale_items` y `purchase_receipt_items`. La planilla de
+   carga avisa y usa "unidad".
+3. **El precio por mayor es del producto, no del cliente.** Un cliente que
+   llevó 2 papas pidió el precio de "desde 3" y se fue enojado. 0032 deja
+   `fn_precio_cliente` en null y `fn_guardar_precios_cliente` en
+   `PRECIO_POR_CLIENTE_DESACTIVADO`. **Lo guardado (% y precios especiales) no
+   se borró**: queda sin efecto (Felipe eligió esto sobre borrarlo). El cliente
+   queda para factura y fiado. Vender dice "Precio por mayor (desde 3)" y
+   "Por mayor desde 3: llevando 1 más".
+4. **Perecible = fecha obligatoria** al cargar stock, y se muestra "vence en N
+   días" (producto y cada línea de la recepción). Ya no se pregunta "cuántos
+   días antes avisar" (queda el valor que tenía, 30 por omisión).
+5. **El costo es neto** (cierra la pregunta N° 13 de docs/26). El margen de
+   Productos usa `margenNetoPct` (core). **Pendiente:** el `gross_profit` de
+   `v_sales_by_product` (Reportes) sigue siendo precio con IVA − costo.
+
+**Recibir mercadería** (T-55 / RQ-37 cerrado): producto nuevo ahí mismo (desde
+la búsqueda o un código escaneado que no existe) y proveedor nuevo ("+ Nuevo",
+`FormProveedor.tsx` compartido con Compras); costos netos o con IVA; total del
+papel que avisa si no cuadra; **forma de pago**: transferencia, efectivo de la
+caja (registra y paga la factura de proveedor: egreso en la caja abierta) o a
+crédito; y la factura queda en el **libro de compras** si el proveedor tiene
+RUT (admin y supervisor). **Defecto corregido:** la factura por pagar se
+registraba con la suma de costos (neta): la deuda quedaba 19 % corta.
+**Ojo:** anular una recepción no deshace el egreso de caja ni la recibida del
+libro de compras.
+
+**Maqueta:** el catálogo ya no se vuelve a sembrar en cada carga (hallazgo 1 de
+la 6ª ronda, abajo): solo si está vacío o cambia `VERSION_SEMILLA`.
+
+**Verificado en local:** core **451** · robot 6/6 · typecheck · `db:check`
+153 cuerpos · `db:test` **172 + 1 TODO (T-45), 0 fallas** · build de producción
+(`NEXT_PUBLIC_DEMO=false`). `ubicaciones.test.mjs` y `clientes.test.mjs`
+reescritos para 0032; el traspaso de la bodega y las dos pruebas nuevas de la
+planilla se vieron fallar antes del arreglo (regla 16).
+**En la maqueta** (build con `NEXT_PUBLIC_DEMO=true`, `next start -p 3005`):
+`demo-bodega-unidad.mjs` **26/26** (nuevo) · demo-flujo 19/19 · demo-datos 11/11 ·
+demo-ronda2 15/15 · ronda3 45/45 · ronda4 44/44 · ronda5 22/22 · ronda6 14/14 ·
+demo-roles 184 pantallas sin errores, desbordes ni controles sin nombre.
+Los `demo-*` se ajustaron donde probaban lo que se sacó a propósito (reponer,
+"Mover", % del cliente; el redondeo y el fiado de ronda4 ahora usan un
+producto de $1.463) y para que corran en Windows (ruta de las capturas).
+**Sin actualizar ni correr** (dependen del comportamiento viejo y corren
+contra la base real): `bodega-sala.mjs` (obsoleto), `flujo-completo.mjs`
+(20 en sala + 5 en bodega, 0,35 kg de queso), `clientes.mjs` (precio de
+cliente), `m5-vender`, `documentos`, `facturacion`, `ofertas-masivas`.
+Rehacerlos después de aplicar 0032.
+
+---
+
+## Corte anterior — 2026-10-01 (6ª ronda: 50 errores más)
 
 **2026-10-01 · Versión 0.5.2.** Pedido: "Sigamos buscando 50 errores más y
 cuando termines sube las actualizaciones". Se siguió la numeración (51 a 100)

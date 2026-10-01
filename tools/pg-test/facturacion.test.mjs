@@ -121,17 +121,18 @@ test('un receptor incompleto no deja nada a medias', async () => {
   assert.equal((await banco.su.query(`select count(*)::int as n from facturas where tenant_id = $1`, [L.tenant])).rows[0].n, 0);
 });
 
-test('lo que se cuenta va entero; lo que se pesa admite decimales', async () => {
+test('todo va entero, también lo que antes se vendía por kilo (0032)', async () => {
   const L = await nuevoLocal(banco);
   const pan = await L.producto({ nombre: 'Pan', precio: 1000, stock: 10 });
   const queso = await L.producto({ nombre: 'Queso', precio: 9990, stock: 5 });
+  // 0032: un producto no puede quedar por kilo.
   await banco.su.query(`update products set unit = 'kg' where id = $1`, [queso]);
   const adm = await banco.como(L.admin);
-  const r = await intentar(rpc(adm, 'fn_emitir_factura_manual', factura([{ product_id: pan, cantidad: 1.5, precio: 1000 }])));
-  assert.match(r.error, /CANTIDAD_ENTERA: Pan/);
-  const f = await rpc(adm, 'fn_emitir_factura_manual', factura([{ product_id: queso, cantidad: 0.35, precio: 9990 }]));
-  assert.equal(f.total, 3497);
-  assert.equal(await L.stock(queso), 4.65);
+  for (const [id, nombre, cantidad] of [[pan, 'Pan', 1.5], [queso, 'Queso', 0.35]]) {
+    const r = await intentar(rpc(adm, 'fn_emitir_factura_manual', factura([{ product_id: id, cantidad, precio: 1000 }])));
+    assert.match(r.error ?? '', new RegExp('CANTIDAD_ENTERA: ' + nombre));
+  }
+  assert.equal(await L.stock(queso), 5);
 });
 
 test('perecible: sale del lote que vence primero, y la nota de crédito lo devuelve ahí', async () => {

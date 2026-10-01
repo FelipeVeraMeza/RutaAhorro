@@ -410,10 +410,10 @@ const DESCRIPCIONES: Record<string, string> = {
   codigo_barras: 'el código del envase',
   categoria: 'se crea sola si no existe',
   precio_venta: 'precio al público, con IVA incluido',
-  costo: 'cuánto te cuesta a ti',
-  unidad: 'unidad, kg, gramo, litro, ml, paquete o caja',
+  costo: 'cuánto te cuesta a ti, sin IVA (neto)',
+  unidad: 'opcional: todo se vende por unidad',
   stock_inicial: 'cuántas unidades tienes hoy',
   stock_minimo: 'bajo esta cantidad te avisamos',
   perecible: 'si o no; si es sí, se controla por lote y vencimiento',
-  dias_alerta: 'cuántos días antes avisar el vencimiento',
+  dias_alerta: 'opcional: cuántos días antes avisar (30 si va vacío)',
 };

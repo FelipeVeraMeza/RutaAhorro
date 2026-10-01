@@ -200,8 +200,6 @@ export function PrecioClient({ usuarioId = '', puedeVender = false, puedeCrearPr
             {elegido.stock <= 0
               ? <span className="text-[var(--color-alerta)]">🔴 Sin stock</span>
               : <>🟢 Quedan {cantidadConUnidad(elegido.stock, elegido.unit)}</>}
-            {typeof elegido.stockSala === 'number' &&
-              ` · a la vista ${cantidadConUnidad(elegido.stockSala, elegido.unit)}`}
           </p>
           {elegido.venceProximo && elegido.venceProximo < diaLocal(new Date(), zonaHoraria) && (
             <p role="alert" className="text-xs mt-2 text-[var(--color-alerta)]">

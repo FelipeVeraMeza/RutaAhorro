@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   addToCart, cartTotals, setQuantity, removeFromCart, aplicarOfertas, tramosVigentes, diaLocal, precioDelTramo,
-  precioParaCliente, describirCliente, type ClienteConPrecios,
+  type ClienteConPrecios,
   aplicarCombos, lineSubtotal, type Combo,
   formatCLP, formatCantidad, validarCantidadVenta, admiteDecimales, toUserMessage, construirComprobante,
   cantidadAtipica,
@@ -85,7 +85,8 @@ export function PosClient({
   zonaRef.current = config.zonaHoraria;
   const ofertasRef = useRef(config.ofertasActivas);
   ofertasRef.current = config.ofertasActivas;
-  // 0022 · El cliente de la venta: su % o su precio especial en cada línea.
+  // El cliente de la venta: para la factura y el fiado. Desde 0032 no tiene
+  // precio propio: el precio por mayor es del producto, desde N unidades.
   const [cliente, setCliente] = useState<ClienteConPrecios | null>(null);
   const clienteRef = useRef(cliente);
   clienteRef.current = cliente;
@@ -105,13 +106,10 @@ export function PosClient({
       // producción el catálogo ya llega sin ellas; esto cubre la maqueta y
       // un carrito armado antes de que llegara la configuración.
       const lineas = (ofertasRef.current ? siguiente
-        : siguiente.map((l) => (l.tramos?.length ? { ...l, tramos: [] } : l)))
-        // 0022 · El precio del cliente elegido, que no se apaga con las ofertas.
-        .map((l) => (l.precioLista == null ? l
-          : { ...l, precioCliente: precioParaCliente(l.productId, l.precioLista, clienteRef.current) }));
+        : siguiente.map((l) => (l.tramos?.length ? { ...l, tramos: [] } : l)));
       const dia = diaLocal(new Date(), zonaRef.current);
       // 0023 · El combo va después: se mide contra el precio que la línea ya
-      // tiene (oferta o cliente), así nunca se suma a otra rebaja.
+      // tiene (la oferta), así nunca se suma a otra rebaja.
       return aplicarCombos(aplicarOfertas(lineas, dia), ofertasRef.current ? combosRef.current : [], dia);
     });
   }, []);
@@ -219,18 +217,13 @@ export function PosClient({
 
   const agregar = useCallback((p: LocalProduct, qty = 1) => {
     cambiarCarro((prev) => addToCart(prev, lineaDesde(p, qty)));
-    // La venta descuenta de la sala. Si lo que hay a la vista no alcanza pero
-    // queda en bodega, se avisa y se vende igual (decisión 2026-09-19).
     const enCarro = (linesRef.current.find((l) => l.productId === p.id)?.quantity ?? 0) + qty;
-    const sala = p.stockSala ?? p.stock;
     // Vender alimentos vencidos está prohibido (Reglamento Sanitario): si el
     // producto tiene un lote vencido, que el cajero mire la fecha antes de
     // entregarlo. No se bloquea: puede que en la repisa ya no quede de ese lote.
     if (p.venceProximo && p.venceProximo < diaLocal(new Date(), zonaRef.current)) {
       notificar('error', `${p.name}: hay un lote vencido el ${p.venceProximo.split('-').reverse().join('-')}. Revisa la fecha antes de entregarlo`,
         { productId: p.id, cantidad: qty });
-    } else if (enCarro > sala && (p.stockBodega ?? 0) > 0) {
-      notificar('info', `${p.name}: a la vista quedan ${formatCantidad(Math.max(0, sala))} · hay ${formatCantidad(p.stockBodega ?? 0)} en bodega, conviene reponer`);
     } else if (enCarro > p.stock && venderSinStockRef.current) {
       // Se vende igual (respuesta 13), pero quien cobra sabe que el sistema
       // no lo tenía: es la pista de que falta ingresar una recepción.
@@ -242,9 +235,7 @@ export function PosClient({
       notificar('error', `${p.name}: el sistema tiene ${Math.max(0, p.stock)}. Así no se podrá cobrar: pide a un supervisor que lo revise`,
         { productId: p.id, cantidad: qty });
     } else {
-      // El precio que se va a cobrar: el del cliente elegido si es menor.
-      const precio = precioParaCliente(p.id, p.salePrice, clienteRef.current) ?? p.salePrice;
-      notificar('ok', `${p.name} · ${formatCLP(Math.min(precio, p.salePrice))}`, { productId: p.id, cantidad: qty });
+      notificar('ok', `${p.name} · ${formatCLP(p.salePrice)}`, { productId: p.id, cantidad: qty });
     }
   }, [notificar, cambiarCarro, puedeForzarStock]);
 
@@ -636,11 +627,11 @@ export function PosClient({
                       </span>
                     )}
                     <span className="block text-xs text-[var(--texto-suave)] num">
-                      A la vista {formatCantidad(p.stockSala ?? p.stock)}{typeof p.stockBodega === 'number' && ` · en bodega ${formatCantidad(p.stockBodega)}`}
+                      En bodega {formatCantidad(p.stock)}
                       {p.tracksExpiry && ' · perecible'}
                     </span>
                   </span>
-                  <PrecioResultado precio={p.salePrice} cliente={cliente ? precioParaCliente(p.id, p.salePrice, cliente) : null} />
+                  <span className="num font-semibold whitespace-nowrap">{formatCLP(p.salePrice)}</span>
                 </button>
               </li>
             ))}
@@ -648,13 +639,13 @@ export function PosClient({
         )}
       </div>
 
-      {/* Cliente (0022): precio mayorista o especial, y los datos de la factura. */}
+      {/* Cliente (0022): para la factura y el fiado. Sin precio propio (0032). */}
       <div className="px-3 pt-3">
         {cliente ? (
           <div className="flex items-center gap-2 tarjeta px-3 py-1.5">
             <span className="min-w-0 flex-1 text-sm">
               <strong className="font-semibold inline-flex items-center gap-1.5"><Icono nombre="clientes" tamano={16} className="text-marca-700" />{cliente.nombre}</strong>
-              <span className="block text-xs text-[var(--texto-suave)]">{describirCliente(cliente)}</span>
+              {cliente.rut && <span className="block text-xs text-[var(--texto-suave)] num">{cliente.rut}</span>}
             </span>
             <button onClick={() => setEligiendoCliente(true)} className="tap px-2 text-sm underline">Cambiar</button>
             <button onClick={() => elegirCliente(null)} aria-label="Quitar el cliente"
@@ -663,7 +654,7 @@ export function PosClient({
         ) : (
           <button onClick={() => setEligiendoCliente(true)}
                   className="tap w-full px-3 rounded-xl border border-dashed border-[var(--borde)] text-sm text-[var(--texto-suave)] text-left">
-            <span className="inline-flex items-center gap-2"><Icono nombre="clientes" tamano={18} /> Elegir cliente (precio mayorista o factura)</span>
+            <span className="inline-flex items-center gap-2"><Icono nombre="clientes" tamano={18} /> Elegir cliente (para factura o fiado)</span>
           </button>
         )}
       </div>
@@ -827,19 +818,6 @@ export function PosClient({
   );
 }
 
-/** El precio en la búsqueda: con un cliente elegido, el suyo (y el normal tachado). */
-function PrecioResultado({ precio, cliente }: { precio: number; cliente: number | null }) {
-  if (cliente == null || cliente >= precio) {
-    return <span className="num font-semibold whitespace-nowrap">{formatCLP(precio)}</span>;
-  }
-  return (
-    <span className="num whitespace-nowrap text-right">
-      <s className="block text-xs text-[var(--texto-suave)]">{formatCLP(precio)}</s>
-      <span className="font-semibold text-marca-700">{formatCLP(cliente)}</span>
-    </span>
-  );
-}
-
 /**
  * La cantidad de la línea, que se toca y se escribe: para 20 panes había que
  * tocar "+" 19 veces, y un producto por kilo no admitía 0,35 (hallazgo 4 del
@@ -896,13 +874,6 @@ function CantidadDeLinea({ linea, onCambiar, onError }: {
  */
 function OfertaDeLinea({ linea, zona }: { linea: CartLine; zona: string }) {
   if (linea.precioLista == null) return null;
-  if (linea.precioCliente != null && linea.unitPrice === linea.precioCliente) {
-    return (
-      <p className="text-xs font-medium text-marca-700 num">
-        🤝 Precio de cliente · ahorra {formatCLP(Math.round((linea.precioLista - linea.unitPrice) * linea.quantity))}
-      </p>
-    );
-  }
   if (!linea.tramos?.length) return null;
   const lista = linea.precioLista;
   const vigentes = tramosVigentes(linea.tramos, diaLocal(new Date(), zona))
@@ -910,14 +881,19 @@ function OfertaDeLinea({ linea, zona }: { linea: CartLine; zona: string }) {
     .filter((t) => t.precio < lista);
   const ahorro = Math.round((lista - linea.unitPrice) * linea.quantity);
   const siguiente = vigentes.find((t) => t.desde > linea.quantity && t.precio < linea.unitPrice);
+  // "Por mayor" es una oferta desde 2 o más unidades; desde 1 es una
+  // promoción. Lo que importa en el mostrador (Felipe, 2026-10-01): que se vea
+  // desde cuántas rige, para que nadie lo pida llevando menos.
+  const aplicado = [...vigentes].reverse().find((t) => t.desde <= linea.quantity && t.precio === linea.unitPrice);
+  const porMayor = (aplicado?.desde ?? 1) > 1;
   return (
     <>
       {ahorro > 0 && (
-        <p className="text-xs font-medium text-marca-700 num">🏷️ Oferta aplicada · ahorra {formatCLP(ahorro)}</p>
+        <p className="text-xs font-medium text-marca-700 num">🏷️ {porMayor ? `Precio por mayor (desde ${aplicado!.desde})` : 'Oferta aplicada'} · ahorra {formatCLP(ahorro)}</p>
       )}
       {siguiente && (
         <p className="text-xs text-[var(--texto-suave)] num">
-          Llevando {siguiente.desde - linea.quantity} más: {formatCLP(siguiente.precio)} c/u
+          Por mayor desde {siguiente.desde}: llevando {siguiente.desde - linea.quantity} más, {formatCLP(siguiente.precio)} c/u
         </p>
       )}
     </>
@@ -952,7 +928,7 @@ function ElegirCliente({ onElegir, onCerrar }: {
               <button onClick={() => onElegir(c)} className="tap w-full px-3 py-2 text-left active:bg-marca-50">
                 <span className="block text-sm font-medium">{c.nombre}</span>
                 <span className="block text-xs text-[var(--texto-suave)]">
-                  {c.rut ? `${c.rut} · ` : ''}{describirCliente(c)}
+                  {c.rut ?? 'sin RUT'}
                 </span>
               </button>
             </li>

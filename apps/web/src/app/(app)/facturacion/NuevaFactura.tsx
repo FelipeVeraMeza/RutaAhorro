@@ -207,7 +207,7 @@ export function NuevaFactura({ usuarioId, base, onEmitida }: {
     const precio = modo === 'neto' ? Math.round(p.precioVenta / (1 + ivaPct / 100 + tasa / 100)) : p.precioVenta;
     setLineas((ls) => [...ls, {
       key: nuevaClave(), productId: p.id, nombre: p.nombre, descripcion: '', unidad: p.unidad, tasa,
-      stock: p.stockSala, cantidad: '1', precio: String(precio), descuento: '',
+      stock: p.stock, cantidad: '1', precio: String(precio), descuento: '',
     }]);
     setBuscandoProducto(false);
   }
@@ -392,7 +392,7 @@ export function NuevaFactura({ usuarioId, base, onEmitida }: {
               </details>
               <p className="text-sm flex justify-between gap-2">
                 <span className="text-[var(--texto-suave)]">
-                  {l.stock !== null && `Hay ${cantidadConUnidad(l.stock, l.unidad)} a la vista`}
+                  {l.stock !== null && `Hay ${cantidadConUnidad(l.stock, l.unidad)} en bodega`}
                   {l.stock !== null && cant.valido && cant.valor > l.stock && (
                     <span className="text-[var(--color-aviso)]"> · quedará en negativo</span>
                   )}
@@ -517,7 +517,7 @@ function BuscarProducto({ onElegir, onCerrar }: { onElegir: (p: Producto) => voi
               <button onClick={() => onElegir(p)} className="tap w-full px-3 py-2 flex items-center justify-between gap-3 text-left active:bg-marca-50">
                 <span className="min-w-0">
                   <span className="block text-sm font-medium truncate">{p.nombre}</span>
-                  <span className="block text-xs text-[var(--texto-suave)] num">A la vista {cantidadConUnidad(p.stockSala, p.unidad)}</span>
+                  <span className="block text-xs text-[var(--texto-suave)] num">En bodega {cantidadConUnidad(p.stock, p.unidad)}</span>
                 </span>
                 <span className="num font-semibold whitespace-nowrap">{formatCLP(p.precioVenta)}</span>
               </button>

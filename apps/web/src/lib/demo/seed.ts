@@ -1,6 +1,6 @@
 'use client';
 
-import { db, normalizeSearch, asegurarDueno, setMeta, type LocalProduct } from '../offline/db';
+import { db, normalizeSearch, asegurarDueno, getMeta, setMeta, type LocalProduct } from '../offline/db';
 import { DEMO_PRODUCTOS, DEMO_LOTES } from './data';
 
 /**
@@ -11,11 +11,24 @@ import { DEMO_PRODUCTOS, DEMO_LOTES } from './data';
  * POS funciona exactamente igual que en producción: no hay una rama especial
  * dentro de la pantalla de venta.
  */
+/**
+ * Versión de los datos de ejemplo. Se sube cuando cambian DEMO_PRODUCTOS o
+ * DEMO_LOTES, para que los navegadores que ya tienen la maqueta la renueven.
+ */
+const VERSION_SEMILLA = '2026-10-01';
+
 export async function sembrarCatalogoDemo(): Promise<number> {
   const database = db();
   // Marca el navegador como de la maqueta: al pasar a producción, lo primero
   // que hace la sincronización es notar el cambio y borrar todo esto.
   await asegurarDueno('demo');
+
+  // Se sembraba en cada carga de página (SyncCatalogo), borrando todo: lo que
+  // se creaba, vendía o recibía en la maqueta desaparecía al recargar
+  // (hallazgo de la 6ª ronda). Solo se siembra si no hay nada o si cambiaron
+  // los datos de ejemplo.
+  const ya = await database.products.count();
+  if (ya > 0 && (await getMeta('demo:semilla')) === VERSION_SEMILLA) return ya;
 
   const productos: LocalProduct[] = DEMO_PRODUCTOS.map((p) => ({
     id: p.id,
@@ -45,6 +58,7 @@ export async function sembrarCatalogoDemo(): Promise<number> {
   // La misma marca que deja la sincronización real: Vender dice de cuándo son
   // los precios (RF-M5-29) también en la maqueta.
   await setMeta('catalog:lastSync', new Date().toISOString());
+  await setMeta('demo:semilla', VERSION_SEMILLA);
 
   return productos.length;
 }

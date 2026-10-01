@@ -52,7 +52,8 @@ export const COLUMNAS = [
 
 export const COLUMNAS_OBLIGATORIAS = ['nombre', 'precio_venta'] as const;
 
-export const UNIDADES_VALIDAS = ['unidad', 'kg', 'gramo', 'litro', 'ml', 'paquete', 'caja'];
+/** Desde 0032 hay una sola: todo se vende y se cuenta por unidad. */
+export const UNIDADES_VALIDAS = ['unidad'];
 
 /**
  * Divide una línea CSV respetando comillas.
@@ -265,12 +266,14 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
       }
     }
 
+    // 2026-10-01 (0032): todo se vende y se cuenta por unidad. Una planilla
+    // vieja con "kg" se acepta, pero se dice que queda por unidad.
     const unidadBruta = (campo(cols, 'unidad') || 'unidad').toLowerCase();
-    const unidad = UNIDADES_VALIDAS.includes(unidadBruta) ? unidadBruta : 'unidad';
-    if (!UNIDADES_VALIDAS.includes(unidadBruta) && campo(cols, 'unidad') !== '') {
+    const unidad = 'unidad';
+    if (unidadBruta !== 'unidad') {
       avisos.push({
         fila: nFila, columna: 'unidad',
-        mensaje: `Unidad "${unidadBruta}" no reconocida, se usará "unidad"`,
+        mensaje: `Todo se vende por unidad: "${unidadBruta}" queda como "unidad"`,
         valor: unidadBruta,
       });
     }
@@ -281,6 +284,8 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
       errores.push({ fila: nFila, columna: 'stock_inicial', mensaje: 'El stock inicial no es un número válido', valor: stockBruto });
     } else if (stock < 0) {
       errores.push({ fila: nFila, columna: 'stock_inicial', mensaje: 'El stock inicial no puede ser negativo', valor: stockBruto });
+    } else if (!Number.isInteger(stock)) {
+      errores.push({ fila: nFila, columna: 'stock_inicial', mensaje: 'El stock inicial va en unidades enteras', valor: stockBruto });
     }
 
     const minimoBruto = campo(cols, 'stock_minimo');

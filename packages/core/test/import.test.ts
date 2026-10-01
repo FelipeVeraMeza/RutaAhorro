@@ -227,6 +227,21 @@ describe('avisos que no impiden cargar', () => {
     expect(r.avisos.some((a) => a.columna === 'codigo_barras')).toBe(true);
   });
 
+  it('una planilla vieja con "kg" carga por unidad y lo avisa (0032)', () => {
+    const csv = [ENC, 'Queso;Q;;Cat;9990;7000;kg;5;1;no;30'].join('\n');
+    const r = parsearProductos(csv);
+    expect(r.ok).toBe(true);
+    expect(r.filas[0].unidad).toBe('unidad');
+    expect(r.avisos.some((a) => a.columna === 'unidad' && a.mensaje.includes('por unidad'))).toBe(true);
+  });
+
+  it('el stock inicial con decimales no carga: todo va en unidades enteras', () => {
+    const csv = [ENC, 'Queso;Q;;Cat;9990;7000;unidad;2,5;1;no;30'].join('\n');
+    const r = parsearProductos(csv);
+    expect(r.ok).toBe(false);
+    expect(r.errores.some((e) => e.columna === 'stock_inicial' && e.mensaje.includes('enteras'))).toBe(true);
+  });
+
   it('avisa y corrige una unidad no reconocida', () => {
     const csv = [ENC, 'Raro;R;;Cat;1000;500;bidones;5;1;no;30'].join('\n');
     const r = parsearProductos(csv);

@@ -38,6 +38,7 @@ await ir(p, '/proveedores/recepcion');
 await p.locator('#prov').selectOption({ label: 'Lácteos del Valle' });
 await p.locator('#tipo').selectOption('factura');
 await p.locator('#num').fill('R6');
+await p.getByRole('radio', { name: /A crédito/ }).click();   // el vencimiento se pide al elegir "A crédito"
 await p.getByRole('button', { name: '30 días' }).click();
 await p.getByPlaceholder(/Buscar por nombre/).fill('Arroz');
 await p.waitForTimeout(700);

@@ -1,11 +1,11 @@
 'use client';
 
-import { configuracionLocal } from '@/lib/datos/configuracion';
+import { configuracionLocal, useConfiguracion } from '@/lib/datos/configuracion';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  formatCLP, formatCantidad, marginPct, formatPct, toUserMessage, cantidadConUnidad, aCSV,
+  formatCLP, formatCantidad, margenNetoPct, formatPct, toUserMessage, cantidadConUnidad, aCSV,
   calidadCatalogo, TEXTO_PROBLEMA, precioConRedondeo, validarMonto, type ProblemaCatalogo, diaLocal
 } from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto } from '@/lib/productos';
@@ -56,6 +56,7 @@ export function ProductosClient({
   puedeEditarPrecios?: boolean;
   esAdmin?: boolean;
 }) {
+  const { ivaPct } = useConfiguracion();
   const [productos, setProductos] = useState<Producto[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [busqueda, setBusqueda] = useState('');
@@ -187,12 +188,9 @@ export function ProductosClient({
       { titulo: 'codigo_interno', valor: (p) => p.sku ?? '' },
       { titulo: 'codigos_de_barra', valor: (p) => p.codigos.join(' ') },
       { titulo: 'categoria', valor: (p) => p.categoriaNombre ?? '' },
-      { titulo: 'unidad', valor: (p) => p.unidad },
       { titulo: 'precio_venta', valor: (p) => p.precioVenta },
       ...(puedeVerCostos ? [{ titulo: 'costo_promedio', valor: (p: Producto) => p.costoPromedio ?? 0 }] : []),
       { titulo: 'stock_total', valor: (p) => p.stock },
-      { titulo: 'en_sala', valor: (p) => p.stockSala },
-      { titulo: 'en_bodega', valor: (p) => p.stockBodega },
       { titulo: 'stock_minimo', valor: (p) => p.stockMinimo },
       { titulo: 'perecible', valor: (p) => (p.perecible ? 'si' : 'no') },
       { titulo: 'activo', valor: (p) => (p.activo ? 'si' : 'no') },
@@ -375,7 +373,7 @@ export function ProductosClient({
                     )}
                     {puedeVerCostos && typeof p.costoPromedio === 'number' && p.costoPromedio > 0 && (
                       <p className="text-xs text-[var(--texto-suave)] num">
-                        costo {formatCLP(p.costoPromedio)} · margen {formatPct(marginPct(p.precioVenta, p.costoPromedio))}
+                        costo {formatCLP(p.costoPromedio)} · margen {formatPct(margenNetoPct(p.precioVenta, p.costoPromedio, ivaPct))}
                       </p>
                     )}
                   </div>
@@ -388,9 +386,8 @@ export function ProductosClient({
                 )}
                 <div className="flex items-center justify-between gap-2 mt-1.5">
                   <p className={`text-xs num ${est.clase}`}>
-                    {est.icono} {est.texto} · {cantidadConUnidad(p.stock, p.unidad)}
-                    {p.stockMinimo > 0 && ` (mín. ${p.stockMinimo})`}
-                    {` · a la vista ${formatCantidad(p.stockSala)} · en bodega ${formatCantidad(p.stockBodega)}`}
+                    {est.icono} {est.texto} · {cantidadConUnidad(p.stock, 'unidad')} en bodega
+                    {p.stockMinimo > 0 && ` (mín. ${formatCantidad(p.stockMinimo)})`}
                   </p>
 
                   {puedeEditar && (
@@ -450,8 +447,8 @@ export function ProductosClient({
             if (r.nuevo) {
               const total = r.sala + r.bodega;
               setAviso(total > 0
-                ? `${r.nombre} creado: ${formatCantidad(r.sala)} a la vista (listo para vender)${r.bodega ? ` y ${formatCantidad(r.bodega)} en bodega` : ''}`
-                : `${r.nombre} creado, sin stock. Para cargarle unidades: Inventario → Ajustar, o Proveedores → Recepción`);
+                ? `${r.nombre} creado con ${cantidadConUnidad(total, 'unidad')} en bodega`
+                : `${r.nombre} creado, sin stock. Para cargarle unidades: Compras → Recibir mercadería, o Inventario → Ajustar`);
               // Se muestra el recién creado: sin esto quedaba perdido en la lista.
               // Los demás filtros se sueltan: con "🟠 Bajo" o una categoría
               // elegidos, el producto nuevo no aparecía aunque se buscara.

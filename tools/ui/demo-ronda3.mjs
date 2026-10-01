@@ -8,7 +8,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
 const BASE = process.env.RA_BASE ?? 'http://localhost:3000';
-const SP = new URL('./.capturas/demo', import.meta.url).pathname;
+// En Windows, pathname trae "/C:/...": sin la barra inicial, mkdir arma "C:C:...".
+const SP = new URL('./.capturas/demo', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 mkdirSync(SP, { recursive: true });
 const nav = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'msedge' });
 const resultados = [];
@@ -80,7 +81,8 @@ await ir(p, '/productos/etiquetas');
 ok('RF-M2-22', /Precio de góndola/.test(await texto(p)), 'Etiquetas ofrece el cartel de precio de góndola');
 
 await ir(p, '/inventario');
-ok('RF-M4-21', /Qué reponer/.test(await texto(p)), 'Inventario sugiere qué pasar de la bodega a la sala');
+// RF-M4-21 (reponer la sala) quedó fuera el 2026-10-01: una sola bodega (0032).
+ok('0032', !/Qué reponer/.test(await texto(p)), 'Inventario sin "Qué reponer": una sola bodega');
 
 await ir(p, '/reportes?vista=horas');
 ok('RF-M7-13', /\b(0?9|10|11|12):00\b|Por hora/.test(await texto(p)), 'Reportes muestra las ventas por hora');

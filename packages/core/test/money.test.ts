@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   clp, formatCLP, parseCLP, taxIncluded, netAmount,
-  margin, marginPct, change, formatPct, coincide, validarCantidadStock, validarMonto,
+  margin, marginPct, margenNeto, margenNetoPct, change, formatPct, coincide, validarCantidadStock, validarMonto,
 } from '../src/money.js';
 
 describe('clp', () => {
@@ -130,5 +130,21 @@ describe('validarMonto no adivina decimales ni miles mal puestos', () => {
     expect(validarMonto('1990').valor).toBe(1990);
     expect(validarMonto('1.234.567').valor).toBe(1234567);
     expect(validarMonto(' 20 000 ').valor).toBe(20000);
+  });
+});
+
+describe('margen con costo neto', () => {
+  it('el ejemplo de docs/26 N° 13: $2.490 con costo neto $1.850 deja 11,6 %, no 25,7 %', () => {
+    expect(marginPct(2490, 1850)).toBe(25.7);
+    expect(margenNeto(2490, 1850)).toBe(242);
+    expect(margenNetoPct(2490, 1850)).toBe(11.6);
+  });
+  it('sin costo, el margen es todo el neto; con precio 0, 0', () => {
+    expect(margenNetoPct(1190, 0)).toBe(100);
+    expect(margenNetoPct(0, 500)).toBe(0);
+  });
+  it('vender bajo el costo neto da negativo', () => {
+    expect(margenNeto(1190, 1100)).toBe(-100);
+    expect(margenNetoPct(1190, 1100)).toBeLessThan(0);
   });
 });

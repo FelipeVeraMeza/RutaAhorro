@@ -51,10 +51,6 @@ const GUIAS: Guia[] = [
     'Marca los productos y elige "Código de barras" o "Cartel de góndola".',
     'Imprimir: en el diálogo del navegador elige tu impresora o "Guardar como PDF".',
   ] },
-  { titulo: 'Reponer la sala desde la bodega', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/inventario', texto: 'Ir a Inventario' }, pasos: [
-    'Inventario → "Reponer": lista lo que está vacío o bajo el mínimo en la sala y hay en bodega.',
-    'Ajusta la cantidad si hace falta, marca y "Pasar a la sala".',
-  ] },
   { titulo: 'Contar el inventario (toma)', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/inventario', texto: 'Ir a Inventario' }, pasos: [
     '"Imprimir hoja para contar" si prefieres contar en papel.',
     'Escribe lo contado; el sistema muestra la diferencia antes de guardar.',

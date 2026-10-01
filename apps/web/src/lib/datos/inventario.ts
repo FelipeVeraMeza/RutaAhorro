@@ -115,12 +115,9 @@ export interface RepositorioInventario {
     nuevaCantidad: number;
     tipo: 'ajuste_positivo' | 'ajuste_negativo' | 'merma';
     motivo: string;
-    /** La cantidad real es la de ESTA ubicación, no la del total del local. */
-    ubicacion: Ubicacion;
   }): Promise<void>;
-  /** Traspaso entre bodega y sala (0014). No cambia el total ni el costo. */
-  reponer(datos: { productoId: string; cantidad: number; desde: Ubicacion; hacia: Ubicacion; motivo?: string }): Promise<void>;
-  aplicarToma(items: Array<{ productoId: string; contado: number }>, ubicacion: Ubicacion): Promise<{
+  /** Una sola bodega (0032): lo contado es el total del local. */
+  aplicarToma(items: Array<{ productoId: string; contado: number }>): Promise<{
     diferencias: number;
     valorDiferencia: number;
   }>;
@@ -216,11 +213,6 @@ const repoLocal: RepositorioInventario = {
     });
   },
 
-  async reponer() {
-    // La maqueta no distingue ubicaciones.
-    throw new Error('NO_DISPONIBLE_EN_DEMO');
-  },
-
   async aplicarToma(items) {
     const costos = JSON.parse((await db().meta.get('demo:costos'))?.value ?? '{}') as Record<string, number>;
     let diferencias = 0;
@@ -303,26 +295,17 @@ const repoSupabase: RepositorioInventario = {
     }));
   },
 
-  async ajustar({ productoId, nuevaCantidad, tipo, motivo, ubicacion }) {
+  async ajustar({ productoId, nuevaCantidad, tipo, motivo }) {
     const { error } = await supabase().rpc('fn_adjust_stock', {
       p_product_id: productoId,
       p_new_quantity: nuevaCantidad,
       p_movement_type: tipo,
       p_reason: motivo,
-      p_ubicacion: ubicacion,
     });
     if (error) throw error;
   },
 
-  async reponer({ productoId, cantidad, desde, hacia, motivo }) {
-    const { error } = await supabase().rpc('fn_transfer_stock', {
-      p_product_id: productoId, p_cantidad: cantidad,
-      p_desde: desde, p_hacia: hacia, p_reason: motivo ?? null,
-    });
-    if (error) throw error;
-  },
-
-  async aplicarToma(items, ubicacion) {
+  async aplicarToma(items) {
     const client = supabase();
     const { data: { user } } = await client.auth.getUser();
     const { data: perfil } = await client.from('profiles').select('tenant_id, store_id').eq('id', user!.id).single();
@@ -336,7 +319,6 @@ const repoSupabase: RepositorioInventario = {
     const { data, error } = await client.rpc('fn_apply_stock_count', {
       p_count_id: conteo.id,
       p_items: items.map((i) => ({ product_id: i.productoId, counted_qty: i.contado })),
-      p_ubicacion: ubicacion,
     });
     if (error) throw error;
 
@@ -350,7 +332,7 @@ const repoSupabase: RepositorioInventario = {
  * navegador: el POS mostraba el stock de antes de reponer (Sala 0 cuando ya
  * había 5) hasta la sincronización periódica.
  */
-const MUEVEN_STOCK = new Set(['ajustar', 'reponer', 'aplicarToma', 'darDeBajaLote']);
+const MUEVEN_STOCK = new Set(['ajustar', 'aplicarToma', 'darDeBajaLote']);
 
 const repoSupabaseSincronizado = new Proxy(repoSupabase, {
   get(objetivo, clave, receptor) {
@@ -369,14 +351,15 @@ export function repoInventario(): RepositorioInventario {
 }
 
 /**
- * "Traspaso · sale de la bodega", "Carga inicial · entra a la sala de ventas".
+ * "Traspaso · sale de la bodega": solo para los traspasos de antes de 0032,
+ * cuando había sala y bodega. Desde entonces hay un solo lugar y decir
+ * "entra a la sala" en cada movimiento confundiría.
  *
- * Se arma con el signo de la cantidad y no con el tipo: el mismo tipo puede
- * sumar o restar —un traspaso es las dos cosas, una vez en cada lugar— y lo
- * que se quiere responder es siempre la misma pregunta, "¿a dónde fue?".
+ * Se arma con el signo de la cantidad: un traspaso son dos filas, una en cada
+ * lugar.
  */
-export function dondeOcurrio(m: Pick<Movimiento, 'cantidad' | 'ubicacion'>): string {
-  if (!m.ubicacion) return '';
+export function dondeOcurrio(m: Pick<Movimiento, 'tipo' | 'cantidad' | 'ubicacion'>): string {
+  if (!m.ubicacion || m.tipo !== 'traslado') return '';
   const lugar = UBICACION_EN_FRASE[m.ubicacion];
   return m.cantidad < 0 ? `sale de ${lugar}` : `entra a ${lugar}`;
 }

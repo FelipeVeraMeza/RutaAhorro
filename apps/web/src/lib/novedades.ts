@@ -16,6 +16,20 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.6.0',
+    fecha: '2026-10-01',
+    titulo: 'Una sola bodega, todo por unidad y el precio por mayor en el producto',
+    cambios: [
+      { para: 'todos', texto: 'Ya no hay "sala" y "bodega": todo el stock está en un solo lugar y no hay que reponer. Lo que estaba en la bodega pasó solo.' },
+      { para: 'todos', texto: 'Todo se vende y se cuenta por unidad. No hay kilos, litros ni medias unidades.' },
+      { para: 'vendedor', texto: 'El precio por mayor es del producto: Vender muestra "Precio por mayor (desde 3)" y, si faltan, "Por mayor desde 3: llevando 1 más". Los clientes ya no tienen precio propio.' },
+      { para: 'admin', texto: 'Producto perecible: si cargas stock, la fecha de vencimiento es obligatoria y se muestra cuántos días le quedan. Ya no se pregunta "cuántos días antes avisar".' },
+      { para: 'admin', texto: 'El costo es neto (sin IVA), como en la factura del proveedor, y el margen se calcula sobre el precio sin IVA.' },
+      { para: 'bodega', texto: 'Recibir mercadería: crea el producto o el proveedor nuevo ahí mismo, elige si los costos vienen netos o con IVA y anota el total del papel para ver si cuadra.' },
+      { para: 'admin', texto: 'Recibir mercadería: "Efectivo de la caja" saca el pago de tu caja abierta; "A crédito" deja la factura en Por pagar por su total con IVA; la factura queda sola en el libro de compras.' },
+    ],
+  },
+  {
     version: '0.5.2',
     fecha: '2026-10-01',
     titulo: 'Segunda revisión por rol: 50 arreglos más',

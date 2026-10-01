@@ -1,18 +1,17 @@
 /**
- * 0022 · Clientes y precio por cliente (RQ-07, RQ-20, RQ-21).
+ * Clientes (0022) sin precio propio (0032).
  *
- * Decisión de Felipe (2026-09-27): un % de rebaja general por cliente y
- * precios especiales en productos puntuales; se cobra el más barato entre la
- * oferta, el % y el precio especial, sin sumarse.
+ * 0022 le daba a cada cliente un % de rebaja y precios especiales. Felipe lo
+ * corrigió el 2026-10-01: el precio por mayor es del PRODUCTO («las papas por
+ * mayor desde 3»), no de quién compra. Un cliente que lleva 2 pidió el precio
+ * por mayor, no se lo dieron y se fue enojado: el sistema no tiene que dejar
+ * a un cliente con precio mayorista.
  *
- * Lo delicado: un vendedor con tope 0 % tiene que poder cobrar el precio del
- * cliente (lo configuró el dueño), y NO tiene que poder cobrarlo sin elegir al
- * cliente, ni con un cliente de otro local.
+ * El cliente sigue sirviendo para la factura (RQ-20) y el fiado.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { levantarBanco, nuevoLocal, rpc, intentar } from './banco.mjs';
-import { precioParaCliente } from '../../packages/core/dist/index.js';
 
 let banco;
 before(async () => { banco = await levantarBanco(); });
@@ -26,12 +25,14 @@ async function mostrador() {
   const sup = await banco.como(L.supervisor);
   const caj = await banco.como(L.cajero1);
   for (const c of [adm, sup, caj]) await rpc(c, 'fn_open_cash_session', { p_opening_amount: 0 });
+  // Un cliente como quedó de antes de 0032: con su % y un precio especial
+  // guardados. Lo guardado no se borró; tiene que no servir.
   const mayorista = await rpc(adm, 'fn_guardar_cliente', {
     p_id: null, p_datos: { nombre: 'Almacén Don Pepe', rut: '76.086.428-5', descuento_pct: 8 },
   });
-  await rpc(adm, 'fn_guardar_precios_cliente', {
-    p_cliente_id: mayorista, p_precios: [{ product_id: cafe, precio: 3500 }],
-  });
+  await banco.su.query(
+    `insert into cliente_precios (tenant_id, cliente_id, product_id, precio) values ($1, $2, $3, 3500)`,
+    [L.tenant, mayorista, cafe]);
   return { L, jugo, cafe, adm, sup, caj, mayorista };
 }
 
@@ -45,76 +46,73 @@ function venta(lineas, extra = {}) {
   };
 }
 
-test('el vendedor cobra el precio del cliente: su % en uno, su precio especial en otro', async () => {
+test('el cliente queda en la venta, a precio normal', async () => {
   const { jugo, cafe, caj, mayorista } = await mostrador();
-  const r = await rpc(caj, 'fn_register_sale', venta([[jugo, 2, 1840], [cafe, 1, 3500]],
+  const r = await rpc(caj, 'fn_register_sale', venta([[jugo, 2, 2000], [cafe, 1, 4000]],
     { document: { cliente_id: mayorista } }));
-  assert.equal(r.total, 2 * 1840 + 3500);
+  assert.equal(r.total, 8000);
   const { rows: [s] } = await banco.su.query(`select cliente_id from sales where id = $1`, [r.sale_id]);
-  assert.equal(s.cliente_id, mayorista, 'la venta guarda a quién se le vendió a precio mayorista');
+  assert.equal(s.cliente_id, mayorista);
 });
 
-test('sin elegir al cliente, el mismo precio es un descuento sin permiso', async () => {
-  const { jugo, caj } = await mostrador();
-  const r = await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 2, 1840]])));
+test('ni el % ni el precio especial guardados del cliente bajan el precio', async () => {
+  const { jugo, cafe, caj, mayorista } = await mostrador();
+  const doc = { document: { cliente_id: mayorista } };
+  for (const [p, precio] of [[jugo, 1840], [cafe, 3500]]) {
+    const r = await intentar(rpc(caj, 'fn_register_sale', venta([[p, 1, precio]], doc)));
+    assert.equal(r.ok, false, `cobró ${precio} por ser el cliente`);
+    assert.match(r.error, /DESCUENTO_EXCEDE_LIMITE/);
+  }
+  const { rows: [{ precio }] } = await banco.su.query(`select fn_precio_cliente($1, $2, 4000) as precio`, [mayorista, cafe]);
+  assert.equal(precio, null);
+});
+
+test('ya no se le puede poner precio a un cliente', async () => {
+  const { cafe, adm, mayorista } = await mostrador();
+  const r = await intentar(rpc(adm, 'fn_guardar_precios_cliente', {
+    p_cliente_id: mayorista, p_precios: [{ product_id: cafe, precio: 3000 }] }));
   assert.equal(r.ok, false);
-  assert.match(r.error, /DESCUENTO_EXCEDE_LIMITE/);
+  assert.match(r.error, /PRECIO_POR_CLIENTE_DESACTIVADO/);
 });
 
-test('ni por debajo del precio del cliente', async () => {
-  const { jugo, caj, mayorista } = await mostrador();
-  const r = await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 1, 1839]], { document: { cliente_id: mayorista } })));
-  assert.equal(r.ok, false);
-  assert.match(r.error, /DESCUENTO_EXCEDE_LIMITE/);
-});
-
-test('oferta y cliente no se suman: gana el más barato', async () => {
+test('el precio por mayor es del producto: desde 3 sí, con 2 no, sea quien sea', async () => {
   const { jugo, adm, caj, mayorista } = await mostrador();
   await rpc(adm, 'fn_guardar_precios_producto', { p_product_id: jugo, p_tramos: [{ desde: 3, precio: 1400 }] });
-  // Con 3, la oferta ($1.400) es mejor que el 8 % ($1.840).
-  assert.ok((await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 3, 1400]], { document: { cliente_id: mayorista } })))).ok);
-  // Pero no el 8 % encima de la oferta.
-  const r = await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 3, 1288]], { document: { cliente_id: mayorista } })));
-  assert.equal(r.ok, false, 'sumó la oferta y el % del cliente');
-  // Con las ofertas apagadas, el precio del cliente sigue: es un acuerdo, no una promoción.
-  await rpc(adm, 'fn_guardar_configuracion', { p_cambios: { ofertas_activas: false } });
-  await banco.su.query(`update tenants set settings = settings || jsonb_build_object('ofertas_pausadas_desde', now() - interval '1 hour')
-                         where id = (select tenant_id from clientes where id = $1)`, [mayorista]);
-  assert.ok((await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 3, 1840]], { document: { cliente_id: mayorista } })))).ok);
+  assert.ok((await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 3, 1400]])))).ok, 'con 3 va por mayor');
+  for (const doc of [{}, { document: { cliente_id: mayorista } }]) {
+    const r = await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 2, 1400]], doc)));
+    assert.equal(r.ok, false, `vendió 2 a precio por mayor ${JSON.stringify(doc)}`);
+  }
 });
 
-test('un cliente de otro local, o desactivado, no sirve para vender a su precio', async () => {
+test('un cliente de otro local, o desactivado, no sirve para vender', async () => {
   const { jugo, adm, caj, mayorista } = await mostrador();
   const otro = await nuevoLocal(banco, 'Otro');
   const admOtro = await banco.como(otro.admin);
-  const ajeno = await rpc(admOtro, 'fn_guardar_cliente', { p_id: null, p_datos: { nombre: 'Del vecino', descuento_pct: 50 } });
-  const r1 = await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 1, 1000]], { document: { cliente_id: ajeno } })));
+  const ajeno = await rpc(admOtro, 'fn_guardar_cliente', { p_id: null, p_datos: { nombre: 'Del vecino' } });
+  const r1 = await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 1, 2000]], { document: { cliente_id: ajeno } })));
   assert.equal(r1.ok, false);
   assert.match(r1.error, /CLIENTE_NO_ENCONTRADO/);
 
-  await rpc(adm, 'fn_guardar_cliente', { p_id: mayorista, p_datos: { nombre: 'Almacén Don Pepe', rut: '76.086.428-5', descuento_pct: 8, activo: false } });
-  const r2 = await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 1, 1840]], { document: { cliente_id: mayorista } })));
+  await rpc(adm, 'fn_guardar_cliente', { p_id: mayorista, p_datos: { nombre: 'Almacén Don Pepe', rut: '76.086.428-5', activo: false } });
+  const r2 = await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 1, 2000]], { document: { cliente_id: mayorista } })));
   assert.equal(r2.ok, false);
   assert.match(r2.error, /CLIENTE_NO_ENCONTRADO/);
 });
 
-test('solo admin y supervisor crean clientes y les ponen precio; se valida RUT, % y duplicados', async () => {
-  const { cafe, sup, caj, mayorista } = await mostrador();
-  const v = await intentar(rpc(caj, 'fn_guardar_cliente', { p_id: null, p_datos: { nombre: 'Yo mismo', descuento_pct: 99 } }));
+test('solo admin y supervisor crean clientes; se valida RUT y duplicados', async () => {
+  const { sup, caj, mayorista } = await mostrador();
+  const v = await intentar(rpc(caj, 'fn_guardar_cliente', { p_id: null, p_datos: { nombre: 'Yo mismo' } }));
   assert.equal(v.ok, false);
   assert.match(v.error, /SIN_PERMISO/);
-  const v2 = await intentar(rpc(caj, 'fn_guardar_precios_cliente', { p_cliente_id: mayorista, p_precios: [{ product_id: cafe, precio: 1 }] }));
-  assert.equal(v2.ok, false, 'un vendedor se puso un precio especial');
   // Tampoco escribiendo la tabla directo (regla 14).
-  const directo = await intentar(caj.query(`update clientes set descuento_pct = 99 where id = $1`, [mayorista]));
-  const { rows: [c] } = await banco.su.query(`select descuento_pct::float as d from clientes where id = $1`, [mayorista]);
-  assert.equal(c.d, 8, `un vendedor cambió el % del cliente (${JSON.stringify(directo)})`);
+  const directo = await intentar(caj.query(`update clientes set nombre = 'Cambiado' where id = $1`, [mayorista]));
+  const { rows: [c] } = await banco.su.query(`select nombre from clientes where id = $1`, [mayorista]);
+  assert.equal(c.nombre, 'Almacén Don Pepe', `un vendedor cambió al cliente (${JSON.stringify(directo)})`);
 
   const casos = [
     [{ nombre: '' }, /NOMBRE_CLIENTE_REQUERIDO/],
     [{ nombre: 'X', rut: '11.111.111-2' }, /RUT_INVALIDO/],
-    [{ nombre: 'X', descuento_pct: 100 }, /PORCENTAJE_INVALIDO/],
-    [{ nombre: 'X', descuento_pct: -1 }, /PORCENTAJE_INVALIDO/],
     [{ nombre: 'Otro Don Pepe', rut: '76086428-5' }, /CLIENTE_RUT_DUPLICADO/],
   ];
   for (const [datos, error] of casos) {
@@ -141,26 +139,11 @@ test('RQ-20 · una factura a un RUT nuevo deja al cliente guardado; la siguiente
   assert.ok(vs.every((v) => v.cliente_id === cs[0].id), 'las dos facturas quedan del mismo cliente');
 });
 
-test('RQ-20 · facturar a un RUT que ya es cliente aplica su precio aunque no lo hayan elegido', async () => {
+test('RQ-20 · facturar a un RUT que ya es cliente cobra el precio normal', async () => {
   const { jugo, caj } = await mostrador();
-  const r = await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 1, 1840]], {
-    document: { tipo: 'factura', rut: '76086428-5', razon_social: 'Almacén Don Pepe' },
-  })));
-  assert.ok(r.ok, r.error);
-});
-
-test('la base y core calculan igual el precio del cliente, con precios y % al azar', async () => {
-  const { L, adm } = await mostrador();
-  for (let i = 0; i < 25; i++) {
-    const base = 100 + Math.floor(Math.random() * 30_000);
-    const pct = Math.floor(Math.random() * 3000) / 100;
-    const especial = Math.random() < 0.5 ? Math.max(1, Math.floor(base * (0.6 + Math.random() * 0.6))) : null;
-    const p = await L.producto({ nombre: `Azar ${i}`, precio: base });
-    const c = await rpc(adm, 'fn_guardar_cliente', { p_id: null, p_datos: { nombre: `Azar ${i}`, descuento_pct: pct } });
-    if (especial) await rpc(adm, 'fn_guardar_precios_cliente', { p_cliente_id: c, p_precios: [{ product_id: p, precio: especial }] });
-    const { rows: [{ precio }] } = await banco.su.query(`select fn_precio_cliente($1, $2, $3) as precio`, [c, p, base]);
-    const bd = precio == null || precio >= base ? null : precio;
-    const core = precioParaCliente(p, base, { id: c, nombre: '', descuentoPct: pct, precios: especial ? { [p]: especial } : {} });
-    assert.equal(bd, core, `base ${base}, ${pct} %, especial ${especial}`);
-  }
+  const document = { tipo: 'factura', rut: '76086428-5', razon_social: 'Almacén Don Pepe' };
+  const rebajado = await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 1, 1840]], { document })));
+  assert.equal(rebajado.ok, false, 'facturó con el % del cliente');
+  const normal = await intentar(rpc(caj, 'fn_register_sale', venta([[jugo, 1, 2000]], { document })));
+  assert.ok(normal.ok, normal.error);
 });

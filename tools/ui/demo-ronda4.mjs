@@ -10,7 +10,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
 const BASE = process.env.RA_BASE ?? 'http://localhost:3000';
-const SP = new URL('./.capturas/demo', import.meta.url).pathname;
+// En Windows, pathname trae "/C:/...": sin la barra inicial, mkdir arma "C:\C:\...".
+const SP = new URL('./.capturas/demo', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 mkdirSync(SP, { recursive: true });
 const nav = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'msedge' });
 const resultados = [];
@@ -61,23 +62,35 @@ await p.waitForTimeout(600);
 ok('RF-M9-13', /Pie del comprobante guardado/.test(await texto(p)), 'el administrador guarda el pie del comprobante');
 ok('RF-M9-13', await p.getByLabel('Texto al pie del comprobante').getAttribute('maxlength') === '160', 'con límite de 160 caracteres');
 
-// ---- cliente con 8 %: un total que no termina en 0
+// ---- un cliente (para el fiado de más abajo)
 await ir(p, '/clientes');
 await p.getByRole('button', { name: 'Nuevo cliente' }).click();
 const ficha = p.getByRole('dialog');
 await ficha.getByLabel('Nombre o razón social').fill('Doña Rosa');
-await ficha.getByLabel('% de rebaja en todo').fill('8');
 await ficha.getByRole('button', { name: 'Guardar' }).click();
 await p.waitForTimeout(800);
+
+// ---- un total que no termina en 0. Antes salía del 8 % de un cliente; desde
+// 0032 los clientes no tienen precio propio, así que es un producto de $1.463.
+await ir(p, '/productos');
+await p.getByRole('button', { name: /Nuevo producto/ }).first().click();
+const alta = p.getByRole('dialog');
+await alta.getByPlaceholder('Ej: Arroz grado 1 · 1 kg').fill('Redondeo QA');
+await alta.getByLabel(/^Precio de venta/).fill('1463');
+const pere = alta.getByRole('checkbox', { name: /Producto perecible/ });
+if (await pere.isChecked()) await pere.uncheck();
+await alta.getByLabel(/Cuántos tienes hoy en la bodega/).fill('5');
+await alta.getByRole('button', { name: 'Crear producto' }).click();
+await p.waitForTimeout(1200);
 
 // ---- RF-M5-28 · redondeo del efectivo
 await ir(p, '/pos');
 await p.waitForTimeout(1500);
-await agregar(p, 'Arroz');
+await agregar(p, 'Redondeo QA');
 await p.getByRole('button', { name: /Elegir cliente/ }).click();
 await p.getByRole('dialog').getByRole('button', { name: /Doña Rosa/ }).click();
 await p.waitForTimeout(300);
-// $1.590 con 8 % = $1.463 (termina en 3: baja a $1.460).
+// $1.463 termina en 3: en efectivo baja a $1.460.
 await p.getByRole('button', { name: 'Cobrar' }).click();
 await p.waitForTimeout(500);
 const cobro = plano(await p.getByRole('dialog').innerText());
@@ -126,7 +139,7 @@ ok('RF-M5-30', /Doña Rosa puede comprar fiado hasta \$5\.000/.test(await texto(
 
 await ir(p, '/pos');
 await p.waitForTimeout(1200);
-await agregar(p, 'Arroz');
+await agregar(p, 'Redondeo QA');
 await agregar(p, 'Aceite');
 await p.getByRole('button', { name: /Elegir cliente/ }).click();
 await p.getByRole('dialog').getByRole('button', { name: /Doña Rosa/ }).click();
@@ -136,9 +149,9 @@ const fiadoBtn = p.getByRole('button', { name: /Fiado/ });
 ok('RF-M5-30', await fiadoBtn.count() === 1, 'con un cliente con crédito aparece "Fiado"');
 await fiadoBtn.click();
 await p.waitForTimeout(300);
-// $1.463 + $2.291 = $3.754
+// $1.463 + $2.490 = $3.953 (el Aceite a precio normal: sin precio de cliente desde 0032)
 const enFiado = plano(await p.getByRole('dialog').innerText());
-ok('RF-M5-30', /debe \$0 de un tope de \$5\.000/.test(enFiado) && /Queda debiendo \$3\.754/.test(enFiado),
+ok('RF-M5-30', /debe \$0 de un tope de \$5\.000/.test(enFiado) && /Queda debiendo \$3\.953/.test(enFiado),
   'dice cuánto debe y cuánto quedará debiendo', enFiado.slice(0, 200));
 await p.getByRole('button', { name: 'Confirmar venta' }).click();
 await p.locator('#ticket').waitFor({ timeout: 15000 });
@@ -154,22 +167,22 @@ await p.waitForTimeout(800);
 await p.getByRole('button', { name: /Fiado/ }).click();
 await p.waitForTimeout(300);
 const sinCupo = plano(await p.getByRole('dialog').innerText());
-ok('RF-M5-30', /Le quedan \$1\.246 de crédito: no alcanza/.test(sinCupo) && await p.getByRole('button', { name: 'Confirmar venta' }).isDisabled(),
+ok('RF-M5-30', /Le quedan \$1\.047 de crédito: no alcanza/.test(sinCupo) && await p.getByRole('button', { name: 'Confirmar venta' }).isDisabled(),
   'pasado el tope no deja fiar', sinCupo.slice(0, 160));
 await p.keyboard.press('Escape');
 
 await ir(p, '/caja');
 const caja2 = plano(await texto(p));
-ok('RF-M5-30', /Fiado: \$3\.754 vendidos a cuenta\. No está en el cajón/.test(caja2) && /Debería haber \$21\.460/.test(caja2),
+ok('RF-M5-30', /Fiado: \$3\.953 vendidos a cuenta\. No está en el cajón/.test(caja2) && /Debería haber \$21\.460/.test(caja2),
   'lo fiado no suma al efectivo esperado');
 
 await ir(p, '/fiado');
-ok('RF-M5-30', /\$3\.754/.test(await texto(p)), 'Fiado muestra lo que debe Doña Rosa');
+ok('RF-M5-30', /\$3\.953/.test(await texto(p)), 'Fiado muestra lo que debe Doña Rosa');
 await p.getByRole('button', { name: 'Abonar a la cuenta de Doña Rosa' }).click();
 await p.getByLabel('Monto que paga').fill('2000');
 await p.getByRole('button', { name: 'Registrar abono' }).click();
 await p.waitForTimeout(700);
-ok('RF-M5-30', /queda debiendo \$1\.754/.test(await texto(p)), 'un abono de $2.000 deja $1.754');
+ok('RF-M5-30', /queda debiendo \$1\.953/.test(await texto(p)), 'un abono de $2.000 deja $1.953');
 await p.getByRole('button', { name: 'Ver movimientos de Doña Rosa' }).click();
 await p.waitForTimeout(500);
 const movs = plano(await p.getByRole('dialog').innerText());
@@ -228,6 +241,7 @@ await ir(p, '/proveedores/recepcion');
 await p.locator('#prov').selectOption({ label: 'Lácteos del Valle' });
 await p.locator('#tipo').selectOption('factura');
 await p.locator('#num').fill('88');
+await p.getByRole('radio', { name: /A crédito/ }).click();   // el vencimiento se pide al elegir "A crédito"
 await p.getByRole('button', { name: '30 días' }).click();
 ok('RF-M3-13', (await p.inputValue('#vence')) === en(30), 'al recibir con factura se indica el vencimiento (30 días)');
 await p.getByPlaceholder(/Buscar|nombre o código/i).first().fill('Leche');

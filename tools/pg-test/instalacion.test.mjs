@@ -59,11 +59,12 @@ test('instalar.sql se puede ejecutar dos veces sin error ni duplicar el local', 
 
 test('Reinstalar sobre una base con ventas no cambia ningún saldo', async () => {
   // Es lo que se hace para llevar una migración nueva a la base real, que ya
-  // tiene ventas, recepciones y traspasos.
+  // tiene ventas y recepciones.
   const L = await nuevoLocal(banco, 'Con datos');
   const p = await L.producto({ stock: 20 });
   const adm = await banco.como(L.admin);
-  await rpc(adm, 'fn_transfer_stock', { p_product_id: p, p_cantidad: 5 });
+  const prov = (await banco.su.query(`insert into suppliers (tenant_id, name) values ($1, 'Prov') returning id`, [L.tenant])).rows[0].id;
+  await rpc(adm, 'fn_confirm_receipt', { p_supplier_id: prov, p_items: [{ product_id: p, quantity: 5, unit_cost: 500 }] });
   await rpc(adm, 'fn_open_cash_session', { p_opening_amount: 1000 });
   await rpc(adm, 'fn_register_sale', venta(p, 2, 1000));
   const foto = async () => (await banco.su.query(`

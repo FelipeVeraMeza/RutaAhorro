@@ -68,6 +68,24 @@ export function marginPct(salePrice: number, cost: number): number {
   return Math.round((margin(price, cost) / price) * 1000) / 10;
 }
 
+/**
+ * Margen en pesos con el costo NETO, que es como se guarda desde 2026-10-01
+ * (docs/26 N° 13): el costo sale de la factura del proveedor, sin IVA, y el
+ * precio de venta lo trae incluido. Comparar el precio con IVA contra un
+ * costo neto le sumaba al margen el 19 % que es del fisco: un producto de
+ * $2.490 con costo neto $1.850 mostraba 25,7 % y deja 11,6 %.
+ */
+export function margenNeto(precioConIva: number, costoNeto: number, ivaPct = 19): number {
+  return netAmount(precioConIva, ivaPct) - clp(costoNeto);
+}
+
+/** `margenNeto` como porcentaje del precio de venta sin IVA. */
+export function margenNetoPct(precioConIva: number, costoNeto: number, ivaPct = 19): number {
+  const neto = netAmount(precioConIva, ivaPct);
+  if (neto <= 0) return 0;
+  return Math.round((margenNeto(precioConIva, costoNeto, ivaPct) / neto) * 1000) / 10;
+}
+
 /** Vuelto. Nunca negativo: si pagó de menos, el vuelto es 0, no una deuda. */
 export function change(received: number, total: number): number {
   return Math.max(clp(received) - clp(total), 0);

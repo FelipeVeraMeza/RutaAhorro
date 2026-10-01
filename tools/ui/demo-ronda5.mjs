@@ -69,7 +69,6 @@ p = await pagina('admin');
 await ir(p, '/clientes');
 await p.getByRole('button', { name: 'Nuevo cliente' }).click();
 await p.getByRole('dialog').getByLabel('Nombre o razón social').fill('José Muñoz');
-await p.getByRole('dialog').getByLabel('% de rebaja en todo').fill('8');
 await p.getByRole('dialog').getByRole('button', { name: 'Guardar' }).click();
 await p.waitForTimeout(700);
 await p.fill('input[type=search]', 'jose munoz');
@@ -86,7 +85,10 @@ await p.getByRole('dialog').getByRole('button', { name: /José Muñoz/ }).click(
 await p.waitForTimeout(300);
 await p.fill('input[type=search]', 'Aceite');
 await p.waitForTimeout(600);
-ok('QA-09', /\$2\.291/.test(await p.locator('main ul').first().innerText()), 'la búsqueda muestra el precio del cliente elegido ($2.291)');
+// QA-09 mostraba el precio del cliente ($2.291 con 8 %). Desde 0032 el cliente
+// no tiene precio propio: la búsqueda muestra el normal, sin tachar nada.
+const listaAceite = await p.locator('main ul').first().innerText();
+ok('0032', /\$2\.490/.test(listaAceite) && !/\$2\.291/.test(listaAceite), 'con un cliente elegido, la búsqueda muestra el precio normal ($2.490)');
 await p.fill('input[type=search]', '');
 await p.getByRole('button', { name: 'Vaciar' }).click();
 await p.getByRole('button', { name: 'Sí, vaciar' }).click();
@@ -100,8 +102,9 @@ ok('QA-11', /\b\d{2}-\d{2} \d{2}:\d{2}\b/.test(ventas) && !/\d{1,2}\/\d{1,2}, \d
 await ir(p, '/productos');
 ok('QA-12', /margen \d+(,\d)? %/.test(await texto(p)), 'el margen se escribe con coma decimal ("25,7 %")');
 await ir(p, '/inventario');
-ok('QA-14', await p.getByRole('button', { name: 'Mover' }).count() > 0 && !/Reponer\n/.test(await texto(p)),
-  'con la bodega vacía el botón dice "Mover", no "Reponer"');
+// QA-14 ("Mover" o "Reponer") quedó fuera el 2026-10-01: una sola bodega (0032).
+ok('0032', await p.getByRole('button', { name: 'Mover' }).count() === 0 && await p.getByRole('button', { name: 'Reponer' }).count() === 0,
+  'Inventario sin "Mover" ni "Reponer": una sola bodega');
 await ir(p, '/proveedores?vista=comprar');
 await p.getByLabel('Cantidad a pedir de Cloro · 900 ml').fill('0');
 await p.waitForTimeout(300);

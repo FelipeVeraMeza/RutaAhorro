@@ -7,7 +7,8 @@
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 const BASE = process.env.RA_BASE ?? 'http://localhost:3000';
-const SP = new URL('./.capturas/demo', import.meta.url).pathname;
+// En Windows, pathname trae "/C:/...": sin la barra inicial, mkdir arma "C:C:...".
+const SP = new URL('./.capturas/demo', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 mkdirSync(SP, { recursive: true });
 const nav = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'msedge' });
 let ok = 0, mal = 0;
@@ -34,9 +35,11 @@ await p.waitForTimeout(1200);
 check((await p.locator('[role=dialog]').innerText()).includes('Ya hay un producto llamado'), 'avisa nombre repetido');
 await p.getByRole('textbox', { name: 'Nombre (obligatorio)' }).fill('Galletas QA');
 await p.getByLabel(/Precio de venta/).fill('1290');
-await p.getByLabel(/En la sala de ventas/).fill('5');
+await p.getByLabel(/Cuántos tienes hoy en la bodega/).fill('5');   // 0032: una sola bodega
 await p.getByPlaceholder('Escribe o escanea').fill('7800000000017');
-check((await p.locator('[role=dialog]').innerText()).includes('Sin fecha, estas unidades'), 'avisa perecible sin fecha');
+check((await p.locator('[role=dialog]').innerText()).includes('Falta la fecha'), 'avisa perecible sin fecha');
+// 0032: con stock, la fecha es obligatoria y dice cuántos días le quedan.
+await p.getByLabel(/Cuándo vence/).fill(new Date(Date.now() + 20 * 864e5).toISOString().slice(0, 10));
 await p.getByRole('button', { name: 'Crear producto' }).click();
 await p.waitForTimeout(1500);
 const lista = await p.locator('main').innerText();
@@ -75,8 +78,8 @@ check((await p.locator('main').innerText()).includes('Se recuperó la recepción
 // --- inventario: nombre completo y "Mover todo"
 await p.goto(BASE + '/inventario', { waitUntil: 'networkidle' }); await p.waitForTimeout(800);
 check((await p.locator('main').innerText()).includes('Aceite vegetal · 900 ml'), 'inventario muestra el nombre completo en 360 px');
-await p.getByRole('button', { name: /^(Reponer|Mover)$/ }).first().click();
-check(await p.getByRole('button', { name: /Mover todo/ }).count() === 1, 'reponer ofrece "Mover todo"');
+// Reponer y "Mover todo" quedaron fuera el 2026-10-01: una sola bodega (0032).
+check(await p.getByRole('button', { name: /^(Reponer|Mover)$/ }).count() === 0, 'Inventario sin "Reponer": una sola bodega');
 await p.screenshot({ path: SP + '/d-inventario.png' });
 await p.context().close();
 

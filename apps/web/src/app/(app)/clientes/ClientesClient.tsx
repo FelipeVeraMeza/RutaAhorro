@@ -1,24 +1,20 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  formatCLP, formatRut, isValidRut, toUserMessage, validarCantidad, validarMonto,
-  describirCliente, precioParaCliente, coincide
-} from '@rutaahorro/core';
+import { formatRut, isValidRut, toUserMessage, coincide } from '@rutaahorro/core';
 import { repoClientes, type Cliente, type DatosCliente } from '@/lib/datos/clientes';
-import { repoProductos, type Producto } from '@/lib/productos';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { Encabezado } from '@/components/Encabezado';
 import { Icono } from '@/components/Icono';
 
 /**
- * Clientes y precio por cliente (0022, RQ-07, RQ-20, RQ-21).
+ * Clientes (0022, RQ-20, RQ-21): los datos para la factura y el fiado.
  *
- * Cada cliente puede tener un % de rebaja general (el mayorista) y precios
- * especiales en productos puntuales. En el POS se cobra el más barato entre
- * la oferta del producto, el % y el precio especial: no se suman. Los que
- * reciben factura quedan acá solos, con los datos del receptor.
+ * Hasta 0032 un cliente podía tener un % de rebaja y precios especiales. Felipe
+ * lo sacó el 2026-10-01: el precio por mayor es del producto («desde 3»), no
+ * de quién compra. Lo que un cliente tenía guardado queda sin efecto, y al
+ * guardarlo de nuevo se limpia.
  */
 export function ClientesClient() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -50,7 +46,7 @@ export function ClientesClient() {
       <Encabezado
         titulo="Clientes"
         icono="clientes"
-        descripcion="Precio mayorista o especial, y los datos para la factura. El cajero los elige en Vender."
+        descripcion="Los datos para la factura y el fiado. El cajero los elige en Vender. El precio por mayor se pone en cada producto."
         acciones={
           <button onClick={() => setEditando('nuevo')} className="btn btn-primario btn-chico">
             <Icono nombre="agregar" tamano={16} /> Nuevo cliente
@@ -76,7 +72,7 @@ export function ClientesClient() {
                     className={`tap w-full tarjeta px-3 py-2.5 text-left ${c.activo ? '' : 'opacity-60'}`}>
               <span className="block font-medium">{c.nombre}</span>
               <span className="block text-xs text-[var(--texto-suave)]">
-                {c.rut ?? 'Sin RUT'} · {describirCliente(c)}{!c.activo && ' · desactivado'}
+                {c.rut ?? 'Sin RUT'}{c.giro ? ` · ${c.giro}` : ''}{!c.activo && ' · desactivado'}
               </span>
             </button>
           </li>
@@ -84,7 +80,7 @@ export function ClientesClient() {
         {!cargando && visibles.length === 0 && (
           <li className="tarjeta p-4 text-sm text-[var(--texto-suave)]">
             {clientes.length === 0
-              ? 'Todavía no hay clientes. Agrega a los mayoristas, o se crean solos al hacer una factura.'
+              ? 'Todavía no hay clientes. Agrégalos acá, o se crean solos al hacer una factura.'
               : 'Ningún cliente coincide.'}
           </li>
         )}
@@ -113,29 +109,8 @@ function FichaCliente({ cliente, onCerrar, onGuardado }: {
     email: cliente?.email ?? '', descuentoPct: cliente?.descuentoPct ?? 0, notas: cliente?.notas ?? '',
     activo: cliente?.activo ?? true,
   });
-  const [pct, setPct] = useState(cliente?.descuentoPct ? String(cliente.descuentoPct).replace('.', ',') : '');
-  // Precios especiales, como texto mientras se escriben.
-  const [precios, setPrecios] = useState<Record<string, string>>(
-    Object.fromEntries(Object.entries(cliente?.precios ?? {}).map(([k, v]) => [k, v.toLocaleString('es-CL')])));
-  const [productos, setProductos] = useState<Producto[]>([]);
-  const [buscarProd, setBuscarProd] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
-  // Si el cliente nuevo se creó pero sus precios no se guardaron, reintentar
-  // tiene que actualizar ESE cliente: antes "Guardar" de nuevo creaba otro.
-  const [creadoId, setCreadoId] = useState<string | null>(null);
-
-  useEffect(() => {
-    void repoProductos().listar({ soloActivos: true, limite: 5000 }, false).then(setProductos).catch(() => {});
-  }, []);
-  const porId = useMemo(() => new Map(productos.map((p) => [p.id, p])), [productos]);
-  const candidatos = useMemo(() => {
-    const q = buscarProd.trim().toLowerCase();
-    if (q.length < 2) return [];
-    return productos.filter((p) => !(p.id in precios) && coincide(p.nombre, q)).slice(0, 8);
-  }, [productos, buscarProd, precios]);
-
-  const vPct = validarCantidad(pct, { permiteVacio: true, maximo: 99.99 });
   const errorRut = d.rut && d.rut.trim() !== '' && !isValidRut(d.rut) ? 'Revisa el RUT' : null;
   const cambiar = (clave: keyof DatosCliente) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setD((x) => ({ ...x, [clave]: e.target.value }));
@@ -153,13 +128,6 @@ function FichaCliente({ cliente, onCerrar, onGuardado }: {
     if (d.email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim())) {
       setError('Revisa el correo: le falta la @ o el dominio (ej.: ventas@empresa.cl)'); return;
     }
-    if (!vPct.valido) { setError(`% de rebaja: ${vPct.error}`); return; }
-    const numeros: Record<string, number> = {};
-    for (const [id, v] of Object.entries(precios)) {
-      const m = validarMonto(v, { etiqueta: 'precio especial', permiteCero: false, maximo: 50_000_000 });
-      if (!m.valido) { setError(`${porId.get(id)?.nombre ?? 'Producto'}: ${m.error}`); return; }
-      numeros[id] = m.valor;
-    }
     setGuardando(true);
     try {
       const limpio = (s: string | null) => (s ?? '').trim() || null;
@@ -167,15 +135,10 @@ function FichaCliente({ cliente, onCerrar, onGuardado }: {
         ...d, rut: d.rut && isValidRut(d.rut) ? formatRut(d.rut) : null, nombre: d.nombre.trim(),
         giro: limpio(d.giro), direccion: limpio(d.direccion), comuna: limpio(d.comuna),
         telefono: limpio(d.telefono), email: limpio(d.email), notas: limpio(d.notas),
-        descuentoPct: pct.trim() ? vPct.valor : 0,
+        // 0032 · Sin precio por cliente: lo que tuviera guardado se limpia.
+        descuentoPct: 0,
       };
-      const repo = repoClientes();
-      const id = await repo.guardar(cliente?.id ?? creadoId, datos);
-      if (!cliente) setCreadoId(id);
-      const antes = cliente?.precios ?? {};
-      const cambiaron = Object.keys(numeros).length !== Object.keys(antes).length
-        || Object.entries(numeros).some(([k, v]) => antes[k] !== v);
-      if (cambiaron) await repo.guardarPrecios(id, numeros);
+      await repoClientes().guardar(cliente?.id ?? null, datos);
       onGuardado(`${datos.nombre} guardado`);
     } catch (e) {
       setError(toUserMessage(e));
@@ -183,8 +146,6 @@ function FichaCliente({ cliente, onCerrar, onGuardado }: {
       setGuardando(false);
     }
   }
-
-  const clienteVista = { id: cliente?.id ?? '', nombre: d.nombre, descuentoPct: vPct.valido ? vPct.valor : 0, precios: {} };
 
   return (
     <Modal titulo={cliente ? cliente.nombre : 'Nuevo cliente'} encabezado="visible" onCerrar={onCerrar} bloqueado={guardando}>
@@ -202,63 +163,6 @@ function FichaCliente({ cliente, onCerrar, onGuardado }: {
           {texto('telefono', 'Teléfono', { inputMode: 'tel' })}
         </div>
         {texto('email', 'Correo', { inputMode: 'email' })}
-
-        <section className="rounded-xl border border-[var(--borde)] p-3 space-y-3" aria-labelledby="t-precio-cliente">
-          <h3 id="t-precio-cliente" className="font-semibold text-sm">Precio para este cliente</h3>
-          <Campo etiqueta="% de rebaja en todo" error={pct !== '' && !vPct.valido ? vPct.error : null}
-                 ayuda="Ej.: 8 para un mayorista. Vacío = precio normal. No se suma a las ofertas: se cobra el más barato.">
-            {(p) => <input {...p} inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)}
-                           className="tap w-28 px-3 rounded-lg border border-[var(--borde)] num text-right" />}
-          </Campo>
-
-          <div>
-            <p className="text-sm font-medium">Precios especiales</p>
-            <p className="text-xs text-[var(--texto-suave)] mb-2">
-              Para productos puntuales. Si el % sale más barato, se cobra el %.
-            </p>
-            <ul className="space-y-2">
-              {Object.keys(precios).map((id) => {
-                const p = porId.get(id);
-                const m = validarMonto(precios[id], { permiteCero: false });
-                return (
-                  <li key={id} className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 text-sm">
-                      <span className="block truncate">{p?.nombre ?? 'Producto'}</span>
-                      {p && <span className="block text-xs text-[var(--texto-suave)] num">normal {formatCLP(p.precioVenta)}
-                        {m.valido && m.valor >= p.precioVenta && ' · no es más barato'}</span>}
-                    </span>
-                    <input inputMode="numeric" value={precios[id]} aria-label={`Precio especial de ${p?.nombre ?? 'producto'}`}
-                           onChange={(e) => setPrecios((x) => ({ ...x, [id]: e.target.value }))}
-                           className="tap w-24 px-2 rounded-lg border border-[var(--borde)] num text-right" />
-                    <button type="button" aria-label={`Quitar precio especial de ${p?.nombre ?? 'producto'}`}
-                            onClick={() => setPrecios((x) => { const n = { ...x }; delete n[id]; return n; })}
-                            className="tap px-2 text-sm text-[var(--color-alerta)]">Quitar</button>
-                  </li>
-                );
-              })}
-            </ul>
-            <input type="search" value={buscarProd} onChange={(e) => setBuscarProd(e.target.value)}
-                   placeholder="Agregar producto…" aria-label="Buscar producto para precio especial"
-                   className="tap w-full mt-2 px-3 rounded-lg border border-[var(--borde)]" />
-            {candidatos.length > 0 && (
-              <ul className="tarjeta mt-1 divide-y divide-[var(--borde)]">
-                {candidatos.map((p) => (
-                  <li key={p.id}>
-                    <button type="button" className="tap w-full px-3 text-left text-sm flex justify-between gap-2"
-                            onClick={() => { setPrecios((x) => ({ ...x, [p.id]: '' })); setBuscarProd(''); }}>
-                      <span className="truncate">{p.nombre}</span>
-                      <span className="num text-[var(--texto-suave)]">
-                        {formatCLP(p.precioVenta)}
-                        {precioParaCliente(p.id, p.precioVenta, clienteVista) != null
-                          && ` → ${formatCLP(precioParaCliente(p.id, p.precioVenta, clienteVista)!)} con el %`}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </section>
 
         <Campo etiqueta="Notas">
           {(p) => <textarea {...p} value={d.notas ?? ''} onChange={cambiar('notas')} rows={2}

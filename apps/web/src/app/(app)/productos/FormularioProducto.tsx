@@ -4,7 +4,7 @@ import { Icono } from '@/components/Icono';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  formatCLP, formatCantidad, marginPct, formatPct, isValidEan, normalizeBarcode, toUserMessage,
+  formatCLP, margenNeto, margenNetoPct, formatPct, textoVencimiento, diasEntre, isValidEan, normalizeBarcode, toUserMessage,
   validarMonto, validarCantidad, cantidadConUnidad, diaLocal, precioConRedondeo, validarCantidadStock
 } from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto, type CambioPrecio } from '@/lib/productos';
@@ -13,9 +13,9 @@ import { useScanner } from '@/lib/scanner/useScanner';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { repoPrecios, type ImpuestoAdicional } from '@/lib/datos/precios';
+import { useConfiguracion } from '@/lib/datos/configuracion';
 import { OfertasEImpuesto, filasDesdeTramos, tramosDesdeFilas, type FilaOferta } from './OfertasEImpuesto';
 
-const UNIDADES = ['unidad', 'kg', 'gramo', 'litro', 'ml', 'paquete', 'caja'];
 
 interface Props {
   producto: Producto | null;   // null = alta
@@ -25,7 +25,10 @@ interface Props {
   puedeEditarPrecios?: boolean;
   esAdmin?: boolean;
   /** Al guardar, qué quedó: para decirlo en la lista y mostrar el producto. */
-  onGuardado: (resumen: { nombre: string; nuevo: boolean; sala: number; bodega: number }) => void;
+  onGuardado: (resumen: {
+    id: string; nombre: string; nuevo: boolean; sala: number; bodega: number;
+    unidad: string; perecible: boolean;
+  }) => void;
   onCancelar: () => void;
   /** Otra persona lo cambió mientras se editaba (0020): volver a abrirlo con lo nuevo. */
   onRecargar?: () => void;
@@ -35,11 +38,20 @@ interface Props {
   codigoInicial?: string | null;
   /** Edición: abrir un alta copiando este producto. */
   onDuplicar?: (p: Producto) => void;
+  /** Alta con el nombre que se buscó y no estaba (Recibir mercadería). */
+  nombreInicial?: string | null;
+  /**
+   * Alta desde Recibir mercadería (T-55): el producto llegó en la factura y
+   * todavía no estaba en el catálogo. Nace sin stock y sin costo, porque la
+   * cantidad, el costo y el vencimiento se anotan en la línea de la
+   * recepción; preguntarlos acá los sumaba dos veces.
+   */
+  desdeRecepcion?: boolean;
 }
 
 export function FormularioProducto({
   producto, categorias, puedeVerCostos, puedeEditarPrecios = false, esAdmin = false, onGuardado, onCancelar, onRecargar,
-  plantilla = null, codigoInicial = null, onDuplicar,
+  plantilla = null, codigoInicial = null, onDuplicar, nombreInicial = null, desdeRecepcion = false,
 }: Props) {
   // Lo que llena el formulario: el producto que se edita, o el que se duplica.
   const origen = producto ?? plantilla;
@@ -59,22 +71,25 @@ export function FormularioProducto({
     return () => { vivo = false; };
   }, [producto]);
 
-  const [nombre, setNombre] = useState(producto?.nombre ?? (plantilla ? `${plantilla.nombre} (copia)` : ''));
+  const [nombre, setNombre] = useState(producto?.nombre ?? (plantilla ? `${plantilla.nombre} (copia)` : (nombreInicial ?? '')));
   // El SKU no se copia: es el código interno de UN producto.
   const [sku, setSku] = useState(producto?.sku ?? '');
   const [descripcion, setDescripcion] = useState(origen?.descripcion ?? '');
   const [categoriaId, setCategoriaId] = useState(origen?.categoriaId ?? '');
   const [nuevaCategoria, setNuevaCategoria] = useState('');
-  const [unidad, setUnidad] = useState(origen?.unidad ?? 'unidad');
+  // 0032 · Todo se vende y se cuenta por unidad: no hay kg, litro ni ml.
+  const unidad = 'unidad';
+  const { ivaPct } = useConfiguracion();
   const [precio, setPrecio] = useState(origen ? String(origen.precioVenta) : '');
   const [costo, setCosto] = useState(origen?.costoPromedio ? String(origen.costoPromedio) : '');
   const [stockMinimo, setStockMinimo] = useState(String(origen?.stockMinimo ?? 0));
   const [stockSala, setStockSala] = useState('0');
-  const [stockBodega, setStockBodega] = useState('0');
   // Respuesta 8 del cuestionario: «todos tienen fecha de vencimiento». Un
   // producto nuevo nace perecible; quien crea uno que no vence lo desmarca.
   const [perecible, setPerecible] = useState(origen?.perecible ?? true);
-  const [diasAlerta, setDiasAlerta] = useState(String(origen?.diasAlerta ?? 30));
+  // Los días de aviso ya no se preguntan: se cuentan desde la fecha de
+  // vencimiento. El producto conserva los que tenía (30 por omisión).
+  const diasAlerta = String(origen?.diasAlerta ?? 30);
   // Los códigos de barra no se copian: cada uno es de un solo producto.
   const [codigos, setCodigos] = useState<string[]>(producto?.codigos ?? (codigoInicial ? [codigoInicial] : []));
   const [codigoNuevo, setCodigoNuevo] = useState('');
@@ -144,12 +159,17 @@ export function FormularioProducto({
   const vCosto = validarMonto(costo, { etiqueta: 'costo', permiteVacio: true, maximo: 50_000_000 });
   const vStockMinimo = validarCantidad(stockMinimo, { permiteVacio: true, maximo: 1_000_000 });
   const vStockSala = validarCantidadStock(stockSala, unidad, { permiteVacio: true, maximo: 1_000_000 });
-  const vStockBodega = validarCantidadStock(stockBodega, unidad, { permiteVacio: true, maximo: 1_000_000 });
   const vDiasAlerta = validarCantidad(diasAlerta, { permiteVacio: true, maximo: 3650 });
 
   const precioNum = vPrecio.valor;
   const costoNum = vCosto.valor;
-  const margen = precioNum > 0 && costoNum > 0 ? marginPct(precioNum, costoNum) : null;
+  // El costo es neto (sin IVA) y el precio lo trae incluido: el margen se
+  // calcula contra el precio sin IVA (docs/26 N° 13).
+  const margen = precioNum > 0 && costoNum > 0 ? margenNetoPct(precioNum, costoNum, ivaPct) : null;
+  // Cuántos días le quedan a lo que se carga: se calcula de la fecha, no se
+  // pregunta (Felipe, 2026-10-01).
+  const diasParaVencer = vencimiento ? diasEntre(hoy, vencimiento) : null;
+  const pideVencimiento = !esEdicion && !desdeRecepcion && perecible && vStockSala.valor > 0;
 
   async function agregarCodigo(bruto: string) {
     const code = normalizeBarcode(bruto.trim());
@@ -178,11 +198,13 @@ export function FormularioProducto({
     setConflicto(false);
 
     if (nombre.trim() === '') { setError('El nombre es obligatorio'); return; }
-    for (const v of [vPrecio, vCosto, vStockMinimo, vStockSala, vStockBodega, vDiasAlerta]) {
+    for (const v of [vPrecio, vCosto, vStockMinimo, vStockSala, vDiasAlerta]) {
       if (!v.valido) { setError(v.error); return; }
     }
-    if (perecible && vDiasAlerta.valor <= 0) {
-      setError('Un producto perecible necesita cuántos días antes avisar');
+    // Un perecible con stock sin fecha quedaba "sin lote": fuera de las
+    // alertas y del FEFO. Antes era solo un aviso.
+    if (pideVencimiento && !vencimiento) {
+      setError('Falta la fecha de vencimiento: es perecible y estás cargando stock');
       return;
     }
     // Las ofertas se revisan ANTES de guardar el producto: si no, quedaría
@@ -242,8 +264,9 @@ export function FormularioProducto({
         idGuardado = (await repo.crear({
           ...base,
           costo: costoNum,
+          // 0032 · Una sola bodega: todo entra al mismo lugar.
           stockInicialSala: vStockSala.valor,
-          stockInicialBodega: vStockBodega.valor,
+          stockInicialBodega: 0,
           vencimientoInicial: perecible && vencimiento ? vencimiento : null,
         })).id;
       }
@@ -265,7 +288,10 @@ export function FormularioProducto({
           return;
         }
       }
-      onGuardado({ nombre: base.nombre, nuevo: !esEdicion, sala: vStockSala.valor, bodega: vStockBodega.valor });
+      onGuardado({
+        id: idGuardado!, nombre: base.nombre, nuevo: !esEdicion,
+        sala: vStockSala.valor, bodega: 0, unidad, perecible,
+      });
     } catch (e) {
       setConflicto(String((e as { message?: string })?.message ?? '').includes('PRODUCTO_CAMBIO_MIENTRAS_EDITABAS'));
       setError(toUserMessage(e));
@@ -290,6 +316,12 @@ export function FormularioProducto({
                 y agrega su código de barras. El stock parte en lo que pongas abajo.
               </p>
             )}
+            {desdeRecepcion && (
+              <p className="text-sm bg-marca-50 text-marca-900 px-3 py-2 rounded-lg">
+                Queda en el catálogo y se agrega a esta recepción. La cantidad, el costo
+                y el vencimiento los anotas en su línea, como los demás.
+              </p>
+            )}
             {codigoInicial && !esEdicion && (
               <p className="text-sm bg-marca-50 text-marca-900 px-3 py-2 rounded-lg">
                 El código <strong className="num">{codigoInicial}</strong> no estaba en el catálogo: ya quedó puesto abajo.
@@ -302,10 +334,8 @@ export function FormularioProducto({
               <div className="rounded-xl bg-[var(--fondo)] p-3 space-y-2">
                 <p className="text-sm">
                   <span className="text-[var(--texto-suave)]">Stock ahora: </span>
-                  <strong className="num">{cantidadConUnidad(producto.stock, producto.unidad)}</strong>
-                  <span className="text-[var(--texto-suave)] num">
-                    {' '}· a la vista {formatCantidad(producto.stockSala)} · en bodega {formatCantidad(producto.stockBodega)}
-                  </span>
+                  <strong className="num">{cantidadConUnidad(producto.stock, 'unidad')}</strong>
+                  <span className="text-[var(--texto-suave)]"> en bodega</span>
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Link href={`/inventario?ajustar=${producto.id}`}
@@ -367,8 +397,9 @@ export function FormularioProducto({
                 )}
               </Campo>
 
-              {puedeVerCostos && (
-                <Campo etiqueta="Costo" error={costo !== '' ? vCosto.error : null}>
+              {puedeVerCostos && !desdeRecepcion && (
+                <Campo etiqueta="Costo neto" ayuda="Sin IVA, como en la factura del proveedor"
+                       error={costo !== '' ? vCosto.error : null}>
                   {(p) => (
                     <input
                       {...p}
@@ -385,7 +416,7 @@ export function FormularioProducto({
             {/* RF-M2-21 · un precio que no termina en 0 obliga a redondear en efectivo. */}
             {vPrecio.valido && precioConRedondeo(precioNum) && (
               <p className="-mt-2 text-xs text-[var(--color-aviso)]">
-                No termina en 0: al pagar en efectivo habrá que redondear (Ley 20.956). Por kilo puede estar bien.
+                No termina en 0: al pagar en efectivo habrá que redondear (Ley 20.956).
               </p>
             )}
 
@@ -393,95 +424,14 @@ export function FormularioProducto({
               <p className={`text-sm px-3 py-2 rounded-lg ${
                 margen < 0 ? 'bg-red-50 text-red-900' : 'bg-marca-50 text-marca-900'
               }`}>
-                Margen: <strong className="num">{formatCLP(precioNum - costoNum)}</strong>
+                Margen sin IVA: <strong className="num">{formatCLP(margenNeto(precioNum, costoNum, ivaPct))}</strong>
                 {' '}({formatPct(margen)})
                 {margen < 0 && ' · estás vendiendo bajo el costo'}
               </p>
             )}
 
-            <Campo etiqueta="Unidad" ayuda="Cómo se vende y se cuenta: por unidad, por kilo, por litro…">
-              {(p) => (
-                <select
-                  {...p}
-                  value={unidad} onChange={(e) => setUnidad(e.target.value)}
-                  className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
-                >
-                  {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
-                </select>
-              )}
-            </Campo>
-            {/* ¿Cuántos hay, y dónde? (0016). Antes era un solo "Stock inicial"
-                que entraba entero a la bodega sin decirlo: se cargaba el
-                catálogo creyendo dejarlo listo para vender y la sala quedaba en
-                cero. */}
-            {!esEdicion && (
-              <div className="rounded-xl border border-[var(--borde)] p-3">
-                <p className="text-sm font-medium mb-0.5">¿Cuántos tienes hoy?</p>
-                <p className="text-xs text-[var(--texto-suave)] mb-3">
-                  Lo que está a la vista se puede vender de inmediato. Lo de la bodega
-                  pasa a la sala cuando tocas “Reponer” en Inventario.
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Campo
-                    etiqueta="En la sala de ventas"
-                    ayuda="A la vista, listo para vender"
-                    error={stockSala !== '' ? vStockSala.error : null}
-                  >
-                    {(p) => (
-                      <input
-                        {...p}
-                        inputMode="decimal" value={stockSala}
-                        onChange={(e) => setStockSala(e.target.value)}
-                        className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
-                      />
-                    )}
-                  </Campo>
-                  <Campo
-                    etiqueta="En la bodega"
-                    ayuda="Guardado, no se vende todavía"
-                    error={stockBodega !== '' ? vStockBodega.error : null}
-                  >
-                    {(p) => (
-                      <input
-                        {...p}
-                        inputMode="decimal" value={stockBodega}
-                        onChange={(e) => setStockBodega(e.target.value)}
-                        className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
-                      />
-                    )}
-                  </Campo>
-                </div>
-                <p role="status" className="text-xs text-[var(--texto-suave)] mt-2">
-                  Total en el local:{' '}
-                  <span className="num font-medium text-[var(--texto)]">
-                    {cantidadConUnidad(vStockSala.valor + vStockBodega.valor, unidad)}
-                  </span>
-                </p>
-                {/* 0024 · Sin fecha, esas unidades no entran en las alertas de vencimiento. */}
-                {perecible && vStockSala.valor + vStockBodega.valor > 0 && (
-                  <div className="mt-3">
-                    <Campo etiqueta="¿Cuándo vence lo que tienes?"
-                           ayuda="Para avisarte antes de que venza. Si hay fechas distintas, pon la más próxima.">
-                      {(p) => (
-                        <input
-                          {...p}
-                          type="date" value={vencimiento} min={hoy}
-                          onChange={(e) => setVencimiento(e.target.value)}
-                          className={`tap w-full px-3 py-2.5 rounded-xl border bg-white ${vencimiento ? 'border-[var(--borde)]' : 'border-[var(--color-aviso)]'}`}
-                        />
-                      )}
-                    </Campo>
-                    {!vencimiento && (
-                      <p className="text-xs text-[var(--color-aviso)] mt-1">
-                        Sin fecha, estas unidades no aparecen en las alertas de vencimiento.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Perecible: activa el control por lote y FEFO (ADR-007) */}
+            {/* Perecible: activa el control por lote y FEFO (ADR-007). Va antes
+                de la cantidad: si es perecible, la fecha se pide junto a ella. */}
             <div className="rounded-xl border border-[var(--borde)] p-3">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
@@ -492,30 +442,53 @@ export function FormularioProducto({
                 <span className="text-sm">
                   <strong className="block">Producto perecible</strong>
                   <span className="text-[var(--texto-suave)]">
-                    Se controlará por lote con fecha de vencimiento. Al vender saldrá
-                    primero el lote que vence antes.
+                    Lleva fecha de vencimiento. El sistema cuenta los días que le quedan
+                    y al vender sale primero lo que vence antes.
                   </span>
                 </span>
               </label>
-
-              {perecible && (
-                <div className="mt-3 pl-8">
-                  <Campo
-                    etiqueta="Avisar cuántos días antes de vencer"
-                    error={diasAlerta !== '' ? vDiasAlerta.error : null}
-                  >
-                    {(p) => (
-                      <input
-                        {...p}
-                        inputMode="numeric" value={diasAlerta}
-                        onChange={(e) => setDiasAlerta(e.target.value)}
-                        className="tap w-24 px-3 py-2 rounded-lg border border-[var(--borde)] num text-right"
-                      />
-                    )}
-                  </Campo>
-                </div>
-              )}
             </div>
+
+            {/* 0032 · Una sola bodega: antes eran dos casillas, sala y bodega, y
+                había que acordarse de "reponer". */}
+            {!esEdicion && !desdeRecepcion && (
+              <div className="rounded-xl border border-[var(--borde)] p-3 space-y-3">
+                <Campo
+                  etiqueta="¿Cuántos tienes hoy en la bodega?"
+                  ayuda="En unidades. Puede quedar en 0 y entrar después con Recibir mercadería."
+                  error={stockSala !== '' ? vStockSala.error : null}
+                >
+                  {(p) => (
+                    <input
+                      {...p}
+                      inputMode="numeric" value={stockSala}
+                      onChange={(e) => setStockSala(e.target.value)}
+                      className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
+                    />
+                  )}
+                </Campo>
+                {pideVencimiento && (
+                  <div>
+                    <Campo etiqueta="¿Cuándo vence?" obligatorio
+                           ayuda="Si hay fechas distintas, pon la más próxima.">
+                      {(p) => (
+                        <input
+                          {...p}
+                          type="date" value={vencimiento} min={hoy}
+                          onChange={(e) => setVencimiento(e.target.value)}
+                          className={`tap w-full px-3 py-2.5 rounded-xl border bg-white ${vencimiento ? 'border-[var(--borde)]' : 'border-[var(--color-alerta)]'}`}
+                        />
+                      )}
+                    </Campo>
+                    <p role="status" className={`text-xs mt-1 ${diasParaVencer === null ? 'text-[var(--color-alerta)]' : 'text-[var(--texto-suave)]'}`}>
+                      {diasParaVencer === null
+                        ? 'Falta la fecha: sin ella no se puede guardar.'
+                        : `Desde hoy, ${textoVencimiento(diasParaVencer)}.`}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Códigos de barras: RF-M2-02 permite varios por producto */}
             <Campo etiqueta="Códigos de barras">
@@ -674,7 +647,7 @@ export function FormularioProducto({
             {puedeEditarPrecios && (
               <details className="rounded-xl border border-[var(--borde)] p-3" open={filasOferta.length > 0 || impuestoId != null}>
                 <summary className="text-sm font-semibold cursor-pointer min-h-[44px] py-2.5 -my-2.5">
-                  Ofertas e impuesto adicional (opcional)
+                  Precio por mayor, ofertas e impuesto (opcional)
                 </summary>
                 <div className="mt-3 space-y-4">
                   <OfertasEImpuesto
@@ -718,7 +691,7 @@ export function FormularioProducto({
               disabled={guardando}
               className="tap flex-1 py-3 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50"
             >
-              {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : 'Crear producto'}
+              {guardando ? 'Guardando…' : esEdicion ? 'Guardar cambios' : desdeRecepcion ? 'Crear y agregar' : 'Crear producto'}
             </button>
           </footer>
       </>
