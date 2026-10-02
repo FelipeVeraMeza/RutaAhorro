@@ -170,7 +170,10 @@ export function NuevaFactura({ usuarioId, base, onEmitida }: {
     }));
   }
   function alCambiarRut(texto: string) {
-    setReceptor((r) => ({ ...r, rut: texto }));
+    // Si venía de un cliente guardado, cambiar el RUT deja de ser ese cliente:
+    // antes quedaban su razón social, giro y dirección, y la factura salía con
+    // el RUT nuevo y el nombre del cliente anterior.
+    setReceptor((r) => (clienteId ? { ...RECEPTOR_VACIO, rut: texto } : { ...r, rut: texto }));
     setClienteId(null);
     if (!isValidRut(texto)) return;
     const c = clientes.find((x) => soloRut(x.rut) === soloRut(texto));
@@ -495,6 +498,7 @@ function BuscarProducto({ onElegir, onCerrar }: { onElegir: (p: Producto) => voi
   const [res, setRes] = useState<Producto[]>([]);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
+    setError(null);
     if (q.trim().length < 2) { setRes([]); return; }
     let vivo = true;
     const t = setTimeout(() => {

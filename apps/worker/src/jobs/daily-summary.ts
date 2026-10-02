@@ -1,5 +1,6 @@
+import { diaLocal, rangoDeDias } from '@rutaahorro/core';
 import { admin, activeTenants } from '../supabase.js';
-import { sendEmail, renderEmail, money } from '../mailer.js';
+import { sendEmail, renderEmail, money, escapar } from '../mailer.js';
 import { log } from '../logger.js';
 
 /**
@@ -12,32 +13,56 @@ import { log } from '../logger.js';
  */
 export async function runDailySummary() {
   const tenants = await activeTenants();
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
   const results: Array<{ tenant: string; sent: boolean }> = [];
 
   for (const tenant of tenants) {
-    // Ventas del día
-    const { data: sales } = await admin
-      .from('sales')
-      .select('total, status')
+    // El día del local, con su zona y su desfase de HOY (regla 17). Antes iba
+    // '-03:00' escrito fijo: en invierno (-04:00) el "día" partía a las 23:00
+    // de ayer. Y la zona era siempre la de Santiago, no la del local.
+    const zona = String((tenant.settings as { timezone?: string })?.timezone || 'America/Santiago');
+    const today = diaLocal(new Date(), zona);
+    const rango = rangoDeDias(today, today, zona);
+
+    // Ventas del día, netas de devoluciones, como el Inicio (v_sales_daily).
+    // Antes se traían las ventas de a una, y la API corta en 1.000: un día
+    // bueno salía con el total corto.
+    const { data: dia } = await admin
+      .from('v_sales_daily')
+      .select('sales_count, total_amount, average_ticket')
       .eq('tenant_id', tenant.id)
-      .gte('sold_at', `${today}T00:00:00-03:00`)
-      .lte('sold_at', `${today}T23:59:59-03:00`);
+      .eq('sale_date', today)
+      .maybeSingle();
+    const { count: voidedCount } = await admin
+      .from('sales')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenant.id)
+      .eq('status', 'anulada')
+      .gte('sold_at', rango.desde)
+      .lt('sold_at', rango.hasta);
 
-    const completed = (sales ?? []).filter((s) => s.status === 'completada');
-    const voided = (sales ?? []).filter((s) => s.status === 'anulada');
-    const total = completed.reduce((sum, s) => sum + (s.total ?? 0), 0);
-    const avgTicket = completed.length > 0 ? Math.round(total / completed.length) : 0;
+    const completed = { length: Number(dia?.sales_count ?? 0) };
+    const voided = { length: voidedCount ?? 0 };
+    const total = Number(dia?.total_amount ?? 0);
+    const avgTicket = Number(dia?.average_ticket ?? 0);
 
-    // Cajas del día
-    const { data: sessions } = await admin
+    // Cajas: las cerradas hoy con diferencia y TODAS las que siguen abiertas.
+    // Antes solo las abiertas hoy: la caja olvidada desde ayer, que es la
+    // que hay que avisar, no salía en el resumen.
+    const { data: abiertas } = await admin
       .from('v_cash_sessions_summary')
       .select('full_name, status, difference, sales_total')
       .eq('tenant_id', tenant.id)
-      .gte('opened_at', `${today}T00:00:00-03:00`);
+      .eq('status', 'abierta');
+    const { data: cerradasHoy } = await admin
+      .from('v_cash_sessions_summary')
+      .select('full_name, status, difference, sales_total')
+      .eq('tenant_id', tenant.id)
+      .eq('status', 'cerrada')
+      .gte('closed_at', rango.desde)
+      .lt('closed_at', rango.hasta);
 
-    const open = (sessions ?? []).filter((s) => s.status === 'abierta');
-    const withDiff = (sessions ?? []).filter((s) => s.status === 'cerrada' && (s.difference ?? 0) !== 0);
+    const open = abiertas ?? [];
+    const withDiff = (cerradasHoy ?? []).filter((s) => (s.difference ?? 0) !== 0);
 
     // Stock bajo mínimo
     const { data: lowStock } = await admin
@@ -71,10 +96,10 @@ export async function runDailySummary() {
         heading: 'Caja',
         rows: [
           ...(open.length > 0
-            ? open.map((s) => [`⚠️ Caja SIN CERRAR · ${s.full_name ?? 'sin nombre'}`, money(s.sales_total ?? 0)])
+            ? open.map((s) => [`⚠️ Caja SIN CERRAR · ${escapar(s.full_name ?? 'sin nombre')}`, money(s.sales_total ?? 0)])
             : []),
           ...withDiff.map((s) => [
-            `${(s.difference ?? 0) < 0 ? 'Faltante' : 'Sobrante'} · ${s.full_name ?? 'sin nombre'}`,
+            `${(s.difference ?? 0) < 0 ? 'Faltante' : 'Sobrante'} · ${escapar(s.full_name ?? 'sin nombre')}`,
             money(Math.abs(s.difference ?? 0)),
           ]),
         ],
@@ -84,7 +109,7 @@ export async function runDailySummary() {
         rows: [
           ...(valueAtRisk > 0 ? [['<strong>Valor en riesgo</strong>', `<strong>${money(valueAtRisk)}</strong>`]] : []),
           ...(expiring ?? []).map((l) => [
-            `${l.expiry_status === 'vencido' ? '🔴' : '🟡'} ${l.product_name} · ${
+            `${l.expiry_status === 'vencido' ? '🔴' : '🟡'} ${escapar(l.product_name)} · ${
               l.expiry_status === 'vencido' ? `venció hace ${Math.abs(l.days_to_expiry)} d` : `vence en ${l.days_to_expiry} d`
             }`,
             money(l.value_at_risk ?? 0),
@@ -93,7 +118,7 @@ export async function runDailySummary() {
       },
       {
         heading: 'Stock bajo mínimo',
-        rows: (lowStock ?? []).map((p) => [p.name as string, `${p.quantity} / mín. ${p.min_stock}`]),
+        rows: (lowStock ?? []).map((p) => [escapar(p.name), `${p.quantity} / mín. ${p.min_stock}`]),
       },
     ];
 

@@ -59,9 +59,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div>
           <p className="text-4xl mb-3" aria-hidden>🔒</p>
           <h1 className="text-lg font-semibold mb-1">Tu cuenta está desactivada</h1>
-          <p className="text-sm text-[var(--texto-suave)]">
+          <p className="text-sm text-[var(--texto-suave)] mb-4">
             Contacta al administrador del local.
           </p>
+          {/* Sin salir, el celular compartido del mostrador quedaba tomado:
+              /login devuelve a "/" a quien tiene sesión, y "/" mostraba esto
+              otra vez. El siguiente cajero no tenía cómo entrar. */}
+          <form action="/api/logout" method="post">
+            <button className="tap px-4 rounded-xl border border-[var(--borde)] text-sm">Salir</button>
+          </form>
         </div>
       </main>
     );

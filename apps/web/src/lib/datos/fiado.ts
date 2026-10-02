@@ -63,11 +63,21 @@ const cuenta = (clienteId: string, nombre: string, tope: number, saldo: number, 
 // Supabase
 // ---------------------------------------------------------------------------
 const base = {
-  async cuentas(): Promise<CuentaCliente[]> {
-    const { data, error } = await supabase().from('v_cuenta_clientes')
-      .select('cliente_id, nombre, credito_tope, saldo, ultimo_abono, is_active').order('nombre');
-    if (error) throw error;
-    return (data ?? []).map((r) => cuenta(
+  async cuentas(clienteId?: string): Promise<CuentaCliente[]> {
+    // Por páginas (la API entrega 1.000) y, para un solo cliente, solo esa
+    // fila. El cobro leía TODAS las cuentas para buscar una: con más de 1.000
+    // clientes, a uno de más abajo en el abecedario nunca se le ofrecía fiar.
+    const data: Array<Record<string, unknown>> = [];
+    for (let desde = 0; desde < 50_000; desde += 1000) {
+      let q = supabase().from('v_cuenta_clientes')
+        .select('cliente_id, nombre, credito_tope, saldo, ultimo_abono, is_active');
+      if (clienteId) q = q.eq('cliente_id', clienteId);
+      const { data: pagina, error } = await q.order('nombre').order('cliente_id').range(desde, desde + 999);
+      if (error) throw error;
+      data.push(...(pagina ?? []));
+      if ((pagina ?? []).length < 1000) break;
+    }
+    return data.map((r) => cuenta(
       r.cliente_id as string, r.nombre as string, Number(r.credito_tope ?? 0), Number(r.saldo ?? 0),
       (r.ultimo_abono as string) ?? null, r.is_active !== false));
   },
@@ -121,7 +131,7 @@ async function agregarDemo(m: Omit<MovDemo, 'id' | 'fecha'>) {
 }
 
 const demo: typeof base = {
-  async cuentas() {
+  async cuentas(_clienteId?: string) {
     const clientes = await leer<Array<{ id: string; nombre: string; activo?: boolean }>>(CLAVE_CLIENTES, []);
     const topes = await leer<Record<string, number>>(CLAVE_TOPES, {});
     const movs = await leer<MovDemo[]>(CLAVE_MOVS, []);
@@ -165,7 +175,7 @@ export const fijarTopeCredito = (clienteId: string, tope: number) => repo().fija
 
 /** La cuenta de un cliente (tope, saldo, disponible), o null si no se pudo leer. */
 export async function cuentaDe(clienteId: string): Promise<CuentaCliente | null> {
-  return (await cuentasClientes()).find((c) => c.clienteId === clienteId) ?? null;
+  return (await repo().cuentas(clienteId)).find((c) => c.clienteId === clienteId) ?? null;
 }
 
 /**

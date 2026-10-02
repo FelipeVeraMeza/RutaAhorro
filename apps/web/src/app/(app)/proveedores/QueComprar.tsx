@@ -24,6 +24,9 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+  // Aparte del error de carga: "No se pudo copiar" iba a `error` y la
+  // pantalla entera se cambiaba por ese mensaje, con el pedido armado perdido.
+  const [errorCopia, setErrorCopia] = useState<string | null>(null);
   // RF-M3-12 · el proveedor de la última recepción de cada producto.
   const [proveedorDe, setProveedorDe] = useState<Map<string, { id: string; nombre: string }>>(new Map());
   const [proveedorElegido, setProveedorElegido] = useState('');
@@ -73,7 +76,7 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
   const texto = textoPedido(pedido, local);
   async function copiar() {
     try { await navigator.clipboard.writeText(texto); setCopiado(true); setTimeout(() => setCopiado(false), 2500); }
-    catch { setError('No se pudo copiar. Mantén presionado el texto para copiarlo.'); }
+    catch { setErrorCopia('No se pudo copiar. Usa "Enviar por WhatsApp" o "Exportar a Excel".'); }
   }
   function exportar() {
     const csv = aCSV(pedido, [
@@ -143,6 +146,7 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
           {verCostos && costoEstimado(pedido) > 0 && <> · costo estimado <strong className="num">{formatCLP(costoEstimado(pedido))}</strong></>}
         </p>
       </div>
+      {errorCopia && <p role="alert" className="text-sm text-[var(--color-alerta)]">{errorCopia}</p>}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <a href={`https://wa.me/?text=${encodeURIComponent(texto)}`} target="_blank" rel="noopener noreferrer"
            className={`btn btn-primario ${pedido.length ? '' : 'pointer-events-none opacity-50'}`}>

@@ -32,17 +32,26 @@ async function verificar(correo: string, clave: string, demo: boolean): Promise<
     return (c ? c.clave === clave : clave === DEMO_CLAVE) ? 'ok' : 'mal';
   }
   const guardada = (() => { try { return JSON.parse(localStorage.getItem(HUELLA) ?? '{}') as Record<string, string>; } catch { return {}; } })();
-  if (!navigator.onLine) {
+  const contraHuella = async () => {
     const h = guardada[correo.toLowerCase()];
-    if (!h) return 'sin-red';
-    return (await huella(correo, clave)) === h ? 'ok' : 'mal';
-  }
+    if (!h) return 'sin-red' as const;
+    return (await huella(correo, clave)) === h ? 'ok' as const : 'mal' as const;
+  };
+  if (!navigator.onLine) return contraHuella();
   try {
     const { supabase } = await import('@/lib/supabase/client');
     const { error } = await supabase().auth.signInWithPassword({ email: correo, password: clave });
-    if (error) return 'mal';
+    if (error) {
+      // Con wifi pero sin internet real (onLine dice true) Supabase no lanza:
+      // devuelve un error de red. Antes eso era "Contraseña incorrecta" y
+      // contaba para la espera, con la clave bien escrita; se revisa contra
+      // la huella como si no hubiera red.
+      const { status, name } = error as { status?: number; name?: string };
+      if (name === 'AuthRetryableFetchError' || status === 0 || (status ?? 0) >= 500) return contraHuella();
+      return 'mal';
+    }
   } catch {
-    return 'sin-red';
+    return contraHuella();
   }
   try {
     guardada[correo.toLowerCase()] = await huella(correo, clave);

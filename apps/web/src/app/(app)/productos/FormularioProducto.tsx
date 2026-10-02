@@ -123,6 +123,11 @@ export function FormularioProducto({
 
   const [escaneando, setEscaneando] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  // El producto nuevo que ya se creó en un intento anterior. Si después
+  // fallaban las ofertas o el impuesto, el error decía "quedó guardado" pero el
+  // formulario seguía en "Crear producto": tocarlo otra vez creaba un segundo
+  // producto igual (y otra categoría nueva igual).
+  const [creadoId, setCreadoId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [avisoCodigo, setAvisoCodigo] = useState<string | null>(null);
   // Otro producto que ya se llama igual: el catálogo se llenaba de "Arroz"
@@ -157,7 +162,8 @@ export function FormularioProducto({
   // mínimo de "1.5" kg se convertía en 15. Ver docs/21.
   const vPrecio = validarMonto(precio, { etiqueta: 'precio de venta', permiteCero: false, maximo: 50_000_000 });
   const vCosto = validarMonto(costo, { etiqueta: 'costo', permiteVacio: true, maximo: 50_000_000 });
-  const vStockMinimo = validarCantidad(stockMinimo, { permiteVacio: true, maximo: 1_000_000 });
+  // Entero, como todo desde 0032: "2,5" de mínimo no significa nada en unidades.
+  const vStockMinimo = validarCantidadStock(stockMinimo, unidad, { permiteVacio: true, maximo: 1_000_000 });
   const vStockSala = validarCantidadStock(stockSala, unidad, { permiteVacio: true, maximo: 1_000_000 });
   const vDiasAlerta = validarCantidad(diasAlerta, { permiteVacio: true, maximo: 3650 });
 
@@ -234,6 +240,9 @@ export function FormularioProducto({
       let catId: string | null = categoriaId || null;
       if (nuevaCategoria.trim()) {
         catId = (await repo.crearCategoria(nuevaCategoria.trim())).id;
+        // Queda elegida: un reintento no la vuelve a crear.
+        setCategoriaId(catId);
+        setNuevaCategoria('');
       }
 
       const base = {
@@ -260,6 +269,8 @@ export function FormularioProducto({
           esperadoEn: producto.actualizadoEn,
           ...(puedeVerCostos && costo.trim() !== '' ? { costo: costoNum } : {}),
         });
+      } else if (creadoId) {
+        idGuardado = creadoId;
       } else {
         idGuardado = (await repo.crear({
           ...base,
@@ -269,6 +280,7 @@ export function FormularioProducto({
           stockInicialBodega: 0,
           vencimientoInicial: perecible && vencimiento ? vencimiento : null,
         })).id;
+        setCreadoId(idGuardado);
       }
 
       // Ofertas e impuesto: solo si cambiaron. Si fallan, el producto ya
@@ -619,7 +631,7 @@ export function FormularioProducto({
                     {(p) => (
                       <input
                         {...p}
-                        inputMode="decimal" value={stockMinimo}
+                        inputMode="numeric" value={stockMinimo}
                         onChange={(e) => setStockMinimo(e.target.value)}
                         className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
                       />
@@ -680,9 +692,12 @@ export function FormularioProducto({
             className="sticky bottom-0 bg-white border-t border-[var(--borde)] p-4 flex gap-2"
             style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
           >
+            {/* Mientras guarda no se cancela: cerrar a medias no cancela nada en
+                la base, solo esconde si quedó guardado o no. */}
             <button
               onClick={onCancelar}
-              className="tap px-4 py-3 rounded-xl border border-[var(--borde)] font-medium"
+              disabled={guardando}
+              className="tap px-4 py-3 rounded-xl border border-[var(--borde)] font-medium disabled:opacity-50"
             >
               Cancelar
             </button>

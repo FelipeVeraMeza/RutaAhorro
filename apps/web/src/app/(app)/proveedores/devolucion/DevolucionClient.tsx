@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { formatCLP, formatCantidad, toUserMessage, validarCantidadStock, textoVencimiento } from '@rutaahorro/core';
 import { Encabezado, EstadoVacio } from '@/components/Encabezado';
 import { Icono } from '@/components/Icono';
-import { repoProveedores, buscarParaRecepcion, type Proveedor } from '@/lib/datos/proveedores';
+import { repoProveedores, buscarParaRecepcion, productoParaRecepcion, type Proveedor } from '@/lib/datos/proveedores';
 import { repoInventario, type Lote } from '@/lib/datos/inventario';
 import { repoDevoluciones, type DevolucionProveedor } from '@/lib/datos/devoluciones';
 import { findByBarcode } from '@/lib/offline/catalog';
@@ -45,12 +45,18 @@ export function DevolucionClient({ verCostos = false }: { verCostos?: boolean })
   const [guardando, setGuardando] = useState(false);
 
   const cargar = useCallback(async () => {
+    // Antes cada lectura caía en silencio a una lista vacía: sin red, la
+    // pantalla decía "Elige a quién se devuelve" con ningún proveedor y nada
+    // explicaba por qué.
+    let fallo: unknown = null;
+    const nada = <T,>(e: unknown): T[] => { fallo ??= e; return []; };
     const [ps, ls, hs] = await Promise.all([
-      repoProveedores().listar().catch(() => []),
-      repoInventario().lotes().catch(() => []),
-      repoDevoluciones().listar().catch(() => []),
+      repoProveedores().listar().catch((e) => nada<Proveedor>(e)),
+      repoInventario().lotes().catch((e) => nada<Lote>(e)),
+      repoDevoluciones().listar().catch((e) => nada<DevolucionProveedor>(e)),
     ]);
     setProveedores(ps); setLotes(ls); setHistorial(hs);
+    if (fallo) setAviso({ tipo: 'error', texto: toUserMessage(fallo) });
   }, []);
   useEffect(() => { void cargar(); }, [cargar]);
 
@@ -74,8 +80,11 @@ export function DevolucionClient({ verCostos = false }: { verCostos?: boolean })
     onScan: async (code) => {
       const prod = await findByBarcode(code);
       if (!prod) { setAviso({ tipo: 'error', texto: `El código ${code} no está en el catálogo` }); return; }
-      const [r] = (await buscarParaRecepcion(prod.name)).filter((x) => x.productId === prod.id);
+      // Antes se buscaba por nombre entre los 12 primeros: un "Pan" escaneado
+      // podía no estar entre ellos y la cámara se cerraba sin agregar nada.
+      const r = await productoParaRecepcion(prod.id, prod.name);
       if (r) agregar(r);
+      else setAviso({ tipo: 'error', texto: `${prod.name} no está activo en el catálogo` });
       setEscaneando(false);
     },
   });

@@ -60,8 +60,12 @@ export async function middleware(request: NextRequest) {
   const user = claims?.claims?.sub ? claims.claims : null;
   const path = request.nextUrl.pathname;
   const isAuthRoute = path.startsWith('/login') || path.startsWith('/recuperar');
-  // El buzón de errores recibe también los de la pantalla de ingreso (RNF-40).
-  if (path === '/api/errores') return response;
+  // Las rutas de /api responden ellas mismas (cada una revisa quién pide). Antes
+  // una llamada con la sesión vencida se redirigía a /login: `fetch` seguía la
+  // redirección, recibía la página de ingreso con 200 y la pantalla daba por
+  // hecho lo que nunca se hizo ("Cuenta creada", con una clave que no existe).
+  // También el buzón de errores, que recibe los de la pantalla de ingreso (RNF-40).
+  if (path.startsWith('/api/')) return response;
 
   if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone();

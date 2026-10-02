@@ -8,10 +8,13 @@ export async function runLowStockCheck() {
   let created = 0;
 
   for (const tenant of tenants) {
-    const { data } = await admin
+    const { data, error } = await admin
       .from('v_low_stock')
       .select('product_id, name, quantity, min_stock')
       .eq('tenant_id', tenant.id);
+    // Antes el error se ignoraba: el trabajo quedaba "ok, 0 alertas" en
+    // job_runs y nadie se enteraba de que no había revisado nada.
+    if (error) throw new Error(`No se pudo leer el stock bajo mínimo: ${error.message}`);
 
     for (const p of data ?? []) {
       // No repetir la alerta si ya hay una sin leer del mismo producto:
@@ -46,11 +49,12 @@ export async function runExpiryCheck() {
   let created = 0;
 
   for (const tenant of tenants) {
-    const { data } = await admin
+    const { data, error } = await admin
       .from('v_expiring_lots')
       .select('lot_id, product_id, product_name, expiry_date, quantity, value_at_risk, expiry_status, days_to_expiry')
       .eq('tenant_id', tenant.id)
       .in('expiry_status', ['vencido', 'por_vencer']);
+    if (error) throw new Error(`No se pudieron leer los vencimientos: ${error.message}`);
 
     for (const lot of data ?? []) {
       const { data: existing } = await admin
@@ -111,11 +115,12 @@ export async function runOpenCashCheck() {
     );
     const limite = Number.isFinite(horasLimite) && horasLimite > 0 ? horasLimite : 12;
 
-    const { data } = await admin
+    const { data, error } = await admin
       .from('v_cash_sessions_summary')
       .select('session_id, full_name, opened_at, sales_total')
       .eq('tenant_id', tenant.id)
       .eq('status', 'abierta');
+    if (error) throw new Error(`No se pudieron leer las cajas abiertas: ${error.message}`);
 
     for (const s of data ?? []) {
       const horas = (Date.now() - new Date(s.opened_at as string).getTime()) / 3_600_000;
@@ -174,7 +179,7 @@ export async function runIntegrityCheck() {
     // Si difieren, FEFO descontará de lotes que no reflejan el saldo real.
     const { data: byLot } = await admin
       .from('v_stock_by_lot')
-      .select('product_id, total_quantity')
+      .select('product_id, product_name, total_quantity')
       .eq('tenant_id', tenant.id);
 
     let lotMismatches = 0;
@@ -189,12 +194,20 @@ export async function runIntegrityCheck() {
       const diff = Math.abs((level?.quantity ?? 0) - (row.total_quantity ?? 0));
       if (diff > 0.001) {
         lotMismatches++;
+        // Una por producto mientras no se lea, como los otros chequeos: cada
+        // domingo se sumaba otra igual del mismo producto.
+        const { data: existing } = await admin
+          .from('alerts').select('id')
+          .eq('tenant_id', tenant.id).eq('type', 'lot_stock_mismatch').eq('is_read', false)
+          .contains('payload', { product_id: row.product_id }).limit(1);
+        if ((existing ?? []).length > 0) continue;
         await admin.from('alerts').insert({
           tenant_id: tenant.id,
           type: 'lot_stock_mismatch',
           severity: 'critical',
           payload: {
             product_id: row.product_id,
+            product_name: row.product_name,
             stock_levels: level?.quantity ?? 0,
             sum_of_lots: row.total_quantity,
             difference: diff,

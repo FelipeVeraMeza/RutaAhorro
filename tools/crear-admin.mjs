@@ -89,6 +89,16 @@ const tienda = tiendas[0];
 // no puede pasar es que el instalador ponga "123456" en la cuenta que manda.
 const clave = claveDada ?? `Ra-${randomBytes(9).toString('base64url')}`;
 
+// 0037 · El disparador toma el local y el rol de `cuentas_autorizadas`, no
+// del metadata. Con una base sin 0037 la tabla no existe: se sigue igual.
+{
+  const { error: eAut } = await db.from('cuentas_autorizadas').upsert({
+    email: correo.toLowerCase(), tenant_id: tenant.id, store_id: tienda.id, role: rol, full_name: nombre,
+  });
+  if (eAut && !/cuentas_autorizadas|42P01|PGRST205|does not exist|schema cache/i.test(`${eAut.code} ${eAut.message}`)) {
+    morir(`No se pudo autorizar la cuenta: ${eAut.message}`);
+  }
+}
 const { data: creado, error: errCrear } = await db.auth.admin.createUser({
   email: correo,
   password: clave,

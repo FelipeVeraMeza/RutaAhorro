@@ -241,7 +241,8 @@ export default async function DashboardPage() {
           {masPorVencer > 0 && (
             <p className="text-xs text-[var(--texto-suave)] mt-2">
               Y {masPorVencer} {masPorVencer === 1 ? 'lote más' : 'lotes más'}.{' '}
-              <Link href="/inventario" className="underline inline-flex items-center min-h-[44px] px-1 -my-3">Ver todos</Link>
+              {/* A la pestaña Lotes: antes abría Stock y había que buscarlos. */}
+              <Link href="/inventario?vista=lotes" className="underline inline-flex items-center min-h-[44px] px-1 -my-3">Ver todos</Link>
             </p>
           )}
         </section>

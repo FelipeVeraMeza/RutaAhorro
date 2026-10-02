@@ -57,6 +57,9 @@ export function EmisorSii() {
   }
 
   async function borrar() {
+    // Un toque las borraba sin preguntar: la emisión real se apagaba y había
+    // que pedirle de nuevo al cliente sus dos claves y repetir el ensayo.
+    if (!window.confirm('¿Borrar las claves del SII? La emisión real se apaga y para volver a encenderla hay que guardarlas de nuevo y repetir el ensayo.')) return;
     setError(null); setAviso(null);
     try { await repoFacturacion().borrarCredenciales(); setAviso('Credenciales borradas: la emisión real queda apagada.'); await cargar(); }
     catch (e) { setError(e instanceof Error ? e.message : toUserMessage(e)); }

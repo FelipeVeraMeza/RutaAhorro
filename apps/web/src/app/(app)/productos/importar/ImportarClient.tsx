@@ -151,7 +151,10 @@ export function ImportarClient() {
               type="file"
               accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="sr-only"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void elegirArchivo(f); }}
+              // Se vacía al leerlo: corregir la planilla en Excel y volver a
+              // elegir el mismo archivo no disparaba onChange (mismo nombre),
+              // y la pantalla se quedaba con el error de la versión anterior.
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void elegirArchivo(f); }}
             />
           </label>
           <p className="text-xs text-[var(--texto-suave)] mt-3">
@@ -280,7 +283,9 @@ export function ImportarClient() {
                       </td>
                       <td className="py-2 px-3 text-right num">{formatCLP(f.precio_venta)}</td>
                       <td className="py-2 px-3 text-right num text-[var(--texto-suave)]">
-                        {formatCLP(f.costo)}
+                        {/* Sin columna costo, al actualizar se conserva el de
+                            hoy (no queda en $0): no mostrar "$0". */}
+                        {f.sinDato?.includes('costo') ? '—' : formatCLP(f.costo)}
                       </td>
                       <td className="py-2 pl-3 text-right num">{f.stock_inicial}</td>
                     </tr>
@@ -355,8 +360,11 @@ export function ImportarClient() {
     <div className="px-4 py-5 space-y-4">
       <Cabecera />
       <div className="tarjeta p-5 text-center">
-        <p className="text-4xl mb-3" aria-hidden>🎉</p>
-        <h2 className="text-lg font-semibold mb-1">Carga completada</h2>
+        {/* Si no entró ninguna fila no es "Carga completada 🎉". */}
+        <p className="text-4xl mb-3" aria-hidden>{(resultado?.creados ?? 0) + (resultado?.actualizados ?? 0) > 0 ? '🎉' : '⚠️'}</p>
+        <h2 className="text-lg font-semibold mb-1">
+          {(resultado?.creados ?? 0) + (resultado?.actualizados ?? 0) > 0 ? 'Carga completada' : 'No se cargó ningún producto'}
+        </h2>
         <p className="text-sm text-[var(--texto-suave)] mb-4">
           {resultado?.creados ?? 0} creados
           {(resultado?.actualizados ?? 0) > 0 && ` · ${resultado?.actualizados} actualizados`}

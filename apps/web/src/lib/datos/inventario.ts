@@ -1,5 +1,6 @@
 'use client';
 
+import { admiteDecimales } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import { db } from '../offline/db';
@@ -204,12 +205,18 @@ const repoLocal: RepositorioInventario = {
     const p = await db().products.get(productoId);
     if (!p) throw new Error('PRODUCTO_NO_ENCONTRADO');
 
+    // Las mismas reglas que fn_adjust_stock desde 0037: la maqueta aceptaba
+    // dejar el stock en −5 y una merma que sumaba, y la base no.
+    if (nuevaCantidad < 0) throw new Error('CANTIDAD_NEGATIVA');
+    if (!admiteDecimales(p.unit) && !Number.isInteger(nuevaCantidad)) throw new Error('CANTIDAD_ENTERA');
     const delta = nuevaCantidad - p.stock;
     if (delta === 0) return;
+    if (tipo === 'merma' && delta > 0) throw new Error('MERMA_SUMA_STOCK');
+    const tipoReal = tipo === 'merma' ? tipo : delta > 0 ? 'ajuste_positivo' : 'ajuste_negativo';
 
     await db().products.put({ ...p, stock: nuevaCantidad, updatedAt: new Date().toISOString() });
     await registrarMov({
-      productoId, productoNombre: p.name, tipo,
+      productoId, productoNombre: p.name, tipo: tipoReal,
       cantidad: delta, saldo: nuevaCantidad,
       motivo, usuario: 'Modo demo',
     });
@@ -223,6 +230,7 @@ const repoLocal: RepositorioInventario = {
     for (const it of items) {
       const p = await db().products.get(it.productoId);
       if (!p) continue;
+      if (it.contado < 0) throw new Error('CANTIDAD_NEGATIVA');
       const delta = it.contado - p.stock;
       if (delta === 0) continue;
 
@@ -309,12 +317,18 @@ const repoSupabase: RepositorioInventario = {
 
   async aplicarToma(items) {
     const client = supabase();
+    // Con la sesión vencida `user` es null y `user!.id` reventaba con un
+    // TypeError: la toma (a veces de una hora de conteo) fallaba con "problema
+    // inesperado" en vez de pedir volver a ingresar.
     const { data: { user } } = await client.auth.getUser();
-    const { data: perfil } = await client.from('profiles').select('tenant_id, store_id').eq('id', user!.id).single();
+    if (!user) throw new Error('NO_AUTENTICADO');
+    const { data: perfil, error: e0 } = await client.from('profiles').select('tenant_id, store_id').eq('id', user.id).maybeSingle();
+    if (e0) throw e0;
+    if (!perfil) throw new Error('NO_AUTENTICADO');
 
     const { data: conteo, error: e1 } = await client
       .from('stock_counts')
-      .insert({ tenant_id: perfil!.tenant_id, store_id: perfil!.store_id })
+      .insert({ tenant_id: perfil.tenant_id, store_id: perfil.store_id })
       .select('id').single();
     if (e1) throw e1;
 

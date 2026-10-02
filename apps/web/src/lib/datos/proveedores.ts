@@ -228,12 +228,15 @@ const repoSupabase: RepositorioProveedores = {
   async crear(p) {
     const client = supabase();
     const { data: { user } } = await client.auth.getUser();
-    const { data: perfil } = await client.from('profiles').select('tenant_id').eq('id', user!.id).single();
+    if (!user) throw new Error('NO_AUTENTICADO');
+    const { data: perfil, error: e0 } = await client.from('profiles').select('tenant_id').eq('id', user.id).maybeSingle();
+    if (e0) throw e0;
+    if (!perfil) throw new Error('NO_AUTENTICADO');
 
     const { data, error } = await client
       .from('suppliers')
       .insert({
-        tenant_id: perfil!.tenant_id,
+        tenant_id: perfil.tenant_id,
         name: p.nombre, rut: p.rut, contact_name: p.contacto,
         phone: p.telefono, email: p.email,
       })
@@ -242,17 +245,22 @@ const repoSupabase: RepositorioProveedores = {
     return { id: data.id as string };
   },
 
+  // Con `select`: la política deja editar solo al administrador, y para
+  // supervisor y bodega el update no daba error, no tocaba ninguna fila, y
+  // la pantalla decía "guardado" con los datos de antes.
   async actualizar(id, p) {
-    const { error } = await supabase().from('suppliers').update({
+    const { data, error } = await supabase().from('suppliers').update({
       name: p.nombre, rut: p.rut, contact_name: p.contacto,
       phone: p.telefono, email: p.email,
-    }).eq('id', id);
+    }).eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('SIN_PERMISO');
   },
 
   async desactivar(id) {
-    const { error } = await supabase().from('suppliers').update({ is_active: false }).eq('id', id);
+    const { data, error } = await supabase().from('suppliers').update({ is_active: false }).eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('SIN_PERMISO');
   },
 
   async recepciones(limite = 30) {
@@ -339,14 +347,12 @@ export async function buscarParaRecepcion(termino: string) {
  */
 export async function productoParaRecepcion(
   productId: string,
-  nombre: string,
+  _nombre?: string,
 ): Promise<ReturnType<typeof paraRecepcion> | null> {
-  const encontrados = await repoProductos().listar(
-    { busqueda: nombre, soloActivos: true },
-    true,
-  );
-  const p = encontrados.find((x) => x.id === productId);
-  return p ? paraRecepcion(p) : null;
+  // Por id y no buscando el nombre: con un nombre común ("Pan") la búsqueda
+  // trae muchos, y el escaneado podía quedar fuera.
+  const p = await repoProductos().obtener(productId, true);
+  return p && p.activo ? paraRecepcion(p) : null;
 }
 
 function paraRecepcion(p: {
@@ -382,12 +388,21 @@ export async function ultimoProveedorPorProducto(): Promise<Map<string, { id: st
     }
     return mapa;
   }
-  const { data, error } = await supabase().from('purchase_receipt_items')
-    .select('product_id, recepcion:purchase_receipts!inner(received_at, status, supplier_id, proveedor:suppliers(name))')
-    .eq('recepcion.status', 'confirmada')
-    .limit(5000);
-  if (error) throw error;
-  const filas = (data ?? []).map((f) => {
+  // Por páginas: la API entrega 1.000 filas como máximo, y sin orden esas
+  // 1.000 eran cualquiera. Con más líneas recibidas que eso, el "último
+  // proveedor" de un producto salía de una recepción vieja, o no salía.
+  const data: Array<Record<string, unknown>> = [];
+  for (let desde = 0; desde < 50_000; desde += 1000) {
+    const { data: pagina, error } = await supabase().from('purchase_receipt_items')
+      .select('product_id, recepcion:purchase_receipts!inner(received_at, status, supplier_id, proveedor:suppliers(name))')
+      .eq('recepcion.status', 'confirmada')
+      .order('id')
+      .range(desde, desde + 999);
+    if (error) throw error;
+    data.push(...(pagina ?? []));
+    if ((pagina ?? []).length < 1000) break;
+  }
+  const filas = data.map((f) => {
     const r = f.recepcion as unknown as { received_at: string; supplier_id: string | null; proveedor: { name: string } | null };
     return { productId: f.product_id as string, fecha: r.received_at, id: r.supplier_id, nombre: r.proveedor?.name ?? null };
   }).sort((a, b) => b.fecha.localeCompare(a.fecha));

@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import {
   formatCLP, formatCantidad, toUserMessage, NOMBRE_DTE, construirXmlDte, desdeRegistro, montosDevolucion,
-  validarCantidad, type RegistroDte, type TipoDte, redondeoEfectivo
+  validarCantidad, type RegistroDte, type TipoDte, redondeoEfectivo, etiquetaAdicional,
 } from '@rutaahorro/core';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
@@ -91,7 +91,9 @@ export function DocumentoTributario({ doc, onCerrar, pdfUrl }: {
           <Fila izq="Neto" der={formatCLP(doc.neto)} />
           <Fila izq={`IVA (${Number(doc.iva_pct)}%)`} der={formatCLP(doc.iva)} />
           {(doc.impuestos_detalle ?? []).map((a, i) => (
-            <Fila key={i} izq={`Imp. adicional ${String(Number(a.tasa)).replace('.', ',')}%`} der={formatCLP(a.monto)} />
+            // Con su nombre ("IABA 18%"), como el comprobante: dos impuestos
+            // distintos con la misma tasa (ILA vinos y cervezas, 20,5 %) no se distinguían.
+            <Fila key={i} izq={etiquetaAdicional({ nombre: (a as { nombre?: string | null }).nombre ?? null, tasa: Number(a.tasa) })} der={formatCLP(a.monto)} />
           ))}
           <div className="flex justify-between font-bold text-[14px] mt-1">
             <span>TOTAL</span><span>{formatCLP(doc.total)}</span>

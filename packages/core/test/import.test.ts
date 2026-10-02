@@ -396,3 +396,21 @@ describe('celdas con solo espacios', () => {
     expect(r.filas[0].sku).toBeNull();
   });
 });
+
+describe('docs/28 · lo que la planilla no trae', () => {
+  it('marca las columnas ausentes o vacías para no pisarlas al actualizar', () => {
+    const r = parsearFilas([['nombre', 'sku', 'precio_venta', 'costo'], ['Arroz', 'ARR', '1590', '']]);
+    expect(r.ok).toBe(true);
+    expect(r.filas[0].sinDato).toEqual(expect.arrayContaining(['costo', 'categoria', 'stock_minimo', 'perecible', 'descripcion']));
+    expect(r.filas[0].sinDato).not.toContain('sku');
+    expect(r.filas[0].fila).toBe(2);
+  });
+
+  it('rechaza precio cero, pesos con decimales y un mínimo negativo', () => {
+    const r = parsearFilas([
+      ['nombre', 'precio_venta', 'costo', 'stock_minimo'],
+      ['A', '0', '', ''], ['B', '1590,5', '', ''], ['C', '1000', '800,5', ''], ['D', '1000', '', '-3'],
+    ]);
+    expect(r.errores.map((e) => `${e.fila}:${e.columna}`)).toEqual(['2:precio_venta', '3:precio_venta', '4:costo', '5:stock_minimo']);
+  });
+});

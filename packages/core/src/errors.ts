@@ -9,6 +9,7 @@
 export const ERROR_MESSAGES: Record<string, string> = {
   NO_AUTENTICADO: 'Tu sesión expiró. Vuelve a ingresar',
   SIN_PERMISO: 'No tienes permiso para esta acción',
+  EN_USO: 'Está usado en otros registros (ventas, compras, combos o facturas): no se puede eliminar, solo desactivar',
   SIN_PERMISO_ANULAR: 'No tienes permiso para anular esta venta',
   SIN_PERMISO_AJUSTAR: 'No tienes permiso para ajustar el stock',
   SIN_PERMISO_CREAR_PRODUCTO: 'No tienes permiso para crear productos',
@@ -154,6 +155,8 @@ export const ERROR_MESSAGES: Record<string, string> = {
   RECEPCION_NO_ENCONTRADA: 'No se encontró esa recepción',
   ACTECO_INVALIDO: 'El código de actividad económica son solo números (hasta 6), como 471100',
   FACTURA_NO_EN_EMISION: 'Esa factura ya no está esperando respuesta del SII. Recarga para ver cómo quedó',
+  // 0037 · revisión de 150 errores (docs/28)
+  MERMA_SUMA_STOCK: 'Una merma resta stock: la cantidad real tiene que ser menor que la del sistema',
   // Cuentas con contraseña temporal (/api/usuarios/crear y /clave)
   SIN_CONEXION: 'No hay conexión con el servidor. Revisa internet y vuelve a intentar',
   CLAVE_CORTA: 'La contraseña necesita al menos 8 caracteres',
@@ -218,6 +221,11 @@ export function toUserMessage(error: unknown): string {
   // Errores conocidos de Postgres que no son nuestros
   if (raw.includes('duplicate key') && raw.includes('barcode')) {
     return ERROR_MESSAGES.CODIGO_DUPLICADO;
+  }
+  // Borrar algo que otra tabla usa (un producto en un combo o una factura):
+  // antes era "Ocurrió un problema inesperado", sin pista de qué hacer.
+  if (raw.includes('violates foreign key constraint')) {
+    return ERROR_MESSAGES.EN_USO;
   }
   if (raw.includes('JWT') || raw.includes('expired')) {
     return ERROR_MESSAGES.NO_AUTENTICADO;

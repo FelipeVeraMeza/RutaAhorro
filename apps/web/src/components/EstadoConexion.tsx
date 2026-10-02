@@ -60,11 +60,15 @@ export function EstadoConexion() {
 
   async function forceSync() {
     setSyncing(true);
-    const { syncQueue, pendingCount, ventasConError } = await cola();
-    await syncQueue();
-    setPending(await pendingCount());
-    setConError(await ventasConError());
-    setSyncing(false);
+    // Con finally: si algo lanzaba (el chunk sin red, IndexedDB), el botón
+    // quedaba en "enviando…" y deshabilitado hasta recargar.
+    try {
+      const { syncQueue, pendingCount, ventasConError } = await cola();
+      await syncQueue();
+      setPending(await pendingCount());
+      setConError(await ventasConError());
+    } catch { /* la cola sigue igual; el reintento automático la vuelve a mirar */ }
+    finally { setSyncing(false); }
   }
 
   // Todo en orden y conectado: no se muestra nada. Un cartel verde permanente

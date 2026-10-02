@@ -128,6 +128,21 @@ function LoginForm() {
     }
 
     if (authError) {
+      // Sin red (o con Supabase caído) signInWithPassword no lanza: devuelve
+      // el error con status 0 o 5xx. Antes eso decía "Correo o contraseña
+      // incorrectos" y además contaba como intento fallido: el cajero, con la
+      // clave bien escrita, quedaba castigado esperando.
+      const { status, name } = authError as { status?: number; name?: string };
+      if (name === 'AuthRetryableFetchError' || status === 0 || (status ?? 0) >= 500) {
+        setError('No hay conexión con el servidor. Revisa internet y vuelve a intentar.');
+        setLoading(false);
+        return;
+      }
+      if (status === 429) {
+        setError('Demasiados intentos seguidos. Espera unos minutos antes de probar de nuevo.');
+        setLoading(false);
+        return;
+      }
       // Nunca revelar si el correo existe: eso permite enumerar usuarios.
       fallo('Correo o contraseña incorrectos');
       setLoading(false);

@@ -79,13 +79,22 @@ export default async function CajaPage() {
   resumen = (rResumen.data as Record<string, unknown>) ?? null;
   movimientos = (rMovs.data ?? []) as typeof movimientos;
 
+  // `expected_amount` de la vista es el que se guarda AL CERRAR: en una caja
+  // abierta viene null, y el diálogo para cerrar la de otro nunca decía
+  // cuánto debería haber (se contaba a ciegas). Se calcula como el cierre.
+  const cajasAjenas = await Promise.all((ajenas ?? []).map(async (c) => {
+    const { data } = await client.rpc('fn_cash_session_summary', { p_session_id: c.session_id });
+    const esperado = (data as { expected_amount?: number } | null)?.expected_amount;
+    return { ...c, expected_amount: typeof esperado === 'number' ? esperado : null };
+  }));
+
   return (
     <CajaClient
       session={session ?? null}
       resumen={resumen}
       movimientos={movimientos}
       historial={historial ?? []}
-      cajasAjenas={(ajenas ?? []) as Array<{
+      cajasAjenas={cajasAjenas as Array<{
         session_id: string; full_name: string | null; opened_at: string;
         sales_total: number | null; expected_amount: number | null;
       }>}

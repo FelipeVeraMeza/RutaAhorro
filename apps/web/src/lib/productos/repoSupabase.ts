@@ -7,6 +7,7 @@ import type {
   FiltroProductos, Producto, ProductoEditable, ProductoNuevo,
   RepositorioProductos, ResultadoLote,
 } from './tipos';
+import { cambiosDesdePlanilla } from './tipos';
 
 /**
  * Repositorio respaldado por Supabase. Es el que corre en producción.
@@ -71,23 +72,25 @@ function aProducto(f: FilaBD): Producto {
 
 async function tenantYTienda() {
   const client = supabase();
+  // Sesión vencida: decirlo, no reventar con un TypeError ("problema inesperado").
   const { data: { user } } = await client.auth.getUser();
-  const { data } = await client
+  if (!user) throw new Error('NO_AUTENTICADO');
+  const { data, error } = await client
     .from('profiles')
     .select('tenant_id, store_id')
-    .eq('id', user!.id)
-    .single();
-  return { tenantId: data!.tenant_id as string, storeId: data!.store_id as string | null };
+    .eq('id', user.id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('NO_AUTENTICADO');
+  return { tenantId: data.tenant_id as string, storeId: data.store_id as string | null };
 }
 
 export const repoSupabase: RepositorioProductos = {
   async listar(filtro: FiltroProductos, verCostos) {
     const client = supabase();
     const tabla = verCostos ? 'products' : 'products_public';
-    let q = client.from(tabla).select(verCostos ? SELECT_CON_COSTO : SELECT_BASE);
+    let condicionBusqueda: string | null = null;
 
-    if (filtro.soloActivos !== false) q = q.eq('is_active', true);
-    if (filtro.categoriaId) q = q.eq('category_id', filtro.categoriaId);
     // RF-M2-05: por nombre, SKU o código de barras. Hasta el 2026-09-27 el
     // campo decía "Buscar por nombre o SKU" y filtraba solo por nombre: un
     // SKU o un código escaneado no encontraban nada.
@@ -107,17 +110,35 @@ export const repoSupabase: RepositorioProductos = {
           for (const p of locales) if (!ids.includes(p.id)) ids.push(p.id);
         }
       } catch { /* sin catálogo local, queda la búsqueda de la base */ }
-      q = q.or([
+      condicionBusqueda = [
         `name.ilike.%${texto}%`,
         `sku.ilike.%${texto}%`,
         ...(ids.length ? [`id.in.(${ids.join(',')})`] : []),
-      ].join(','));
+      ].join(',');
     }
 
-    const { data, error } = await q.order('name').limit(filtro.limite ?? 200);
-    if (error) throw error;
+    // Por páginas de 1.000, que es lo que entrega la API como máximo. Antes
+    // era una sola consulta con `limit(200)`: Productos, Inventario (y su
+    // "Valor al costo", la toma y la hoja de conteo) y Etiquetas veían solo
+    // los primeros 200 por nombre, sin aviso, y el filtro "Agotado" buscaba
+    // solo entre ellos. Los que pedían 5.000 recibían 1.000.
+    const limite = filtro.limite ?? 20_000;
+    const filas: FilaBD[] = [];
+    for (let desde = 0; desde < limite; desde += 1000) {
+      // Una consulta nueva por página: el constructor de la API se modifica al
+      // encadenarle filtros, y reusarlo repetiría el rango.
+      let q = client.from(tabla).select(verCostos ? SELECT_CON_COSTO : SELECT_BASE);
+      if (filtro.soloActivos !== false) q = q.eq('is_active', true);
+      if (filtro.categoriaId) q = q.eq('category_id', filtro.categoriaId);
+      if (condicionBusqueda) q = q.or(condicionBusqueda);
+      const hasta = Math.min(desde + 1000, limite) - 1;
+      const { data, error } = await q.order('name').order('id').range(desde, hasta);
+      if (error) throw error;
+      filas.push(...((data ?? []) as unknown as FilaBD[]));
+      if ((data ?? []).length < hasta - desde + 1) break;
+    }
 
-    let productos = (data ?? []).map((f) => aProducto(f as unknown as FilaBD));
+    let productos = filas.map((f) => aProducto(f));
 
     // El filtro por estado se aplica en el cliente: depende del stock, que
     // viene de una tabla relacionada y no se puede filtrar en la consulta.
@@ -235,9 +256,13 @@ export const repoSupabase: RepositorioProductos = {
     // Un producto sin movimientos es un error de carga, no un hecho del
     // negocio, y ese sí se puede eliminar.
     if (await this.tieneMovimientos(id)) throw new Error('TIENE_MOVIMIENTOS');
-    await supabase().from('product_barcodes').delete().eq('product_id', id);
-    const { error } = await supabase().from('products').delete().eq('id', id);
+    // Los códigos se van solos (on delete cascade). Antes se borraban primero
+    // y aparte: si el producto no se podía borrar (está en un combo, en una
+    // factura, en una oferta), quedaba vivo y sin sus códigos de barra, y en
+    // el POS ya no se podía escanear.
+    const { data, error } = await supabase().from('products').delete().eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('SIN_PERMISO');
   },
 
   async categorias() {
@@ -331,12 +356,13 @@ export const repoSupabase: RepositorioProductos = {
             .map((b) => b.barcode);
           const codigos = codigosDesdeImportacion(previos, fila.codigo_barras);
 
+          // Lo que la planilla no trae queda como estaba (`sinDato`): antes
+          // una planilla de precios dejaba el costo en $0, sin categoría ni
+          // mínimo, y los perecibles como no perecibles.
+          const actual = await this.obtener(previo.id as string, true);
+          if (!actual) throw new Error('PRODUCTO_NO_ENCONTRADO');
           await this.actualizar(previo.id as string, {
-            nombre: fila.nombre, descripcion: fila.descripcion,
-            sku: fila.sku, categoriaId, unidad: fila.unidad,
-            precioVenta: fila.precio_venta, costo: fila.costo,
-            stockMinimo: fila.stock_minimo, perecible: fila.perecible,
-            diasAlerta: fila.dias_alerta,
+            ...cambiosDesdePlanilla(fila, actual, categoriaId),
             ...(codigos ? { codigos } : {}),
           });
           resultado.actualizados++;
@@ -360,7 +386,9 @@ export const repoSupabase: RepositorioProductos = {
         // "duplicate key value violates unique constraint …", y el almacenero
         // que sube su planilla no tiene por qué leer eso.
         resultado.errores.push({
-          fila: i + 2,
+          // La fila de Excel: con filas en blanco o con errores en la planilla,
+          // `i + 2` apuntaba a otro producto.
+          fila: fila.fila ?? i + 2,
           nombre: fila.nombre,
           mensaje: toUserMessage(e),
         });

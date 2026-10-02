@@ -57,7 +57,11 @@ export function BitacoraClient() {
       {filas === null ? (
         <p className="text-sm text-[var(--texto-suave)] text-center py-8">Cargando…</p>
       ) : filas.length === 0 ? (
-        <EstadoVacio icono="inventario" titulo="Nada registrado en estas fechas" texto="Prueba con un rango más amplio o con otro tipo." />
+        // Con error, "Nada registrado en estas fechas" decía algo falso: no se
+        // sabe si hay o no. Queda solo el error.
+        error ? null : desde > hasta ? (
+          <p role="alert" className="text-sm text-[var(--color-alerta)]">La fecha de inicio es posterior a la de término.</p>
+        ) : <EstadoVacio icono="inventario" titulo="Nada registrado en estas fechas" texto="Prueba con un rango más amplio o con otro tipo." />
       ) : (
         <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden">
           {filas.map((f) => (

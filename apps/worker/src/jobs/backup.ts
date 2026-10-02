@@ -27,14 +27,32 @@ const TABLES = [
   'cash_sessions', 'cash_movements',
   'sales', 'sale_items', 'sale_payments', 'sale_item_lots',
   'audit_log', 'alerts',
+  // Lo de 0014 en adelante. La lista se había quedado en 0006: el respaldo
+  // diario no traía boletas ni facturas (dte_documentos, facturas), clientes,
+  // la cuenta del fiado, devoluciones, ofertas, combos ni lo por pagar. Un
+  // local restaurado desde él perdía su historia tributaria y lo que le deben.
+  'stock_ubicaciones', 'product_price_tiers', 'impuestos_adicionales',
+  'clientes', 'cliente_precios', 'combos', 'combo_items',
+  'sale_returns', 'sale_return_items', 'dte_emisores', 'dte_folios', 'dte_documentos',
+  'facturas', 'factura_lineas', 'factura_notas_credito', 'facturas_recibidas',
+  'cuenta_cliente_movimientos', 'facturas_proveedor',
+  'devoluciones_proveedor', 'devolucion_proveedor_items', 'autorizaciones_descuento',
 ] as const;
+
+/** Las tablas cuya llave no es `id`: para leerlas por páginas con un orden estable. */
+const ORDEN: Partial<Record<string, string>> = {
+  product_suppliers: 'product_id', stock_levels: 'product_id', stock_ubicaciones: 'product_id',
+  dte_emisores: 'tenant_id',
+};
 
 const PAGE = 1000;
 
 async function dumpTable(table: string, tenantId: string): Promise<unknown[]> {
   const rows: unknown[] = [];
   for (let from = 0; ; from += PAGE) {
-    let query = admin.from(table).select('*').range(from, from + PAGE - 1);
+    // Con orden: sin él PostgreSQL no garantiza que las páginas sigan una a
+    // otra, y una tabla grande podía quedar con filas repetidas y faltantes.
+    let query = admin.from(table).select('*').order(ORDEN[table] ?? 'id').range(from, from + PAGE - 1);
     // `tenants` se filtra por id; el resto por tenant_id.
     query = table === 'tenants' ? query.eq('id', tenantId) : query.eq('tenant_id', tenantId);
 
@@ -67,7 +85,7 @@ export async function runBackup() {
           generated_at: new Date().toISOString(),
           tenant_id: tenant.id,
           tenant_name: tenant.name,
-          schema_version: '0006',
+          schema_version: '0037',
           tables: TABLES.length,
           rows: totalRows,
         },
@@ -98,7 +116,12 @@ export async function runBackup() {
 /** Elimina respaldos más antiguos que la retención configurada (RF-M9-02). */
 export async function cleanupOldBackups() {
   const tenants = await activeTenants();
-  const cutoff = new Date(Date.now() - env.backupRetentionDays * 864e5);
+  // BACKUP_RETENTION_DAYS=0 (o negativo) dejaba el corte en "ahora" y borraba
+  // todos los respaldos, también el de esta madrugada. Menos de 1 día no es
+  // una retención: se usan los 30 de omisión y se avisa.
+  const dias = Number.isFinite(env.backupRetentionDays) && env.backupRetentionDays >= 1 ? env.backupRetentionDays : 30;
+  if (dias !== env.backupRetentionDays) log.warn('BACKUP_RETENTION_DAYS no válido: se usan 30 días', { valor: env.backupRetentionDays });
+  const cutoff = new Date(Date.now() - dias * 864e5);
   let removed = 0;
 
   for (const tenant of tenants) {
@@ -116,10 +139,11 @@ export async function cleanupOldBackups() {
       .map((f) => `${tenant.id}/${f.name}`);
 
     if (stale.length > 0) {
-      await admin.storage.from(env.backupBucket).remove(stale);
-      removed += stale.length;
+      const { error: eBorrar } = await admin.storage.from(env.backupBucket).remove(stale);
+      if (eBorrar) log.warn('No se pudieron borrar respaldos viejos', { tenant: tenant.name, error: eBorrar.message });
+      else removed += stale.length;
     }
   }
 
-  return { removed, retentionDays: env.backupRetentionDays };
+  return { removed, retentionDays: dias };
 }

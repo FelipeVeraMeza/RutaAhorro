@@ -167,15 +167,10 @@ const repoSupabase: RepositorioUsuarios = {
   async invitar({ nombre, email, rol }) {
     // La invitación la emite el servidor: crear usuarios en Auth requiere la
     // llave de servicio, que jamás puede estar en el navegador (RNF-25).
-    const res = await fetch('/api/usuarios/invitar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre, email, rol }),
-    });
-    if (!res.ok) {
-      const cuerpo = await res.json().catch(() => ({}));
-      throw new Error(cuerpo?.error?.code ?? 'ERROR_INTERNO');
-    }
+    // Por `llamar`, como crear y restablecer: antes el texto del servidor se
+    // perdía (salía "problema inesperado" sin decir qué pasó con el correo)
+    // y sin red no se decía que era la conexión.
+    await llamar('/api/usuarios/invitar', { nombre, email, rol });
   },
 
   async crearConClave(datos) {

@@ -7,6 +7,7 @@ import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { useFormatoFecha, diaCorto } from '@/lib/formatoFecha';
 import { repoProveedores, type Proveedor } from '@/lib/datos/proveedores';
+import { useConfiguracion } from '@/lib/datos/configuracion';
 import { repoFacturacion, type FacturaRecibida, type TipoRecibida } from '@/lib/datos/facturacion';
 
 const TIPOS: Array<[TipoRecibida, string]> = [
@@ -90,6 +91,7 @@ export function Recibidas({ mes }: { mes: string }) {
 
 function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHecho: () => void }) {
   const { zona } = useFormatoFecha();
+  const { ivaPct } = useConfiguracion();
   const hoy = diaLocal(new Date(), zona);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [supplierId, setSupplierId] = useState<string | null>(null);
@@ -126,8 +128,9 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
   const vNeto = validarMonto(neto, { etiqueta: 'neto', permiteVacio: true });
   const vExento = validarMonto(exento, { etiqueta: 'exento', permiteVacio: true });
   const vOtros = validarMonto(otros, { etiqueta: 'otros impuestos', permiteVacio: true });
-  // El IVA se propone (19 % del neto) y se puede corregir: se copia del papel.
-  const ivaPropuesto = tipo === 34 ? 0 : Math.round(vNeto.valor * 0.19);
+  // El IVA se propone (la tasa del local, 19 %) y se puede corregir: se copia
+  // del papel. Antes el 19 estaba escrito acá aparte de la configuración.
+  const ivaPropuesto = tipo === 34 ? 0 : Math.round(vNeto.valor * ivaPct / 100);
   const vIva = validarMonto(ivaEditado ? iva : String(ivaPropuesto), { etiqueta: 'IVA', permiteVacio: true });
   const total = vNeto.valor + vExento.valor + vIva.valor + vOtros.valor;
   const vFolio = Number(folio.replace(/\D/g, ''));
@@ -145,6 +148,10 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
   }
   function alCambiarRut(t: string) {
     setRut(t);
+    // Otro RUT ya no es el proveedor elegido: su razón social quedaba y el
+    // libro de compras (y el proveedor nuevo que se crea solo) salía con el
+    // RUT de uno y el nombre de otro.
+    if (supplierId) setRazon('');
     setSupplierId(null);
     if (!isValidRut(t)) return;
     const p = proveedores.find((x) => soloRut(x.rut) === soloRut(t));
@@ -244,7 +251,7 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
           <Campo etiqueta="Neto" error={vNeto.valido ? null : vNeto.error}>
             {(p) => <input {...p} inputMode="numeric" value={neto} onChange={(e) => setNeto(e.target.value)} className={`${c} num text-right`} />}
           </Campo>
-          <Campo etiqueta="IVA" ayuda={ivaEditado ? undefined : '19 % del neto'} error={vIva.valido ? null : vIva.error}>
+          <Campo etiqueta="IVA" ayuda={ivaEditado ? undefined : `${ivaPct} % del neto`} error={vIva.valido ? null : vIva.error}>
             {(p) => <input {...p} inputMode="numeric" value={ivaEditado ? iva : String(ivaPropuesto)}
                            onChange={(e) => { setIvaEditado(true); setIva(e.target.value); }} className={`${c} num text-right`} />}
           </Campo>

@@ -146,6 +146,21 @@ function EditarCombo({ combo, productos, onCerrar, onGuardado }: {
 
   async function guardar() {
     setError(null);
+    // Apagar un combo no lo revalida (la base tampoco, 0037): si un producto
+    // bajó de precio o se desactivó, el combo ya no "sale más barato" y antes
+    // no había cómo dejar de aplicarlo.
+    if (combo && !activo) {
+      setGuardando(true);
+      try {
+        await repoCombos().guardar({ ...combo, activo: false });
+        onGuardado(`Combo "${combo.nombre}" desactivado`);
+      } catch (e) {
+        setError(toUserMessage(e));
+      } finally {
+        setGuardando(false);
+      }
+      return;
+    }
     const malo = cantidades.findIndex((c) => !c.valido);
     if (malo >= 0) { setError(`${porId.get(items[malo].productId)?.nombre}: ${cantidades[malo].error}`); return; }
     if (!vPrecio.valido) { setError(vPrecio.error); return; }

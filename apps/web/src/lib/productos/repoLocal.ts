@@ -9,6 +9,7 @@ import type {
   Categoria, Producto, ProductoEditable, ProductoNuevo,
   RepositorioProductos, ResultadoLote,
 } from './tipos';
+import { cambiosDesdePlanilla } from './tipos';
 
 /**
  * Repositorio respaldado por IndexedDB (modo demo).
@@ -149,7 +150,7 @@ export const repoLocal: RepositorioProductos = {
     }
 
     todos.sort((a, b) => a.name.localeCompare(b.name, 'es'));
-    const pagina = todos.slice(0, filtro.limite ?? 200);
+    const pagina = todos.slice(0, filtro.limite ?? 20_000);
     return Promise.all(pagina.map((p) => aProducto(p, verCostos, cats, costos)));
   },
 
@@ -326,17 +327,11 @@ export const repoLocal: RepositorioProductos = {
             .map((b) => b.barcode);
           const codigos = codigosDesdeImportacion(previos, fila.codigo_barras);
 
+          // Lo que la planilla no trae queda como estaba (`sinDato`).
+          const actual = await this.obtener(existente.id, true);
+          if (!actual) throw new Error('PRODUCTO_NO_ENCONTRADO');
           await this.actualizar(existente.id, {
-            nombre: fila.nombre,
-            descripcion: fila.descripcion,
-            sku: fila.sku,
-            categoriaId,
-            unidad: fila.unidad,
-            precioVenta: fila.precio_venta,
-            costo: fila.costo,
-            stockMinimo: fila.stock_minimo,
-            perecible: fila.perecible,
-            diasAlerta: fila.dias_alerta,
+            ...cambiosDesdePlanilla(fila, actual, categoriaId),
             ...(codigos ? { codigos } : {}),
           });
           resultado.actualizados++;
@@ -360,7 +355,7 @@ export const repoLocal: RepositorioProductos = {
         }
       } catch (e) {
         resultado.errores.push({
-          fila: i + 2,
+          fila: fila.fila ?? i + 2,
           nombre: fila.nombre,
           mensaje: toUserMessage(e),
         });

@@ -40,17 +40,31 @@ async function leer(): Promise<ConfiguracionLocal> {
     return desdeSettings({ redondeo_efectivo: true, ...(guardada ? JSON.parse(guardada) : {}) });
   }
 
-  const { data, error } = await supabase().from('tenants').select('settings').maybeSingle();
-  // Si no se puede leer, se sigue con los valores por omisión: quedarse sin
-  // vender porque no cargó la configuración sería mucho peor que cobrar con el
-  // IVA por omisión, que además es el que corresponde en Chile.
-  if (error || !data) return CONFIGURACION_POR_OMISION;
-
+  const { data, error } = await supabase().from('tenants').select('settings').maybeSingle()
+    .then((r) => r, (e: unknown) => ({ data: null, error: e }));
+  // Si no se puede leer, se sigue con la última leída en este navegador, y si
+  // no hay, con los valores por omisión: quedarse sin vender porque no cargó la
+  // configuración sería mucho peor. Antes eran siempre los de omisión, y
+  // quedaban guardados toda la sesión: el POS abierto sin internet cobraba sin
+  // el redondeo del efectivo y con la zona horaria de omisión hasta recargar.
+  if (error || !data) {
+    cache = null;   // se vuelve a intentar en la próxima lectura
+    try {
+      const ultima = localStorage.getItem(CLAVE_ULTIMA);
+      if (ultima) return desdeSettings(JSON.parse(ultima));
+    } catch { /* sin almacenamiento */ }
+    return CONFIGURACION_POR_OMISION;
+  }
+  try { localStorage.setItem(CLAVE_ULTIMA, JSON.stringify(data.settings ?? {})); } catch { /* sin almacenamiento */ }
   return desdeSettings(data.settings);
 }
 
+const CLAVE_ULTIMA = 'ra:configuracion';
+
 /** Configuración del local. Se consulta una vez y se reutiliza. */
 export function configuracionLocal(): Promise<ConfiguracionLocal> {
+  // Si la lectura falla, `leer` vuelve a dejar `cache` en null (después de
+  // esta asignación, porque espera a la red): la próxima vez se reintenta.
   cache ??= leer();
   return cache;
 }

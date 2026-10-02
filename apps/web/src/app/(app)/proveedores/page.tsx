@@ -35,6 +35,7 @@ export default async function ProveedoresPage({ searchParams }: {
   return (
     <ProveedoresClient
       puedeAnular={user.role === 'admin'}
+      puedeEditarProveedores={user.role === 'admin'}
       verCostos={user.role === 'admin'}
       local={local}
       verPorPagar={user.role === 'admin' || user.role === 'supervisor'}

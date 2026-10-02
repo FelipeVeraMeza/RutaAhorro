@@ -123,7 +123,8 @@ test('Un cajero no puede inventar ventas ni pagos fuera de fn_register_sale', as
 
 test('Un supervisor no puede editar el total de una venta ni anularla sin devolver stock', async () => {
   const p = await A.producto({ stock: 10 });
-  const { c: sup } = await sesionAbierta(A, A.bodega);
+  // Desde 0037 bodega no abre caja ni vende: la venta la hace otra cuenta.
+  const { c: sup } = await sesionAbierta(A, await A.usuario('vendedor', 'cajero-total'));
   const { sale_id } = await rpc(sup, 'fn_register_sale', venta(p, 2, 1000));
   const s = await banco.como(A.supervisor);
   const r1 = await intentar(s.query(`update sales set total = 1 where id = $1`, [sale_id]));

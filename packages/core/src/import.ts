@@ -25,6 +25,17 @@ export interface FilaProducto {
   stock_minimo: number;
   perecible: boolean;
   dias_alerta: number;
+  /**
+   * Los datos opcionales que esta fila NO trae (columna ausente o celda en
+   * blanco). Al actualizar un producto que ya existe, esos quedan como
+   * estaban. Antes se escribían los valores por omisión: una planilla del
+   * proveedor con solo nombre, SKU y precio dejaba el costo de cada producto
+   * en $0 (y con él el margen y el inventario valorizado), el mínimo en 0, la
+   * categoría vacía y los perecibles como no perecibles.
+   */
+  sinDato?: Array<'descripcion' | 'sku' | 'categoria' | 'costo' | 'stock_minimo' | 'perecible' | 'dias_alerta'>;
+  /** El número de fila como lo ve el usuario en Excel, para los errores al cargar. */
+  fila?: number;
 }
 
 export interface ErrorFila {
@@ -216,6 +227,15 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
       errores.push({ fila: nFila, columna: 'precio_venta', mensaje: 'El precio no es un número válido', valor: precioBruto });
     } else if (precio < 0) {
       errores.push({ fila: nFila, columna: 'precio_venta', mensaje: 'El precio no puede ser negativo', valor: precioBruto });
+    } else if (precio === 0) {
+      // Un producto a $0 se vende regalado: casi siempre es una celda vacía
+      // con fórmula o un precio que no se alcanzó a escribir.
+      errores.push({ fila: nFila, columna: 'precio_venta', mensaje: 'El precio tiene que ser mayor que cero', valor: precioBruto });
+    } else if (!Number.isInteger(precio) && precioBruto.includes(',')) {
+      // "1590,5" escrito a mano se redondeaba a 1.591 sin aviso: los pesos no
+      // llevan decimales. Una celda de Excel calculada (=costo*1,19) trae el
+      // número crudo con punto y se muestra redondeada: esa se sigue redondeando.
+      errores.push({ fila: nFila, columna: 'precio_venta', mensaje: 'Los pesos van sin decimales', valor: precioBruto });
     }
 
     const costoBruto = campo(cols, 'costo');
@@ -224,6 +244,8 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
       errores.push({ fila: nFila, columna: 'costo', mensaje: 'El costo no es un número válido', valor: costoBruto });
     } else if (costo < 0) {
       errores.push({ fila: nFila, columna: 'costo', mensaje: 'El costo no puede ser negativo', valor: costoBruto });
+    } else if (!Number.isInteger(costo) && costoBruto.includes(',')) {
+      errores.push({ fila: nFila, columna: 'costo', mensaje: 'Los pesos van sin decimales', valor: costoBruto });
     }
 
     // Vender bajo el costo es legal, pero casi siempre es un error de tipeo.
@@ -292,9 +314,13 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
     const minimo = minimoBruto === '' ? 0 : leerNumero(minimoBruto);
     if (minimo === null) {
       errores.push({ fila: nFila, columna: 'stock_minimo', mensaje: 'El stock mínimo no es un número válido', valor: minimoBruto });
+    } else if (minimo < 0 || !Number.isInteger(minimo)) {
+      // Se aceptaba "-3" o "2,5": un mínimo que no existe en unidades.
+      errores.push({ fila: nFila, columna: 'stock_minimo', mensaje: 'El stock mínimo va en unidades enteras, 0 o más', valor: minimoBruto });
     }
 
-    const perecible = leerBooleano(campo(cols, 'perecible'));
+    const perecibleBruto = campo(cols, 'perecible');
+    const perecible = leerBooleano(perecibleBruto);
     const diasBruto = campo(cols, 'dias_alerta');
     const dias = diasBruto === '' ? 30 : (leerNumero(diasBruto) ?? 30);
 
@@ -314,6 +340,12 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
         stock_minimo: minimo,
         perecible,
         dias_alerta: Math.max(0, Math.round(dias)),
+        fila: nFila,
+        sinDato: ([
+          ['descripcion', campo(cols, 'descripcion')], ['sku', campo(cols, 'sku')],
+          ['categoria', campo(cols, 'categoria')], ['costo', costoBruto], ['stock_minimo', minimoBruto],
+          ['perecible', perecibleBruto], ['dias_alerta', diasBruto],
+        ] as const).filter(([, v]) => v === '').map(([k]) => k),
       });
     }
   }

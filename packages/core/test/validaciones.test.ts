@@ -92,6 +92,18 @@ describe('mensajes de error en lenguaje del negocio (RNF-20)', () => {
     expect(toUserMessage({ message: 'UNA_SOLA_BODEGA' })).toMatch(/una sola bodega/);
   });
 
+  it('borrar algo que otra tabla usa dice qué hacer, no "problema inesperado"', () => {
+    expect(toUserMessage({ message: 'update or delete on table "products" violates foreign key constraint "combo_items_product_id_fkey" on table "combo_items"' }))
+      .toBe(ERROR_MESSAGES.EN_USO);
+  });
+
+  it('los códigos que levanta 0037 tienen su mensaje', () => {
+    for (const c of ['MONTO_NEGATIVO', 'CANTIDAD_NEGATIVA', 'MERMA_SUMA_STOCK', 'CAJA_NO_ABIERTA_DEVOLUCION',
+      'PROVEEDOR_NO_ENCONTRADO', 'RECEPCION_YA_ANULADA', 'FECHA_INVALIDA', 'CANTIDAD_INVALIDA', 'COMBO_NO_ENCONTRADO']) {
+      expect(toUserMessage({ message: c }), c).not.toBe(ERROR_MESSAGES.ERROR_INTERNO);
+    }
+  });
+
   it('nombra el producto concreto cuando falta stock', () => {
     expect(toUserMessage({ message: 'STOCK_INSUFICIENTE: Coca-Cola 1.5L' }))
       .toBe('No hay stock suficiente de Coca-Cola 1.5L');

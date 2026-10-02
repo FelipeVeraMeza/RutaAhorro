@@ -37,7 +37,12 @@ export async function POST(request: Request) {
   }
 
   if (admin) {
-    await admin.auth.admin.updateUserById(yo.id, { app_metadata: { debe_cambiar_clave: false } });
+    // Si esto falla la clave ya cambió, pero la marca sigue: la pantalla decía
+    // "Contraseña guardada" y volvía a pedirla, sin explicar por qué.
+    const { error: e2 } = await admin.auth.admin.updateUserById(yo.id, { app_metadata: { debe_cambiar_clave: false } });
+    if (e2 && yo.debeCambiarClave) {
+      return respuestaError('ERROR_INTERNO', 'Tu contraseña nueva quedó guardada, pero no se pudo quitar la marca de contraseña temporal. Sal y entra con la nueva', 500);
+    }
   }
   return Response.json({ ok: true });
 }

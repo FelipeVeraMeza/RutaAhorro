@@ -183,11 +183,14 @@ function EditarImpuesto({ inicial, onCerrar, onGuardado }: {
     if (!nombre.trim()) { setError('El impuesto necesita un nombre'); return; }
     if (!vTasa.valido || vTasa.valor <= 0) { setError('La tasa tiene que ser un porcentaje mayor que 0'); return; }
     if (!vCodigo.valido) { setError(vCodigo.error); return; }
+    // El código del SII es un número entero: "27,5" se redondeaba a 28 sin
+    // aviso, y 28 es otro impuesto en la boleta.
+    if (codigo.trim() && !Number.isInteger(vCodigo.valor)) { setError('El código SII es un número entero, como 27 o 271'); return; }
     setGuardando(true);
     try {
       await repoPrecios().guardarImpuesto({
         id: inicial.id ?? null, nombre: nombre.trim(), tasa: vTasa.valor,
-        codigoSii: codigo.trim() ? Math.round(vCodigo.valor) : null, activo,
+        codigoSii: codigo.trim() ? vCodigo.valor : null, activo,
       });
       onGuardado(inicial.id
         ? `${nombre.trim()} quedó en ${String(vTasa.valor).replace('.', ',')}% para las ventas desde ahora`

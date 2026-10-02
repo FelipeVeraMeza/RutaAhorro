@@ -1,5 +1,5 @@
 import { getCurrentUser } from '@/lib/supabase/server';
-import { clienteAdmin, MINIMO_CLAVE, respuestaError } from '@/lib/supabase/admin';
+import { clienteAdmin, autorizarCuenta, retirarAutorizacion, MINIMO_CLAVE, respuestaError } from '@/lib/supabase/admin';
 
 const ROLES = ['admin', 'supervisor', 'vendedor', 'bodega'] as const;
 
@@ -39,6 +39,11 @@ export async function POST(request: Request) {
     return respuestaError('SERVIDOR_SIN_LLAVE', 'Falta SUPABASE_SECRET_KEY en el servidor', 500);
   }
 
+  // 0037 · El local y el rol se autorizan aparte: el disparador ya no le cree
+  // al metadata.
+  const aut = await autorizarCuenta(admin, { email, tenantId: actor.tenantId, storeId: actor.storeId, rol, nombre });
+  if (aut.error) return respuestaError('ERROR_INTERNO', aut.error, 500);
+
   const { data: creado, error } = await admin.auth.admin.createUser({
     email,
     password: clave,
@@ -54,6 +59,7 @@ export async function POST(request: Request) {
   });
 
   if (error || !creado?.user) {
+    await retirarAutorizacion(admin, email);
     const yaExiste = /already|registered|exists/i.test(error?.message ?? '');
     return yaExiste
       ? respuestaError('CORREO_YA_REGISTRADO', 'Ese correo ya tiene un usuario', 409)

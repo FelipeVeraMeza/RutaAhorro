@@ -317,7 +317,9 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
       // factura recibida acá había que anotarla otra vez en Facturación.
       if (tipoDoc === 'factura' && puedePagar) {
         const prov = proveedores.find((p) => p.id === proveedorId);
-        const folio = Number(documento.trim());
+        // "12.345" (con punto de miles, como se lee en el papel) es un número:
+        // antes no quedaba en el libro de compras por "no ser un número".
+        const folio = Number(documento.trim().replace(/[.\s]/g, ''));
         if (!prov?.rut) {
           pendiente.push('No quedó en el libro de compras: el proveedor no tiene RUT. Agrégalo en Compras y regístrala en Facturación → Recibidas.');
         } else if (!Number.isInteger(folio) || folio <= 0) {

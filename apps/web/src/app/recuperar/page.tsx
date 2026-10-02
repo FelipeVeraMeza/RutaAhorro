@@ -20,6 +20,10 @@ import { supabase } from '@/lib/supabase/client';
  */
 const MINIMO = 8;
 
+/** Supabase no lanza sin red: devuelve el error con status 0 (o 5xx). */
+const sinConexion = (e: { status?: number; name?: string }) =>
+  e.name === 'AuthRetryableFetchError' || e.status === 0 || (e.status ?? 0) >= 500;
+
 type Modo = 'cargando' | 'pedir' | 'enviado' | 'crear' | 'invalido';
 
 function Recuperar() {
@@ -75,12 +79,20 @@ function Recuperar() {
     e.preventDefault();
     setTrabajando(true);
     setError(null);
-    await supabase().auth.resetPasswordForEmail(email.trim(), {
+    const { error: e1 } = await supabase().auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/recuperar`,
-    });
+    }).catch((x: unknown) => ({ error: x as { status?: number; name?: string } }));
+    setTrabajando(false);
+    // Sin red o con demasiados pedidos no se mandó nada: antes igual decía
+    // "Revisa tu correo" y la persona esperaba un enlace que nunca iba a
+    // llegar. Estos dos casos no revelan si el correo existe.
+    if (e1 && sinConexion(e1)) { setError('No hay conexión con el servidor. Revisa internet y vuelve a intentar.'); return; }
+    if (e1 && (e1 as { status?: number }).status === 429) {
+      setError('Ya se pidieron varios enlaces seguidos. Espera unos minutos y revisa tu correo (también el no deseado).');
+      return;
+    }
     // La respuesta es la misma exista o no el correo: decir "no existe"
     // permite averiguar quién trabaja en el local.
-    setTrabajando(false);
     setModo('enviado');
   }
 
@@ -93,7 +105,9 @@ function Recuperar() {
     const { error: e2 } = await supabase().auth.updateUser({ password: clave });
     setTrabajando(false);
     if (e2) {
-      setError(/should be different/i.test(e2.message)
+      setError(sinConexion(e2)
+        ? 'No hay conexión con el servidor. Revisa internet y vuelve a intentar: el enlace sigue sirviendo.'
+        : /should be different/i.test(e2.message)
         ? 'La contraseña nueva tiene que ser distinta de la anterior'
         : /weak|at least/i.test(e2.message)
           ? 'Esa contraseña es muy fácil de adivinar. Usa una más larga o con números.'
@@ -130,6 +144,7 @@ function Recuperar() {
                 required autoFocus value={email} onChange={(e) => setEmail(e.target.value)}
                 className={campo} placeholder="tu@correo.cl" />
             </div>
+            {error && <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
             <button type="submit" disabled={trabajando}
               className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-semibold disabled:opacity-50">
               {trabajando ? 'Enviando…' : 'Enviar enlace'}

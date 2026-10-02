@@ -77,12 +77,16 @@ export function lineSubtotal(line: CartLine): number {
 
 export function cartTotals(lines: CartLine[], globalDiscount = 0): CartTotals {
   const gross = lines.reduce((sum, l) => sum + clp(l.unitPrice * l.quantity), 0);
-  const lineDiscounts = lines.reduce((sum, l) => sum + descuentoDeLinea(l), 0);
-  const discountTotal = clp(lineDiscounts + globalDiscount);
+  // Cada línea aporta como mucho su propio bruto, igual que en la base
+  // (fn_register_sale topa el subtotal de la línea en 0). Restar el descuento
+  // entero rebajaba las OTRAS líneas: el total de la pantalla quedaba bajo el
+  // de la base y la venta se rechazaba con PAGO_NO_CUADRA.
+  const lineas = lines.reduce((sum, l) => sum + lineSubtotal(l), 0);
+  const total = Math.max(lineas - clp(globalDiscount), 0);
   return {
     subtotal: clp(gross),
-    discountTotal,
-    total: Math.max(clp(gross) - discountTotal, 0),
+    discountTotal: clp(gross) - total,
+    total,
     itemCount: lines.length,
     unitCount: lines.reduce((sum, l) => sum + l.quantity, 0),
   };
@@ -140,12 +144,18 @@ export function insufficientStock(lines: CartLine[]): CartLine[] {
   );
 }
 
-/** Utilidad bruta estimada del carrito. Solo se muestra a admin (RF-M2-10). */
-export function estimatedProfit(lines: CartLine[]): number {
-  return lines.reduce(
-    (sum, l) => sum + lineSubtotal(l) - clp((l.unitCost ?? 0) * l.quantity),
-    0,
-  );
+/**
+ * Utilidad bruta estimada del carrito. Solo se muestra a admin (RF-M2-10).
+ *
+ * El costo es neto desde 2026-10-01 (docs/26 N° 13) y el precio trae IVA (y
+ * el impuesto adicional): se pasa cada línea a neto antes de restar. Restar
+ * el costo neto del precio con IVA le sumaba a la utilidad lo que es del fisco.
+ */
+export function estimatedProfit(lines: CartLine[], ivaPct = 19): number {
+  return lines.reduce((sum, l) => {
+    const neto = clp(lineSubtotal(l) / (1 + ivaPct / 100 + (l.tasaAdicional ?? 0) / 100));
+    return sum + neto - clp((l.unitCost ?? 0) * l.quantity);
+  }, 0);
 }
 
 /**

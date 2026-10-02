@@ -373,15 +373,19 @@ const repoSupabase: RepositorioReportes = {
     return filas;
   },
 
+  // Todas las consultas de abajo van por páginas (`todas`): la API corta en
+  // 1.000 filas y estas vistas traen una fila por producto (o vendedor) y
+  // día. Un mes de 100 productos son 3.000 filas: el reporte sumaba solo las
+  // primeras 1.000 y mostraba ventas, utilidad e inventario cortos sin aviso.
   async ventasPorDia({ desde, hasta }) {
-    const { data, error } = await supabase()
+    const data = await todas((a, b) => supabase()
       .from('v_sales_daily')
       .select('sale_date, sales_count, total_amount, average_ticket')
       .gte('sale_date', desde)
       .lte('sale_date', hasta)
-      .order('sale_date');
-    if (error) throw error;
-    return (data ?? []).map((d) => ({
+      .order('sale_date')
+      .range(a, b));
+    return data.map((d) => ({
       fecha: d.sale_date as string,
       ventas: Number(d.sales_count ?? 0),
       total: Number(d.total_amount ?? 0),
@@ -393,15 +397,16 @@ const repoSupabase: RepositorioReportes = {
     // La vista trae una fila por producto y día. Se suma acá porque PostgREST
     // no agrupa: es el único caso del módulo donde el navegador hace cuentas,
     // y sobre un conjunto ya acotado por fecha.
-    const { data, error } = await supabase()
+    const data = await todas((a, b) => supabase()
       .from('v_sales_by_product')
       .select('product_id, product_name, category_id, units_sold, revenue, cost, gross_profit')
       .gte('sale_date', desde)
-      .lte('sale_date', hasta);
-    if (error) throw error;
+      .lte('sale_date', hasta)
+      .order('sale_date').order('product_id').order('product_name')
+      .range(a, b));
 
     const porProducto = new Map<string, VentaPorProducto>();
-    for (const f of data ?? []) {
+    for (const f of data) {
       const id = f.product_id as string;
       const previo = porProducto.get(id) ?? {
         productoId: id,
@@ -422,15 +427,16 @@ const repoSupabase: RepositorioReportes = {
   },
 
   async ventasPorUsuario({ desde, hasta }) {
-    const { data, error } = await supabase()
+    const data = await todas((a, b) => supabase()
       .from('v_sales_by_user')
       .select('user_id, full_name, sales_count, total_amount')
       .gte('sale_date', desde)
-      .lte('sale_date', hasta);
-    if (error) throw error;
+      .lte('sale_date', hasta)
+      .order('sale_date').order('user_id')
+      .range(a, b));
 
     const porUsuario = new Map<string, VentaPorUsuario>();
-    for (const f of data ?? []) {
+    for (const f of data) {
       const id = (f.user_id as string) ?? 'sin-usuario';
       const previo = porUsuario.get(id)
         ?? { usuarioId: id, nombre: (f.full_name as string) ?? 'Sin nombre', ventas: 0, total: 0 };
@@ -442,13 +448,13 @@ const repoSupabase: RepositorioReportes = {
   },
 
   async inventarioValorizado() {
-    const { data, error } = await supabase()
+    const data = await todas((a, b) => supabase()
       .from('v_inventory_valued')
       .select('product_id, name, category_name, quantity, avg_cost, cost_value, sale_value')
       .gt('quantity', 0)
-      .order('cost_value', { ascending: false });
-    if (error) throw error;
-    return (data ?? []).map((p) => ({
+      .order('cost_value', { ascending: false }).order('product_id')
+      .range(a, b));
+    return data.map((p) => ({
       productoId: p.product_id as string,
       nombre: (p.name as string) ?? 'Producto',
       categoria: (p.category_name as string | null) ?? null,
@@ -460,14 +466,14 @@ const repoSupabase: RepositorioReportes = {
   },
 
   async sinMovimiento(diasMinimos) {
-    const { data, error } = await supabase()
+    const data = await todas((a, b) => supabase()
       .from('v_stale_products')
       .select('product_id, name, quantity, cost_value, days_idle')
       .gte('days_idle', diasMinimos)
       .gt('quantity', 0)
-      .order('cost_value', { ascending: false });
-    if (error) throw error;
-    return (data ?? []).map((p) => ({
+      .order('cost_value', { ascending: false }).order('product_id')
+      .range(a, b));
+    return data.map((p) => ({
       productoId: p.product_id as string,
       nombre: (p.name as string) ?? 'Producto',
       cantidad: Number(p.quantity ?? 0),
@@ -477,14 +483,14 @@ const repoSupabase: RepositorioReportes = {
   },
 
   async ajustes({ desde, hasta }) {
-    const { data, error } = await supabase()
+    const data = await todas((a, b) => supabase()
       .from('v_adjustments')
       .select('adj_date, movement_type, product_name, quantity, reason, value_impact, created_by_name')
       .gte('adj_date', desde)
       .lte('adj_date', hasta)
-      .order('adj_date', { ascending: false });
-    if (error) throw error;
-    return (data ?? []).map((a) => ({
+      .order('adj_date', { ascending: false }).order('product_id').order('movement_type').order('quantity')
+      .range(a, b));
+    return data.map((a) => ({
       fecha: a.adj_date as string,
       tipo: a.movement_type as string,
       productoNombre: (a.product_name as string) ?? 'Producto',

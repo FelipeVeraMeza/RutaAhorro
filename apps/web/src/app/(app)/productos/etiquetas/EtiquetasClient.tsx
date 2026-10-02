@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   diaLocal,
   formatCLP, etiquetaSvg, generateInternalBarcode, toUserMessage, admiteDecimales,
@@ -49,14 +49,20 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
   // RF-M2-22 · además del código de barras, el cartel de precio de la repisa.
   const [tipo, setTipo] = useState<'codigo' | 'gondola'>('codigo');
 
+  // Solo la respuesta de la última búsqueda (como en Productos).
+  const pedido = useRef(0);
   const cargar = useCallback(async () => {
+    const este = ++pedido.current;
     setCargando(true);
+    // Sin esto, un error anterior (sin red) seguía arriba con la lista ya cargada.
+    setError(null);
     try {
-      setProductos(await repoProductos().listar({ busqueda, soloActivos: true }, puedeVerCostos));
+      const lista = await repoProductos().listar({ busqueda, soloActivos: true }, puedeVerCostos);
+      if (este === pedido.current) setProductos(lista);
     } catch (e) {
-      setError(toUserMessage(e));
+      if (este === pedido.current) setError(toUserMessage(e));
     } finally {
-      setCargando(false);
+      if (este === pedido.current) setCargando(false);
     }
   }, [busqueda, puedeVerCostos]);
 

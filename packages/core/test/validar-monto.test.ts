@@ -97,4 +97,17 @@ describe('validarCantidad', () => {
   it('respeta el tope', () => {
     expect(validarCantidad('5000', { maximo: 1000 }).valido).toBe(false);
   });
+
+  it('lee el punto de miles como en Chile: "1.000" son mil, no uno (docs/28)', () => {
+    expect(validarCantidad('1.000').valor).toBe(1000);
+    expect(validarCantidad('12.500').valor).toBe(12500);
+    expect(validarCantidad('0.5').valor).toBe(0.5);
+  });
+
+  it('no acepta notación científica ni hexadecimal', () => {
+    for (const t of ['1e3', '0x10', 'Infinity', '1,5,3', '1.2.3']) {
+      expect(validarCantidad(t).valido).toBe(false);
+    }
+    expect(validarCantidad('1,').valor).toBe(1);
+  });
 });

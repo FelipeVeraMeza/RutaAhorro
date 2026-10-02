@@ -32,6 +32,8 @@ const MOTIVOS: Record<string, string> = {
 
 type Tipo = 'pct' | 'precio';
 
+const diaLegible = (d: string) => d.split('-').reverse().join('-');
+
 export function OfertasMasivasClient({ esAdmin }: { esAdmin: boolean }) {
   const config = useConfiguracion();
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -340,7 +342,8 @@ export function OfertasMasivasClient({ esAdmin }: { esAdmin: boolean }) {
             <p>
               <strong>Desde {String(oferta.tramo.desde).replace('.', ',')} unidades, {describirTramo(oferta.tramo)}</strong>
               {oferta.tramo.vigenteDesde || oferta.tramo.vigenteHasta
-                ? `, del ${oferta.tramo.vigenteDesde ?? 'hoy'} al ${oferta.tramo.vigenteHasta ?? 'sin término'}` : ''}
+                // En días como los escribe el local (dd-mm-aaaa): salía "2026-10-05".
+                ? `, del ${oferta.tramo.vigenteDesde ? diaLegible(oferta.tramo.vigenteDesde) : 'hoy'} al ${oferta.tramo.vigenteHasta ? diaLegible(oferta.tramo.vigenteHasta) : 'sin término'}` : ''}
               {' '}a {marcados.size - seSaltan} {marcados.size - seSaltan === 1 ? 'producto' : 'productos'}.
             </p>
             {seSaltan > 0 && <p>Se saltan {seSaltan}: la oferta no es más barata que su precio normal.</p>}

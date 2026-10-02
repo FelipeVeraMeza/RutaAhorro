@@ -1,7 +1,7 @@
 'use client';
 import { Icono } from '@/components/Icono';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatCLP, formatCantidad, formatPct, toUserMessage, aCSV, nombreArchivoReporte, type ColumnaCSV,
   periodoAnterior, variacionPct, serieCompleta, diasEnRango, ventasPorHora, clasificacionABC,
@@ -82,8 +82,14 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
    * fecha, y el dueño mira uno a la vez. En un celular con datos móviles la
    * diferencia se siente.
    */
+  // Solo vale la respuesta del último pedido: con dos cambios de fecha
+  // seguidos, la primera consulta (un rango más largo, más lenta) llegaba
+  // después y el reporte mostraba otro período que el de las fechas elegidas.
+  const pedido = useRef(0);
   const cargar = useCallback(async () => {
     if (rangoInvertido) return;
+    const este = ++pedido.current;
+    const vigente = () => este === pedido.current;
     setCargando(true);
     setError(null);
     try {
@@ -91,6 +97,7 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
       if (vista === 'ventas') {
         const previo = periodoAnterior(rango.desde, rango.hasta);
         const [actual, antes] = await Promise.all([repo.ventasPorDia(rango), repo.ventasPorDia(previo)]);
+        if (!vigente()) return;
         setVentas(actual);
         setAnterior({
           total: antes.reduce((s, d) => s + d.total, 0),
@@ -98,17 +105,17 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
           ...previo,
         });
       }
-      if (vista === 'productos') setProductos(await repo.ventasPorProducto(rango, verCostos));
-      if (vista === 'horas') setPorHora(ventasPorHora(await repo.ventasCrudas(rango), zona));
-      if (vista === 'control') setControl(await repo.controlAnulaciones(rango));
-      if (vista === 'usuarios') setUsuarios(await repo.ventasPorUsuario(rango));
-      if (vista === 'inventario') setInventario(await repo.inventarioValorizado());
-      if (vista === 'dormido') setDormido(await repo.sinMovimiento(diasDormido));
-      if (vista === 'ajustes') setAjustes(await repo.ajustes(rango));
+      if (vista === 'productos') { const r = await repo.ventasPorProducto(rango, verCostos); if (vigente()) setProductos(r); }
+      if (vista === 'horas') { const r = ventasPorHora(await repo.ventasCrudas(rango), zona); if (vigente()) setPorHora(r); }
+      if (vista === 'control') { const r = await repo.controlAnulaciones(rango); if (vigente()) setControl(r); }
+      if (vista === 'usuarios') { const r = await repo.ventasPorUsuario(rango); if (vigente()) setUsuarios(r); }
+      if (vista === 'inventario') { const r = await repo.inventarioValorizado(); if (vigente()) setInventario(r); }
+      if (vista === 'dormido') { const r = await repo.sinMovimiento(diasDormido); if (vigente()) setDormido(r); }
+      if (vista === 'ajustes') { const r = await repo.ajustes(rango); if (vigente()) setAjustes(r); }
     } catch (e) {
-      setError(toUserMessage(e));
+      if (vigente()) setError(toUserMessage(e));
     } finally {
-      setCargando(false);
+      if (vigente()) setCargando(false);
     }
   }, [vista, rango, rangoInvertido, verCostos, diasDormido, zona]);
 

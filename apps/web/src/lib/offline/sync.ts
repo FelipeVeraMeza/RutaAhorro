@@ -31,10 +31,23 @@ export function newClientUuid(): string {
  * Usuario de la sesión, leído del almacenamiento local y no del servidor:
  * tiene que funcionar sin conexión, que es cuando más se encola.
  */
+const ULTIMO_USUARIO = 'ra:ultimo-usuario';
+
 async function usuarioActual(): Promise<string | null> {
   if (DEMO_ACTIVO) return 'demo';
-  const { data } = await supabase().auth.getSession();
-  return data.session?.user.id ?? null;
+  // Sin red y con el token vencido (pasa a la hora), getSession no puede
+  // refrescarlo y devuelve null. La venta se encolaba sin dueño, y una venta
+  // sin dueño la enviaba el siguiente que entrara: quedaba en SU caja. Se
+  // recuerda quién tuvo la sesión por última vez en este navegador.
+  try {
+    const { data } = await supabase().auth.getSession();
+    const id = data.session?.user.id;
+    if (id) {
+      try { localStorage.setItem(ULTIMO_USUARIO, id); } catch { /* sin almacenamiento */ }
+      return id;
+    }
+  } catch { /* sin red */ }
+  try { return localStorage.getItem(ULTIMO_USUARIO); } catch { return null; }
 }
 
 export async function enqueueSale(sale: Omit<QueuedSale, 'status' | 'attempts' | 'createdAt' | 'userId'>) {
@@ -58,7 +71,11 @@ export async function pendingCount(): Promise<number> {
  */
 export async function pendingSales(): Promise<QueuedSale[]> {
   const yo = await usuarioActual();
-  const rows = await db().saleQueue.where('status').anyOf('pendiente', 'error').toArray();
+  // 'enviando' también: si la pestaña se cerró (o el celular se quedó sin
+  // batería) a mitad del envío, la venta quedaba en ese estado para siempre,
+  // fuera de la cola y del aviso de "ventas sin enviar". Reenviarla es seguro:
+  // la base la reconoce por su clientUuid y no la duplica.
+  const rows = await db().saleQueue.where('status').anyOf('pendiente', 'enviando', 'error').toArray();
   return rows
     .filter((s) => !s.userId || s.userId === yo)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -80,7 +97,13 @@ export interface SyncResult {
   remaining: number;
 }
 
-let syncing = false;
+/**
+ * La sincronización en curso, si hay una. Antes era un booleano y una segunda
+ * llamada volvía al tiro: el POS (que sincroniza para saber si la base aceptó
+ * la venta) leía la venta todavía "pendiente" y entregaba el comprobante de
+ * una venta que la base podía rechazar un segundo después (regla 19).
+ */
+let enCurso: Promise<SyncResult> | null = null;
 
 /**
  * Lo que respondió la base por cada venta enviada en esta sesión: el folio y
@@ -93,17 +116,44 @@ export function respuestaDe(clientUuid: string): unknown {
   return respuestas.get(clientUuid);
 }
 
-/** Envía la cola al servidor. Es seguro llamarla muchas veces. */
+/**
+ * Envía la cola al servidor. Es seguro llamarla muchas veces: si ya hay una
+ * sincronización andando, se espera a que termine y se hace otra pasada, así
+ * lo que se encoló mientras tanto también se envía antes de responder.
+ */
 export async function syncQueue(): Promise<SyncResult> {
+  while (enCurso) await enCurso.catch(() => undefined);
+  const esta = enviarCola();
+  enCurso = esta;
+  try {
+    return await esta;
+  } finally {
+    if (enCurso === esta) enCurso = null;
+  }
+}
+
+/**
+ * ¿El envío falló por la red y no porque la base rechazó la venta? Sin
+ * respuesta del servidor (status 0) no se sabe nada de la venta: se deja
+ * pendiente, no en error. Antes quedaba "rechazada" con "Failed to fetch".
+ */
+function falloDeRed(status: number, error: { code?: string } | null): boolean {
+  // 401 (token vencido, PGRST301/PGRST303) y 5xx (Supabase caído o
+  // reiniciando) tampoco dicen nada de la venta: antes la dejaban "rechazada
+  // por la base" y el POS le avisaba al cajero que la venta no existía.
+  return status === 0 || status === 401 || status >= 500
+    || (!!error && (!error.code || error.code === 'PGRST301' || error.code === 'PGRST303'));
+}
+
+async function enviarCola(): Promise<SyncResult> {
   const result: SyncResult = { sent: 0, duplicated: 0, failed: 0, remaining: 0 };
 
-  if (syncing || typeof navigator !== 'undefined' && !navigator.onLine) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
     result.remaining = await pendingCount();
     return result;
   }
 
-  syncing = true;
-  try {
+  {
     const queue = await pendingSales();
 
     // En demo no hay servidor: se simula una sincronización exitosa para poder
@@ -134,7 +184,7 @@ export async function syncQueue(): Promise<SyncResult> {
     for (const sale of queue) {
       await db().saleQueue.update(sale.clientUuid, { status: 'enviando' });
 
-      const { data, error } = await client.rpc('fn_register_sale', {
+      const { data, error, status } = await client.rpc('fn_register_sale', {
         p_client_uuid: sale.clientUuid,
         p_items: sale.items.map(({ name: _name, ...rest }) => rest),
         p_payments: sale.payments,
@@ -158,6 +208,13 @@ export async function syncQueue(): Promise<SyncResult> {
           : null,
       });
 
+      if (error && falloDeRed(status, error)) {
+        // Sin respuesta: la venta vuelve a la cola tal cual y se corta la
+        // pasada (las siguientes fallarían igual). Se reintenta con la red.
+        await db().saleQueue.update(sale.clientUuid, { status: 'pendiente', lastError: error.message });
+        break;
+      }
+
       if (error) {
         result.failed++;
         await db().saleQueue.update(sale.clientUuid, {
@@ -180,8 +237,6 @@ export async function syncQueue(): Promise<SyncResult> {
     // El stock que muestra el POS es el del celular. Sin esto quedaba el de
     // antes de vender hasta la sincronización periódica, 10 minutos después.
     if (result.sent > 0) void syncCatalog().catch(() => {});
-  } finally {
-    syncing = false;
   }
 
   result.remaining = await pendingCount();

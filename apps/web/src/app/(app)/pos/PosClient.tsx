@@ -469,6 +469,13 @@ export function PosClient({
         return false;
       }
       registrada = respuestaDe(clientUuid) as typeof registrada;
+      // El celular decía "con conexión" pero la base no respondió (señal
+      // débil, wifi sin internet): la venta sigue en la cola y se entrega
+      // como sin conexión (ADR-005). El cliente se va con el producto, así
+      // que al llegar se registra forzada, igual que una hecha sin red.
+      if (!registrada && fila) {
+        await db().saleQueue.update(clientUuid, { sinConexion: true });
+      }
     }
 
     // El comprobante se arma con las líneas ANTES de vaciar el carrito

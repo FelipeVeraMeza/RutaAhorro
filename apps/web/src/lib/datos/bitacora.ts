@@ -46,6 +46,7 @@ export const ACCIONES: Record<string, string> = {
   'editar:cliente_credito': 'Crédito de cliente (fiado)',
   'crear:combo': 'Combo creado',
   'editar:combo': 'Combo cambiado',
+  'desactivar:combo': 'Combo desactivado',
   ofertas: 'Ofertas de productos',
   'crear:factura_proveedor': 'Factura de proveedor registrada',
   'pagar:factura_proveedor': 'Factura de proveedor pagada',

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerSupabase } from '@supabase/supabase-js';
 import { getCurrentUser } from '@/lib/supabase/server';
+import { autorizarCuenta, retirarAutorizacion } from '@/lib/supabase/admin';
 
 /**
  * Invitación de empleados (RF-M1-12).
@@ -22,9 +23,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const { nombre, email, rol } = await request.json().catch(() => ({}));
+  const cuerpo = await request.json().catch(() => ({}));
+  const nombre = String(cuerpo.nombre ?? '').trim();
+  // Igual que "Crear cuenta": sin espacios y en minúsculas. " Juan@Mail.cl"
+  // se invitaba tal cual, y después no calzaba con la cuenta autorizada.
+  const email = String(cuerpo.email ?? '').trim().toLowerCase();
+  const rol = String(cuerpo.rol ?? '');
 
-  if (!nombre || !email || !['admin', 'supervisor', 'vendedor', 'bodega'].includes(rol)) {
+  if (!nombre || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !['admin', 'supervisor', 'vendedor', 'bodega'].includes(rol)) {
     return NextResponse.json(
       { error: { code: 'DATOS_INVALIDOS', message: 'Faltan datos o el rol no es válido' } },
       { status: 400 },
@@ -45,6 +51,12 @@ export async function POST(request: Request) {
 
   const descuento = rol === 'admin' ? 100 : rol === 'supervisor' ? 10 : 0;
 
+  // 0037 · El disparador toma el local y el rol de la autorización, no del metadata.
+  const aut = await autorizarCuenta(admin, { email, tenantId: actor.tenantId, storeId: actor.storeId, rol, nombre });
+  if (aut.error) {
+    return NextResponse.json({ error: { code: 'ERROR_INTERNO', message: aut.error } }, { status: 500 });
+  }
+
   const { error } = await admin.auth.admin.inviteUserByEmail(email, {
     // El tenant y el rol NO vienen del cliente: se toman del administrador que
     // invita. Aceptarlos del navegador permitiría invitar a otro local.
@@ -61,6 +73,7 @@ export async function POST(request: Request) {
   });
 
   if (error) {
+    await retirarAutorizacion(admin, email);
     const yaExiste = /already|registered|exists/i.test(error.message);
     return NextResponse.json(
       {

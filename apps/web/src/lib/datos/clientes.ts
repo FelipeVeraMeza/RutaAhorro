@@ -46,13 +46,19 @@ const aDatos = (d: DatosCliente) => ({
 });
 
 async function leerDeBase(soloActivos: boolean): Promise<Cliente[]> {
-  let q = supabase().from('clientes')
-    .select('id, rut, nombre, giro, direccion, comuna, telefono, email, descuento_pct, notas, is_active')
-    .order('nombre');
-  if (soloActivos) q = q.eq('is_active', true);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []).map((r) => ({
+  // Por páginas: la API entrega 1.000 filas. Con más clientes, los de más
+  // abajo en el abecedario no aparecían en Clientes ni bajaban al POS.
+  const data: Array<Record<string, unknown>> = [];
+  for (let desde = 0; desde < 50_000; desde += 1000) {
+    let q = supabase().from('clientes')
+      .select('id, rut, nombre, giro, direccion, comuna, telefono, email, descuento_pct, notas, is_active');
+    if (soloActivos) q = q.eq('is_active', true);
+    const { data: pagina, error } = await q.order('nombre').order('id').range(desde, desde + 999);
+    if (error) throw error;
+    data.push(...(pagina ?? []));
+    if ((pagina ?? []).length < 1000) break;
+  }
+  return data.map((r) => ({
     id: r.id as string,
     rut: (r.rut as string) ?? null,
     nombre: r.nombre as string,

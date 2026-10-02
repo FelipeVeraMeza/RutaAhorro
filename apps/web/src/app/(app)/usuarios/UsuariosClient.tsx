@@ -65,6 +65,8 @@ export function UsuariosClient({ miId }: { miId: string }) {
 
   const cargar = useCallback(async () => {
     setCargando(true);
+    // Un error anterior quedaba arriba aunque esta carga funcionara.
+    setError(null);
     try {
       setUsuarios(await repoUsuarios().listar());
     } catch (e) {

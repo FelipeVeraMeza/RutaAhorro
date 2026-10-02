@@ -21,7 +21,19 @@ const TABLAS = [
   'sale_return_items', 'cash_sessions', 'cash_movements', 'inventory_movements', 'stock_counts',
   'stock_count_items', 'dte_documentos', 'facturas', 'factura_lineas', 'factura_notas_credito',
   'facturas_recibidas', 'audit_log',
+  // Lo que se agregó después (0019, 0029, 0030, 0035, 0036) y el respaldo no
+  // traía: la cuenta del fiado de cada cliente, las facturas por pagar, las
+  // devoluciones a proveedor, las autorizaciones de descuento y el emisor de
+  // las boletas. "Descargar mis datos" decía "todo" y dejaba eso afuera.
+  'cuenta_cliente_movimientos', 'facturas_proveedor', 'devoluciones_proveedor',
+  'devolucion_proveedor_items', 'autorizaciones_descuento', 'dte_emisores', 'dte_folios', 'alerts',
 ];
+
+/** Con qué ordenar cada tabla al leerla por páginas (las que no tienen `id`). */
+const ORDEN: Record<string, string> = {
+  product_suppliers: 'product_id', stock_levels: 'product_id', stock_ubicaciones: 'product_id',
+  dte_emisores: 'tenant_id',
+};
 
 export interface Respaldo {
   formato: 'rutaahorro-respaldo';
@@ -46,7 +58,11 @@ export async function armarRespaldo(onProgreso?: (hechas: number, total: number)
     const filas: unknown[] = [];
     try {
       for (let desde = 0; ; desde += PAGINA) {
-        const { data, error } = await supabase().from(tabla).select('*').range(desde, desde + PAGINA - 1);
+        // Con orden: sin él, PostgreSQL no garantiza que una página siga a la
+        // otra y una tabla grande (ventas, kardex) podía salir con filas
+        // repetidas y otras faltando en la copia.
+        const { data, error } = await supabase().from(tabla).select('*')
+          .order(ORDEN[tabla] ?? 'id').range(desde, desde + PAGINA - 1);
         if (error) throw error;
         filas.push(...(data ?? []));
         if ((data ?? []).length < PAGINA) break;

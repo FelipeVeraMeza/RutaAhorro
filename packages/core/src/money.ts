@@ -207,7 +207,16 @@ export function validarCantidad(
       : { valido: false, valor: 0, error: 'Escribe la cantidad' };
   }
 
-  const valor = Number(texto.replace(',', '.'));
+  // En Chile el punto separa miles: "1.000" son mil unidades, no una. Se
+  // leía 1 sin aviso (una recepción de 1.000 latas entraba como 1). Solo
+  // cuando tiene forma de miles (grupos de 3); "0.5" sigue siendo medio.
+  const sinMiles = /^\d{1,3}(\.\d{3})+$/.test(texto) ? texto.replace(/\./g, '') : texto;
+  // Solo dígitos y una coma o un punto decimal: Number() aceptaba "1e3",
+  // "0x10" o "Infinity" como cantidades.
+  if (!/^\d*[.,]?\d+$|^\d+[.,]$/.test(sinMiles.replace(/^-/, ''))) {
+    return { valido: false, valor: 0, error: 'La cantidad tiene que ser un número' };
+  }
+  const valor = Number(sinMiles.replace(',', '.'));
   if (!Number.isFinite(valor)) {
     return { valido: false, valor: 0, error: 'La cantidad tiene que ser un número' };
   }

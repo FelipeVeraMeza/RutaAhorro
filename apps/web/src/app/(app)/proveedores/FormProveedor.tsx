@@ -47,6 +47,18 @@ export function FormProveedor({
         telefono: telefono.trim() || null,
         email: email.trim() || null,
       };
+      // La base no tiene un RUT único por proveedor: el mismo proveedor creado
+      // dos veces (desde Compras y desde Recibir mercadería) partía en dos sus
+      // facturas por pagar, sus recepciones y "Qué comprar".
+      if (datos.rut) {
+        const digitos = (r: string | null) => (r ?? '').replace(/[^0-9kK]/g, '').toUpperCase();
+        const igual = (await repoProveedores().listar(true))
+          .find((o) => o.id !== proveedor?.id && digitos(o.rut) === digitos(datos.rut));
+        if (igual) {
+          setError(`Ya existe "${igual.nombre}" con ese RUT${igual.activo ? '' : ' (desactivado)'}: usa ese en vez de crear otro.`);
+          return;
+        }
+      }
       if (proveedor) {
         await repoProveedores().actualizar(proveedor.id, datos);
         onGuardado(proveedor.id);

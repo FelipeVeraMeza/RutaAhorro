@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatCLP, formatCantidad, diaLocal, toUserMessage, NOMBRE_DOCUMENTO, type Comprobante as DatosComprobante } from '@rutaahorro/core';
 import { Comprobante } from '../pos/Comprobante';
 import { useConfiguracion } from '@/lib/datos/configuracion';
@@ -51,8 +51,15 @@ function copiaDe(v: VentaDetallada, local: string, ivaPct: number, pie: string |
     folio: v.folio, fecha: v.fecha, local, cajero: v.vendedor ?? '',
     lineas,
     subtotal: lineas.reduce((s, l) => s + Math.round(l.precioUnitario * l.cantidad), 0),
-    descuento: lineas.reduce((s, l) => s + l.descuento, 0) + v.descuento,
-    total: v.total, iva: v.iva, neto: v.total - v.iva, adicionales: [], totalAdicionales: 0, ivaPct,
+    // `discount_total` de la venta YA incluye el de cada línea (fn_register_sale):
+    // sumarle las líneas lo duplicaba y la copia decía "Descuento" del doble.
+    descuento: v.descuento,
+    total: v.total, iva: v.iva,
+    // Neto e impuestos adicionales como los guardó la base (0018).
+    neto: v.neto ?? v.total - v.iva - (v.adicionales ?? []).reduce((s, a) => s + a.monto, 0),
+    adicionales: v.adicionales ?? [],
+    totalAdicionales: (v.adicionales ?? []).reduce((s, a) => s + a.monto, 0),
+    ivaPct,
     pagos: v.pagos.map((p) => ({ metodo: p.metodo, monto: p.monto })), vuelto: 0,
     // RF-M5-28 · Lo cobrado en efectivo es lo que registró la base; la
     // diferencia con el total es el redondeo.
@@ -102,14 +109,29 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
   const [copia, setCopia] = useState<DatosComprobante | null>(null);
   const { ivaPct, comprobantePie } = useConfiguracion();
   const [motivo, setMotivo] = useState('');
+  const [errorAnular, setErrorAnular] = useState<string | null>(null);
   const [enCurso, setEnCurso] = useState(false);
 
+  // Solo la respuesta del último filtro: al escribir un folio o mover las
+  // fechas, una consulta anterior más lenta llegaba después y dejaba la lista
+  // (y el resumen) de otro filtro.
+  const pedido = useRef(0);
   const cargar = useCallback(async () => {
+    const este = ++pedido.current;
     setCargando(true);
     setError(null);
     try {
-      const n = Number(folio.trim());
-      const porFolio = folio.trim() !== '' && Number.isFinite(n);
+      // "1.234" (con punto de miles) se leía 1,234 y la base respondía con un
+      // error de tipo ("problema inesperado"); con letras se ignoraba el
+      // filtro sin decir nada y se listaba el día entero.
+      const limpio = folio.trim().replace(/[.\s]/g, '');
+      if (limpio !== '' && !/^\d+$/.test(limpio)) {
+        setVentas([]); setResumen(null);
+        setError('El folio son solo números (ej.: 1234)');
+        return;
+      }
+      const n = Number(limpio);
+      const porFolio = limpio !== '';
       const [lista, res] = await Promise.all([
         repoVentas().listar({
           desde, hasta, incluirAnuladas, limite,
@@ -117,12 +139,13 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
         }),
         porFolio ? Promise.resolve(null) : repoVentas().resumen(desde, hasta),
       ]);
+      if (este !== pedido.current) return;
       setVentas(lista);
       setResumen(res);
     } catch (e) {
-      setError(toUserMessage(e));
+      if (este === pedido.current) setError(toUserMessage(e));
     } finally {
-      setCargando(false);
+      if (este === pedido.current) setCargando(false);
     }
   }, [desde, hasta, folio, incluirAnuladas, limite]);
 
@@ -146,8 +169,10 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
       await cargar();
       setTimeout(() => setExito(null), 8000);
     } catch (e) {
-      setError(toUserMessage(e));
-      setAnulando(null);
+      // El error queda DENTRO del diálogo de anular: antes se cerraba y el
+      // mensaje salía en la pantalla de atrás, tapado por el detalle de la
+      // venta, y parecía que "Anular" no había hecho nada.
+      setErrorAnular(toUserMessage(e));
     } finally {
       setEnCurso(false);
     }
@@ -206,7 +231,7 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
         </button>
       </div>
 
-      <label className="flex items-center gap-2 text-sm mb-3">
+      <label className="flex items-center gap-2 text-sm mb-3 min-h-[44px]">
         <input
           type="checkbox" checked={incluirAnuladas}
           onChange={(e) => setIncluirAnuladas(e.target.checked)}
@@ -430,10 +455,14 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
               </div>
             )}
 
-            <button onClick={() => { setCopia(copiaDe(detalle, local, ivaPct, comprobantePie || null)); setDetalle(null); }}
-              className="btn btn-secundario w-full">
-              Reimprimir o compartir el comprobante
-            </button>
+            {/* Una venta anulada no tiene comprobante que entregar: la copia
+                salía igual que la de una venta vigente, sin decir "anulada". */}
+            {!detalle.anulada && (
+              <button onClick={() => { setCopia(copiaDe(detalle, local, ivaPct, comprobantePie || null)); setDetalle(null); }}
+                className="btn btn-secundario w-full">
+                Reimprimir o compartir el comprobante
+              </button>
+            )}
 
             {/* Sin el id de cada línea no hay qué devolver: la maqueta no los
                 guarda, y el diálogo abría vacío (hallazgo de la 6ª ronda). */}
@@ -461,7 +490,7 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
             {puedeAnular && !detalle.anulada && detalle.documentos.length === 0 && detalle.devoluciones.length === 0
               && (!anulaSoloDeHoy || diaLocal(detalle.fecha, zona) === hoyLocal(zona)) && (
               <button
-                onClick={() => { setAnulando(detalle); setMotivo(''); }}
+                onClick={() => { setAnulando(detalle); setMotivo(''); setErrorAnular(null); }}
                 className="tap w-full py-3 rounded-xl border border-[var(--color-alerta)] text-[var(--color-alerta)] font-medium"
               >
                 Anular esta venta
@@ -524,6 +553,7 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
             <datalist id="motivos-anulacion">
               {MOTIVOS_SUGERIDOS.map((m) => <option key={m} value={m} />)}
             </datalist>
+            {errorAnular && <p role="alert" className="text-sm text-[var(--color-alerta)]">{errorAnular}</p>}
 
             <div className="space-y-2 pt-1">
               <button

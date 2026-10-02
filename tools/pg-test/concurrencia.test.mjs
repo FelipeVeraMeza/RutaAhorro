@@ -8,7 +8,7 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { levantarBanco, nuevoLocal, rpc, intentar, esperarBloqueo, venta } from './banco.mjs';
+import { levantarBanco, nuevoLocal, rpc, intentar, esperarBloqueo, venta, crearUsuario } from './banco.mjs';
 
 let banco;
 before(async () => { banco = await levantarBanco(); });
@@ -60,9 +60,8 @@ test('CP-02 · 50 ventas desde 5 cajas: folios consecutivos, sin repetir ni salt
   const cajeros = [];
   for (let i = 0; i < 5; i++) {
     const u = i === 0 ? local.cajero1 : i === 1 ? local.cajero2 : null;
-    const usuario = u ?? { id: (await banco.su.query(
-      `insert into auth.users (email, raw_user_meta_data) values ($1, $2) returning id`,
-      [`extra${i}@x.cl`, { tenant_id: local.tenant, store_id: local.store, role: 'vendedor' }])).rows[0].id };
+    const usuario = u ?? { id: await crearUsuario(banco.su, `extra${i}@x.cl`,
+      { tenant_id: local.tenant, store_id: local.store, role: 'vendedor' }) };
     cajeros.push(await abrirCaja(usuario));
   }
 
@@ -313,9 +312,8 @@ test('Anular la misma recepción dos veces descuenta el stock una sola vez', asy
   const { receipt_id } = await rpc(adm, 'fn_confirm_receipt', {
     p_supplier_id: prov, p_items: [{ product_id: p, quantity: 10, unit_cost: 500 }] });
 
-  const segundoAdmin = { id: (await banco.su.query(
-    `insert into auth.users (email, raw_user_meta_data) values ('adm2@x.cl', $1) returning id`,
-    [{ tenant_id: local.tenant, store_id: local.store, role: 'admin' }])).rows[0].id };
+  const segundoAdmin = { id: await crearUsuario(banco.su, 'adm2@x.cl',
+    { tenant_id: local.tenant, store_id: local.store, role: 'admin' }) };
   const [r1, r2] = await dosVeces(adm, await banco.como(segundoAdmin),
     'fn_void_receipt', { p_receipt_id: receipt_id, p_reason: 'guía equivocada' });
   assert.ok(r1.ok, r1.error);

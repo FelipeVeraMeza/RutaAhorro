@@ -31,6 +31,15 @@ export async function sendEmail(subject: string, html: string, to = env.alertsEm
   return { sent: true };
 }
 
+/**
+ * Texto de la base dentro del HTML del correo. Un producto llamado
+ * "Bebida <light>" o un nombre con "&" rompía la tabla (y un nombre escrito
+ * con etiquetas se metía como HTML en el correo del dueño).
+ */
+export function escapar(texto: unknown): string {
+  return String(texto ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+}
+
 /** Formato de moneda: se reutiliza el de @rutaahorro/core para que el correo
  *  y la pantalla muestren exactamente el mismo número. */
 const money = formatCLP;
@@ -56,7 +65,7 @@ export function renderEmail(title: string, sections: Array<{ heading: string; ro
 
   return `<!doctype html><html lang="es"><body style="margin:0;padding:24px;background:#f8fafc;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a">
   <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;padding:24px;border:1px solid #e5e7eb">
-    <h1 style="margin:0 0 4px;font-size:18px">${title}</h1>
+    <h1 style="margin:0 0 4px;font-size:18px">${escapar(title)}</h1>
     <p style="margin:0 0 20px;color:#6b7280;font-size:13px">RutaAhorro · ${new Date().toLocaleDateString('es-CL', { timeZone: 'America/Santiago', dateStyle: 'full' })}</p>
     ${sections
       .map(

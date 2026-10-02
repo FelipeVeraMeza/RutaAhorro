@@ -178,6 +178,25 @@ export async function levantarBanco({ aplicar = true } = {}) {
 }
 
 /**
+ * Crea un usuario como lo hace el servidor (0037): primero la autorización
+ * en `cuentas_autorizadas` —el disparador toma de ahí el local y el rol— y
+ * después la fila de auth.users. Antes de 0037 la tabla no existe y el
+ * disparador lee el metadata, así que se omite.
+ */
+export async function crearUsuario(su, email, meta) {
+  const hay = (await su.query(`select to_regclass('public.cuentas_autorizadas') as t`)).rows[0].t;
+  if (hay && meta?.tenant_id) {
+    await su.query(
+      `insert into cuentas_autorizadas (email, tenant_id, store_id, role, full_name) values (lower($1), $2, $3, $4, $5)
+       on conflict (email) do update set tenant_id = excluded.tenant_id, store_id = excluded.store_id,
+                                         role = excluded.role, full_name = excluded.full_name`,
+      [email, meta.tenant_id, meta.store_id ?? null, meta.role ?? 'vendedor', meta.full_name ?? null]);
+  }
+  return (await su.query(
+    `insert into auth.users (email, raw_user_meta_data) values ($1, $2) returning id`, [email, meta])).rows[0].id;
+}
+
+/**
  * Un local nuevo con su tienda y un usuario por rol. Cada prueba arma el suyo
  * para no depender del orden en que corren.
  */
@@ -188,14 +207,15 @@ export async function nuevoLocal(banco, nombre = 'Local') {
 
   const usuario = async (rol, alias) => {
     const meta = { tenant_id: tenant, store_id: store, role: rol, full_name: alias };
-    const id = (await su.query(
-      `insert into auth.users (email, raw_user_meta_data) values ($1, $2) returning id`,
-      [`${alias}@${tenant.slice(0, 8)}.cl`, meta])).rows[0].id;
+    const email = `${alias}@${tenant.slice(0, 8)}.cl`;
+    const id = await crearUsuario(su, email, meta);
     return { id, rol, alias };
   };
 
   const local = {
     tenant, store,
+    /** Otra cuenta del local, para las pruebas que necesitan una caja más. */
+    usuario,
     admin: await usuario('admin', 'admin'),
     supervisor: await usuario('supervisor', 'supervisor'),
     cajero1: await usuario('vendedor', 'cajero1'),

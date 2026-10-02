@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   formatCLP, formatCantidad, diaLocal, validarCantidadStock, toUserMessage, textoVencimiento, cantidadConUnidad,
 } from '@rutaahorro/core';
@@ -27,15 +27,17 @@ const fecha = (iso: string) =>
 
 
 export function InventarioClient({
-  puedeAjustar, verCostos, puedeOfertar = false,
+  puedeAjustar, verCostos, puedeOfertar = false, vistaInicial = 'stock',
 }: {
+  /** "Ver todos" de los vencimientos del Inicio abre Lotes, no Stock. */
+  vistaInicial?: Vista;
   puedeAjustar: boolean;
   verCostos: boolean;
   /** Admin y supervisor: un lote por vencer se puede poner en oferta (RF-M4-23). */
   puedeOfertar?: boolean;
 }) {
   const { fechaHora, zona } = useFormatoFecha();
-  const [vista, setVista] = useState<Vista>('stock');
+  const [vista, setVista] = useState<Vista>(vistaInicial);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [busqueda, setBusqueda] = useState('');
@@ -53,21 +55,33 @@ export function InventarioClient({
   const [aplicandoToma, setAplicandoToma] = useState(false);
   const [revisandoToma, setRevisandoToma] = useState(false);
 
+  // Todo producto que se vio, aunque la búsqueda lo esconda después: la
+  // revisión de la toma necesita el nombre y el stock de lo contado bajo otro
+  // filtro. Sin esto salía "Producto · sistema 0" y la diferencia mal.
+  const vistos = useRef(new Map<string, Producto>());
+  // Solo la respuesta de la última búsqueda se muestra (como en Productos):
+  // una más corta y más lenta llegaba después y pisaba la lista.
+  const pedido = useRef(0);
   const cargar = useCallback(async () => {
+    const este = ++pedido.current;
     setCargando(true);
+    // Un error anterior (sin red) quedaba pegado arriba aunque esta carga funcionara.
+    setError(null);
     try {
       const [ps, ms, ls] = await Promise.all([
         repoProductos().listar({ busqueda }, verCostos),
         repoInventario().kardex(null, 80),
         repoInventario().lotes(),
       ]);
+      for (const p of ps) vistos.current.set(p.id, p);
+      if (este !== pedido.current) return;
       setProductos(ps);
       setMovimientos(ms);
       setLotes(ls);
     } catch (e) {
-      setError(toUserMessage(e));
+      if (este === pedido.current) setError(toUserMessage(e));
     } finally {
-      setCargando(false);
+      if (este === pedido.current) setCargando(false);
     }
   }, [busqueda, verCostos]);
 
@@ -103,7 +117,7 @@ export function InventarioClient({
    */
   const aplicables = Object.entries(conteo)
     .map(([productoId, texto]) => {
-      const producto = productos.find((p) => p.id === productoId);
+      const producto = productos.find((p) => p.id === productoId) ?? vistos.current.get(productoId);
       const v = validarCantidadStock(texto, producto?.unidad, { permiteVacio: true });
       return { productoId, texto, v, producto };
     })
@@ -297,7 +311,7 @@ export function InventarioClient({
                     }`}>
                       {l.estado === 'vencido' ? '🔴' : l.estado === 'por_vencer' ? '🟠' : '🟢'}
                       {' '}{ETIQUETA_ESTADO_LOTE[l.estado]} · {textoVencimiento(l.diasParaVencer)}
-                      {' '}({fecha(l.vence)})
+                      {' '}({fecha(`${l.vence}T12:00:00`)})
                     </p>
                     <p className="text-xs text-[var(--texto-suave)] num truncate">
                       {cantidadConUnidad(l.cantidad, l.unidad)} en existencia
@@ -363,7 +377,7 @@ export function InventarioClient({
                       }`}>
                         {m.cantidad > 0 ? '+' : ''}{formatCantidad(m.cantidad)}
                       </p>
-                      <p className="text-[11px] text-[var(--texto-suave)] num">saldo {m.saldo}</p>
+                      <p className="text-[11px] text-[var(--texto-suave)] num">saldo {formatCantidad(m.saldo)}</p>
                     </div>
                   </div>
                 </li>
@@ -425,7 +439,7 @@ export function InventarioClient({
                       Sistema: {formatCantidad(sistema)}
                       {dif !== null && dif !== 0 && (
                         <span className={dif < 0 ? 'text-[var(--color-alerta)]' : 'text-[var(--color-aviso)]'}>
-                          {' · '}{dif > 0 ? '+' : ''}{dif}
+                          {' · '}{dif > 0 ? '+' : ''}{formatCantidad(dif)}
                         </span>
                       )}
                       {dif === 0 && <span className="text-marca-700"> · cuadra</span>}
@@ -584,6 +598,10 @@ function DialogoAjuste({
     if (!v.valido) { setError(v.error); return; }
     if (motivo.trim() === '') { setError('El motivo es obligatorio'); return; }
     if (delta === 0) { setError('La cantidad es la misma: no hay nada que ajustar'); return; }
+    // Una merma es producto perdido: siempre resta. Marcada con una cantidad
+    // mayor quedaba una "merma" que SUMABA stock, y Reportes → Ajustes la
+    // mostraba como pérdida con valor positivo.
+    if (esMerma && delta > 0) { setError('Una merma resta stock: la cantidad real tiene que ser menor que la del sistema'); return; }
 
     setGuardando(true);
     try {

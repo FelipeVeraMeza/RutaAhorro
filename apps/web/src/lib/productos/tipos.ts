@@ -10,6 +10,7 @@
  *  2. El día que cambie el proveedor de base de datos, se reemplaza una
  *     implementación y las pantallas no se tocan.
  */
+import type { FilaProducto } from '@rutaahorro/core';
 
 export interface Producto {
   id: string;
@@ -176,4 +177,27 @@ export interface RepositorioProductos {
     filas: import('@rutaahorro/core').FilaProducto[],
     onProgreso?: (hechas: number, total: number) => void,
   ): Promise<ResultadoLote>;
+}
+
+/**
+ * Lo que se escribe al actualizar un producto desde una planilla: lo que la
+ * fila trae, y lo que no trae (`sinDato`) queda como estaba en el producto.
+ */
+export function cambiosDesdePlanilla(
+  fila: FilaProducto, actual: Producto, categoriaId: string | null,
+): Omit<ProductoEditable, 'codigos'> {
+  const falta = new Set(fila.sinDato ?? []);
+  return {
+    nombre: fila.nombre,
+    descripcion: falta.has('descripcion') ? actual.descripcion : fila.descripcion,
+    sku: falta.has('sku') ? actual.sku : fila.sku,
+    categoriaId: falta.has('categoria') ? actual.categoriaId : categoriaId,
+    unidad: fila.unidad,
+    precioVenta: fila.precio_venta,
+    // Sin el campo, `actualizar` deja el costo como estaba.
+    ...(falta.has('costo') ? {} : { costo: fila.costo }),
+    stockMinimo: falta.has('stock_minimo') ? actual.stockMinimo : fila.stock_minimo,
+    perecible: falta.has('perecible') ? actual.perecible : fila.perecible,
+    diasAlerta: falta.has('dias_alerta') ? actual.diasAlerta : fila.dias_alerta,
+  };
 }

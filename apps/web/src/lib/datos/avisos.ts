@@ -1,5 +1,6 @@
 'use client';
 
+import { textoVencimiento } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import { DEMO_BAJO_STOCK } from '../demo/data';
@@ -35,7 +36,27 @@ function textoDe(tipo: string, payload: Record<string, unknown>): string {
       ? `${nombre} se vendió sin stock registrado (quedó en ${q}): falta ingresar una recepción o ajustar`
       : q === 0 ? `${nombre} se agotó` : `${nombre} bajó de su mínimo (quedan ${q})`;
   }
-  return String(payload.message ?? tipo);
+  // Las que escribe el worker (vencimientos, cajas abiertas, revisión semanal
+  // del inventario) no traen `message`: el Inicio mostraba "lot_expiring" o
+  // "cash_session_open", el código en inglés, como texto del aviso.
+  const nombre = String(payload.product_name ?? 'Un producto');
+  const dias = Number(payload.days_to_expiry ?? NaN);
+  if (tipo === 'lot_expired') {
+    return `${nombre}: hay un lote vencido${payload.expiry_date ? ` el ${String(payload.expiry_date).split('-').reverse().join('-')}` : ''}. Retíralo de la venta`;
+  }
+  if (tipo === 'lot_expiring') {
+    return Number.isFinite(dias) ? `${nombre}: un lote ${textoVencimiento(dias)}` : `${nombre}: un lote está por vencer`;
+  }
+  if (tipo === 'cash_session_open') {
+    return `La caja de ${String(payload.user ?? 'alguien')} lleva ${Number(payload.hours_open ?? 0)} horas abierta`;
+  }
+  if (tipo === 'lot_stock_mismatch') {
+    // Desde 0037 el worker manda el nombre: antes no se sabía qué producto revisar.
+    return payload.product_name
+      ? `${nombre}: el stock no cuadra con la suma de sus lotes. Revísalo en Inventario → Lotes`
+      : 'La revisión semanal encontró un producto cuyo stock no cuadra con sus lotes: revisa Inventario → Lotes';
+  }
+  return String(payload.message ?? 'Aviso del sistema');
 }
 
 export async function avisosSinLeer(): Promise<Aviso[]> {

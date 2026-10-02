@@ -20,7 +20,9 @@ const TIPO_DOC: Record<string, string> = {
 
 type Pestana = 'proveedores' | 'recepciones' | 'comprar' | 'pagar';
 
-export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, vistaInicial = 'proveedores', verPorPagar = false, avisoInicial = null }: {
+export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, vistaInicial = 'proveedores', verPorPagar = false, avisoInicial = null, puedeEditarProveedores = false }: {
+  /** Solo el administrador puede editar o desactivar (RLS de suppliers). */
+  puedeEditarProveedores?: boolean;
   avisoInicial?: { tipo: 'ok' | 'error'; texto: string } | null;
   puedeAnular: boolean;
   /** RF-M3-13 · admin y supervisor (la tabla solo la leen ellos). */
@@ -46,6 +48,8 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
 
   const cargar = useCallback(async () => {
     setCargando(true);
+    // Un error anterior quedaba arriba aunque esta carga funcionara.
+    setError(null);
     try {
       const repo = repoProveedores();
       const [ps, rs] = await Promise.all([repo.listar(), repo.recepciones()]);
@@ -178,12 +182,16 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
                         </p>
                       )}
                     </div>
-                    <button
-                      onClick={() => setEditando(p)}
-                      className="tap px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)] shrink-0"
-                    >
-                      Editar
-                    </button>
+                    {/* Solo el administrador edita un proveedor (RLS): para los demás el
+                        botón guardaba sin guardar nada. */}
+                    {puedeEditarProveedores && (
+                      <button
+                        onClick={() => setEditando(p)}
+                        className="tap px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)] shrink-0"
+                      >
+                        Editar
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

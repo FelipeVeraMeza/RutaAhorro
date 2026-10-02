@@ -93,11 +93,16 @@ export function PedirAutorizacion({ pct, tope, onAutorizado, onCerrar }: {
 
   useEffect(() => {
     void repoAutorizaciones().autorizadores()
-      .then((l) => { setAutorizadores(l); if (l.length === 1) setQuien(l[0].id); })
+      // Se marca solo si es el único Y alcanza: marcado uno que no puede
+      // autorizar tanto, el botón quedaba listo para un rechazo seguro.
+      .then((l) => { setAutorizadores(l); if (l.length === 1 && l[0].tope + 0.01 >= pedido) setQuien(l[0].id); })
       .catch((e) => { setAutorizadores([]); setError(toUserMessage(e)); });
   }, []);
 
   async function autorizar() {
+    // Enter en el PIN mientras se revisa mandaba otro intento: el segundo
+    // gastaba un intento fallido más (5 bloquean) o una segunda autorización.
+    if (enviando) return;
     setError(null);
     if (!navigator.onLine) { setError('Para autorizar se necesita internet: el PIN se revisa en el sistema'); return; }
     if (!quien) { setError('Elige quién autoriza'); return; }

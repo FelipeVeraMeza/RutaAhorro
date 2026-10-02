@@ -2,7 +2,7 @@
 
 import { configuracionLocal, useConfiguracion } from '@/lib/datos/configuracion';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   formatCLP, formatCantidad, margenNetoPct, formatPct, toUserMessage, cantidadConUnidad, aCSV,
@@ -99,7 +99,13 @@ export function ProductosClient({
     void repoProductos().obtener(editarId, puedeVerCostos).then((p) => { if (p) setEditando(p); }).catch(() => {});
   }, [editarId, puedeEditar, puedeVerCostos]);
 
+  // Solo vale la respuesta de la última búsqueda. Desde que la lista trae el
+  // catálogo entero (por páginas) una búsqueda corta tarda más que una larga:
+  // "co" llegaba después de "coca" y la pantalla mostraba lo de "co" con
+  // "coca" escrito.
+  const pedido = useRef(0);
   const cargar = useCallback(async () => {
+    const este = ++pedido.current;
     setCargando(true);
     setError(null);
     try {
@@ -111,12 +117,13 @@ export function ProductosClient({
         ),
         repo.categorias(),
       ]);
+      if (este !== pedido.current) return;
       setProductos(items);
       setCategorias(cats);
     } catch (e) {
-      setError(toUserMessage(e));
+      if (este === pedido.current) setError(toUserMessage(e));
     } finally {
-      setCargando(false);
+      if (este === pedido.current) setCargando(false);
     }
   }, [busqueda, categoriaId, estado, verInactivos, puedeVerCostos]);
 

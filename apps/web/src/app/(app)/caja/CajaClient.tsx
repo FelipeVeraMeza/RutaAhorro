@@ -749,11 +749,20 @@ function ResumenCierre({ c, onListo }: {
         ))}
         <div className="border-t border-dashed border-black my-1" />
         <p className="flex justify-between"><span>Efectivo inicial</span><span>{formatCLP(Number(c.resumen.opening_amount ?? 0))}</span></p>
+        {/* Sin las ventas en efectivo, los ingresos y los egresos, el papel no
+            explicaba el "Debía haber": la cuenta no se podía rehacer a mano. */}
+        <p className="flex justify-between"><span>Ventas en efectivo</span><span>{formatCLP(Number(c.resumen.cash_sales ?? 0))}</span></p>
+        {Number(c.resumen.cash_in ?? 0) > 0 && (
+          <p className="flex justify-between"><span>Ingresos</span><span>{formatCLP(Number(c.resumen.cash_in))}</span></p>
+        )}
+        {Number(c.resumen.cash_out ?? 0) > 0 && (
+          <p className="flex justify-between"><span>Egresos</span><span>-{formatCLP(Number(c.resumen.cash_out))}</span></p>
+        )}
         {Number(c.resumen.abonos_efectivo ?? 0) > 0 && (
           <p className="flex justify-between"><span>Abonos de fiado</span><span>{formatCLP(Number(c.resumen.abonos_efectivo))}</span></p>
         )}
         {Number(c.resumen.ajuste_redondeo ?? 0) !== 0 && (
-          <p className="flex justify-between"><span>Redondeo efectivo</span><span>{Number(c.resumen.ajuste_redondeo) > 0 ? '+' : '-'}{formatCLP(Math.abs(Number(c.resumen.ajuste_redondeo)))}</span></p>
+          <p className="flex justify-between"><span>&nbsp;&nbsp;redondeo (ya en ventas)</span><span>{Number(c.resumen.ajuste_redondeo) > 0 ? '+' : '-'}{formatCLP(Math.abs(Number(c.resumen.ajuste_redondeo)))}</span></p>
         )}
         <p className="flex justify-between"><span>Debía haber</span><span>{formatCLP(c.esperado)}</span></p>
         <p className="flex justify-between"><span>Contado</span><span>{formatCLP(c.contado)}</span></p>

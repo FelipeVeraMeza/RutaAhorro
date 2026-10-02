@@ -2,6 +2,7 @@
 
 import {
   diaLocal, rangoDeDias, type DocumentoVenta, type TipoDocumento, type RegistroDte,
+  type ImpuestoAdicionalDesglosado,
 } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { configuracionLocal } from './configuracion';
@@ -72,6 +73,13 @@ export interface Devolucion {
 }
 
 export interface VentaDetallada extends Venta {
+  /**
+   * Neto e impuestos adicionales que guardó la base (0018). La copia del
+   * comprobante los calculaba como total − IVA: con bebidas o alcoholes el
+   * IABA/ILA quedaba sumado al neto y no aparecía en el papel.
+   */
+  neto?: number;
+  adicionales?: ImpuestoAdicionalDesglosado[];
   lineas: LineaVenta[];
   pagos: Array<{ metodo: string; monto: number }>;
   /** Boleta o factura y notas de crédito (0019). Vacío con tarjeta o en la maqueta. */
@@ -242,13 +250,16 @@ export async function registrarVentaDemo(v: QueuedSale): Promise<number> {
 
 function aVenta(v: VentaDemo): Venta {
   const iva = Math.round(v.total - v.total / 1.19);
+  // Como la base: subtotal bruto y el descuento de las líneas (antes la
+  // maqueta decía descuento 0 en una venta con descuento o combo).
+  const descuento = v.lineas.reduce((s, l) => s + (l.descuento ?? 0), 0);
   return {
     id: v.id,
     folio: v.folio,
     fecha: v.fecha,
     total: v.total,
-    subtotal: v.total,
-    descuento: 0,
+    subtotal: v.lineas.reduce((s, l) => s + Math.round(l.cantidad * l.precioUnitario), 0),
+    descuento,
     iva,
     vendedor: 'Modo demo',
     anulada: v.anulada,
@@ -453,13 +464,14 @@ const repoSupabase: RepositorioVentas = {
     const client = supabase();
     const { data, error } = await client
       .from('sales')
-      .select(SELECT_VENTA)
+      .select(`${SELECT_VENTA}, neto, impuestos_adicionales, impuestos_detalle`)
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;
     if (!data) return null;
+    const imp = data as unknown as { neto: number | null; impuestos_detalle: ImpuestoAdicionalDesglosado[] | null };
 
-    const [{ data: items }, { data: pagos }, { data: docs }, { data: devs }] = await Promise.all([
+    const [rItems, rPagos, rDocs, rDevs] = await Promise.all([
       client.from('sale_items')
         .select('id, product_name, quantity, unit_price, discount_amount, subtotal, sale_return_items(cantidad)')
         .eq('sale_id', id).order('id'),
@@ -471,9 +483,18 @@ const repoSupabase: RepositorioVentas = {
         .select('numero, monto, created_at, motivo, reembolso, es_total')
         .eq('sale_id', id).order('numero'),
     ]);
+    // Un error en cualquiera de las cuatro (sin red a la mitad) se ignoraba y
+    // el detalle salía sin líneas o sin pagos, como si la venta fuera vacía:
+    // "Devolver" no ofrecía nada y la copia del comprobante salía en $0.
+    for (const r of [rItems, rPagos, rDocs, rDevs]) if (r.error) throw r.error;
+    const items = rItems.data, pagos = rPagos.data, docs = rDocs.data, devs = rDevs.data;
 
     return {
       ...aVentaBD(data as unknown as FilaVenta),
+      neto: imp.neto == null ? undefined : Number(imp.neto),
+      adicionales: (imp.impuestos_detalle ?? []).map((a) => ({
+        tasa: Number(a.tasa), nombre: a.nombre ?? null, neto: Number(a.neto), monto: Number(a.monto),
+      })),
       lineas: (items ?? []).map((l) => ({
         id: l.id as string,
         devuelto: ((l.sale_return_items as Array<{ cantidad: number }> | null) ?? [])

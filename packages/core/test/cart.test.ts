@@ -29,6 +29,13 @@ describe('totales del carrito', () => {
     expect(t.total).toBe(0);
   });
 
+  it('un descuento mayor que su línea no rebaja las otras (igual que la base, docs/28)', () => {
+    // fn_register_sale topa cada línea en 0: el total es 2.000, no 1.500.
+    const t = cartTotals([linea('a', 500, 1, { descuentoCombo: 1000 }), linea('b', 2000, 1)]);
+    expect(t.total).toBe(2000);
+    expect(t.discountTotal).toBe(500);
+  });
+
   it('el carrito vacío da cero', () => {
     expect(cartTotals([]).total).toBe(0);
   });
@@ -121,7 +128,14 @@ describe('stock insuficiente', () => {
 });
 
 describe('utilidad estimada', () => {
-  it('resta el costo del subtotal', () => {
-    expect(estimatedProfit([linea('a', 1990, 2, { unitCost: 1200 })])).toBe(1580);
+  it('resta el costo NETO del subtotal SIN IVA (docs/28)', () => {
+    // 3.980 con IVA = 3.345 neto; menos 2 × 1.200 de costo neto = 945.
+    // Antes daba 1.580: le sumaba a la utilidad el IVA, que es del fisco.
+    expect(estimatedProfit([linea('a', 1990, 2, { unitCost: 1200 })])).toBe(945);
+  });
+
+  it('saca también el impuesto adicional', () => {
+    // 1.000 / 1,37 = 730 neto (IABA 18 %); costo 500.
+    expect(estimatedProfit([linea('a', 1000, 1, { unitCost: 500, tasaAdicional: 18 })])).toBe(230);
   });
 });
