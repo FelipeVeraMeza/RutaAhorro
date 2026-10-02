@@ -5,6 +5,7 @@ import { Icono } from '@/components/Icono';
 import { NOMBRE_ROL, LEMA_ROL } from '@/lib/navegacion';
 import { versionCompleta } from '@/lib/novedades';
 import { PreferenciasCelular } from './PreferenciasCelular';
+import { PinAutorizacion } from './PinAutorizacion';
 
 export const metadata = { title: 'Mi cuenta' };
 
@@ -37,6 +38,11 @@ export default async function CuentaPage() {
           <Icono nombre="clave" tamano={18} /> Cambiar mi contraseña
         </Link>
       </section>
+
+      {/* RQ-17 · John y María José autorizan descuentos con su PIN (0036). */}
+      {(user.role === 'admin' || user.role === 'supervisor') && (
+        <PinAutorizacion yo={{ id: user.id, nombre: user.fullName || 'Sin nombre', tope: user.maxDiscountPct }} />
+      )}
 
       <PreferenciasCelular />
 

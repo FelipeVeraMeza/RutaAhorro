@@ -16,6 +16,16 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.6.2',
+    fecha: '2026-10-01',
+    titulo: 'Descuentos con autorización',
+    cambios: [
+      { para: 'admin', texto: 'Mi cuenta → "PIN para autorizar descuentos": con ese PIN autorizas descuentos en el celular de un vendedor, hasta tu propio tope. Nadie puede ver el PIN.' },
+      { para: 'vendedor', texto: 'Vender: cada producto tiene "Descuento" (en pesos o %). Si pasa tu tope, "Pedir autorización y cobrar": el administrador o un supervisor escribe su PIN en tu celular. Sirve para esa venta y necesita internet.' },
+      { para: 'supervisor', texto: 'Cinco PIN incorrectos seguidos bloquean al que autoriza por 15 minutos. La venta guarda quién autorizó el descuento.' },
+    ],
+  },
+  {
     version: '0.6.1',
     fecha: '2026-10-01',
     titulo: 'Devolver al proveedor y utilidad sin IVA',

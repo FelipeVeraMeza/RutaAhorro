@@ -145,7 +145,7 @@ export async function syncQueue(): Promise<SyncResult> {
         // la única forma de registrar una venta (regla 6).
         // El cliente (0022) viaja en el mismo objeto: la firma de la función
         // no cambia y la cola vieja sigue sirviendo.
-        p_document: sale.documento || sale.clienteId
+        p_document: sale.documento || sale.clienteId || sale.autorizacion
           ? {
               tipo: sale.documento?.tipo ?? null,
               rut: sale.documento?.receptor?.rut ?? null,
@@ -153,6 +153,7 @@ export async function syncQueue(): Promise<SyncResult> {
               giro: sale.documento?.receptor?.giro ?? null,
               direccion: sale.documento?.receptor?.direccion ?? null,
               cliente_id: sale.clienteId ?? null,
+              autorizacion: sale.autorizacion ?? null,
             }
           : null,
       });

@@ -8,11 +8,11 @@
 
 ---
 
-## CÓMO SEGUIR — corte 2026-10-01 (noche, sesión local: 0032 a 0035), léelo antes que todo
+## CÓMO SEGUIR — corte 2026-10-01 (noche, sesión local: 0032 a 0036), léelo antes que todo
 
 **Nada de esto está en GitHub ni en Supabase.** Felipe sube él al final
 ("no subas nada, yo lo subo"). Antes de su push hay que aplicar en Supabase
-**0029 a 0035**, en orden (`npm run db:instalar` y
+**0029 a 0036**, en orden (`npm run db:instalar` y
 `npm run db:aplicar -- --aplicar`): Railway despliega `main` apenas llega, y el
 código nuevo con la base vieja rompe fiado, por pagar, recepción de perecibles y
 todo lo de abajo. Al 2026-10-01 la base real **no tiene ninguna** (revisado
@@ -22,7 +22,33 @@ consultando sus tablas y funciones).
 `db:aplicar` se había quedado en 0026; al aplicar 0029/0030 habría dicho
 "✖ La base NO quedó como debe" por funciones que sí tienen que estar. Ahora
 `tools/rpc-permitidas.mjs` es la única lista, para `seguridad.test.mjs` y para
-`aplicar-esquema.mjs`. Después de aplicar deben salir **43 funciones**.
+`aplicar-esquema.mjs`. Después de aplicar deben salir **46 funciones**.
+
+**Tercera tanda (Felipe: "haz 4 cambios más y para"):**
+- **0036 · descuento autorizado con PIN (RQ-15, RQ-17).** PIN de 4–6
+  dígitos por admin/supervisor (`fn_guardar_pin`, sal + sha256 en
+  `pines_autorizacion`, sin políticas: nadie lo lee). `fn_autorizar_descuento`
+  deja una autorización de un solo uso, para ese vendedor, 15 minutos, hasta el
+  tope de quien autoriza; un PIN malo devuelve null **sin levantar error**, a
+  propósito, para que el intento fallido quede en `intentos_pin` (5 en 15 min
+  bloquean). `fn_register_sale` = la de 0029 + leer `p_document.autorizacion`
+  (misma firma). La venta guarda `descuento_autorizado_por`.
+  `autorizacion.test.mjs` 5/5 (la de un solo uso, vista fallar).
+- **Mi cuenta:** "PIN para autorizar descuentos" (admin y supervisor).
+- **Vender:** "Descuento" en cada línea ($ o %); si pasa el tope,
+  "Pedir autorización y cobrar". Necesita internet. `demo-descuento.mjs` 11/11.
+- Después de aplicar deben salir **46 funciones** expuestas.
+- **Sigue abierto:** RQ-16 (descuento a la venta completa) y RQ-27 (retiros
+  autorizados con el mismo PIN) pueden usar este mecanismo.
+- **Ojo con las pruebas de noche (regla 17):** corridas después de las 21:00
+  en Chile, dos pruebas mías fallaron porque sacaban "hoy" con
+  `toISOString()` (UTC, que ya era mañana). La app estaba bien. Corregidas a
+  `toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })`.
+- **Verificado al cierre:** core 452 · typecheck · `db:check` 160 · db:test
+  **185 + 1 TODO, 0 fallas** · recorridos de la maqueta: descuento 11/11,
+  devolución 12/12, bodega-unidad 26/26, flujo 19/19, datos 11/11, ronda2
+  15/15, ronda3 45/45, ronda4 44/44, ronda5 22/22, ronda6 14/14, roles 192
+  pantallas sin errores.
 
 **Segunda tanda del mismo día (lo pendiente + mejoras):**
 - **0033 · utilidad sin IVA en Reportes.** `v_sales_by_product.gross_profit`

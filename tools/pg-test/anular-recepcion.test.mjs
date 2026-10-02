@@ -72,7 +72,9 @@ test('0034 · anular la recepción saca su factura del libro de compras, y solo 
   });
   const libro = (receipt, folio) => rpc(adm, 'fn_registrar_factura_recibida', { p_datos: {
     supplier_id: prov, rut_emisor: '76.086.428-5', razon_social: 'Dulces del Sur', tipo: 33, folio,
-    fecha_emision: new Date().toISOString().slice(0, 10), neto: 3000, iva: 570, receipt_id: receipt } });
+    // El día del local, no el de UTC (regla 17): después de las 21:00 en Chile, UTC ya es mañana
+    // y la base rechaza una factura con fecha futura.
+    fecha_emision: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' }), neto: 3000, iva: 570, receipt_id: receipt } });
   const mala = await recibir('501');
   const buena = await recibir('502');
   await libro(mala.receipt_id, 501);

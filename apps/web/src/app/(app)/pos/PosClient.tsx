@@ -25,6 +25,7 @@ import { combosParaVender } from '@/lib/datos/combos';
 import { guardarCarro, leerCarro, tomarPedidoPendiente } from '@/lib/offline/carro';
 import { Escaner } from './Escaner';
 import { Cobro } from './Cobro';
+import { DescuentoLinea, PedirAutorizacion, type AutorizacionVigente } from './Descuentos';
 import { Comprobante } from './Comprobante';
 
 /** `deshacer`: lo que se acaba de agregar, para sacarlo con un toque (RF-M5-24). */
@@ -53,12 +54,12 @@ function lineaDesde(p: LocalProduct, quantity: number): CartLine {
   };
 }
 
-// Nota: el descuento por línea (RF-M5-08) aún no está en esta pantalla. Cuando
-// se agregue, vuelven a entrar `role` y `maxDiscountPct` para aplicar el tope
-// por rol con `isDiscountAllowed` de @rutaahorro/core.
 export function PosClient({
   hasOpenSession, local = '', cajero = '', usuarioId = '', puedeForzarStock = false, puedeCrearProductos = false,
+  topeDescuento = 0,
 }: {
+  /** El tope de descuento de quien vende (profiles.max_discount_pct). Pasarlo pide autorización (RQ-17). */
+  topeDescuento?: number;
   /** Admin y supervisor: un código desconocido se puede crear desde acá (RF-M5-04). */
   puedeCrearProductos?: boolean;
   hasOpenSession: boolean;
@@ -138,6 +139,18 @@ export function PosClient({
   const avisoTimer = useRef<number | null>(null);
 
   const totals = cartTotals(lines);
+
+  // RQ-15/17 · Descuento por línea. Si pasa el tope de quien vende, John o
+  // María José lo autorizan con su PIN en este celular (0036). La base mide lo
+  // mismo y rechaza lo que no esté autorizado.
+  const [descontando, setDescontando] = useState<CartLine | null>(null);
+  const [autorizacion, setAutorizacion] = useState<AutorizacionVigente | null>(null);
+  const [pidiendoAutorizacion, setPidiendoAutorizacion] = useState(false);
+  const brutoLineas = lines.reduce((s, l) => s + Math.round(l.unitPrice * l.quantity), 0);
+  const descuentoManual = lines.reduce((s, l) => s + (l.discountAmount ?? 0), 0);
+  const pctDescuento = brutoLineas > 0 ? (descuentoManual * 100) / brutoLineas : 0;
+  const faltaAutorizacion = pctDescuento > topeDescuento + 0.011
+    && !(autorizacion && autorizacion.pct + 0.011 >= pctDescuento);
 
   const notificar = useCallback((tipo: 'ok' | 'error' | 'info', texto: string, deshacer?: { productId: string; cantidad: number }, recuperar?: CartLine) => {
     setAviso({ tipo, texto, deshacer, recuperar });
@@ -434,6 +447,7 @@ export function PosClient({
       payments,
       documento,
       clienteId: cliente?.id ?? null,
+      autorizacion: autorizacion?.id ?? null,
       // Solo el descuento a la venta completa: los de cada línea (combos) ya
       // viajan en `discount_amount`. Antes iba `totals.discountTotal`, que los
       // incluye, y la base los restaba dos veces. No se notaba porque hasta
@@ -486,8 +500,9 @@ export function PosClient({
     contarVendidos(lines.map((l) => l.productId));
     void cargarFrecuentes();
     setLines([]);
-    // La siguiente venta parte sin cliente: si no, el próximo que pase por
-    // la caja pagaría a precio mayorista.
+    // La autorización era para esta venta (y la base ya la gastó).
+    setAutorizacion(null);
+    // La siguiente venta parte sin cliente.
     setCliente(null);
     setCobrando(false);
     return true;
@@ -687,6 +702,11 @@ export function PosClient({
                       )}
                     </p>
                     <OfertaDeLinea linea={l} zona={config.zonaHoraria} />
+                    {(l.discountAmount ?? 0) > 0 && (
+                      <p className="text-xs font-medium text-marca-700 num">
+                        ✂️ Descuento -{formatCLP(l.discountAmount ?? 0)}
+                      </p>
+                    )}
                     {(l.descuentoCombo ?? 0) > 0 && (
                       <p className="text-xs font-medium text-marca-700 num">
                         🎁 Combo {l.comboNombre} · -{formatCLP(l.descuentoCombo ?? 0)}
@@ -728,9 +748,16 @@ export function PosClient({
                     +
                   </button>
                   <button
+                    onClick={() => setDescontando(l)}
+                    aria-label={`Descuento a ${l.name}`}
+                    className="tap ml-auto px-3 text-sm underline"
+                  >
+                    Descuento
+                  </button>
+                  <button
                     onClick={() => quitarLinea(l)}
                     aria-label={`Quitar ${l.name} de la venta`}
-                    className="tap ml-auto px-3 text-sm text-[var(--color-alerta)]"
+                    className="tap px-3 text-sm text-[var(--color-alerta)]"
                   >
                     Quitar
                   </button>
@@ -761,10 +788,10 @@ export function PosClient({
               Vaciar
             </button>
             <button
-              onClick={() => { setErrorCobro(null); setCobrando(true); }}
+              onClick={() => { setErrorCobro(null); if (faltaAutorizacion) setPidiendoAutorizacion(true); else setCobrando(true); }}
               className="tap flex-1 py-3.5 rounded-xl bg-marca-500 text-white font-bold text-base active:bg-marca-600"
             >
-              Cobrar
+              {faltaAutorizacion ? 'Pedir autorización y cobrar' : 'Cobrar'}
             </button>
           </div>
         </div>
@@ -784,6 +811,26 @@ export function PosClient({
         />
       )}
 
+      {descontando && (
+        <DescuentoLinea
+          linea={descontando}
+          onCerrar={() => setDescontando(null)}
+          onAplicar={(monto) => {
+            cambiarCarro((p) => p.map((x) => (x.productId === descontando.productId ? { ...x, discountAmount: monto } : x)));
+            setDescontando(null);
+          }}
+        />
+      )}
+
+      {pidiendoAutorizacion && (
+        <PedirAutorizacion
+          pct={pctDescuento}
+          tope={topeDescuento}
+          onCerrar={() => setPidiendoAutorizacion(false)}
+          onAutorizado={(a) => { setAutorizacion(a); setPidiendoAutorizacion(false); setErrorCobro(null); setCobrando(true); }}
+        />
+      )}
+
       {eligiendoCliente && (
         <ElegirCliente onElegir={elegirCliente} onCerrar={() => setEligiendoCliente(false)} />
       )}
@@ -796,7 +843,7 @@ export function PosClient({
               Se quitan {lines.length} {lines.length === 1 ? 'producto' : 'productos'} del carrito ({formatCLP(totals.total)}).
             </p>
             <button
-              onClick={() => { setLines([]); elegirCliente(null); setConfirmandoVaciar(false); }}
+              onClick={() => { setLines([]); setAutorizacion(null); elegirCliente(null); setConfirmandoVaciar(false); }}
               className="tap w-full py-3.5 rounded-xl bg-[var(--color-alerta)] text-white font-bold"
             >
               Sí, vaciar

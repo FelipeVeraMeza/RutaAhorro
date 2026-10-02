@@ -18,7 +18,8 @@ export default async function PosPage() {
     const caja = leerCajaDemo((await cookies()).get(DEMO_COOKIE_CAJA)?.value, user.id);
     return (
       <PosClient hasOpenSession={caja.abierta} local="Almacén RutaAhorro" cajero={user.fullName}
-                 usuarioId={user.id} puedeForzarStock={puedeForzarStock} puedeCrearProductos={puedeForzarStock} />
+                 usuarioId={user.id} puedeForzarStock={puedeForzarStock} puedeCrearProductos={puedeForzarStock}
+                 topeDescuento={user.maxDiscountPct} />
     );
   }
 
@@ -50,6 +51,7 @@ export default async function PosPage() {
       usuarioId={user.id}
       puedeForzarStock={puedeForzarStock}
       puedeCrearProductos={puedeForzarStock}
+      topeDescuento={user.maxDiscountPct}
     />
   );
 }

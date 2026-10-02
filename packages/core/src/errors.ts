@@ -80,6 +80,14 @@ export const ERROR_MESSAGES: Record<string, string> = {
   // 0035 · devolución a proveedor
   DEVOLUCION_SIN_PRODUCTOS: 'Agrega al menos un producto para devolver',
   LOTE_NO_ENCONTRADO: 'Ese lote ya no existe o es de otro producto',
+  // 0036 · descuento autorizado
+  PIN_INVALIDO: 'El PIN son 4 a 6 números',
+  PIN_INCORRECTO: 'PIN incorrecto',
+  PIN_BLOQUEADO: 'Demasiados PIN incorrectos: espera 15 minutos o que autorice otra persona',
+  SIN_PIN: 'Esa persona todavía no tiene PIN: lo crea en Mi cuenta',
+  AUTORIZADOR_INVALIDO: 'Solo un administrador o supervisor activo puede autorizar',
+  AUTORIZACION_EXCEDE_TOPE: 'Quien autoriza no puede dar un descuento tan grande',
+  AUTORIZACION_INVALIDA: 'La autorización ya se usó, venció o es de otra persona: pídela de nuevo',
   // 0023 · combos
   NOMBRE_COMBO_REQUERIDO: 'El combo necesita un nombre',
   COMBO_INVALIDO: 'Revisa el combo: el precio y las cantidades tienen que ser mayores que cero',

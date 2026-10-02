@@ -39,7 +39,7 @@ await p.getByLabel(/Cuántos tienes hoy en la bodega/).fill('5');   // 0032: una
 await p.getByPlaceholder('Escribe o escanea').fill('7800000000017');
 check((await p.locator('[role=dialog]').innerText()).includes('Falta la fecha'), 'avisa perecible sin fecha');
 // 0032: con stock, la fecha es obligatoria y dice cuántos días le quedan.
-await p.getByLabel(/Cuándo vence/).fill(new Date(Date.now() + 20 * 864e5).toISOString().slice(0, 10));
+await p.getByLabel(/Cuándo vence/).fill(new Date(Date.now() + 20 * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Santiago' }));
 await p.getByRole('button', { name: 'Crear producto' }).click();
 await p.waitForTimeout(1500);
 const lista = await p.locator('main').innerText();

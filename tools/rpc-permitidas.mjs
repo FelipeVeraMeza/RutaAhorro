@@ -33,4 +33,6 @@ export const RPC_PERMITIDAS = [
   'fn_anular_factura_proveedor', 'fn_pagar_factura_proveedor', 'fn_registrar_factura_proveedor',
   // 0035 · devolución a proveedor
   'fn_devolver_a_proveedor',
+  // 0036 · descuento autorizado con PIN
+  'fn_autorizadores', 'fn_autorizar_descuento', 'fn_guardar_pin',
 ].sort();

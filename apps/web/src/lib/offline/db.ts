@@ -81,8 +81,10 @@ export interface QueuedSale {
    * de este campo no lo traen y la base las resuelve por el medio de pago.
    */
   documento?: DocumentoVenta;
-  /** El cliente elegido en el POS (0022): la base le aplica su precio. */
+  /** El cliente elegido en el POS (0022): factura y fiado. */
   clienteId?: string | null;
+  /** Descuento autorizado con PIN (0036): de un solo uso, la base lo gasta. */
+  autorizacion?: string | null;
   /**
    * Se cobró sin conexión: el cliente ya se fue con el producto y un papel en
    * la mano. La base no puede rechazarla por stock (el del celular podía estar

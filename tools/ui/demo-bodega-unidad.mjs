@@ -30,7 +30,9 @@ const check = (cond, t) => { cond ? ok++ : mal++; console.log(cond ? '✔' : '�
 const main = async () => (await p.locator('main').innerText().catch(() => ''));
 const foto = (n) => p.screenshot({ path: `${SP}/${n}.png`, fullPage: true }).catch(() => {});
 const sufijo = Math.random().toString(16).slice(2, 6);
-const hoyMas = (d) => { const f = new Date(); f.setDate(f.getDate() + d); return f.toISOString().slice(0, 10); };
+// El día del local (regla 17): con toISOString, después de las 21:00 en Chile ya era mañana
+// y la pantalla decía, con razón, un día más que lo que esperaba el recorrido.
+const hoyMas = (d) => new Date(Date.now() + d * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
 
 async function entrar(correo, clave) {
   await p.goto(BASE + '/login', { waitUntil: 'networkidle' });
