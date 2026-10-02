@@ -114,7 +114,10 @@ export interface FacturaRecibida {
   anuladaMotivo: string | null;
 }
 
-export type RecibidaNueva = Omit<FacturaRecibida, 'id' | 'estado' | 'anuladaMotivo' | 'total'>;
+export type RecibidaNueva = Omit<FacturaRecibida, 'id' | 'estado' | 'anuladaMotivo' | 'total'> & {
+  /** La recepción de la que viene: anularla la saca del libro (0034). */
+  receiptId?: string | null;
+};
 
 export interface ResumenMes {
   mes: string;           // 'AAAA-MM-01'
@@ -279,7 +282,7 @@ const supabaseRepo: RepositorioFacturacion = {
     return aRecibida(await rpc<Fila>('fn_registrar_factura_recibida', { p_datos: {
       supplier_id: d.supplierId, rut_emisor: d.rutEmisor, razon_social: d.razonSocial, tipo: d.tipo, folio: d.folio,
       fecha_emision: d.fechaEmision, neto: d.neto, exento: d.exento, iva: d.iva, otros_impuestos: d.otrosImpuestos,
-      notas: d.notas,
+      notas: d.notas, receipt_id: d.receiptId ?? null,
     } }));
   },
   async anularRecibida(id, motivo) { await rpc('fn_anular_factura_recibida', { p_id: id, p_motivo: motivo }); },
@@ -325,6 +328,13 @@ async function leerDemo(): Promise<Demo> {
   return crudo ? JSON.parse(crudo) : { facturas: [], recibidas: [] };
 }
 const guardarDemo = (d: Demo) => setMeta(CLAVE_DEMO, JSON.stringify(d));
+
+/** Maqueta de 0034: anular una recepción saca su factura del libro de compras. */
+export async function anularRecibidaPorRecepcionDemo(receiptId: string, motivo: string): Promise<void> {
+  const d = await leerDemo();
+  await guardarDemo({ ...d, recibidas: d.recibidas.map((r) => ((r as RecibidaNueva).receiptId === receiptId && r.estado === 'vigente'
+    ? { ...r, estado: 'anulada', anuladaMotivo: `Recepción anulada: ${motivo}` } : r)) });
+}
 const mesDe = (fecha: string) => fecha.slice(0, 7);
 // El día del local (regla 17), no el del celular.
 const hoy = async () => diaLocal(new Date(), (await (await import('./configuracion')).configuracionLocal()).zonaHoraria);

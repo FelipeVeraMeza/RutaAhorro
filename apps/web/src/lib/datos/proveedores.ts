@@ -201,6 +201,8 @@ const repoLocal: RepositorioProveedores = {
     r.estado = 'anulada';
     await guardarJson(KEY_REC, rs);
     const { anularPorRecepcionDemo } = await import('./porPagar');
+    const { anularRecibidaPorRecepcionDemo } = await import('./facturacion');
+    await anularRecibidaPorRecepcionDemo(id, motivo);
     return { facturaYaPagada: await anularPorRecepcionDemo(id, motivo) };
   },
 };

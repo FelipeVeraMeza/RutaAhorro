@@ -1,12 +1,13 @@
 /**
- * Clientes y precio por cliente (0022, RQ-07, RQ-20, RQ-21), como lo hace el
+ * Clientes (0022, RQ-20, RQ-21) sin precio propio (0032), como lo hace el
  * administrador desde el celular y como lo cobra un cajero, en
  * "QA · pruebas internas".
  *
  *   node tools/ui/clientes.mjs   (la app compilada en http://localhost:3001)
  *
- * El cajero tiene tope de descuento 0 %: si la base le acepta la venta a
- * precio mayorista, es porque ese precio es del cliente y no un descuento.
+ * Desde 2026-10-01 el precio por mayor es del PRODUCTO («desde 3»), no del
+ * cliente (RQ-07 retirado): elegir un cliente no baja ningún precio, y el
+ * precio por mayor rige para cualquiera que lleve la cantidad.
  */
 import { chromium } from 'playwright-core';
 import { createClient } from '@supabase/supabase-js';
@@ -61,6 +62,11 @@ async function producto(nombre, precio) {
 const nA = `QA Cli ${sufijo} Arroz`, nB = `QA Cli ${sufijo} Aceite`;
 const pA = await producto(nA, 2000);
 const pB = await producto(nB, 4000);
+// Precio por mayor del arroz: desde 3 a $1.500 c/u.
+{
+  const { error } = await admin.cli.rpc('fn_guardar_precios_producto', { p_product_id: pA, p_tramos: [{ desde: 3, precio: 1500 }] });
+  if (error) throw error;
+}
 const nCliente = `QA Mayorista ${sufijo}`;
 const rutMayorista = rutAlAzar();
 const rutFactura = rutAlAzar();
@@ -96,18 +102,14 @@ const f = p.getByRole('dialog');
 await f.getByLabel('Nombre o razón social').fill(nCliente);
 await f.getByLabel('RUT').fill(rutMayorista.replace(/\./g, ''));
 await f.getByLabel('Giro').fill('Almacén');
-await f.getByLabel('% de rebaja en todo').fill('8');
-await f.getByLabel('Buscar producto para precio especial').fill(nB);
-await f.getByRole('button', { name: new RegExp(nB) }).click();
-await f.getByLabel(`Precio especial de ${nB}`, { exact: true }).fill('3.500');
+ok('0032', (await f.getByLabel('% de rebaja en todo').count()) === 0 && (await f.getByText(/Precios especiales/).count()) === 0,
+  'la ficha ya no ofrece % de rebaja ni precios especiales');
 const medFicha = await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 await f.getByRole('button', { name: 'Guardar' }).click();
 await p.getByText(`${nCliente} guardado`).waitFor({ timeout: 15000 });
 const { data: cli } = await servicio.from('clientes').select('id, rut, descuento_pct, giro').eq('tenant_id', tenant).eq('nombre', nCliente).single();
-const { data: esp } = await servicio.from('cliente_precios').select('product_id, precio').eq('cliente_id', cli.id);
-ok('RQ-21', cli.rut === rutMayorista && Number(cli.descuento_pct) === 8 && cli.giro === 'Almacén',
-  'la ficha quedó en la base con su RUT formateado y 8 %', `${cli.rut} · ${cli.descuento_pct}`);
-ok('RQ-07', esp?.length === 1 && esp[0].product_id === pB && esp[0].precio === 3500, 'y el precio especial del aceite: $3.500');
+ok('RQ-21', cli.rut === rutMayorista && Number(cli.descuento_pct) === 0 && cli.giro === 'Almacén',
+  'la ficha quedó en la base con su RUT formateado y sin precio propio', `${cli.rut} · ${cli.descuento_pct}`);
 ok('RNF-16', medFicha <= 1, 'la ficha no se desborda a 360 px', `${medFicha} px`);
 
 console.log('El cajero no entra a Clientes');
@@ -116,7 +118,7 @@ await c.goto(`${BASE}/clientes`);
 await c.waitForTimeout(1500);
 ok('RQ-21', !c.url().includes('/clientes'), 'un vendedor que escribe /clientes vuelve al inicio', c.url());
 
-console.log('POS · el cajero elige al cliente y cobra su precio');
+console.log('POS · el cliente no cambia el precio; la cantidad sí (precio por mayor)');
 await c.goto(`${BASE}/pos`);
 await c.waitForTimeout(3000); // el catálogo y los clientes bajan al entrar
 async function agregar(nombre, veces = 1) {
@@ -134,8 +136,13 @@ await c.getByRole('button', { name: /Elegir cliente/ }).click();
 await c.getByRole('dialog').getByLabel('Buscar cliente por nombre o RUT').fill(sufijo);
 await c.getByRole('dialog').getByRole('button', { name: new RegExp(nCliente) }).click();
 barra = await c.locator('.sticky.bottom-0').innerText();
-ok('RQ-07', /\$7\.180/.test(barra), 'con el mayorista: 2 × $1.840 (8 %) + $3.500 (especial) = $7.180', barra.replace(/\n+/g, ' · '));
-ok('RQ-07', await c.getByText(/Precio de cliente · ahorra/).count() === 2, 'cada línea dice que es precio de cliente');
+ok('0032', /\$8\.000/.test(barra) && (await c.getByText(/Precio de cliente/).count()) === 0,
+  'con el cliente elegido sigue en $8.000: el cliente no tiene precio propio', barra.replace(/\n+/g, ' · '));
+ok('0032', (await c.getByText(/Por mayor desde 3: llevando 1 más/).count()) === 1, 'con 2 arroces avisa "Por mayor desde 3: llevando 1 más"');
+await c.getByRole('button', { name: `Agregar una unidad de ${nA}` }).click();
+barra = await c.locator('.sticky.bottom-0').innerText();
+ok('0032', /\$8\.500/.test(barra) && (await c.getByText(/Precio por mayor \(desde 3\)/).count()) === 1,
+  'con 3 arroces rige el precio por mayor: 3 × $1.500 + $4.000 = $8.500', barra.replace(/\n+/g, ' · '));
 const chip = await c.evaluate(() => {
   const b = [...document.querySelectorAll('button')].find((x) => x.textContent?.trim() === 'Cambiar');
   return b ? Math.round(b.getBoundingClientRect().height) : 0;
@@ -148,16 +155,16 @@ await c.locator('#ticket').first().waitFor({ timeout: 15000 });
 await c.waitForTimeout(2000);
 const { data: v1 } = await servicio.from('sales').select('total, cliente_id')
   .eq('sold_by', cajero.id).order('folio', { ascending: false }).limit(1).single();
-ok('RQ-07', v1.total === 7180 && v1.cliente_id === cli.id, 'la base aceptó la venta del cajero y guardó al cliente',
+ok('0032', v1.total === 8500 && v1.cliente_id === cli.id, 'la base aceptó el precio por mayor del cajero y guardó al cliente',
   `total ${v1.total}`);
 const nueva = c.getByRole('button', { name: 'Nueva venta' });
 if (await nueva.count()) await nueva.click();
 
 console.log('La venta siguiente parte sin cliente');
 await agregar(nA);
-ok('RQ-07', await c.getByRole('button', { name: /Elegir cliente/ }).count() === 1, 'no arrastra al mayorista a la venta siguiente');
+ok('RQ-21', await c.getByRole('button', { name: /Elegir cliente/ }).count() === 1, 'no arrastra al cliente a la venta siguiente');
 barra = await c.locator('.sticky.bottom-0').innerText();
-ok('RQ-07', /\$2\.000/.test(barra), 'y cobra precio normal', barra.replace(/\n+/g, ' · '));
+ok('0032', /\$2\.000/.test(barra), 'y un arroz va a precio normal', barra.replace(/\n+/g, ' · '));
 
 console.log('RQ-20 · la factura guarda al receptor, y la siguiente lo autocompleta');
 await c.getByRole('button', { name: 'Cobrar' }).click();
@@ -188,7 +195,7 @@ await nav.close();
 for (const id of [pA, pB]) await admin.cli.from('products').update({ is_active: false }).eq('id', id);
 for (const id of [cli.id, nuevo?.id].filter(Boolean)) {
   const { data: x } = await servicio.from('clientes').select('*').eq('id', id).single();
-  await admin.cli.rpc('fn_guardar_cliente', { p_id: id, p_datos: { nombre: x.nombre, rut: x.rut, descuento_pct: x.descuento_pct, activo: false } });
+  await admin.cli.rpc('fn_guardar_cliente', { p_id: id, p_datos: { nombre: x.nombre, rut: x.rut, activo: false } });
 }
 const malos = resultados.filter((x) => !x.cumple);
 console.log(`\n${resultados.length - malos.length}/${resultados.length} comprobaciones pasaron.`);

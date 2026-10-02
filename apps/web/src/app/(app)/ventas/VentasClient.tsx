@@ -435,13 +435,21 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
               Reimprimir o compartir el comprobante
             </button>
 
-            {puedeAnular && !detalle.anulada && detalle.lineas.some((l) => l.cantidad > (l.devuelto ?? 0)) && (
+            {/* Sin el id de cada línea no hay qué devolver: la maqueta no los
+                guarda, y el diálogo abría vacío (hallazgo de la 6ª ronda). */}
+            {puedeAnular && !detalle.anulada && detalle.lineas.some((l) => l.cantidad > (l.devuelto ?? 0))
+              && detalle.lineas.every((l) => l.id) && (
               <button
                 onClick={() => setDevolviendo(detalle)}
                 className="tap w-full py-3 rounded-xl border border-[var(--borde)] font-medium"
               >
                 Devolver productos
               </button>
+            )}
+            {puedeAnular && !detalle.anulada && !detalle.lineas.every((l) => l.id) && (
+              <p className="text-xs text-[var(--texto-suave)]">
+                En el modo de prueba las devoluciones no se hacen: en el sistema real, acá aparece "Devolver productos".
+              </p>
             )}
 
             {/* Con boleta o factura, o con devoluciones, no se anula: se devuelve

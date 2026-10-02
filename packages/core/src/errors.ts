@@ -22,7 +22,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   FACTURA_EN_CERO: 'La factura no puede quedar en $0',
   GIRO_RECEPTOR_REQUERIDO: 'Falta el giro del cliente: el SII lo exige en una factura',
   DIRECCION_RECEPTOR_REQUERIDA: 'Falta la dirección o la comuna del cliente: el SII las exige en una factura',
-  CANTIDAD_ENTERA: 'Ese producto se vende entero: la cantidad no puede tener decimales',
+  CANTIDAD_ENTERA: 'Todo se vende y se cuenta por unidad: la cantidad va sin decimales',
   LINEA_SIN_NOMBRE: 'Una línea libre necesita decir qué se factura',
   DESCUENTO_MAYOR_QUE_LINEA: 'El descuento de una línea no puede ser mayor que la línea',
   FACTURA_NO_ENCONTRADA: 'No se encontró esa factura',
@@ -74,6 +74,12 @@ export const ERROR_MESSAGES: Record<string, string> = {
   NOMBRE_CLIENTE_REQUERIDO: 'El cliente necesita un nombre o razón social',
   CLIENTE_RUT_DUPLICADO: 'Ya hay un cliente con ese RUT',
   PRECIO_CLIENTE_INVALIDO: 'El precio especial tiene que ser un monto mayor que cero',
+  // 0032 · una sola bodega, precio por mayor en el producto
+  PRECIO_POR_CLIENTE_DESACTIVADO: 'Los clientes ya no tienen precio propio: el precio por mayor se pone en cada producto',
+  UNA_SOLA_BODEGA: 'El stock está en una sola bodega: no hay nada que traspasar',
+  // 0035 · devolución a proveedor
+  DEVOLUCION_SIN_PRODUCTOS: 'Agrega al menos un producto para devolver',
+  LOTE_NO_ENCONTRADO: 'Ese lote ya no existe o es de otro producto',
   // 0023 · combos
   NOMBRE_COMBO_REQUERIDO: 'El combo necesita un nombre',
   COMBO_INVALIDO: 'Revisa el combo: el precio y las cantidades tienen que ser mayores que cero',

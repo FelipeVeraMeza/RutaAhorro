@@ -51,6 +51,11 @@ const GUIAS: Guia[] = [
     'Marca los productos y elige "Código de barras" o "Cartel de góndola".',
     'Imprimir: en el diálogo del navegador elige tu impresora o "Guardar como PDF".',
   ] },
+  { titulo: 'Devolver mercadería al proveedor', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/proveedores/devolucion', texto: 'Devolver a proveedor' }, pasos: [
+    'Compras → "Devolver": elige el proveedor y el motivo (vencido, dañado, mal despachado).',
+    'Busca o escanea lo que vuelve y la cantidad; si es perecible, puedes elegir el lote.',
+    'Sale de la bodega con su motivo. Cuando llegue la nota de crédito del proveedor, regístrala en Facturación → Recibidas.',
+  ] },
   { titulo: 'Contar el inventario (toma)', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/inventario', texto: 'Ir a Inventario' }, pasos: [
     '"Imprimir hoja para contar" si prefieres contar en papel.',
     'Escribe lo contado; el sistema muestra la diferencia antes de guardar.',

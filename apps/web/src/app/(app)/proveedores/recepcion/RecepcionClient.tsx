@@ -327,7 +327,7 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
             await repoFacturacion().registrarRecibida({
               supplierId: prov.id, rutEmisor: prov.rut, razonSocial: prov.nombre, tipo: 33, folio,
               fechaEmision: hoy(), neto: totalNeto, exento: 0, iva: totalIva, otrosImpuestos: 0,
-              notas: 'Desde Recibir mercadería',
+              notas: 'Desde Recibir mercadería', receiptId: r.id,
             });
             hecho.push('Quedó en el libro de compras.');
           } catch (e) {

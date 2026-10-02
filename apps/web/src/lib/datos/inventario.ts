@@ -17,7 +17,7 @@ import { DEMO_LOTES } from '../demo/data';
 export type TipoMovimiento =
   | 'inventario_inicial' | 'venta' | 'anulacion_venta' | 'recepcion'
   | 'anulacion_recepcion' | 'ajuste_positivo' | 'ajuste_negativo'
-  | 'merma' | 'toma_inventario' | 'traslado';
+  | 'merma' | 'toma_inventario' | 'traslado' | 'devolucion_proveedor';
 
 export const ETIQUETA_MOVIMIENTO: Record<TipoMovimiento, string> = {
   inventario_inicial: 'Inventario inicial',
@@ -30,6 +30,7 @@ export const ETIQUETA_MOVIMIENTO: Record<TipoMovimiento, string> = {
   merma: 'Merma',
   toma_inventario: 'Toma de inventario',
   traslado: 'Traspaso',
+  devolucion_proveedor: 'Devolución a proveedor',
 };
 
 /** Motivos frecuentes: escribirlos a mano cada vez genera datos inconsistentes. */
@@ -130,7 +131,8 @@ async function leerMovs(): Promise<Movimiento[]> {
   return raw?.value ? (JSON.parse(raw.value) as Movimiento[]) : [];
 }
 
-async function registrarMov(m: Omit<Movimiento, 'id' | 'fecha' | 'ubicacion'> & { ubicacion?: Ubicacion }) {
+/** La maqueta anota un movimiento en su kardex. También lo usa la devolución a proveedor. */
+export async function registrarMov(m: Omit<Movimiento, 'id' | 'fecha' | 'ubicacion'> & { ubicacion?: Ubicacion }) {
   const movs = await leerMovs();
   movs.unshift({
     // La maqueta no lleva ubicaciones, y decir "sala" sin que lo sea sería

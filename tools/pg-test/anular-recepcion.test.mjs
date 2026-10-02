@@ -59,3 +59,28 @@ test('el kardex sigue inmutable: solo se acepta anotar el lote una vez', async (
   await assert.rejects(banco.su.query('update inventory_movements set lot_id = gen_random_uuid() where id = $1', [m.id]), /REGISTRO_INMUTABLE/);
   await assert.rejects(banco.su.query('delete from inventory_movements where id = $1', [m.id]), /REGISTRO_INMUTABLE/);
 });
+
+test('0034 · anular la recepción saca su factura del libro de compras, y solo la suya', async () => {
+  const L = await nuevoLocal(banco);
+  const adm = await banco.como(L.admin);
+  const p = await L.producto({ nombre: 'Jalea', precio: 2490, costo: 1000 });
+  const prov = (await banco.su.query(
+    `insert into suppliers (tenant_id, name, rut) values ($1, 'Dulces del Sur', '76.086.428-5') returning id`, [L.tenant])).rows[0].id;
+  const recibir = (num) => rpc(adm, 'fn_confirm_receipt', {
+    p_supplier_id: prov, p_document_type: 'factura', p_document_number: num, p_received_at: new Date().toISOString(),
+    p_items: [{ product_id: p, quantity: 3, unit_cost: 1000 }],
+  });
+  const libro = (receipt, folio) => rpc(adm, 'fn_registrar_factura_recibida', { p_datos: {
+    supplier_id: prov, rut_emisor: '76.086.428-5', razon_social: 'Dulces del Sur', tipo: 33, folio,
+    fecha_emision: new Date().toISOString().slice(0, 10), neto: 3000, iva: 570, receipt_id: receipt } });
+  const mala = await recibir('501');
+  const buena = await recibir('502');
+  await libro(mala.receipt_id, 501);
+  await libro(buena.receipt_id, 502);
+
+  await rpc(adm, 'fn_void_receipt', { p_receipt_id: mala.receipt_id, p_reason: 'Llegó a otro local' });
+  const { rows } = await banco.su.query(
+    `select folio, estado, anulada_motivo from facturas_recibidas where tenant_id = $1 order by folio`, [L.tenant]);
+  assert.deepEqual(rows.map((r) => [Number(r.folio), r.estado]), [[501, 'anulada'], [502, 'vigente']]);
+  assert.match(rows[0].anulada_motivo, /Recepción anulada: Llegó a otro local/);
+});

@@ -9,7 +9,7 @@ import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.RA_BASE ?? 'http://localhost:3000';
 const RUTAS = ['/novedades', '/', '/pos', '/caja', '/precio', '/productos', '/productos/etiquetas', '/productos/ofertas',
-  '/productos/importar', '/productos/combos', '/inventario', '/proveedores', '/proveedores/recepcion',
+  '/productos/importar', '/productos/combos', '/inventario', '/proveedores', '/proveedores/recepcion', '/proveedores/devolucion',
   '/ventas', '/clientes', '/fiado', '/facturacion', '/reportes', '/usuarios', '/configuracion', '/bitacora', '/cuenta', '/ayuda'];
 const ROLES = (process.env.ROLES ?? 'admin,supervisor,vendedor,bodega').split(',');
 const ANCHOS = (process.env.ANCHOS ?? '360,1280').split(',').map(Number);

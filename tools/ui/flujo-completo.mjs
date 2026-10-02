@@ -11,10 +11,14 @@
  *   2 · al crear, avisa y muestra el producto recién creado
  *   3 · al editar, dice cuánto stock hay y lleva a "Ajustar stock"
  *   3b· quién lo modificó, historial de precios y edición simultánea (0020)
- *   4 · en el POS la cantidad se escribe; decimales solo por kilo, litro…
+ *   4 · en el POS la cantidad se escribe; todo por unidad, sin decimales (0032)
  *   5 · el consultador agrega a la venta, y la venta no se pierde al salir
  *   6 · un perecible creado con stock nace con su lote y vencimiento (0024)
  *   7 · los botones de la cabecera de Productos dicen qué hacen
+ *
+ * Desde 0032 (2026-10-01): una sola bodega, todo por unidad y el perecible
+ * con stock pide la fecha. El queso dejó de venderse por kilo: es un queso de
+ * 250 g por unidad.
  *
  * Nada espera un tiempo fijo a que baje el catálogo: se espera a que el
  * producto aparezca. Por internet (Railway) tarda más que en local, y los
@@ -82,13 +86,13 @@ const cajero = await usuario('cajero');
 await cerrarSiAbierta(cajero);
 const sufijo = Date.now().toString().slice(-5);
 const nPan = `QA Flujo ${sufijo} Pan amasado`;
-const nQueso = `QA Flujo ${sufijo} Queso granel`;
+const nQueso = `QA Flujo ${sufijo} Queso gauda 250 g`;
 const vence = diaMas(10);
-// El queso por kilo se crea por la base: el formulario ya se prueba con el pan.
+// El queso se crea por la base: el formulario ya se prueba con el pan.
 const { data: rq, error: eq } = await admin.cli.rpc('fn_create_product', {
-  p_name: nQueso, p_sku: null, p_description: 'Queso gauda a granel', p_category_id: null, p_unit: 'kg',
-  p_sale_price: 9990, p_avg_cost: 6000, p_min_stock: 0, p_tracks_expiry: false, p_expiry_alert_days: 30,
-  p_barcodes: null, p_initial_stock: 0, p_initial_stock_sala: 3.5 });
+  p_name: nQueso, p_sku: null, p_description: 'Queso gauda, trozo de 250 g', p_category_id: null, p_unit: 'unidad',
+  p_sale_price: 2490, p_avg_cost: 1500, p_min_stock: 0, p_tracks_expiry: false, p_expiry_alert_days: 30,
+  p_barcodes: null, p_initial_stock: 0, p_initial_stock_sala: 4 });
 if (eq) throw eq;
 const idQueso = rq.product_id;
 let idPan = null;
@@ -125,10 +129,13 @@ await paso('1 · Productos: la cabecera y el formulario, en el celular', async (
   // Expresiones con mayúscula y ancladas: "unidad" también aparece en ayudas y totales.
   const y = async (re) => (await f.getByText(re).first().boundingBox({ timeout: 5000 }))?.y ?? -1;
   const orden = [];
-  for (const [t, re] of [['Precio de venta', /^Precio de venta/], ['Unidad', /^Unidad$/], ['¿Cuántos tienes hoy?', /^¿Cuántos tienes hoy\?$/],
-    ['Producto perecible', /^Producto perecible$/], ['Códigos de barras', /^Códigos de barras$/]]) orden.push([t, await y(re)]);
+  // 0032: sin "Unidad" (todo por unidad) y perecible antes de la cantidad,
+  // porque si es perecible la fecha se pide junto a ella.
+  for (const [t, re] of [['Precio de venta', /^Precio de venta/], ['Producto perecible', /^Producto perecible$/],
+    ['¿Cuántos tienes hoy en la bodega?', /^¿Cuántos tienes hoy en la bodega\?$/], ['Códigos de barras', /^Códigos de barras$/]]) orden.push([t, await y(re)]);
   const creciente = orden.every(([, v], i) => v > 0 && (i === 0 || v > orden[i - 1][1]));
-  ok('hallazgo 1', creciente, 'el orden es Precio → Unidad → ¿Cuántos tienes hoy? → Perecible → Códigos',
+  ok('0032', (await f.getByText(/^Unidad$/).count()) === 0, 'el formulario ya no pregunta la unidad');
+  ok('hallazgo 1', creciente, 'el orden es Precio → Perecible → ¿Cuántos tienes hoy en la bodega? → Códigos',
     orden.map(([t, v]) => `${t} ${Math.round(v)}`).join(' · '));
   const cuantos = orden[2][1];
   ok('hallazgo 1', cuantos > 0 && cuantos < 780, '"¿Cuántos tienes hoy?" se ve sin desplazarse, en la primera pantalla', `${Math.round(cuantos)} px de 780`);
@@ -137,19 +144,20 @@ await paso('1 · Productos: la cabecera y el formulario, en el celular', async (
 
   await f.getByRole('textbox', { name: 'Nombre (obligatorio)' }).fill(nPan);
   await f.getByRole('textbox', { name: 'Precio de venta (obligatorio)' }).fill('250');
-  await f.getByLabel('Costo', { exact: true }).fill('120');
-  await f.getByLabel('En la sala de ventas').fill('20');
-  await f.getByLabel('En la bodega').fill('5');
-  ok('hallazgo 1', /Total en el local:\s*25 unidades/.test(await f.innerText()), 'suma el total: 25 unidades');
-  const fecha = f.getByLabel('¿Cuándo vence lo que tienes?');
+  await f.getByLabel('Costo neto', { exact: true }).fill('120');
+  await f.getByLabel('¿Cuántos tienes hoy en la bodega?').fill('25');
+  const fecha = f.getByLabel(/¿Cuándo vence\?/);
   ok('hallazgo 6', await fecha.count() === 1, 'como es perecible y tiene stock, pregunta cuándo vence');
+  await f.getByRole('button', { name: 'Crear producto' }).click();
+  ok('0032', (await f.innerText()).includes('Falta la fecha de vencimiento'), 'sin la fecha no se guarda');
   await fecha.fill(vence);
+  ok('0032', (await f.innerText()).includes('vence en 10 días'), 'dice cuántos días le quedan: "vence en 10 días"');
   ok('RNF-12', (await desborde(p)) <= 1, 'el formulario no se desborda a 360 px');
   await f.getByRole('button', { name: 'Crear producto' }).click();
   const aviso = p.getByRole('status').filter({ hasText: 'creado' });
   await aviso.waitFor({ timeout: ESPERA });
   const textoAviso = await aviso.innerText();
-  ok('hallazgo 2', textoAviso.includes(nPan) && /20 a la vista/.test(textoAviso) && /5 en bodega/.test(textoAviso),
+  ok('hallazgo 2', textoAviso.includes(nPan) && /25 unidades en bodega/.test(textoAviso),
     'avisa lo creado y dónde quedó', textoAviso.replace(/\s+/g, ' '));
   const cerrarAviso = p.getByRole('button', { name: 'Cerrar aviso' });
   ok('RNF-16', (await alto(cerrarAviso)) >= 44, 'la × del aviso mide 44 px o más', `${await alto(cerrarAviso)} px`);
@@ -157,7 +165,7 @@ await paso('1 · Productos: la cabecera y el formulario, en el celular', async (
   const filas = await p.locator('main li').count();
   const fila = await p.locator('main li', { hasText: nPan }).first().innerText();
   ok('hallazgo 2', filas === 1, 'la lista queda filtrada en el recién creado', `${filas} fila(s)`);
-  ok('hallazgo 2', /a la vista 20 · en bodega 5/.test(fila), 'y la fila dice a la vista 20 · en bodega 5', fila.replace(/\s+/g, ' '));
+  ok('hallazgo 2', /25 unidades en bodega/.test(fila), 'y la fila dice "25 unidades en bodega"', fila.replace(/\s+/g, ' '));
   await foto(p, 'creado');
 
   const { data: prod } = await servicio.from('products').select('id, sale_price, avg_cost, tracks_expiry').eq('tenant_id', admin.tenant).eq('name', nPan).single();
@@ -178,8 +186,8 @@ await paso('3 · Editar: stock, quién lo tocó, historial de precios', async ()
   };
   let f = await abrirEdicion();
   const t = await f.innerText();
-  ok('hallazgo 3', /Stock ahora:\s*25 unidades/.test(t) && /a la vista 20 · en bodega 5/.test(t),
-    'dice el stock: 25, a la vista 20 y en bodega 5');
+  ok('hallazgo 3', /Stock ahora:\s*25 unidades\s*en bodega/.test(t) && !/a la vista/.test(t),
+    'dice el stock: 25 unidades en bodega (un solo lugar)');
   ok('RF-M10-11', t.includes(`Última modificación: ${admin.nombre}`), 'dice quién lo modificó por última vez', (t.match(/Última modificación:[^\n]*/) ?? [''])[0]);
   for (const b of ['Ajustar stock', 'Ingresar mercadería']) {
     const l = f.getByRole('link', { name: b });
@@ -345,15 +353,15 @@ await paso('4 · POS: la cantidad se escribe', async () => {
   const r = c.locator('main li button', { hasText: nQueso }).first();
   await r.waitFor({ timeout: ESPERA });
   await r.click();
-  const kg = cantidadDe(nQueso);
-  ok('hallazgo 4', (await kg.getAttribute('inputmode')) === 'decimal' && (await q.getAttribute('inputmode')) === 'numeric',
-    'el teclado del celular es decimal para el queso y numérico para el pan');
-  await kg.fill('0,35');
-  await kg.press('Enter');
+  const qq = cantidadDe(nQueso);
+  ok('0032', (await qq.getAttribute('inputmode')) === 'numeric' && (await q.getAttribute('inputmode')) === 'numeric',
+    'todo se cuenta por unidad: el teclado es numérico para los dos');
+  await qq.fill('2');
+  await qq.press('Enter');
   const b = await barra();
-  // 0,35 × 9.990 = 3.496,5 → $3.497, igual que redondea la base.
-  ok('RF-M2-14', (await kg.inputValue()) === '0,35' && /\$3\.497/.test(await c.locator('main').innerText()), '0,35 kg de queso: $3.497');
-  ok('hallazgo 4', /\$7\.097/.test(b) && /2 productos/.test(b), 'total $7.097, y la barra dice "2 productos", no "12,35 unidades"', b);
+  // 12 × $300 + 2 × $2.490 = $8.580.
+  ok('RF-M5-06', (await qq.inputValue()) === '2' && /\$4\.980/.test(await c.locator('main').innerText()), '2 quesos: $4.980');
+  ok('hallazgo 4', /\$8\.580/.test(b) && /14 unidades/.test(b), 'total $8.580, 14 unidades', b);
   ok('RNF-12', (await desborde(c)) <= 1, 'el POS con dos líneas no se desborda a 360 px');
   await foto(c, 'pos-cantidades');
 });
@@ -369,11 +377,11 @@ await paso('5 · La venta a medio armar no se pierde al salir del POS', async ()
   await c.unroute('**/caja?_rsc=*');
   await c.waitForURL((u) => u.pathname === '/pos', { timeout: ESPERA });
   await cantidadDe(nQueso).waitFor({ timeout: ESPERA });
-  ok('hallazgo 5', (await cantidadDe(nPan).inputValue()) === '12' && (await cantidadDe(nQueso).inputValue()) === '0,35',
-    'ida y vuelta a Caja por el menú: siguen 12 panes y 0,35 kg');
+  ok('hallazgo 5', (await cantidadDe(nPan).inputValue()) === '12' && (await cantidadDe(nQueso).inputValue()) === '2',
+    'ida y vuelta a Caja por el menú: siguen 12 panes y 2 quesos');
   await c.reload();
   await cantidadDe(nQueso).waitFor({ timeout: ESPERA });
-  ok('hallazgo 5', /\$7\.097/.test(await barra()), 'y también si se recarga la página', await barra());
+  ok('hallazgo 5', /\$8\.580/.test(await barra()), 'y también si se recarga la página', await barra());
 });
 
 await paso('Cobro · boleta, stock y lote', async () => {
@@ -383,22 +391,23 @@ await paso('Cobro · boleta, stock y lote', async () => {
   const ticket = c.locator('#ticket').first();
   await ticket.waitFor({ timeout: ESPERA });
   const tt = await ticket.innerText();
-  ok('RF-M5-14', /12 x/.test(tt) && /0,35 x/.test(tt), 'el comprobante dice "12 x" y "0,35 x", con coma', (tt.match(/0[.,]35 x[^\n]*/) ?? [''])[0]);
+  ok('RF-M5-14', /12 x/.test(tt) && /2 x/.test(tt), 'el comprobante dice "12 x" y "2 x"');
   await foto(c, 'comprobante');
   const { data: v } = await servicio.from('sales').select('id, total, sale_items(product_id, quantity, subtotal)')
     .eq('sold_by', cajero.id).order('folio', { ascending: false }).limit(1).single();
   const lPan = v.sale_items.find((i) => i.product_id === idPan);
   const lQueso = v.sale_items.find((i) => i.product_id === idQueso);
-  ok('RF-M5-12', v.total === 7097 && Number(lPan?.quantity) === 12 && Number(lQueso?.quantity) === 0.35 && lQueso?.subtotal === 3497,
-    'la base registró $7.097: 12 panes y 0,35 kg ($3.497)', `total ${v.total}`);
+  ok('RF-M5-12', v.total === 8580 && Number(lPan?.quantity) === 12 && Number(lQueso?.quantity) === 2 && lQueso?.subtotal === 4980,
+    'la base registró $8.580: 12 panes y 2 quesos ($4.980)', `total ${v.total}`);
   const { data: dte } = await servicio.from('dte_documentos').select('tipo').eq('sale_id', v.id);
   ok('RF-M5-14', dte?.some((d) => d.tipo === 39), 'con boleta electrónica (simulada)');
   const stock = async (id) => (await servicio.from('stock_ubicaciones').select('ubicacion, quantity').eq('product_id', id)).data
     .reduce((a, r) => ({ ...a, [r.ubicacion]: Number(r.quantity) }), {});
   const sPan = await stock(idPan);
   const sQueso = await stock(idQueso);
-  ok('RF-M4-01', sPan.sala === 8 && sPan.bodega === 5, 'el pan queda en 8 a la vista y 5 en bodega', JSON.stringify(sPan));
-  ok('RF-M4-01', Math.abs(sQueso.sala - 3.15) < 1e-9, 'el queso queda en 3,15 kg', JSON.stringify(sQueso));
+  // 0032: un solo lugar (la base lo guarda como 'sala'; la pantalla dice "bodega").
+  ok('RF-M4-01', sPan.sala === 13 && !sPan.bodega, 'el pan queda en 13, todo en un lugar', JSON.stringify(sPan));
+  ok('RF-M4-01', sQueso.sala === 2 && !sQueso.bodega, 'el queso queda en 2', JSON.stringify(sQueso));
   const { data: lote } = await servicio.from('product_lots').select('quantity').eq('product_id', idPan).single();
   ok('RF-M4-17', Number(lote.quantity) === 13, 'la venta salió del lote inicial (FEFO): quedan 13', lote.quantity);
 
@@ -427,10 +436,10 @@ await paso('Regla 18 · la venta a medias guardada en la pestaña tiene dueño',
 await paso('Cierre de caja · esperado, faltante y explicación', async () => {
   await c.goto(`${BASE}/caja`);
   const main = c.locator('main');
-  await main.getByText(/17\.097/).first().waitFor({ timeout: ESPERA });
-  ok('RF-M6-04', true, 'espera $17.097: $10.000 iniciales + $7.097 de la venta');
+  await main.getByText(/18\.580/).first().waitFor({ timeout: ESPERA });
+  ok('RF-M6-04', true, 'espera $18.580: $10.000 iniciales + $8.580 de la venta');
   await c.getByRole('button', { name: 'Cerrar caja' }).click();
-  await c.fill('#contado', '16.997');
+  await c.fill('#contado', '18.480');
   const cerrar = c.getByRole('button', { name: 'Cerrar caja' }).last();
   ok('RF-M6-06', /Faltante[\s\S]*\$100/.test(await main.innerText()) && await cerrar.isDisabled(),
     'con $100 de menos muestra el faltante y no deja cerrar sin explicar');
@@ -440,8 +449,8 @@ await paso('Cierre de caja · esperado, faltante y explicación', async () => {
   await main.getByRole('heading', { name: 'Abrir caja' }).waitFor({ timeout: ESPERA });
   const { data: s } = await servicio.from('cash_sessions').select('status, expected_amount, counted_amount, difference')
     .eq('user_id', cajero.id).order('opened_at', { ascending: false }).limit(1).single();
-  ok('RF-M6-05', s.status === 'cerrada' && s.expected_amount === 17097 && s.counted_amount === 16997 && s.difference === -100,
-    'la caja queda cerrada: esperado $17.097, contado $16.997, diferencia −$100', JSON.stringify(s));
+  ok('RF-M6-05', s.status === 'cerrada' && s.expected_amount === 18580 && s.counted_amount === 18480 && s.difference === -100,
+    'la caja queda cerrada: esperado $18.580, contado $18.480, diferencia −$100', JSON.stringify(s));
 });
 
 console.log(`\nErrores de JavaScript o HTTP: ${errores.length ? [...new Set(errores)].join(' | ') : 'ninguno'}`);

@@ -68,8 +68,8 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
     try {
       const { facturaYaPagada } = await repoProveedores().anularRecepcion(anulando.id, motivo.trim());
       setAviso(facturaYaPagada
-        ? 'Recepción anulada. Su factura ya estaba pagada: queda como pagada; pide la nota de crédito al proveedor.'
-        : 'Recepción anulada: se sacó el stock, el costo volvió al de antes y su factura por pagar (si tenía) quedó anulada.');
+        ? 'Recepción anulada. Su factura ya estaba pagada: queda como pagada; pide la nota de crédito al proveedor. Si la pagaste con la caja y el proveedor te devuelve la plata, anótala como ingreso en Caja.'
+        : 'Recepción anulada: se sacó el stock, el costo volvió al de antes, y su factura por pagar y del libro de compras (si tenía) quedaron anuladas.');
       setAnulando(null); setMotivo('');
       await cargar();
     } catch (e) {
@@ -87,9 +87,15 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
         icono="proveedores"
         descripcion="Tus proveedores y lo que llega de ellos. Lo recibido entra a la bodega y actualiza el costo."
         acciones={
-          <Link href="/proveedores/recepcion" prefetch={false} className="btn btn-primario btn-chico">
-            <Icono nombre="agregar" tamano={16} /> Recibir mercadería
-          </Link>
+          <>
+            {/* RQ-35 · lo que vuelve al proveedor (0035). */}
+            <Link href="/proveedores/devolucion" prefetch={false} className="btn btn-secundario btn-chico">
+              Devolver
+            </Link>
+            <Link href="/proveedores/recepcion" prefetch={false} className="btn btn-primario btn-chico">
+              <Icono nombre="agregar" tamano={16} /> Recibir mercadería
+            </Link>
+          </>
         }
       />
 

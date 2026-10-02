@@ -8,15 +8,56 @@
 
 ---
 
-## CÓMO SEGUIR — corte 2026-10-01 (tarde, sesión local: 0032), léelo antes que todo
+## CÓMO SEGUIR — corte 2026-10-01 (noche, sesión local: 0032 a 0035), léelo antes que todo
 
 **Nada de esto está en GitHub ni en Supabase.** Felipe sube él al final
 ("no subas nada, yo lo subo"). Antes de su push hay que aplicar en Supabase
-**0029, 0030, 0031 y 0032**, en ese orden (`npm run db:instalar` y
+**0029 a 0035**, en orden (`npm run db:instalar` y
 `npm run db:aplicar -- --aplicar`): Railway despliega `main` apenas llega, y el
 código nuevo con la base vieja rompe fiado, por pagar, recepción de perecibles y
-todo lo de abajo. Al 2026-10-01 la base real **no tiene ninguna de las cuatro**
-(revisado consultando sus tablas y funciones).
+todo lo de abajo. Al 2026-10-01 la base real **no tiene ninguna** (revisado
+consultando sus tablas y funciones).
+
+**Arreglado antes de aplicar:** la lista de funciones esperadas de
+`db:aplicar` se había quedado en 0026; al aplicar 0029/0030 habría dicho
+"✖ La base NO quedó como debe" por funciones que sí tienen que estar. Ahora
+`tools/rpc-permitidas.mjs` es la única lista, para `seguridad.test.mjs` y para
+`aplicar-esquema.mjs`. Después de aplicar deben salir **43 funciones**.
+
+**Segunda tanda del mismo día (lo pendiente + mejoras):**
+- **0033 · utilidad sin IVA en Reportes.** `v_sales_by_product.gross_profit`
+  pasa cada línea a neto (IVA + impuesto adicional) antes de restar el costo
+  neto; mismas columnas (regla 22). El margen de la pantalla es utilidad /
+  (utilidad + costo). `utilidad.test.mjs` (vista fallar sin 0033).
+- **0034 · anular una recepción saca su factura del libro de compras**
+  (disparador sobre `purchase_receipts`; la recepción ahora manda `receipt_id`
+  al libro). El egreso de caja no se deshace: el aviso dice que, si el
+  proveedor devuelve la plata, se anote como ingreso.
+- **0035 · devolución a proveedor (RQ-35).** `fn_devolver_a_proveedor`: sale
+  al costo promedio por el kardex (tipo nuevo `devolucion_proveedor`), del lote
+  elegido o FEFO, nunca más de lo que hay; tabla `devoluciones_proveedor` con
+  documento y motivo. Pantalla Compras → "Devolver" (`/proveedores/devolucion`),
+  admin/supervisor/bodega; el valor al costo solo lo ve el admin.
+  `devolucion-proveedor.test.mjs` 5/5 (la de concurrencia, vista fallar sin el
+  bloqueo).
+- Mensajes para `CANTIDAD_ENTERA`, `PRECIO_POR_CLIENTE_DESACTIVADO`,
+  `UNA_SOLA_BODEGA`, `DEVOLUCION_SIN_PRODUCTOS`, `LOTE_NO_ENCONTRADO`.
+- Maqueta: "Devolver productos" ya no abre vacío (hallazgo 2 de la 6ª ronda).
+- Recorridos contra la base real actualizados para 0032 (sin correr: esperan
+  las migraciones): `flujo-completo` (queso de 250 g por unidad, una sola
+  bodega, fecha obligatoria), `clientes` (sin precio de cliente; el precio por
+  mayor rige con 3), `facturacion` ("En bodega"). `bodega-sala.mjs` borrado.
+- **Verificado:** core 452 · db:test **180 + 1 TODO, 0 fallas** · typecheck ·
+  `demo-devolucion.mjs` 12/12 (nuevo) · demo-bodega-unidad 26/26 · flujo 19/19 ·
+  datos 11/11 · ronda2 15/15 · ronda3 45/45 · ronda4 44/44 · ronda5 22/22 ·
+  ronda6 14/14 · demo-roles 192 pantallas sin errores.
+- **Hallazgo abierto, intermitente:** una vez (de tres) `demo-ronda4` vio el
+  error de React #418 (el HTML del servidor no coincide con el del navegador)
+  en una pantalla del admin. Sospecha: un texto que depende de la hora
+  ("hace N min") que cambia entre el render del servidor y el del navegador.
+  No se pudo repetir.
+
+**Primera tanda del mismo día (0032):**
 
 **Decisiones de Felipe del 2026-10-01** (cambian la visión, no son detalles):
 1. **Una sola bodega.** Sin sala/bodega ni "reponer": nadie registraba los

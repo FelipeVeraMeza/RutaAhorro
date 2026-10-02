@@ -150,7 +150,7 @@ const dlg = p.getByRole('dialog');
 await dlg.getByLabel('Buscar producto del catálogo').fill(nProducto);
 const opcion = dlg.getByRole('button', { name: new RegExp(nProducto) });
 await opcion.waitFor({ timeout: 15000 });
-ok('RQ-46', /A la vista 50/.test(await opcion.innerText()), 'el buscador muestra el stock de la sala', (await opcion.innerText()).replace(/\n/g, ' · '));
+ok('RQ-46', /En bodega 50/.test(await opcion.innerText()), 'el buscador muestra el stock (una sola bodega, 0032)', (await opcion.innerText()).replace(/\n/g, ' · '));
 await opcion.click();
 const lineas = p.locator('section[aria-labelledby=t-detalle] > ul > li');
 await lineas.nth(0).getByLabel(/^Cantidad/).fill(String(CANT));
@@ -208,7 +208,7 @@ await pestana('+ Nueva');
 await p.getByRole('button', { name: '+ Del catálogo' }).click();
 await dlg.getByLabel('Buscar producto del catálogo').fill(nProducto);
 await opcion.waitFor({ timeout: 15000 });
-ok('RQ-46', /A la vista 47/.test(await opcion.innerText()), 'y la pantalla lo muestra: "A la vista 47"', (await opcion.innerText()).replace(/\n/g, ' · '));
+ok('RQ-46', /En bodega 47/.test(await opcion.innerText()), 'y la pantalla lo muestra: "En bodega 47"', (await opcion.innerText()).replace(/\n/g, ' · '));
 await dlg.getByRole('button', { name: 'Cancelar' }).click();
 
 console.log('Nota de crédito parcial: vuelve 1 de 3');

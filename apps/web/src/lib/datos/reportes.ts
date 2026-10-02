@@ -1,6 +1,6 @@
 'use client';
 
-import { diaLocal, sumarDias } from '@rutaahorro/core';
+import { diaLocal, sumarDias, netAmount } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import {
@@ -224,7 +224,8 @@ const repoLocal: RepositorioReportes = {
         categoriaId: p.categoria,
         unidades,
         ingresos,
-        ...(verCostos ? { costo, utilidad: ingresos - costo } : {}),
+        // Igual que v_sales_by_product (0033): el ingreso sin IVA menos el costo neto.
+        ...(verCostos ? { costo, utilidad: netAmount(ingresos) - costo } : {}),
       };
     }).sort((a, b) => b.ingresos - a.ingresos);
   },

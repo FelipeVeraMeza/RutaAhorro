@@ -36,6 +36,15 @@ type Vista = 'ventas' | 'horas' | 'productos' | 'usuarios' | 'control' | 'invent
  */
 const VISTAS: readonly Vista[] = ['ventas', 'horas', 'productos', 'usuarios', 'control', 'inventario', 'dormido', 'ajustes'];
 
+/**
+ * Margen sobre la venta sin IVA. La utilidad ya viene neta (0033) y el costo
+ * es neto, así que la venta sin IVA es utilidad + costo: dividir por lo cobrado
+ * con IVA achicaba el margen en la misma proporción en que antes se inflaba.
+ */
+function margenSobreNeto(utilidad: number, costo: number): number {
+  return (utilidad / (utilidad + costo)) * 100;
+}
+
 export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean; vistaInicial?: string }) {
   const { zonaHoraria: zona } = useConfiguracion();
   const [vista, setVista] = useState<Vista>(VISTAS.includes(vistaInicial as Vista) ? vistaInicial as Vista : 'ventas');
@@ -148,6 +157,7 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
   const totalVendido = ventas.reduce((s, d) => s + d.total, 0);
   const totalTransacciones = ventas.reduce((s, d) => s + d.ventas, 0);
   const utilidadTotal = productos.reduce((s, p) => s + (p.utilidad ?? 0), 0);
+  const costoTotal = productos.reduce((s, p) => s + (p.costo ?? 0), 0);
   const ingresoTotal = productos.reduce((s, p) => s + p.ingresos, 0);
 
   // RF-M7-14 · A: el 80 % de lo vendido; B: el 15 % siguiente; C: el resto.
@@ -323,13 +333,13 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
                 { titulo: 'ingresos', valor: (p) => p.ingresos },
                 ...(verCostos ? [
                   { titulo: 'costo', valor: (p: VentaPorProducto) => p.costo ?? 0 },
-                  { titulo: 'utilidad', valor: (p: VentaPorProducto) => p.utilidad ?? 0 },
+                  { titulo: 'utilidad_sin_iva', valor: (p: VentaPorProducto) => p.utilidad ?? 0 },
                 ] : []),
               ])}
               resumen={verCostos ? [
                 ['Ingresos', formatCLP(ingresoTotal)],
-                ['Utilidad', formatCLP(utilidadTotal)],
-                ['Margen', ingresoTotal > 0 ? formatPct((utilidadTotal / ingresoTotal) * 100, 0) : '—'],
+                ['Utilidad (sin IVA)', formatCLP(utilidadTotal)],
+                ['Margen', utilidadTotal + costoTotal > 0 ? formatPct(margenSobreNeto(utilidadTotal, costoTotal), 0) : '—'],
               ] : [['Ingresos', formatCLP(ingresoTotal)]]}
             >
               <p className="text-xs text-[var(--texto-suave)] mb-2">
@@ -362,8 +372,8 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
                       </p>
                       <p className="text-xs text-[var(--texto-suave)] num">
                         {formatCantidad(p.unidades)} {p.unidades === 1 ? 'vendida' : 'vendidas'}
-                        {verCostos && typeof p.utilidad === 'number' && p.ingresos > 0 && (
-                          <> · margen {formatPct((p.utilidad / p.ingresos) * 100, 0)}</>
+                        {verCostos && typeof p.utilidad === 'number' && p.utilidad + (p.costo ?? 0) > 0 && (
+                          <> · margen {formatPct(margenSobreNeto(p.utilidad, p.costo ?? 0), 0)}</>
                         )}
                       </p>
                     </div>

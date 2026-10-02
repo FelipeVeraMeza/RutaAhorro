@@ -86,6 +86,12 @@ describe('mensajes de error en lenguaje del negocio (RNF-20)', () => {
       .toBe('Primero abre tu caja (en Caja → Abrir caja)');
   });
 
+  it('los códigos de 0032 tienen su mensaje (no el genérico)', () => {
+    expect(toUserMessage({ message: 'CANTIDAD_ENTERA' })).toMatch(/por unidad/);
+    expect(toUserMessage({ message: 'PRECIO_POR_CLIENTE_DESACTIVADO' })).toMatch(/precio por mayor/);
+    expect(toUserMessage({ message: 'UNA_SOLA_BODEGA' })).toMatch(/una sola bodega/);
+  });
+
   it('nombra el producto concreto cuando falta stock', () => {
     expect(toUserMessage({ message: 'STOCK_INSUFICIENTE: Coca-Cola 1.5L' }))
       .toBe('No hay stock suficiente de Coca-Cola 1.5L');

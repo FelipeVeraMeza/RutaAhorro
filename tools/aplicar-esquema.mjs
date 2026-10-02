@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { RPC_PERMITIDAS } from './rpc-permitidas.mjs';
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 dotenv.config({ path: path.join(raiz, '.env.local') });
@@ -41,28 +42,7 @@ if (!clave || /^\[?YOUR[-_ ]?PASSWORD\]?$/i.test(clave)) {
     '  No la pegues en un chat: basta con que esté en el archivo.');
 }
 
-// Las mismas listas que tools/pg-test/seguridad.test.mjs. Si cambian allá,
-// cambian acá: son la definición de "la base quedó cerrada".
-const RPC_PERMITIDAS = [
-  'current_store_id', 'current_tenant_id', 'current_user_role', 'is_active_user',
-  'fn_add_cash_movement', 'fn_adjust_stock', 'fn_apply_stock_count',
-  'fn_cash_session_summary', 'fn_close_cash_session', 'fn_confirm_receipt',
-  'fn_create_product', 'fn_open_cash_session', 'fn_register_sale',
-  'fn_transfer_stock', 'fn_update_product', 'fn_void_receipt', 'fn_void_sale', 'fn_write_off_lot',
-  // 0018 · ofertas e impuestos adicionales
-  'fn_asignar_impuesto', 'fn_guardar_configuracion', 'fn_guardar_impuesto', 'fn_guardar_precios_producto',
-  // 0019 · documentos tributarios y devoluciones
-  'fn_devolver_venta', 'fn_guardar_emisor',
-  // 0021 · ofertas a muchos productos
-  'fn_aplicar_oferta_masiva', 'fn_quitar_ofertas',
-  // 0022 · clientes
-  'fn_guardar_cliente', 'fn_guardar_precios_cliente',
-  // 0023 · combos
-  'fn_guardar_combo',
-  // 0026 · facturación
-  'fn_activar_emision_sii', 'fn_anular_factura_recibida', 'fn_descartar_factura', 'fn_emitir_factura_manual',
-  'fn_estado_emision_sii', 'fn_nota_credito_factura', 'fn_registrar_factura_recibida', 'fn_reintentar_factura',
-].sort();
+// La lista vive en tools/rpc-permitidas.mjs: una sola, para las pruebas y el instalador.
 
 // Se arma por partes y no con `connectionString`: una contraseña con `#`, `@`,
 // `/` o `%` sin codificar rompe el análisis de la URL y la base recibe otra

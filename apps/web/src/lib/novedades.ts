@@ -16,6 +16,16 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.6.1',
+    fecha: '2026-10-01',
+    titulo: 'Devolver al proveedor y utilidad sin IVA',
+    cambios: [
+      { para: 'bodega', texto: 'Compras → "Devolver": lo vencido, dañado o mal despachado vuelve al proveedor con su motivo y documento, y sale de la bodega. Si es perecible, eliges el lote.' },
+      { para: 'admin', texto: 'Reportes: la utilidad y el margen se calculan sin IVA ni impuestos de bebidas, contra el costo neto. Los márgenes se ven más bajos porque ahora son los reales.' },
+      { para: 'admin', texto: 'Anular una recepción también saca su factura del libro de compras.' },
+    ],
+  },
+  {
     version: '0.6.0',
     fecha: '2026-10-01',
     titulo: 'Una sola bodega, todo por unidad y el precio por mayor en el producto',
