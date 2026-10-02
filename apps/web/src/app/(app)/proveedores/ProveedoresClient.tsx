@@ -108,7 +108,8 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
         {([
           ['comprar', 'Qué comprar'],
           ['proveedores', `Proveedores (${proveedores.length})`],
-          ['recepciones', `Recepciones (${recepciones.length})`],
+          // Se leen las 30 últimas: con más, decía "(30)" para siempre.
+          ['recepciones', recepciones.length >= 30 ? 'Recepciones (últimas 30)' : `Recepciones (${recepciones.length})`],
           ...(verPorPagar ? [['pagar', pendientesPago == null ? 'Por pagar' : `Por pagar (${pendientesPago})`] as const] : []),
         ] as const).map(([id, label]) => (
           <button

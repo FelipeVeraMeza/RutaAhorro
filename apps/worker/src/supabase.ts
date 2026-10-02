@@ -29,11 +29,22 @@ export async function recordJobRun(
   fn: () => Promise<Record<string, unknown> | void>,
 ): Promise<{ ok: boolean; details?: unknown; error?: string }> {
   const startedAt = new Date().toISOString();
-  const { data: row } = await admin
+  const { data: row, error: eInsert } = await admin
     .from('job_runs')
     .insert({ job_name: jobName, status: 'running', started_at: startedAt })
     .select('id')
     .single();
+  // Sin fila, los `update ... eq('id', undefined)` de abajo fallaban en
+  // silencio y el trabajo no quedaba registrado ni como error. Se deja dicho
+  // en el log y el trabajo corre igual (un respaldo no se salta por esto).
+  if (eInsert || !row) {
+    console.error(`[job_runs] no se pudo registrar el inicio de ${jobName}: ${eInsert?.message ?? 'sin fila'}`);
+    try {
+      return { ok: true, details: (await fn()) ?? {} };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
 
   try {
     const details = (await fn()) ?? {};

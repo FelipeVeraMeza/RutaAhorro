@@ -288,7 +288,9 @@ const repoSupabase: RepositorioProveedores = {
       p_supplier_id: proveedorId,
       p_document_type: tipoDocumento,
       p_document_number: documento,
-      p_received_at: new Date().toISOString(),
+      // Sin p_received_at: la base pone su hora. Con la del celular, un
+      // reloj adelantado dejaba la recepción (y su factura en el libro de
+      // compras) con fecha de mañana.
       p_items: lineas.map((l) => ({
         product_id: l.productId,
         quantity: l.cantidad,

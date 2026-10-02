@@ -4,9 +4,62 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-10-01.**
+> **Corte: 2026-10-02.**
 
 ---
+
+## CÓMO SEGUIR — corte 2026-10-02 (7ª ronda: 150 errores más, 101–250), léelo antes que todo
+
+**Dónde está:** en GitHub, rama `ccr-d1747f17-ru4skw` (no en `main`, sin PR).
+Detalle de cada error en [docs/28](docs/28-revision-por-rol-150-errores.md).
+
+**Antes de llevar esto a `main` (Railway despliega `main` apenas llega):**
+1. Aplicar en Supabase **0029 a 0037**, en orden (`npm run db:instalar` y
+   `npm run db:aplicar -- --aplicar`). Siguen siendo **46 funciones**.
+2. **Correr `npm run db:test`** con un usuario que no sea root: en la sesión
+   de esta ronda no se pudo (initdb rechaza root). `revision-0037.test.mjs`
+   (9 pruebas) está **escrita y nunca corrida**; regla 16: verla fallar sin
+   0037 y pasar con ella. `banco.mjs` ahora crea los usuarios con
+   `crearUsuario()` (autoriza el correo antes), y `concurrencia` y `seguridad`
+   lo usan.
+3. **Cambio de comportamiento de 0037:** `handle_new_user` ya no le cree al
+   metadata (era la puerta para hacerse administrador con el registro
+   público). Una cuenta creada a mano en el panel de Supabase **no queda
+   vinculada**: crearla desde Usuarios o con `tools/crear-cuentas.mjs` /
+   `tools/crear-admin.mjs` (los dos escriben `cuentas_autorizadas` primero).
+
+**Lo grueso de la ronda:**
+- **La API de Supabase entrega 1.000 filas como máximo, sin avisar.** Se
+  paginó todo lo que podía pasarla: catálogo del celular (productos con
+  desempate por id, stock, ubicaciones, lotes, ofertas, códigos), Reportes,
+  Por pagar, Clientes, Fiado, Precios, Respaldo, Ventas ("Ver más") y el
+  worker. Helper nuevo: `apps/web/src/lib/datos/paginas.ts`
+  (`todasLasFilas`). **Regla para lo que venga:** toda lista que pueda crecer
+  va por páginas con un orden estable que termine en una columna única.
+- **Ventas sin red** (`lib/offline/sync.ts`): `enviando` vuelve a la cola;
+  red caída, 401 y 5xx dejan la venta pendiente (no "rechazada"); una
+  sincronización espera a la que está en curso; el dueño de la venta se
+  recuerda aunque el token haya vencido.
+- **Respuestas que llegan desordenadas:** Productos, Inventario, Etiquetas,
+  Ventas y Reportes descartan la respuesta de una búsqueda anterior
+  (`useRef` con un número de pedido). Usar lo mismo en pantallas nuevas con
+  búsqueda o filtros.
+- **Fechas AAAA-MM-DD:** nunca `new Date('2026-10-05')` para mostrar (es
+  medianoche UTC, en Chile el día anterior): `diaCorto()` o `T12:00:00`.
+- `middleware.ts` no redirige `/api/*` (cada ruta responde su 401).
+- `/api/*` de usuarios: `autorizarCuenta()` y `retirarAutorizacion()` en
+  `lib/supabase/admin.ts`.
+- Raíz: `pretest` y `pretypecheck` construyen `packages/core` primero (en un
+  clon nuevo fallaban).
+
+**Verificado al cierre:** core 460/460 · `tsc` web y worker sin errores ·
+`next build` de producción OK · worker `npm test` 0 fallas (6 omitidas) ·
+`db:check` 175 cuerpos. **No corrido:** `db:test` (ver arriba) y los
+recorridos de la maqueta (`tools/ui`).
+
+**Quedó anotado sin corregir** (docs/28, al final): /recuperar no quita la
+marca de contraseña temporal; la revisión semanal no ve perecibles con stock
+y sin lotes; `v_low_stock` y `v_expiring_lots` sin paginar en el worker.
 
 ## CÓMO SEGUIR — corte 2026-10-01 (noche, sesión local: 0032 a 0036), léelo antes que todo
 

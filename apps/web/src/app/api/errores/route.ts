@@ -6,6 +6,10 @@ import { getCurrentUser } from '@/lib/supabase/server';
  * Nunca responde con detalles: es un buzón.
  */
 export async function POST(request: Request) {
+  // Se corta ANTES de leer: `request.text()` leía el cuerpo entero a memoria
+  // y recién después lo recortaba. Es una ruta sin sesión (recibe los errores
+  // de la pantalla de ingreso): cualquiera podía mandarle megas.
+  if (Number(request.headers.get('content-length') ?? 0) > 20_000) return new Response(null, { status: 413 });
   const texto = (await request.text().catch(() => '')).slice(0, 5000);
   let datos: Record<string, unknown> = {};
   try { datos = JSON.parse(texto); } catch { datos = { crudo: texto.slice(0, 500) }; }

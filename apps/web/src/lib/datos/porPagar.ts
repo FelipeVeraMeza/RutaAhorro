@@ -116,6 +116,8 @@ const demo: typeof base = {
     if (!monto || monto <= 0) throw new Error('MONTO_INVALIDO');
     if (!f.vence) throw new Error('VENCIMIENTO_FACTURA_REQUERIDO');
     if (f.emitida && f.vence < f.emitida) throw new Error('VENCE_ANTES_DE_EMITIDA');
+    // Como fn_registrar_factura_proveedor desde 0037: no viene emitida mañana.
+    if (f.emitida && f.emitida > diaLocal(new Date(), 'America/Santiago')) throw new Error('FECHA_INVALIDA');
     if (lista.some((x) => !x.anulada && x.proveedorId === proveedorId && x.numero.trim().toUpperCase() === numero!.trim().toUpperCase())) {
       throw new Error('FACTURA_PROVEEDOR_DUPLICADA');
     }

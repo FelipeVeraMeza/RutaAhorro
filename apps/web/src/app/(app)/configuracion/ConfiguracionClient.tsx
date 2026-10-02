@@ -405,7 +405,8 @@ function OperacionDelLocal({ config, onGuardado, onError }: {
           {(p) => <input {...p} inputMode="numeric" value={efectivo} onChange={(e) => setEfectivo(e.target.value)}
                          className="tap w-40 px-3 py-2 rounded-lg border border-[var(--borde)] num text-right" />}
         </Campo>
-        <Campo etiqueta="Avisar una caja abierta después de (horas)" error={!vHoras.valido ? vHoras.error : vHoras.valor < 1 ? 'Tiene que ser al menos 1 hora' : null}>
+        {/* Horas enteras: "1,5" se guardaba como 2 sin decirlo (Math.round). */}
+        <Campo etiqueta="Avisar una caja abierta después de (horas)" error={!vHoras.valido ? vHoras.error : vHoras.valor < 1 ? 'Tiene que ser al menos 1 hora' : !Number.isInteger(vHoras.valor) ? 'En horas enteras: 1, 2, 12…' : null}>
           {(p) => <input {...p} inputMode="numeric" value={horas} onChange={(e) => setHoras(e.target.value)}
                          className="tap w-24 px-3 py-2 rounded-lg border border-[var(--borde)] num text-right" />}
         </Campo>
@@ -414,7 +415,7 @@ function OperacionDelLocal({ config, onGuardado, onError }: {
                          className="tap w-24 px-3 py-2 rounded-lg border border-[var(--borde)] num text-right" />}
         </Campo>
         <button
-          disabled={guardando || !vEf.valido || !vHoras.valido || !vVar.valido || vHoras.valor < 1 || vVar.valor < 1}
+          disabled={guardando || !vEf.valido || !vHoras.valido || !vVar.valido || vHoras.valor < 1 || !Number.isInteger(vHoras.valor) || vVar.valor < 1}
           onClick={() => void guardar({
             efectivo_inicial_sugerido: vEf.valor,
             cash_alert_hours: Math.round(vHoras.valor),

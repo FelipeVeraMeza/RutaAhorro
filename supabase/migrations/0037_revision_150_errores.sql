@@ -934,7 +934,7 @@ begin
   insert into purchase_receipts (tenant_id, store_id, supplier_id, document_type,
                                  document_number, received_at, notes, created_by)
   values (v_tenant, v_store, p_supplier_id, p_document_type,
-          p_document_number, coalesce(p_received_at, now()), p_notes, v_user)
+          p_document_number, least(coalesce(p_received_at, now()), now()), p_notes, v_user)  -- 0037 · no en el futuro: la hora venía del reloj del celular
   returning id into v_receipt;
 
   for v_item in select * from jsonb_array_elements(p_items) loop

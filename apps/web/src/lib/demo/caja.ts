@@ -112,6 +112,8 @@ export const cajaDemo = {
   async abrir(usuario: string, monto: number): Resultado {
     const c = leerEnNavegador(usuario);
     if (c.abierta) return { error: { message: 'CAJA_YA_ABIERTA' } };
+    // Como fn_open_cash_session desde 0037.
+    if (!(monto >= 0)) return { error: { message: 'MONTO_NEGATIVO' } };
     escribir({
       ...c, abierta: true, id: `caja-${Date.now()}`, apertura: monto, abiertaEn: new Date().toISOString(),
       ventas: { n: 0, total: 0, porMedio: {}, redondeo: 0 }, movs: [], abonos: 0,
@@ -123,6 +125,7 @@ export const cajaDemo = {
     const c = leerEnNavegador(usuario);
     if (!c.abierta) return { error: { message: 'CAJA_NO_ABIERTA' } };
     if (!reason.trim()) return { error: { message: 'MOTIVO_REQUERIDO' } };
+    if (!(amount > 0)) return { error: { message: 'MONTO_INVALIDO' } };
     c.movs.unshift({ id: `m${Date.now()}`, type, amount, reason, created_at: new Date().toISOString() });
     escribir(c);
     return { error: null };
@@ -131,6 +134,7 @@ export const cajaDemo = {
   async cerrar(usuario: string, nombre: string, contado: number, nota = ''): Resultado {
     const c = leerEnNavegador(usuario);
     if (!c.abierta) return { error: { message: 'CAJA_YA_CERRADA' } };
+    if (!(contado >= 0)) return { error: { message: 'MONTO_NEGATIVO' } };
     const r = resumenCajaDemo(c);
     // Igual que fn_close_cash_session: descuadrada no se cierra sin explicar.
     if (contado !== r.expected_amount && !nota.trim()) return { error: { message: 'MOTIVO_REQUERIDO' } };

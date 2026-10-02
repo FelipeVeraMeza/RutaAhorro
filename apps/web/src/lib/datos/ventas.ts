@@ -6,6 +6,7 @@ import {
 } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { configuracionLocal } from './configuracion';
+import { todasLasFilas } from './paginas';
 import { DEMO_ACTIVO } from '../demo';
 import { db, type QueuedSale } from '../offline/db';
 import { DEMO_PRODUCTOS } from '../demo/data';
@@ -395,30 +396,33 @@ function aVentaBD(f: FilaVenta): Venta {
 
 const repoSupabase: RepositorioVentas = {
   async listar(filtro) {
-    let q = supabase().from('sales').select(SELECT_VENTA);
-
-    if (filtro.folio) {
-      // Buscar por folio ignora las fechas a propósito: quien escribe un folio
-      // sabe exactamente qué venta quiere, y hacerle además acertar el día es
-      // una forma rebuscada de no encontrar nada.
-      q = q.eq('folio', filtro.folio);
-    } else {
-      // Los bordes del día se calculan en la zona del local. Antes se mandaba
-      // '2026-09-18T00:00:00' sin zona, que la base lee en UTC: "hoy" iba de
-      // las 20:00 o 21:00 de ayer a la misma hora de hoy, y lo vendido en la
-      // tarde-noche aparecía en el día siguiente.
-      const { zonaHoraria } = await configuracionLocal();
-      const r = rangoDeDias(filtro.desde ?? filtro.hasta!, filtro.hasta ?? filtro.desde!, zonaHoraria);
-      if (filtro.desde) q = q.gte('sold_at', r.desde);
-      if (filtro.hasta) q = q.lt('sold_at', r.hasta);
-    }
-    if (filtro.incluirAnuladas === false) q = q.eq('status', 'completada');
-
-    const { data, error } = await q
-      .order('sold_at', { ascending: false })
-      .limit(filtro.limite ?? 50);
-    if (error) throw error;
-    return (data ?? []).map((f) => aVentaBD(f as unknown as FilaVenta));
+    // Los bordes del día se calculan en la zona del local. Antes se mandaba
+    // '2026-09-18T00:00:00' sin zona, que la base lee en UTC: "hoy" iba de
+    // las 20:00 o 21:00 de ayer a la misma hora de hoy, y lo vendido en la
+    // tarde-noche aparecía en el día siguiente.
+    const r = filtro.folio ? null : rangoDeDias(filtro.desde ?? filtro.hasta!, filtro.hasta ?? filtro.desde!,
+      (await configuracionLocal()).zonaHoraria);
+    // Una consulta nueva por página (el constructor de Supabase no se reusa).
+    const consulta = () => {
+      let q = supabase().from('sales').select(SELECT_VENTA);
+      if (filtro.folio) {
+        // Buscar por folio ignora las fechas a propósito: quien escribe un folio
+        // sabe exactamente qué venta quiere, y hacerle además acertar el día es
+        // una forma rebuscada de no encontrar nada.
+        q = q.eq('folio', filtro.folio);
+      } else if (r) {
+        if (filtro.desde) q = q.gte('sold_at', r.desde);
+        if (filtro.hasta) q = q.lt('sold_at', r.hasta);
+      }
+      if (filtro.incluirAnuladas === false) q = q.eq('status', 'completada');
+      return q.order('sold_at', { ascending: false }).order('id', { ascending: false });
+    };
+    // De a 1.000 (lo que entrega la API): con "Ver más" pasado las 1.000
+    // ventas la consulta seguía devolviendo 1.000, el botón desaparecía y las
+    // ventas más antiguas del período no se podían ver.
+    const limite = filtro.limite ?? 50;
+    const data = (await todasLasFilas((a, b) => consulta().range(a, Math.min(b, limite - 1)), limite)).slice(0, limite);
+    return data.map((f) => aVentaBD(f as unknown as FilaVenta));
   },
 
   async resumen(desde, hasta) {

@@ -59,6 +59,9 @@ todo lo demás es tu contrato de implementación.
 | [23 — Requerimientos del cuestionario](23-requerimientos-cuestionario.md) | **Respuestas 1–42 del cliente** traducidas a requerimientos, con estado, supuestos y lo que hay que volver a preguntar |
 | [24 — Matriz de requerimientos](24-matriz-requerimientos.md) | **Qué está hecho con evidencia**: cada RF y RNF contra la prueba que lo demuestra. Se regenera con `node tools/matriz.mjs` |
 | [25 — Cincuenta requerimientos nuevos](25-requerimientos-nuevos.md) | Los 50 requerimientos que faltaban (40 RF + 10 RNF), con motivo, criterios de aceptación, prioridad y evidencia. Salen de usar el sistema como dueño, QA y vendedor |
+| [26 — Revisión por rol: 50 errores](26-revision-por-rol-50-errores.md) | Errores 1–50, encontrados usando el sistema con cada rol, y cómo se verificó cada arreglo |
+| [27 — Revisión por rol: 50 más](27-revision-por-rol-50-errores-mas.md) | Errores 51–100 y la migración 0031 |
+| [28 — Revisión por rol: 150 más](28-revision-por-rol-150-errores.md) | Errores 101–250: listas cortadas en 1.000 filas, ventas sin red, guardias de la base (migración 0037) |
 
 ---
 

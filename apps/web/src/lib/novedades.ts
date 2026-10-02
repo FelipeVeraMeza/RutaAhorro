@@ -16,6 +16,21 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.6.3',
+    fecha: '2026-10-02',
+    titulo: 'Tercera revisión por rol: 150 arreglos',
+    cambios: [
+      { para: 'vendedor', texto: 'Vender sin internet es más seguro: una venta que se cortaba a medio enviar ya no se pierde, y sin internet (o con la sesión vencida) queda "por enviar" en vez de "rechazada". Las ventas hechas sin red quedan siempre a tu nombre.' },
+      { para: 'vendedor', texto: 'Ingresar y la pantalla bloqueada: sin internet dicen "No hay conexión" y ya no cuentan como clave mal escrita. Una cuenta desactivada ahora puede salir y dejar entrar a otra persona.' },
+      { para: 'todos', texto: 'Con más de 1.000 productos, clientes o códigos, ya no falta nada: el celular baja todo el catálogo, el stock, las ofertas y los lotes, y las listas y reportes ya no se cortan.' },
+      { para: 'bodega', texto: 'Importar para actualizar: si la planilla no trae la columna costo, perecible, categoría o mínimo, se conserva lo que había (antes se borraba o quedaba en $0). Precio $0 y decimales con coma se avisan.' },
+      { para: 'bodega', texto: 'Ajustes: no se puede dejar stock negativo y una merma no puede sumar. Inventario → Lotes muestra la fecha de vencimiento correcta (salía un día antes).' },
+      { para: 'admin', texto: 'Facturas: cambiar el RUT después de elegir un cliente o proveedor limpia sus datos (antes quedaban los del anterior). Borrar las claves del SII pide confirmar.' },
+      { para: 'admin', texto: 'Un combo se puede desactivar aunque ya no salga más barato. No se puede crear dos veces el mismo proveedor (mismo RUT).' },
+      { para: 'admin', texto: 'Las cuentas del personal se crean solo desde Usuarios: registrarse por fuera ya no da acceso al local.' },
+    ],
+  },
+  {
     version: '0.6.2',
     fecha: '2026-10-01',
     titulo: 'Descuentos con autorización',

@@ -287,6 +287,11 @@ function Movimientos({ cuenta, onCerrar }: { cuenta: CuentaCliente; onCerrar: ()
         <p className="text-sm mb-3">Debe <strong className="num">{formatCLP(cuenta.saldo)}</strong> · tope {formatCLP(cuenta.tope)}</p>
         {error && <p role="alert" className="text-sm text-[var(--color-alerta)]">{error}</p>}
         {movs && movs.length === 0 && <p className="text-sm text-[var(--texto-suave)]">Sin movimientos.</p>}
+        {/* Se leen los 100 más recientes: con más, la suma de lo que se ve no
+            daba el saldo y nada decía que faltaban los antiguos. */}
+        {movs && movs.length >= 100 && (
+          <p className="text-xs text-[var(--texto-suave)] mb-2">Se muestran los 100 movimientos más recientes; el saldo considera todos.</p>
+        )}
         <ul className="divide-y divide-[var(--borde)] text-sm">
           {(movs ?? []).map((m) => (
             <li key={m.id} className="py-2 flex justify-between gap-2">
