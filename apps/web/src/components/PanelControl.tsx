@@ -15,6 +15,9 @@ import { Icono } from './Icono';
  * mermas este mes (RF-M4-24, solo quien ve costos), y las facturas de
  * proveedores que vencen esta semana (RF-M3-13).
  */
+/** Los avisos que caben en el panel; "Marcar como vistos" marca solo estos. */
+const VISIBLES = 6;
+
 export function PanelControl({ usuarioId, verCostos, verPorPagar = false }: {
   usuarioId: string; verCostos: boolean;
   /** RF-M3-13 · admin y supervisor. */
@@ -43,7 +46,14 @@ export function PanelControl({ usuarioId, verCostos, verPorPagar = false }: {
   async function marcarLeidos() {
     if (!avisos) return;
     setMarcando(true);
-    try { await marcarAvisosLeidos(avisos.map((a) => a.id), usuarioId); setAvisos([]); }
+    // Solo los que están a la vista: se leen 20 y se muestran 6, y "Marcar
+    // como vistos" daba por vistos los 14 que nadie alcanzó a leer. Después
+    // se cargan los siguientes.
+    try {
+      await marcarAvisosLeidos(avisos.slice(0, VISIBLES).map((a) => a.id), usuarioId);
+      const resto = avisos.slice(VISIBLES);
+      setAvisos(avisos.length >= 20 ? await avisosSinLeer().catch(() => resto) : resto);
+    }
     catch { /* quedan visibles; se reintenta */ }
     finally { setMarcando(false); }
   }
@@ -105,13 +115,13 @@ export function PanelControl({ usuarioId, verCostos, verPorPagar = false }: {
       {avisos && avisos.length > 0 && (
         <div>
           <div className="flex items-baseline justify-between gap-2 mb-1">
-            <p className="text-xs font-medium text-[var(--texto-suave)]">Avisos del sistema ({avisos.length})</p>
+            <p className="text-xs font-medium text-[var(--texto-suave)]">Avisos del sistema ({avisos.length >= 20 ? '20 o más' : avisos.length})</p>
             <button onClick={() => void marcarLeidos()} disabled={marcando} className="tap -my-2 px-1 text-xs underline text-[var(--texto-suave)]">
               {marcando ? 'Marcando…' : 'Marcar como vistos'}
             </button>
           </div>
           <ul className="space-y-1">
-            {avisos.slice(0, 6).map((a) => (
+            {avisos.slice(0, VISIBLES).map((a) => (
               <li key={a.id} className="text-sm flex gap-2">
                 <span className={`insignia shrink-0 h-fit ${a.gravedad === 'critical' ? 'insignia-alerta' : 'insignia-aviso'}`}>
                   {a.gravedad === 'critical' ? 'Urgente' : 'Aviso'}

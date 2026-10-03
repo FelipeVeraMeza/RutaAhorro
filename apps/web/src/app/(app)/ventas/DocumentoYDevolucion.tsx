@@ -177,7 +177,11 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
   // devolvía solo lo demás.
   const malEscrita = lineas.find((l) => {
     const t = cantidades[l.id!] ?? '';
-    return t.trim() !== '' && !validarCantidad(t, { permiteVacio: true, maximo: 1_000_000 }).valido;
+    if (t.trim() === '') return false;
+    const v = validarCantidad(t, { permiteVacio: true, maximo: 1_000_000 });
+    // Desde 0032 todo es por unidad: "0,5" se aceptaba acá y la base (0038)
+    // lo rechaza. Lo que queda de una venta antigua a granel sí, entero.
+    return !v.valido || (!Number.isInteger(v.valor) && Math.abs(v.valor - quedan(l.id!)) > 1e-9);
   });
 
   const devueltoAntes = venta.devoluciones.reduce((s, d) => s + d.monto, 0);

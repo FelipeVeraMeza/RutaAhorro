@@ -22,11 +22,16 @@ export function ClientesClient() {
   const [editando, setEditando] = useState<Cliente | 'nuevo' | null>(null);
   const [aviso, setAviso] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
   const [cargando, setCargando] = useState(true);
+  // Sin red, "Todavía no hay clientes. Agrégalos acá" era falso e invitaba a
+  // duplicar clientes que sí existen.
+  const [fallo, setFallo] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
       setClientes(await repoClientes().listar());
+      setFallo(false);
     } catch (e) {
+      setFallo(true);
       setAviso({ tipo: 'error', texto: toUserMessage(e) });
     } finally {
       setCargando(false);
@@ -77,7 +82,7 @@ export function ClientesClient() {
             </button>
           </li>
         ))}
-        {!cargando && visibles.length === 0 && (
+        {!cargando && !fallo && visibles.length === 0 && (
           <li className="tarjeta p-4 text-sm text-[var(--texto-suave)]">
             {clientes.length === 0
               ? 'Todavía no hay clientes. Agrégalos acá, o se crean solos al hacer una factura.'

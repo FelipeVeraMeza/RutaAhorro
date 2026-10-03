@@ -24,6 +24,13 @@ const GUIAS: Guia[] = [
     'En efectivo el total se redondea a la decena (Ley 20.956): $1.463 se cobra $1.460. El comprobante lo explica.',
     'Si se cae internet, sigue vendiendo: la venta se envía sola cuando vuelve.',
   ] },
+  // 0036. Antes no había guía: el vendedor veía "Pedir autorización y cobrar"
+  // sin saber qué era.
+  { titulo: 'Hacer un descuento', roles: CAJA, ir: { href: '/pos', texto: 'Ir a Vender' }, pasos: [
+    'En la línea del producto, "Descuento": en pesos o en %.',
+    'Si pasa tu tope, aparece "Pedir autorización y cobrar": el administrador o un supervisor escribe su PIN en tu celular.',
+    'La autorización sirve para esa venta y necesita internet. Cinco PIN malos bloquean al que autoriza por 15 minutos.',
+  ] },
   { titulo: 'Reimprimir o compartir un comprobante', roles: CAJA, ir: { href: '/ventas', texto: 'Ir a Ventas' }, pasos: [
     'En Ventas, toca la venta.',
     '"Reimprimir o compartir el comprobante": sale marcado como COPIA.',
@@ -42,9 +49,11 @@ const GUIAS: Guia[] = [
   { titulo: 'Consultar un precio', roles: TODOS, ir: { href: '/precio', texto: 'Consultar precio' }, pasos: [
     'Escanea o escribe el nombre. Funciona sin internet con el catálogo guardado.',
   ] },
-  { titulo: 'Crear o cambiar un producto', roles: MANDO, ir: { href: '/productos', texto: 'Ir a Productos' }, pasos: [
-    'Productos → "Nuevo producto", o "Editar" en uno existente.',
-    '"Cambiar precio" cambia solo el precio, rápido; avisa si el cambio es grande.',
+  // Bodega también crea y edita productos (sin tocar el precio): antes no veía
+  // esta guía.
+  { titulo: 'Crear o cambiar un producto', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/productos', texto: 'Ir a Productos' }, pasos: [
+    'Productos → "Nuevo producto", o "Editar" en uno existente. Si es perecible y cargas stock, pide la fecha de vencimiento.',
+    '"Cambiar precio" cambia solo el precio, rápido; avisa si el cambio es grande. El precio lo cambian el administrador y el supervisor.',
     '"Revisar datos" lista los productos a los que les falta código, costo, mínimo o categoría.',
   ] },
   { titulo: 'Imprimir etiquetas y carteles de góndola', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/productos/etiquetas', texto: 'Ir a Etiquetas' }, pasos: [
@@ -56,7 +65,13 @@ const GUIAS: Guia[] = [
     'Busca o escanea lo que vuelve y la cantidad; si es perecible, puedes elegir el lote.',
     'Sale de la bodega con su motivo. Cuando llegue la nota de crédito del proveedor, regístrala en Facturación → Recibidas.',
   ] },
-  { titulo: 'Contar el inventario (toma)', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/inventario', texto: 'Ir a Inventario' }, pasos: [
+  { titulo: 'Ajustar el stock o registrar una merma', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/inventario', texto: 'Ir a Inventario' }, pasos: [
+    'Inventario → busca el producto → "Ajustar".',
+    'Escribe cuánto hay de verdad y el motivo. "Merma" es para lo que se perdió (vencido, roto): solo resta.',
+    'Queda en el kardex a tu nombre; el dueño lo ve en Reportes → Mermas.',
+  ] },
+  { titulo: 'Contar el inventario (toma)', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/inventario?vista=toma', texto: 'Ir a la toma' }, pasos: [
+    'Inventario → pestaña "Toma de inventario".',
     '"Imprimir hoja para contar" si prefieres contar en papel.',
     'Escribe lo contado; el sistema muestra la diferencia antes de guardar.',
   ] },
@@ -70,6 +85,17 @@ const GUIAS: Guia[] = [
     'Compras → "Por pagar": las facturas ordenadas por vencimiento; lo vencido sale en rojo.',
     'El Inicio avisa lo que vence en los próximos 7 días.',
     '"Pagada" → cómo se pagó. Con "Efectivo de la caja" sale como egreso de tu caja.',
+  ] },
+  { titulo: 'Ofertas, precio por mayor y combos', roles: MANDO, ir: { href: '/productos/ofertas', texto: 'Ir a Ofertas' }, pasos: [
+    'En cada producto: "Precio por mayor y ofertas" (desde 3 unidades a $1.400 c/u, o un %; con fechas es una promoción).',
+    'Productos → Ofertas: la misma oferta a muchos productos de una vez.',
+    'Combos: varios productos distintos a un precio (2 bebidas + 1 pan por $3.000). Vender los aplica solo.',
+    'Para cobrar todo a precio normal sin borrar nada: Configuración → "Rigen las ofertas".',
+  ] },
+  { titulo: 'Hacer una factura a mano', roles: MANDO, ir: { href: '/facturacion', texto: 'Ir a Facturación' }, pasos: [
+    'Facturación → "Nueva factura": escribe el RUT; si es cliente, se completa solo.',
+    'Agrega productos del catálogo (descuentan stock) o líneas libres (flete, servicio).',
+    'Emitir. Si hay un error, se corrige con nota de crédito: una factura emitida no se edita.',
   ] },
   { titulo: 'Anular o devolver una venta', roles: MANDO, ir: { href: '/ventas', texto: 'Ir a Ventas' }, pasos: [
     'Ventas → toca la venta → Anular (todo) o Devolver (algunos productos).',

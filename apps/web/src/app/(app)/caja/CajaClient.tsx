@@ -373,6 +373,20 @@ export function CajaClient({
             <button
               disabled={cargando || !cont.valido || (necesitaNota && nota.trim() === '')}
               onClick={async () => {
+                // El "debería haber" es el de cuando se abrió esta pantalla. Si
+                // entretanto entró una venta (la cola sin conexión, otra
+                // pestaña), la base pedía explicar una diferencia que acá no se
+                // veía, y el campo para explicarla estaba escondido: no había
+                // cómo cerrar. Se revisa antes y se actualiza la pantalla.
+                if (!DEMO_ACTIVO) {
+                  const { data: fresco } = await supabase().rpc('fn_cash_session_summary', { p_session_id: session.id });
+                  const nuevo = Number((fresco as { expected_amount?: number } | null)?.expected_amount ?? esperado);
+                  if (nuevo !== esperado) {
+                    setError(`Mientras contabas entraron movimientos: ahora debería haber ${formatCLP(nuevo)}. Revisa el conteo y vuelve a cerrar.`);
+                    router.refresh();
+                    return;
+                  }
+                }
                 const ok = await accion(() =>
                   DEMO_ACTIVO
                     ? cajaDemo.cerrar(usuarioId, nombre, cont.valor, nota.trim())

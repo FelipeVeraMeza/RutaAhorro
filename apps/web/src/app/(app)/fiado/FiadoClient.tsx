@@ -37,11 +37,16 @@ export function FiadoClient({ puedeDarCredito }: { puedeDarCredito: boolean }) {
   const [viendo, setViendo] = useState<CuentaCliente | null>(null);
   const [topeDe, setTopeDe] = useState<CuentaCliente | null>(null);
   const [eligiendo, setEligiendo] = useState(false);
+  // Sin red decía "Total que deben $0" y "Ningún cliente tiene crédito
+  // todavía": como si nadie debiera. Ahora queda solo el error.
+  const [fallo, setFallo] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
       setCuentas(await cuentasClientes());
+      setFallo(false);
     } catch (e) {
+      setFallo(true);
       setAviso({ tipo: 'error', texto: toUserMessage(e) });
     } finally {
       setCargando(false);
@@ -86,10 +91,12 @@ export function FiadoClient({ puedeDarCredito }: { puedeDarCredito: boolean }) {
         </p>
       )}
 
-      <div className="tarjeta p-4 flex items-center justify-between" data-total-fiado>
-        <span className="text-sm">Total que deben</span>
-        <span className="num text-xl font-bold">{formatCLP(totalAdeudado)}</span>
-      </div>
+      {!fallo && (
+        <div className="tarjeta p-4 flex items-center justify-between" data-total-fiado>
+          <span className="text-sm">Total que deben</span>
+          <span className="num text-xl font-bold">{formatCLP(totalAdeudado)}</span>
+        </div>
+      )}
 
       {conCuenta.length > 5 && (
         <input type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
@@ -134,7 +141,7 @@ export function FiadoClient({ puedeDarCredito }: { puedeDarCredito: boolean }) {
             </li>
           );
         })}
-        {!cargando && visibles.length === 0 && (
+        {!cargando && !fallo && visibles.length === 0 && (
           <li className="tarjeta p-4 text-sm text-[var(--texto-suave)]">
             {conCuenta.length === 0
               ? puedeDarCredito

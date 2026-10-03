@@ -13,6 +13,24 @@ export const admin: SupabaseClient = createClient(env.supabaseUrl, env.serviceRo
   global: { headers: { 'x-application-name': 'rutaahorro-worker' } },
 });
 
+/**
+ * Todas las filas de una consulta, de a 1.000 (lo que entrega la API como
+ * máximo, sin avisar que cortó). La consulta tiene que venir con un orden
+ * estable que termine en una columna única.
+ */
+export async function todasLasFilas<T>(
+  pedir: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const filas: T[] = [];
+  for (let desde = 0; desde < 200_000; desde += 1000) {
+    const { data, error } = await pedir(desde, desde + 999);
+    if (error) throw new Error(error.message);
+    filas.push(...(data ?? []));
+    if ((data ?? []).length < 1000) break;
+  }
+  return filas;
+}
+
 /** Todos los tenants activos. Los trabajos programados iteran sobre esto. */
 export async function activeTenants(): Promise<Array<{ id: string; name: string; settings: Record<string, unknown> }>> {
   const { data, error } = await admin

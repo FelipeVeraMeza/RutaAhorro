@@ -201,8 +201,11 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
 
   useEffect(() => { if (escaneando) void start(); else stop(); }, [escaneando, start, stop]);
 
+  // Sin red la lista quedaba vacía sin decir nada, y el "+ Nuevo" invitaba a
+  // crear de nuevo un proveedor que ya existía.
   useEffect(() => {
-    void repoProveedores().listar().then(setProveedores).catch(() => {});
+    void repoProveedores().listar().then(setProveedores)
+      .catch(() => setError('No se pudo cargar la lista de proveedores (¿sin conexión?). Recarga antes de crear uno nuevo.'));
   }, []);
 
   useEffect(() => {
@@ -263,7 +266,14 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
       if (!proveedorId) { setError('Para pagar con la caja, elige el proveedor.'); return; }
       // Se mira antes de recibir: después, la mercadería ya entró y el pago
       // quedaría a medias.
-      if (!(await miCajaAbierta().catch(() => null))) {
+      let abierta: Awaited<ReturnType<typeof miCajaAbierta>>;
+      try {
+        abierta = await miCajaAbierta();
+      } catch {
+        setError('No se pudo revisar tu caja (¿sin conexión?). Vuelve a intentar, o elige otra forma de pago.');
+        return;
+      }
+      if (!abierta) {
         setError('No tienes la caja abierta: ábrela en Caja, o elige otra forma de pago.');
         return;
       }

@@ -31,6 +31,10 @@ describe('formatCLP', () => {
     expect(formatCLP(0)).toBe('$0');
   });
 
+  it('un negativo lleva el signo antes del "$"', () => {
+    expect(formatCLP(-1500)).toBe('-$1.500');
+  });
+
   it('no deja espacios duros que rompan el diseño móvil', () => {
     expect(formatCLP(7450)).not.toMatch(/ /);
   });

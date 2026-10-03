@@ -20,9 +20,9 @@ puerta de seguridad abierta, o el usuario no puede terminar lo que hace.
 *Media*: información engañosa o un paso que confunde. *Baja*: formato, texto o
 un caso raro. "typecheck (sin prueba propia)" quiere decir que se corrigió y
 compila, pero **no hay una prueba que lo demuestre por sí misma** (🟡, regla de
-docs/17). Las de la base dicen si tienen prueba escrita en
-`tools/pg-test/revision-0037.test.mjs` — **que no se pudo correr en esta
-sesión** (ver Verificación).
+docs/17). Las de la base dicen si tienen prueba en
+`tools/pg-test/revision-0037.test.mjs` (corrida el 2026-10-03, ver
+Verificación).
 
 | N° | Lo ve | Gravedad | Qué pasaba | Estado | Verificado con |
 |---:|---|---|---|---|---|
@@ -93,28 +93,28 @@ sesión** (ver Verificación).
 | 165 | Jefe | Media | Ofertas de varios productos: "ya tiene oferta" se leía de solo 1.000 tramos. | Corregido | typecheck (sin prueba propia) |
 | 166 | Jefe | Alta | Por pagar: con más de 1.000 facturas, las pendientes más nuevas desaparecían de la lista y del aviso del Inicio. | Corregido | typecheck (sin prueba propia) |
 | 167 | Jefe | Media | Inicio → avisos: los que escribe el worker salían como "lot_expiring" o "cash_session_open" (el código en inglés). | Corregido | typecheck (sin prueba propia) |
-| 168 | Jefe | Alta | Seguridad (base): `handle_new_user` le creía al metadata del registro: con el registro público de Supabase, cualquiera que conociera el id del local se creaba una cuenta de ADMINISTRADOR. Ahora el local y el rol salen de `cuentas_autorizadas`, que solo escribe el servidor. | Corregido | db:check · pg-test revision-0037.test.mjs (escrita, sin correr) |
-| 169 | Vendedor | Alta | Seguridad (base): `fn_register_sale` aceptaba pagos negativos (efectivo 2.000 + débito −1.000 en una venta de 1.000). | Corregido | db:check · pg-test revision-0037.test.mjs (escrita, sin correr) |
-| 170 | Jefe | Media | Base: `fn_register_sale` aceptaba ventas con fecha futura (reloj adelantado): caían en otro día del Inicio, Reportes y la caja. | Corregido | db:check · pg-test revision-0037.test.mjs (escrita, sin correr) |
-| 171 | Jefe | Media | Seguridad (base): bodega podía abrir caja por la API (`fn_open_cash_session`). | Corregido | db:check · pg-test revision-0037.test.mjs (escrita, sin correr) |
-| 172 | Jefe | Media | Seguridad (base): bodega podía registrar ventas por la API (`fn_register_sale` no miraba el rol). | Corregido | db:check · pg-test revision-0037.test.mjs (escrita, sin correr) |
-| 173 | Jefe | Media | Seguridad (base): una cuenta desactivada con la sesión abierta seguía registrando ingresos/egresos y cerrando caja. | Corregido | db:check (sin prueba corrida) |
-| 174 | Jefe | Media | Seguridad (base): una cuenta desactivada seguía anulando ventas (`fn_void_sale`). | Corregido | db:check (sin prueba corrida) |
-| 175 | Jefe | Media | Seguridad (base): una cuenta desactivada seguía ajustando stock y aplicando tomas. | Corregido | db:check (sin prueba corrida) |
-| 176 | Jefe | Media | Seguridad (base): una cuenta desactivada seguía recibiendo, anulando recepciones y dando de baja lotes. | Corregido | db:check (sin prueba corrida) |
-| 177 | Vendedor | Baja | Base: `fn_close_cash_session` aceptaba un contado negativo. | Corregido | db:check (sin prueba corrida) |
-| 178 | Jefe | Baja | Base: anular una venta en efectivo de una caja ya cerrada devolvía plata del cajón de hoy sin dejar el egreso (pagos mixtos y ventas anteriores a 0019). | Corregido | db:check · pg-test revision-0037.test.mjs (escrita, sin correr) |
-| 179 | Bodega | Media | Base: `fn_adjust_stock` aceptaba dejar el stock en negativo o con decimales en productos por unidad. | Corregido | db:check · pg-test revision-0037.test.mjs (escrita, sin correr) |
-| 180 | Bodega | Media | Base: `fn_adjust_stock` aceptaba una "merma" que sumaba stock. | Corregido | db:check · pg-test revision-0037.test.mjs (escrita, sin correr) |
-| 181 | Jefe | Baja | Base: un ajuste se guardaba como "positivo" aunque restara (el tipo no seguía al signo). | Corregido | db:check · pg-test revision-0037.test.mjs (escrita, sin correr) |
-| 182 | Bodega | Media | Base: `fn_apply_stock_count` aceptaba conteos negativos o con decimales. | Corregido | db:check · pg-test revision-0037.test.mjs (escrita, sin correr) |
-| 183 | Bodega | Media | Base: `fn_apply_stock_count` aceptaba productos de otro local. | Corregido | db:check (sin prueba corrida) |
-| 184 | Bodega | Media | Base: `fn_confirm_receipt` aceptaba cantidad 0 o negativa y costos negativos. | Corregido | db:check · pg-test revision-0037.test.mjs (escrita, sin correr) |
-| 185 | Bodega | Media | Base: `fn_confirm_receipt` aceptaba un proveedor de otro local. | Corregido | db:check (sin prueba corrida) |
-| 186 | Bodega | Media | Base: recibir un lote que vence HOY se rechazaba de noche ("ya vencido"): se comparaba con la fecha UTC (regla 17). | Corregido | db:check (sin prueba corrida) |
-| 187 | Bodega | Media | Base: `v_expiring_lots` decía "vencido" de noche lo que vence hoy, con días −1 (fecha UTC, regla 17). | Corregido | db:check (sin prueba corrida) |
-| 188 | Jefe | Baja | Base: Por pagar aceptaba una factura emitida en el futuro. | Corregido | db:check (sin prueba corrida) |
-| 189 | Jefe | Baja | Base: Por pagar aceptaba la factura de una recepción ya anulada. | Corregido | db:check (sin prueba corrida) |
+| 168 | Jefe | Alta | Seguridad (base): `handle_new_user` le creía al metadata del registro: con el registro público de Supabase, cualquiera que conociera el id del local se creaba una cuenta de ADMINISTRADOR. Ahora el local y el rol salen de `cuentas_autorizadas`, que solo escribe el servidor. | Corregido | pg-test revision-0037 ✅ (pasa con 0037, visto fallar sin ella) |
+| 169 | Vendedor | Baja | Base: un pago negativo en `fn_register_sale` lo rechazaba la restricción de la tabla (`amount > 0`), pero con el mensaje crudo de Postgres ("problema inesperado"); el monto recibido negativo no tenía restricción. Ahora responde MONTO_NEGATIVO. *Corrección del 2026-10-03: la primera versión de este documento lo marcó Alta, como si el pago pasara; no pasaba (lo mostró db:test).* | Corregido | pg-test revision-0037 ✅ (pasa con 0037, visto fallar sin ella) |
+| 170 | Jefe | Media | Base: `fn_register_sale` aceptaba ventas con fecha futura (reloj adelantado): caían en otro día del Inicio, Reportes y la caja. | Corregido | pg-test revision-0037 ✅ (pasa con 0037, visto fallar sin ella) |
+| 171 | Jefe | Media | Seguridad (base): bodega podía abrir caja por la API (`fn_open_cash_session`). | Corregido | pg-test revision-0037 ✅ (pasa con 0037, visto fallar sin ella) |
+| 172 | Jefe | Media | Seguridad (base): bodega podía registrar ventas por la API (`fn_register_sale` no miraba el rol). | Corregido | db:check · db:test completo pasa (sin prueba propia) |
+| 173 | Jefe | Media | Seguridad (base): una cuenta desactivada con la sesión abierta seguía registrando ingresos/egresos y cerrando caja. | Corregido | db:check · db:test completo pasa (sin prueba propia) |
+| 174 | Jefe | Media | Seguridad (base): una cuenta desactivada seguía anulando ventas (`fn_void_sale`). | Corregido | db:check · db:test completo pasa (sin prueba propia) |
+| 175 | Jefe | Media | Seguridad (base): una cuenta desactivada seguía ajustando stock y aplicando tomas. | Corregido | db:check · db:test completo pasa (sin prueba propia) |
+| 176 | Jefe | Media | Seguridad (base): una cuenta desactivada seguía recibiendo, anulando recepciones y dando de baja lotes. | Corregido | db:check · db:test completo pasa (sin prueba propia) |
+| 177 | Vendedor | Baja | Base: `fn_close_cash_session` aceptaba un contado negativo. | Corregido | db:check · db:test completo pasa (sin prueba propia) |
+| 178 | Jefe | Baja | Base: anular una venta en efectivo de una caja ya cerrada devolvía plata del cajón de hoy sin dejar el egreso (pagos mixtos y ventas anteriores a 0019). | Corregido | pg-test revision-0037 ✅ (pasa con 0037, visto fallar sin ella) |
+| 179 | Bodega | Media | Base: `fn_adjust_stock` aceptaba dejar el stock en negativo o con decimales en productos por unidad. | Corregido | pg-test revision-0037 ✅ (pasa con 0037, visto fallar sin ella) |
+| 180 | Bodega | Media | Base: `fn_adjust_stock` aceptaba una "merma" que sumaba stock. | Corregido | pg-test revision-0037 ✅ (pasa con 0037, visto fallar sin ella) |
+| 181 | Jefe | Baja | Base: un ajuste se guardaba como "positivo" aunque restara (el tipo no seguía al signo). | Corregido | pg-test revision-0037 ✅ (pasa con 0037, visto fallar sin ella) |
+| 182 | Bodega | Media | Base: `fn_apply_stock_count` aceptaba conteos negativos o con decimales. | Corregido | pg-test revision-0037 ✅ (pasa con 0037, visto fallar sin ella) |
+| 183 | Bodega | Media | Base: `fn_apply_stock_count` aceptaba productos de otro local. | Corregido | db:check · db:test completo pasa (sin prueba propia) |
+| 184 | Bodega | Baja | Base: `fn_confirm_receipt` con cantidad 0 o negativa, o costo negativo: lo rechazaba la restricción de la tabla, pero con el mensaje crudo de Postgres. Ahora CANTIDAD_INVALIDA / MONTO_NEGATIVO. *Corrección del 2026-10-03: antes decía "aceptaba"; no aceptaba.* | Corregido | pg-test revision-0037 ✅ (pasa con 0037, visto fallar sin ella) |
+| 185 | Bodega | Media | Base: `fn_confirm_receipt` aceptaba un proveedor de otro local. | Corregido | db:check · db:test completo pasa (sin prueba propia) |
+| 186 | Bodega | Media | Base: recibir un lote que vence HOY se rechazaba de noche ("ya vencido"): se comparaba con la fecha UTC (regla 17). | Corregido | db:check · db:test completo pasa (sin prueba propia) |
+| 187 | Bodega | Media | Base: `v_expiring_lots` decía "vencido" de noche lo que vence hoy, con días −1 (fecha UTC, regla 17). | Corregido | db:check · db:test completo pasa (sin prueba propia) |
+| 188 | Jefe | Baja | Base: Por pagar aceptaba una factura emitida en el futuro. | Corregido | db:check · db:test completo pasa (sin prueba propia) |
+| 189 | Jefe | Baja | Base: Por pagar aceptaba la factura de una recepción ya anulada. | Corregido | db:check · db:test completo pasa (sin prueba propia) |
 | 190 | Jefe | Baja | Usuarios → invitar: el correo no se normalizaba ni validaba (mayúsculas, espacios). | Corregido | typecheck (sin prueba propia) |
 | 191 | Jefe | Baja | Configuración → impuesto: un código SII con decimales se redondeaba a otro código. | Corregido | typecheck (sin prueba propia) |
 | 192 | Jefe | Baja | Usuarios → invitar: el motivo que daba el servidor se perdía ("problema inesperado"). | Corregido | typecheck (sin prueba propia) |
@@ -129,7 +129,7 @@ sesión** (ver Verificación).
 | 201 | Jefe | Alta | Sesión vencida: las llamadas a /api se redirigían a /login; `fetch` recibía la página con 200 y la pantalla daba por hecho lo que no se hizo ("Cuenta creada", claves del SII guardadas). | Corregido | typecheck (sin prueba propia) |
 | 202 | Bodega | Baja | Recibir mercadería: un N° de factura con punto de miles ("12.345") no quedaba en el libro de compras. | Corregido | typecheck (sin prueba propia) |
 | 203 | Bodega | Media | Compras: supervisor y bodega editaban o desactivaban un proveedor, la base no guardaba nada (RLS) y la pantalla decía "guardado". Ahora solo el administrador ve "Editar" y el repositorio lo comprueba. | Corregido | typecheck (sin prueba propia) |
-| 204 | Jefe | Media | Combos: no se podía desactivar un combo si un producto bajó de precio o se desactivó ("tiene que costar menos"), y seguía aplicándose. | Corregido | db:check · pg-test revision-0037.test.mjs (escrita, sin correr) |
+| 204 | Jefe | Media | Combos: no se podía desactivar un combo si un producto bajó de precio o se desactivó ("tiene que costar menos"), y seguía aplicándose. | Corregido | pg-test revision-0037 ✅ (pasa con 0037, visto fallar sin ella) |
 | 205 | Jefe | Baja | Ofertas a varios productos: la confirmación mostraba las fechas como 2026-10-05. | Corregido | typecheck (sin prueba propia) |
 | 206 | Bodega | Baja | Importar: corregir la planilla y volver a elegir el mismo archivo no hacía nada (el campo no cambiaba). | Corregido | typecheck (sin prueba propia) |
 | 207 | Jefe | Baja | Importar: la vista previa mostraba costo $0 en planillas sin columna costo (se conserva el de hoy). | Corregido | typecheck (sin prueba propia) |
@@ -139,7 +139,7 @@ sesión** (ver Verificación).
 | 211 | Vendedor | Baja | Recuperar contraseña: sin internet al guardar decía "Pide un enlace nuevo" (el enlace seguía sirviendo). | Corregido | typecheck (sin prueba propia) |
 | 212 | Vendedor | Baja | Contraseña temporal: si no se podía quitar la marca decía "guardada" y la volvía a pedir, en bucle. | Corregido | typecheck (sin prueba propia) |
 | 213 | Vendedor | Media | Pantalla bloqueada: con wifi sin internet decía "Contraseña incorrecta" (y sumaba espera) en vez de revisar contra la huella del celular. | Corregido | typecheck (sin prueba propia) |
-| 214 | Jefe | Alta | Seguridad (base): intentos de PIN simultáneos se saltaban el bloqueo de 5 fallos: un PIN de 4 dígitos se adivinaba desde el celular de un vendedor. Ahora se toma la fila del PIN (`for update`). | Corregido | db:check (sin prueba corrida) |
+| 214 | Jefe | Alta | Seguridad (base): intentos de PIN simultáneos se saltaban el bloqueo de 5 fallos: un PIN de 4 dígitos se adivinaba desde el celular de un vendedor. Ahora se toma la fila del PIN (`for update`). | Corregido | db:check · db:test completo pasa (sin prueba propia) |
 | 215 | Vendedor | Media | Cuenta desactivada: la pantalla no tenía "Salir" y el celular compartido quedaba tomado (/login devuelve a "/" a quien tiene sesión). | Corregido | typecheck (sin prueba propia) |
 | 216 | Jefe | Media | Factura manual: cambiar el RUT después de elegir un cliente dejaba su razón social, giro y dirección: factura con el RUT de uno y el nombre de otro. | Corregido | typecheck (sin prueba propia) |
 | 217 | Jefe | Baja | Factura manual → agregar del catálogo: un error de búsqueda quedaba pegado. | Corregido | typecheck (sin prueba propia) |
@@ -150,7 +150,7 @@ sesión** (ver Verificación).
 | 222 | Jefe | Baja | Borrar algo en uso: "Ocurrió un problema inesperado" en vez de decir que solo se puede desactivar. | Corregido | core (vitest): validaciones.test.ts |
 | 223 | Bodega | Media | Proveedores: se podía crear el mismo proveedor (mismo RUT) dos veces; sus facturas por pagar y sus compras quedaban partidas. | Corregido | typecheck (sin prueba propia) |
 | 224 | Jefe | Baja | Qué comprar: si el celular no dejaba copiar, la pantalla entera se cambiaba por el error y se perdía el pedido armado. | Corregido | typecheck (sin prueba propia) |
-| 225 | Jefe | Baja | Seguridad (base): `fn_cash_session_summary` (security definer) dejaba a cualquier cuenta del local leer lo vendido y lo esperado en la caja de otro cajero. | Corregido | db:check · pg-test revision-0037.test.mjs (escrita, sin correr) |
+| 225 | Jefe | Baja | Seguridad (base): `fn_cash_session_summary` (security definer) dejaba a cualquier cuenta del local leer lo vendido y lo esperado en la caja de otro cajero. | Corregido | pg-test revision-0037 ✅ (pasa con 0037, visto fallar sin ella) |
 | 226 | QA | Baja | Worker: los avisos de stock bajo, vencimientos y cajas abiertas ignoraban el error de la consulta y quedaban "ok, 0 avisos". | Corregido | typecheck worker (sin prueba propia) |
 | 227 | Bodega | Baja | Worker, revisión semanal: el aviso de lotes descuadrados se repetía cada domingo y no decía qué producto. | Corregido | typecheck worker (sin prueba propia) |
 | 228 | Jefe | Media | Worker, limpieza de respaldos: BACKUP_RETENTION_DAYS=0 (o negativo) borraba todos los respaldos, también el de esa madrugada. | Corregido | typecheck worker (sin prueba propia) |
@@ -158,7 +158,7 @@ sesión** (ver Verificación).
 | 230 | QA (maqueta) | Baja | Maqueta: ajustes y tomas aceptaban stock negativo y mermas que suman (la base no, desde 0037). | Corregido | typecheck (sin prueba propia) |
 | 231 | Vendedor | Media | Configuración del local: si la primera lectura fallaba (abrir el POS sin red) quedaban los valores de omisión toda la sesión: sin redondeo del efectivo y con otra zona horaria. Ahora usa la última leída y reintenta. | Corregido | typecheck (sin prueba propia) |
 | 232 | Jefe | Baja | Bitácora: con error de red decía además "Nada registrado en estas fechas"; con fechas invertidas no avisaba. | Corregido | typecheck (sin prueba propia) |
-| 233 | Jefe | Baja | Base: una cuenta nueva nacía con tope de descuento 100/10/0 aunque el local tuviera otro configurado por rol. | Corregido | db:check (sin prueba corrida) |
+| 233 | Jefe | Baja | Base: una cuenta nueva nacía con tope de descuento 100/10/0 aunque el local tuviera otro configurado por rol. | Corregido | db:check · db:test completo pasa (sin prueba propia) |
 | 234 | Jefe | Baja | Seguridad: crear o invitar un usuario que fallaba (correo ya registrado) dejaba viva la autorización de ese correo para el local y el rol. | Corregido | typecheck (sin prueba propia) |
 | 235 | Bodega | Media | Inventario → Lotes: la fecha de vencimiento salía un día antes (AAAA-MM-DD leído como medianoche UTC, regla 17). | Corregido | typecheck (sin prueba propia) |
 | 236 | Jefe | Baja | Inicio → vencimientos "Ver todos": abría Inventario en Stock y no en Lotes. | Corregido | typecheck (sin prueba propia) |
@@ -173,7 +173,7 @@ sesión** (ver Verificación).
 | 245 | Jefe | Baja | Configuración: "1,5" horas de aviso de caja se guardaba como 2 sin decirlo. | Corregido | typecheck (sin prueba propia) |
 | 246 | QA | Baja | Worker: si no se podía anotar el inicio en `job_runs`, el trabajo no quedaba registrado ni con su error. | Corregido | typecheck worker (sin prueba propia) |
 | 247 | Jefe | Baja | Fiado → movimientos: con más de 100 se cortaba sin aviso y lo visible no sumaba el saldo. | Corregido | typecheck (sin prueba propia) |
-| 248 | Bodega | Media | Recibir mercadería: la fecha de la recepción venía del reloj del celular (adelantado: recepción y libro de compras con fecha de mañana). La pantalla ya no la manda y la base no acepta una futura. | Corregido | db:check (sin prueba corrida) |
+| 248 | Bodega | Media | Recibir mercadería: la fecha de la recepción venía del reloj del celular (adelantado: recepción y libro de compras con fecha de mañana). La pantalla ya no la manda y la base no acepta una futura. | Corregido | db:check · db:test completo pasa (sin prueba propia) |
 | 249 | Jefe | Baja | Compras: la pestaña decía "Recepciones (30)" para siempre aunque hubiera más. | Corregido | typecheck (sin prueba propia) |
 | 250 | Jefe | Baja | Ventas → "Ver más": pasadas las 1.000 ventas del período el botón desaparecía y las más antiguas no se podían ver. | Corregido | typecheck (sin prueba propia) |
 
@@ -181,13 +181,13 @@ sesión** (ver Verificación).
 
 | | Cantidad |
 |---|:-:|
-| Alta | 18 |
-| Media | 71 |
-| Baja | 61 |
+| Alta | 17 |
+| Media | 70 |
+| Baja | 63 |
 | Corregidos | 150 |
 | Con prueba propia corrida (✅, core) | 111, 112, 113, 114, 195, 196, 197, 198, 199, 222 |
-| Con prueba de base escrita, **sin correr** (🟡) | 168, 169, 170, 171, 172, 178, 179, 180, 181, 182, 184, 204, 225 |
-| Solo `db:check` (compila, 🟡) | 173, 174, 175, 176, 177, 183, 185, 186, 187, 188, 189, 214, 233, 248 |
+| Con prueba de base ✅ (corrida el 2026-10-03, vista fallar sin 0037) | 168, 169, 170, 171, 178, 179, 180, 181, 182, 184, 204, 225 |
+| Base sin prueba propia (compila y db:test completo pasa, 🟡) | 172, 173, 174, 175, 176, 177, 183, 185, 186, 187, 188, 189, 214, 233, 248 |
 
 ## Lo más grave, en una línea cada uno
 
@@ -197,8 +197,6 @@ sesión** (ver Verificación).
   (registro público de Supabase, encendido por omisión). El id del local viaja
   en el token de cualquier vendedor. 0037 crea `cuentas_autorizadas` (sin
   políticas, solo la llave de servicio) y el disparador lee de ahí.
-- **N° 169 · Pagos negativos en una venta** sacaban plata del
-  arqueo sin que nadie la cobrara.
 - **N° 214 · El PIN de autorización se podía adivinar** mandando los
   intentos a la vez (la cuenta de "5 malos" no estaba bajo candado).
 - **N° 158–162 · El celular de la caja bajaba solo 1.000 de cada
@@ -244,8 +242,8 @@ así que el resto del cuerpo es idéntico.
 2. Desde que está aplicada, **una cuenta creada a mano en el panel de
    Supabase (o invitada desde ahí) no queda vinculada**: hay que crearla desde
    Usuarios o con `tools/crear-cuentas.mjs`. Es el punto.
-3. Correr `npm run db:test` (con un usuario que no sea root) y ver pasar
-   `revision-0037.test.mjs`; y, por regla 16, verla fallar sin 0037.
+3. `npm run db:test` ya se corrió (2026-10-03): 194 pasan y las 9 de
+   `revision-0037.test.mjs` fallan sin 0037. Volver a correrlo si se toca algo.
 4. `db:aplicar` sigue esperando **46 funciones** (0037 no agrega RPC nuevas).
 
 ## Encontrados después del 250 (sin corregir)
@@ -270,8 +268,9 @@ así que el resto del cuerpo es idéntico.
 - `apps/worker`: `tsc --noEmit` sin errores; `npm test` 0 fallas (6 omitidas,
   necesitan Supabase).
 - `npm run db:check`: **175 cuerpos PL/pgSQL compilan** (0037 incluida).
-- **`npm run db:test` no se pudo correr:** en este contenedor PostgreSQL
-  embebido corre como root e `initdb` lo rechaza. Las pruebas de 0037 están
-  escritas pero **no se vieron pasar ni fallar** (🟡). Es lo primero que hay
-  que hacer antes de aplicar la migración.
+- **`npm run db:test` (2026-10-03, con el usuario `ubuntu` del contenedor:
+  como root `initdb` se niega):** 194 pasan + 1 TODO conocido (T-45), 0
+  fallas. `revision-0037.test.mjs`: 9/9 con 0037, y **0/9 sin ella** (regla
+  16). Al verlas fallar se vio que los N° 169 y 184 estaban exagerados: la
+  restricción de la tabla ya los rechazaba (ver sus filas).
 - No se corrieron los recorridos de la maqueta (`tools/ui`) en esta sesión.

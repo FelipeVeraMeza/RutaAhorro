@@ -4,6 +4,7 @@ import { resumenFactura, diaLocal, type RegistroDte } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import { getMeta, setMeta } from '../offline/db';
+import { todasLasFilas } from './paginas';
 
 /**
  * Facturación (0026): factura manual, notas de crédito, facturas recibidas,
@@ -246,10 +247,12 @@ async function rutaServidor(metodo: 'POST' | 'DELETE', cuerpo?: unknown) {
 const supabaseRepo: RepositorioFacturacion = {
   async emitidas(mes) {
     const [desde, hasta] = rangoMes(mes);
-    const { data, error } = await supabase().from('facturas').select(SELECT_FACTURA)
-      .gte('fecha_emision', desde).lt('fecha_emision', hasta).order('numero', { ascending: false });
-    if (error) throw error;
-    return (data ?? []).map((f) => aFactura(f as Fila));
+    // Por páginas (la API corta en 1.000 sin avisar): el libro del mes salía
+    // incompleto y el CSV para el contador también.
+    const data = await todasLasFilas<unknown>((d, h) => supabase().from('facturas').select(SELECT_FACTURA)
+      .gte('fecha_emision', desde).lt('fecha_emision', hasta)
+      .order('numero', { ascending: false }).order('id').range(d, h));
+    return data.map((f) => aFactura(f as Fila));
   },
   async obtener(id) {
     const { data, error } = await supabase().from('facturas').select(SELECT_FACTURA).eq('id', id).maybeSingle();
@@ -273,10 +276,10 @@ const supabaseRepo: RepositorioFacturacion = {
   async descartar(id, motivo) { await rpc('fn_descartar_factura', { p_factura: id, p_motivo: motivo }); },
   async recibidas(mes) {
     const [desde, hasta] = rangoMes(mes);
-    const { data, error } = await supabase().from('facturas_recibidas').select('*')
-      .gte('fecha_emision', desde).lt('fecha_emision', hasta).order('fecha_emision', { ascending: false });
-    if (error) throw error;
-    return (data ?? []).map((r) => aRecibida(r as Fila));
+    const data = await todasLasFilas<unknown>((d, h) => supabase().from('facturas_recibidas').select('*')
+      .gte('fecha_emision', desde).lt('fecha_emision', hasta)
+      .order('fecha_emision', { ascending: false }).order('id').range(d, h));
+    return data.map((r) => aRecibida(r as Fila));
   },
   async registrarRecibida(d) {
     return aRecibida(await rpc<Fila>('fn_registrar_factura_recibida', { p_datos: {
@@ -367,6 +370,15 @@ const demoRepo: RepositorioFacturacion = {
   async recibidas(mes) { return (await leerDemo()).recibidas.filter((r) => mesDe(r.fechaEmision) === mes); },
   async registrarRecibida(x) {
     const d = await leerDemo();
+    // Las mismas reglas que fn_registrar_factura_recibida (regla de la
+    // maqueta: no enseñar algo que la base rechaza). Antes la misma factura
+    // se podía registrar dos veces y con fecha de mañana.
+    const rut = (v: string) => v.replace(/[^0-9kK]/g, '').toUpperCase();
+    if (d.recibidas.some((r) => r.estado === 'vigente' && rut(r.rutEmisor) === rut(x.rutEmisor)
+        && r.tipo === x.tipo && Number(r.folio) === Number(x.folio))) {
+      throw new Error('FACTURA_RECIBIDA_DUPLICADA');
+    }
+    if (x.fechaEmision > await hoy()) throw new Error('FECHA_INVALIDA');
     const r: FacturaRecibida = { ...x, id: crypto.randomUUID(), total: x.neto + x.exento + x.iva + x.otrosImpuestos,
       estado: 'vigente', anuladaMotivo: null };
     await guardarDemo({ ...d, recibidas: [r, ...d.recibidas] });

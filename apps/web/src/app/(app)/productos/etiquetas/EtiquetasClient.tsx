@@ -44,6 +44,10 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
   const [generando, setGenerando] = useState<string | null>(null);
 
   const [cantidades, setCantidades] = useState<Record<string, number>>({});
+  // Lo elegido, con su producto: la hoja se arma con esto y no con la lista
+  // visible. Antes, marcar "Coca-Cola × 5", buscar "pan" y marcar "Pan × 3"
+  // imprimía solo el pan: lo de la búsqueda anterior se perdía sin aviso.
+  const elegidos = useRef(new Map<string, Producto>());
   const [tamanio, setTamanio] = useState<TamanioId>('normal');
   const [conPrecio, setConPrecio] = useState(true);
   // RF-M2-22 · además del código de barras, el cartel de precio de la repisa.
@@ -124,6 +128,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
         codigos: [...p.codigos, codigo],
       });
       setAviso(`${p.nombre} quedó con el código ${codigo}`);
+      elegidos.current.set(p.id, p);
       setCantidades((c) => ({ ...c, [p.id]: c[p.id] ?? 1 }));
       await cargar();
     } catch (e) {
@@ -135,10 +140,16 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
 
   const opciones = TAMANIOS.find((t) => t.id === tamanio)!;
 
+  // Lo elegido toma los datos frescos de la lista (el código recién generado).
+  useEffect(() => {
+    for (const p of productos) if (elegidos.current.has(p.id)) elegidos.current.set(p.id, p);
+  }, [productos]);
+
   /** Una entrada por etiqueta a imprimir: un producto repetido N veces. */
   const aImprimir = useMemo(() => {
     const salida: Array<{ clave: string; svg?: string; gondola?: Producto }> = [];
-    for (const p of conCodigo) {
+    const todos = [...elegidos.current.values()].filter((p) => tipo === 'gondola' || p.codigos.length > 0);
+    for (const p of todos) {
       const n = cantidades[p.id] ?? 0;
       if (n <= 0) continue;
       if (tipo === 'gondola') {
@@ -155,14 +166,15 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
       for (let i = 0; i < n; i++) salida.push({ clave: `${p.id}-${i}`, svg });
     }
     return salida;
-  }, [conCodigo, cantidades, opciones, conPrecio, tipo]);
+  }, [productos, cantidades, opciones, conPrecio, tipo]);
 
-  const noImprimibles = tipo === 'gondola' ? [] : conCodigo.filter(
+  const noImprimibles = tipo === 'gondola' ? [] : [...elegidos.current.values()].filter(
     (p) => (cantidades[p.id] ?? 0) > 0 && !etiquetaSvg(p.codigos[0]),
   );
 
-  function cambiarCantidad(id: string, delta: number) {
-    setCantidades((c) => ({ ...c, [id]: Math.max((c[id] ?? 0) + delta, 0) }));
+  function cambiarCantidad(p: Producto, delta: number) {
+    elegidos.current.set(p.id, p);
+    setCantidades((c) => ({ ...c, [p.id]: Math.max((c[p.id] ?? 0) + delta, 0) }));
   }
 
   return (
@@ -193,7 +205,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
         <div className="grid grid-cols-2 gap-2 mb-3" role="radiogroup" aria-label="Qué imprimir">
           {([['codigo', 'Código de barras', 'Para pegar en el producto y escanearlo'],
              ['gondola', 'Precio de góndola', 'Cartel con el precio grande para la repisa']] as const).map(([id, t, d]) => (
-            <button key={id} role="radio" aria-checked={tipo === id} onClick={() => { setTipo(id); setCantidades({}); }}
+            <button key={id} role="radio" aria-checked={tipo === id} onClick={() => { setTipo(id); setCantidades({}); elegidos.current.clear(); }}
               className={`tap text-left px-3 py-2 rounded-lg border ${tipo === id ? 'border-marca-500 bg-marca-50 text-marca-900' : 'border-[var(--borde)]'}`}>
               <span className="block text-sm font-medium">{t}</span>
               <span className="block text-xs text-[var(--texto-suave)]">{d}</span>
@@ -288,7 +300,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={() => cambiarCantidad(p.id, -1)}
+                      onClick={() => cambiarCantidad(p, -1)}
                       disabled={n === 0}
                       aria-label={`Una etiqueta menos de ${p.nombre}`}
                       className="tap w-11 h-11 rounded-lg border border-[var(--borde)] disabled:opacity-30"
@@ -297,7 +309,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
                     </button>
                     <span className="num w-8 text-center text-sm font-medium">{n}</span>
                     <button
-                      onClick={() => cambiarCantidad(p.id, 1)}
+                      onClick={() => cambiarCantidad(p, 1)}
                       aria-label={`Una etiqueta más de ${p.nombre}`}
                       className="tap w-11 h-11 rounded-lg border border-[var(--borde)]"
                     >
@@ -329,7 +341,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
               {aImprimir.length === 1 ? 'etiqueta' : 'etiquetas'}
             </p>
             <button
-              onClick={() => setCantidades({})}
+              onClick={() => { setCantidades({}); elegidos.current.clear(); }}
               className="tap px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)]"
             >
               Vaciar

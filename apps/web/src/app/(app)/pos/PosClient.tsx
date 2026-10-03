@@ -111,7 +111,15 @@ export function PosClient({
       const dia = diaLocal(new Date(), zonaRef.current);
       // 0023 · El combo va después: se mide contra el precio que la línea ya
       // tiene (la oferta), así nunca se suma a otra rebaja.
-      return aplicarCombos(aplicarOfertas(lineas, dia), ofertasRef.current ? combosRef.current : [], dia);
+      const conCombos = aplicarCombos(aplicarOfertas(lineas, dia), ofertasRef.current ? combosRef.current : [], dia);
+      // El descuento manual es un monto fijo: al bajar la cantidad (o al
+      // entrar una oferta) podía quedar mayor que la línea. La base guardaba
+      // ese descuento entero, el reporte de descuentos salía inflado y el
+      // tope de autorización se medía contra plata que no se rebajó.
+      return conCombos.map((l) => {
+        const tope = Math.max(0, Math.round(l.unitPrice * l.quantity) - (l.descuentoCombo ?? 0));
+        return (l.discountAmount ?? 0) > tope ? { ...l, discountAmount: tope } : l;
+      });
     });
   }, []);
 
@@ -282,9 +290,13 @@ export function PosClient({
   const refrescarLineas = useCallback(async (lineas: CartLine[]) => {
     const quitados: string[] = [];
     const frescas: CartLine[] = [];
+    // Con catálogo en el celular, un producto que ya no está en él fue
+    // eliminado: antes la línea se quedaba como estaba y la base rechazaba la
+    // venta al cobrar (PRODUCTO_NO_ENCONTRADO), con el cliente esperando.
+    const hayCatalogo = (await db().products.count().catch(() => 0)) > 0;
     for (const l of lineas) {
       const p = await db().products.get(l.productId).catch(() => undefined);
-      if (p && !p.isActive) { quitados.push(l.name); continue; }
+      if ((p && !p.isActive) || (!p && hayCatalogo)) { quitados.push(l.name); continue; }
       frescas.push(p ? { ...lineaDesde(p, l.quantity), discountAmount: l.discountAmount } : l);
     }
     if (quitados.length) notificar('info', `Se quitó de la venta porque ya no se vende: ${quitados.join(', ')}`);

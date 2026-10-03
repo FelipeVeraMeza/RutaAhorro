@@ -102,7 +102,33 @@ function Recuperar() {
     if (clave.length < MINIMO) { setError(`La contraseña debe tener al menos ${MINIMO} caracteres`); return; }
     if (clave !== repetida) { setError('Las dos contraseñas no son iguales'); return; }
     setTrabajando(true);
-    const { error: e2 } = await supabase().auth.updateUser({ password: clave });
+    // Por el servidor y no con `updateUser` directo: la ruta además borra la
+    // marca de contraseña temporal (vive en app_metadata, el navegador no la
+    // puede tocar). Antes, quien tenía una temporal del administrador y la
+    // cambiaba por el correo de recuperación volvía a /clave al entrar, a
+    // inventar otra contraseña más. Si la ruta no reconoce la sesión (una
+    // cuenta todavía sin perfil), se cambia como antes.
+    let e2: { message: string; status?: number; name?: string } | null = null;
+    let porServidor = false;
+    try {
+      const res = await fetch('/api/cuenta/clave', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clave }),
+      });
+      if (res.ok) {
+        porServidor = true;
+        // El token trae la marca vieja: uno nuevo, o el layout manda a /clave.
+        await supabase().auth.refreshSession().catch(() => {});
+      } else if (res.status !== 401) {
+        // El servidor ya responde en palabras del local: se muestra tal cual.
+        const cuerpo = await res.json().catch(() => ({}));
+        setTrabajando(false);
+        setError(String(cuerpo?.error?.message ?? 'No se pudo guardar la contraseña. Vuelve a intentarlo.'));
+        return;
+      }
+    } catch {
+      e2 = { message: 'sin conexión', status: 0 };
+    }
+    if (!porServidor && !e2) ({ error: e2 } = await supabase().auth.updateUser({ password: clave }));
     setTrabajando(false);
     if (e2) {
       setError(sinConexion(e2)

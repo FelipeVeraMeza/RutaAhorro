@@ -45,7 +45,13 @@ export function escapar(texto: unknown): string {
 const money = formatCLP;
 
 /** Plantilla del correo. Inline CSS: los clientes de correo ignoran <style>. */
-export function renderEmail(title: string, sections: Array<{ heading: string; rows: string[][] }>) {
+export function renderEmail(
+  title: string,
+  sections: Array<{ heading: string; rows: string[][] }>,
+  // La zona del local (settings.timezone). Con Santiago fija, el resumen de las
+  // 22:00 de un local en Isla de Pascua salía con la fecha de mañana.
+  zona = 'America/Santiago',
+) {
   const table = (rows: string[][]) =>
     rows.length === 0
       ? '<p style="margin:4px 0;color:#6b7280">Sin novedades.</p>'
@@ -66,7 +72,7 @@ export function renderEmail(title: string, sections: Array<{ heading: string; ro
   return `<!doctype html><html lang="es"><body style="margin:0;padding:24px;background:#f8fafc;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a">
   <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;padding:24px;border:1px solid #e5e7eb">
     <h1 style="margin:0 0 4px;font-size:18px">${escapar(title)}</h1>
-    <p style="margin:0 0 20px;color:#6b7280;font-size:13px">RutaAhorro · ${new Date().toLocaleDateString('es-CL', { timeZone: 'America/Santiago', dateStyle: 'full' })}</p>
+    <p style="margin:0 0 20px;color:#6b7280;font-size:13px">RutaAhorro · ${new Date().toLocaleDateString('es-CL', { timeZone: zona, dateStyle: 'full' })}</p>
     ${sections
       .map(
         (s) =>

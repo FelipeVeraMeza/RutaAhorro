@@ -24,7 +24,12 @@ const formatter = new Intl.NumberFormat('es-CL', {
 export function formatCLP(value: number): string {
   // El espacio duro que mete Intl entre "$" y el número se ve mal en pantallas
   // angostas de celular; lo eliminamos.
-  return formatter.format(clp(value)).replace(/ /g, '');
+  const n = clp(value);
+  // El signo va antes del "$": Intl daba "$-1.500", que en el margen de un
+  // producto o en la utilidad de Reportes se lee como un guion de adorno.
+  // Caja lo armaba a mano; ahora sale bien en todas partes.
+  if (n < 0) return '-' + formatter.format(-n).replace(/ /g, '');
+  return formatter.format(n).replace(/ /g, '');
 }
 
 /** "12.990" — sin símbolo, para campos de formulario. */

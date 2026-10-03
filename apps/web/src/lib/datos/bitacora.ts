@@ -57,6 +57,19 @@ export const ACCIONES: Record<string, string> = {
   'anular:facturas_recibidas': 'Factura recibida anulada',
   'editar:dte_emisor': 'Datos del emisor',
   emision_sii: 'Emisión ante el SII',
+  // Lo que la base escribe desde 0018–0036 y la bitácora mostraba con el
+  // código interno ("autorizar_descuento"), sin poder filtrarlo tampoco.
+  'crear:impuesto_adicional': 'Impuesto adicional creado',
+  'editar:impuesto_adicional': 'Impuesto adicional cambiado',
+  'asignar:impuesto_adicional': 'Impuesto asignado a productos',
+  autorizar_descuento: 'Descuento autorizado con PIN',
+  guardar_pin: 'PIN de autorización cambiado',
+  devolucion_proveedor: 'Devolución a proveedor',
+  factura_descartada: 'Factura descartada',
+  factura_emitida_sii: 'Factura emitida en el SII',
+  ensayo_sii: 'Ensayo en el portal del SII',
+  credenciales_sii: 'Claves del SII guardadas',
+  credenciales_sii_borradas: 'Claves del SII borradas',
 };
 
 /** El nombre de una entrada, por acción y entidad. */
@@ -83,6 +96,11 @@ function detalle(accion: string, entidad: string | null, antes: Record<string, u
     return [d.numero ? `N° ${d.numero}` : '', d.monto != null ? formatCLP(Number(d.monto)) : '', d.motivo ? String(d.motivo) : '']
       .filter(Boolean).join(' · ');
   }
+  if (accion === 'autorizar_descuento') return `hasta ${String(d.pct ?? '?').replace('.', ',')} %${d.motivo ? ` · ${d.motivo}` : ''}`;
+  if (accion === 'devolucion_proveedor') return [d.documento ? `doc. ${d.documento}` : '', d.motivo ? String(d.motivo) : ''].filter(Boolean).join(' · ');
+  if (accion === 'factura_descartada') return [d.numero ? `N° ${d.numero}` : '', d.motivo ? String(d.motivo) : ''].filter(Boolean).join(' · ');
+  if (accion === 'factura_emitida_sii') return d.folio ? `folio ${d.folio}` : '';
+  if (entidad === 'impuesto_adicional') return d.nombre ? `${d.nombre} ${d.tasa != null ? `${String(d.tasa).replace('.', ',')} %` : ''}`.trim() : d.productos != null ? `${d.productos} productos` : '';
   if (entidad === 'configuracion') return lista(d);
   if (entidad === 'cliente' || entidad === 'combo') return String(d.nombre ?? '');
   return '';
@@ -108,14 +126,17 @@ export async function leerBitacora(desde: string, hasta: string, accion: string 
   const { data, error } = await q;
   if (error) throw error;
   // El registro guarda el id del producto, no su nombre: se busca aparte.
-  const ids = [...new Set((data ?? []).filter((e) => e.entity_type === 'products' && e.entity_id).map((e) => e.entity_id as string))];
+  // "product" (en singular) es como escriben las ofertas (0018, 0021): esas
+  // entradas salían sin decir de qué producto eran.
+  const esProducto = (t: unknown) => t === 'products' || t === 'product';
+  const ids = [...new Set((data ?? []).filter((e) => esProducto(e.entity_type) && e.entity_id).map((e) => e.entity_id as string))];
   const nombres = new Map<string, string>();
   if (ids.length) {
     const { data: ps } = await supabase().from('products_public').select('id, name').in('id', ids);
     for (const p of ps ?? []) nombres.set(p.id as string, p.name as string);
   }
   return (data ?? []).map((e) => {
-    const producto = e.entity_type === 'products' ? nombres.get(e.entity_id as string) : undefined;
+    const producto = esProducto(e.entity_type) ? nombres.get(e.entity_id as string) : undefined;
     const texto = detalle(e.action as string, (e.entity_type as string) ?? null,
       e.old_values as Record<string, unknown> | null, e.new_values as Record<string, unknown> | null);
     return {

@@ -96,13 +96,16 @@ export default async function DashboardPage() {
         .eq('sale_date', hoy)
         .maybeSingle();
     })();
+    // Con un error la cuenta valía 0 y a un local con años de ventas le
+    // aparecía "Carga tus productos · Haz la primera venta". Sin saberlo, no
+    // se muestran los pasos.
     const cuantos = (tabla: string) => client.from(tabla).select('id', { count: 'exact', head: true })
-      .then((r) => r.count ?? 0, () => 0);
+      .then((r) => (r.error || r.count == null ? Number.NaN : r.count), () => Number.NaN);
     const pPasos = user.role === 'admin'
       ? Promise.all([cuantos('products'), cuantos('profiles'), cuantos('cash_sessions'), cuantos('sales')])
       : Promise.resolve(null);
     const [rVentas, rBajos, rVence, rPasos] = await Promise.all([pVentas, pBajos, pVence, pPasos]);
-    if (rPasos) {
+    if (rPasos && rPasos.every((n) => Number.isFinite(n))) {
       const [nProductos, nPersonas, nCajas, nVentas] = rPasos;
       pasos = [
         { hecho: nProductos > 0, texto: 'Carga tus productos (uno por uno o desde Excel)', href: '/productos' },

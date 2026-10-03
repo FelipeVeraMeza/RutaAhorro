@@ -9,6 +9,8 @@
 export const ERROR_MESSAGES: Record<string, string> = {
   NO_AUTENTICADO: 'Tu sesión expiró. Vuelve a ingresar',
   SIN_PERMISO: 'No tienes permiso para esta acción',
+  CATEGORIA_NO_ENCONTRADA: 'Esa categoría no existe en este local. Recarga y elígela de nuevo',
+  FACTURA_EMITIDA_EN_SII: 'El SII ya emitió esta factura (solo falló anotarla acá): no se descarta. Revisa el folio en el portal del SII',
   EN_USO: 'Está usado en otros registros (ventas, compras, combos o facturas): no se puede eliminar, solo desactivar',
   SIN_PERMISO_ANULAR: 'No tienes permiso para anular esta venta',
   SIN_PERMISO_AJUSTAR: 'No tienes permiso para ajustar el stock',

@@ -29,10 +29,18 @@ const TABLAS = [
   'devolucion_proveedor_items', 'autorizaciones_descuento', 'dte_emisores', 'dte_folios', 'alerts',
 ];
 
-/** Con qué ordenar cada tabla al leerla por páginas (las que no tienen `id`). */
-const ORDEN: Record<string, string> = {
-  product_suppliers: 'product_id', stock_levels: 'product_id', stock_ubicaciones: 'product_id',
-  dte_emisores: 'tenant_id',
+/**
+ * Con qué ordenar cada tabla al leerla por páginas (las que no tienen `id`):
+ * su llave primaria completa. Con solo `product_id`, un producto con dos
+ * proveedores (o en sala y bodega) podía quedar partido entre dos páginas en
+ * otro orden: pasadas 1.000 filas, la copia traía filas repetidas y perdía
+ * otras.
+ */
+const ORDEN: Record<string, string[]> = {
+  product_suppliers: ['product_id', 'supplier_id'],
+  stock_levels: ['tenant_id', 'store_id', 'product_id'],
+  stock_ubicaciones: ['store_id', 'product_id', 'ubicacion'],
+  dte_emisores: ['tenant_id'],
 };
 
 export interface Respaldo {
@@ -61,8 +69,9 @@ export async function armarRespaldo(onProgreso?: (hechas: number, total: number)
         // Con orden: sin él, PostgreSQL no garantiza que una página siga a la
         // otra y una tabla grande (ventas, kardex) podía salir con filas
         // repetidas y otras faltando en la copia.
-        const { data, error } = await supabase().from(tabla).select('*')
-          .order(ORDEN[tabla] ?? 'id').range(desde, desde + PAGINA - 1);
+        let q = supabase().from(tabla).select('*');
+        for (const col of ORDEN[tabla] ?? ['id']) q = q.order(col);
+        const { data, error } = await q.range(desde, desde + PAGINA - 1);
         if (error) throw error;
         filas.push(...(data ?? []));
         if ((data ?? []).length < PAGINA) break;

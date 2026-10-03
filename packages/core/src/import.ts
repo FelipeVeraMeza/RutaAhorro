@@ -128,8 +128,19 @@ export function leerNumero(valor: string): number | null {
 }
 
 function leerBooleano(valor: string): boolean {
-  const v = String(valor ?? '').trim().toLowerCase();
-  return ['si', 'sí', 'true', '1', 'x', 'verdadero'].includes(v);
+  return leerSiNo(valor) === true;
+}
+
+/**
+ * "sí" / "no" como los escribe una persona en Excel. Null si no se entiende:
+ * antes todo lo que no era "si" valía "no", así que una columna con "S" o
+ * "Sí." dejaba los perecibles sin control de vencimiento, sin aviso.
+ */
+function leerSiNo(valor: string): boolean | null {
+  const v = String(valor ?? '').trim().toLowerCase().replace(/\.$/, '');
+  if (['si', 'sí', 's', 'true', '1', 'x', 'verdadero', 'yes', 'y'].includes(v)) return true;
+  if (['', 'no', 'n', 'false', '0', 'falso'].includes(v)) return false;
+  return null;
 }
 
 /**
@@ -321,8 +332,27 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
 
     const perecibleBruto = campo(cols, 'perecible');
     const perecible = leerBooleano(perecibleBruto);
+    if (leerSiNo(perecibleBruto) === null) {
+      errores.push({ fila: nFila, columna: 'perecible', mensaje: 'Escribe "sí" o "no"', valor: perecibleBruto });
+    }
     const diasBruto = campo(cols, 'dias_alerta');
-    const dias = diasBruto === '' ? 30 : (leerNumero(diasBruto) ?? 30);
+    const diasLeidos = diasBruto === '' ? 30 : leerNumero(diasBruto);
+    // "abc" pasaba como 30 sin decir nada, y 0 o un negativo hacían fallar la
+    // fila recién al cargar (DIAS_ALERTA_REQUERIDOS), ya revisada "sin errores".
+    if (diasLeidos === null || (diasBruto !== '' && (diasLeidos <= 0 || !Number.isInteger(diasLeidos)))) {
+      errores.push({ fila: nFila, columna: 'dias_alerta', mensaje: 'Los días de alerta van en días enteros, 1 o más', valor: diasBruto });
+    }
+    const dias = diasLeidos ?? 30;
+    // La planilla no trae fecha de vencimiento: el stock de un perecible entra
+    // sin lote, fuera del FEFO y de las alertas. Se dice, para que se reciba
+    // con su fecha (Recibir mercadería) en vez de cargarlo acá.
+    if (perecible && stock !== null && stock > 0) {
+      avisos.push({
+        fila: nFila, columna: 'stock_inicial',
+        mensaje: 'Es perecible y la planilla no trae vencimiento: ese stock entra sin lote. Mejor cárgalo en 0 y recíbelo con su fecha en Recibir mercadería',
+        valor: stockBruto,
+      });
+    }
 
     // Solo se agrega si esta fila no aportó errores
     const filaTieneError = errores.some((e) => e.fila === nFila);
@@ -364,7 +394,9 @@ export function plantillaCSV(): string {
   const ejemplo = [
     COLUMNAS.join(';'),
     'Arroz grado 1 · 1 kg;Arroz grado 1, bolsa de 1 kilo;ARR-1K;7801234000018;Abarrotes;1590;1100;unidad;40;10;no;30',
-    'Leche entera · 1 L;Leche entera, caja de 1 litro;LEC-1L;7801234000056;Lácteos;1190;850;unidad;36;20;si;10',
+    // El perecible va con stock 0: su stock entra por Recibir mercadería, con
+    // fecha de vencimiento. La plantilla enseñaba a cargarlo sin lote.
+    'Leche entera · 1 L;Leche entera, caja de 1 litro;LEC-1L;7801234000056;Lácteos;1190;850;unidad;0;20;si;10',
     'Detergente · 3 L;;DET-3L;;Limpieza;5990;4300;unidad;9;4;no;30',
   ];
   // BOM para que Excel en Windows abra los acentos correctamente

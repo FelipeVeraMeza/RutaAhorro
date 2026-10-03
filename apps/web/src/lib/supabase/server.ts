@@ -130,11 +130,15 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const user = { id: sub, email: (claims.claims.email as string | undefined) ?? null };
   const appMeta = (claims.claims as { app_metadata?: { debe_cambiar_clave?: boolean } }).app_metadata;
 
-  const { data: profile } = await client
+  const { data: profile, error: eProfile } = await client
     .from('profiles')
     .select('full_name, role, tenant_id, store_id, max_discount_pct, is_active, last_seen_at')
     .eq('id', user.id)
     .maybeSingle();
+  // Un error (Supabase lento o caído) no es "sin perfil": antes salía "Tu
+  // cuenta no está vinculada a ningún local", y el cajero creía que lo habían
+  // sacado del sistema. Se lanza y el layout dice que es la conexión.
+  if (eProfile) throw new Error(`PERFIL_NO_DISPONIBLE: ${eProfile.message}`);
 
   // Sin perfil, el usuario existe en Auth pero no está vinculado a ningún local.
   // Ver supabase/seed.sql para el procedimiento de vinculación.

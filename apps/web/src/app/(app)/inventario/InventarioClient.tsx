@@ -26,6 +26,9 @@ const fecha = (iso: string) =>
 
 
 
+/** El conteo a medias de la toma, en este navegador (ver más abajo). */
+const BORRADOR_TOMA = 'toma:borrador';
+
 export function InventarioClient({
   puedeAjustar, verCostos, puedeOfertar = false, vistaInicial = 'stock',
 }: {
@@ -59,6 +62,33 @@ export function InventarioClient({
   // revisión de la toma necesita el nombre y el stock de lo contado bajo otro
   // filtro. Sin esto salía "Producto · sistema 0" y la diferencia mal.
   const vistos = useRef(new Map<string, Producto>());
+  // El conteo vivía solo en memoria: recargar, tocar otro menú o que el
+  // celular cerrara la pestaña borraba una hora de conteo sin preguntar.
+  // Queda en este navegador hasta aplicarlo, y salir con algo contado avisa.
+  useEffect(() => {
+    try {
+      const guardado = JSON.parse(localStorage.getItem(BORRADOR_TOMA) ?? '{}') as Record<string, string>;
+      if (guardado && typeof guardado === 'object' && Object.keys(guardado).length) {
+        setConteo(guardado);
+        // La revisión necesita nombre y stock de cada uno, aunque no salga en
+        // la búsqueda de ahora.
+        for (const id of Object.keys(guardado)) {
+          void repoProductos().obtener(id, verCostos).then((p) => { if (p) vistos.current.set(p.id, p); }).catch(() => {});
+        }
+      }
+    } catch { /* sin almacenamiento: se cuenta igual, solo en memoria */ }
+  }, []);
+  useEffect(() => {
+    const hay = Object.values(conteo).some((t) => t.trim() !== '');
+    try {
+      if (hay) localStorage.setItem(BORRADOR_TOMA, JSON.stringify(conteo));
+      else localStorage.removeItem(BORRADOR_TOMA);
+    } catch { /* idem */ }
+    if (!hay) return;
+    const avisar = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', avisar);
+    return () => window.removeEventListener('beforeunload', avisar);
+  }, [conteo]);
   // Solo la respuesta de la última búsqueda se muestra (como en Productos):
   // una más corta y más lenta llegaba después y pisaba la lista.
   const pedido = useRef(0);

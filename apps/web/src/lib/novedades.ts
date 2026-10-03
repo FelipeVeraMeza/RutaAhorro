@@ -16,6 +16,20 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.6.4',
+    fecha: '2026-10-03',
+    titulo: 'Cuarta revisión por rol: 50 arreglos',
+    cambios: [
+      { para: 'admin', texto: 'Desactivar a alguien en Usuarios lo deja sin acceso al instante, aunque tenga la sesión abierta en su celular.' },
+      { para: 'admin', texto: 'Exportar a Excel ya no ejecuta fórmulas escondidas en un nombre de producto o cliente. Los montos negativos se ven "-$1.500".' },
+      { para: 'admin', texto: 'Una factura que el SII ya emitió no se puede descartar. "Marcar como vistos" en Inicio marca solo los avisos que estás viendo.' },
+      { para: 'bodega', texto: 'Toma de inventario: lo que llevas contado queda guardado en este celular aunque recargues o cambies de pantalla, hasta que lo apliques.' },
+      { para: 'bodega', texto: 'Importar: "S", "Sí" o "yes" en perecible valen sí, y un valor que no se entiende se avisa. Etiquetas: lo marcado en una búsqueda se mantiene al buscar otra cosa.' },
+      { para: 'vendedor', texto: 'Sin internet, Caja, Fiado y Clientes dicen que no hay conexión en vez de mostrar la caja cerrada o la lista vacía. El escáner tiene "Cerrar cámara" si la cámara falla.' },
+      { para: 'todos', texto: 'Recuperar la contraseña por correo ya no te vuelve a pedir que la cambies al entrar. Ayuda tiene guías nuevas: descuento con PIN, ajustes y mermas, ofertas y factura a mano.' },
+    ],
+  },
+  {
     version: '0.6.3',
     fecha: '2026-10-02',
     titulo: 'Tercera revisión por rol: 150 arreglos',

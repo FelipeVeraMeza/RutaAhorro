@@ -23,7 +23,26 @@ import { BloqueoInactividad } from '@/components/BloqueoInactividad';
  * mano; el dueño revisa desde el computador sentado.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await getCurrentUser();
+  let user: Awaited<ReturnType<typeof getCurrentUser>>;
+  try {
+    user = await getCurrentUser();
+  } catch {
+    // No se pudo leer el perfil (Supabase lento o caído). Se dice así, con
+    // reintentar: no es que la cuenta no exista.
+    return (
+      <main className="min-h-dvh grid place-items-center px-6 text-center">
+        <div>
+          <p className="text-4xl mb-3" aria-hidden>📡</p>
+          <h1 className="text-lg font-semibold mb-1">No se pudo conectar con el servidor</h1>
+          <p className="text-sm text-[var(--texto-suave)] mb-4">
+            Tu cuenta está bien. Revisa internet y vuelve a intentar. Si estabas vendiendo, Vender funciona sin conexión.
+          </p>
+          <a href="" className="tap inline-flex items-center px-4 rounded-xl bg-marca-500 text-white text-sm font-semibold">Reintentar</a>
+          <p className="mt-3"><a href="/pos" className="text-sm underline">Ir a Vender</a></p>
+        </div>
+      </main>
+    );
+  }
 
   if (!user) {
     // Con sesión pero sin perfil (una cuenta creada a mano en el panel de

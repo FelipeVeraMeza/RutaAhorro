@@ -76,6 +76,15 @@ export function Escaner({
         {!activo && <Icono nombre="escanear" tamano={22} />}
         {activo && state === 'error' ? 'Reintentar cámara' : activo ? 'Cerrar cámara' : 'Escanear producto'}
       </button>
+      {/* Con la cámara en error el botón de arriba reintenta, y no quedaba
+          cómo cerrarla: el recuadro negro seguía ocupando la pantalla aunque
+          el cajero quisiera seguir con la búsqueda por nombre. */}
+      {activo && state === 'error' && (
+        <button onClick={onToggle}
+          className="tap w-full max-w-md mx-auto flex items-center justify-center mt-2 rounded-xl border border-[var(--borde)] bg-white text-sm">
+          Cerrar cámara y buscar por nombre
+        </button>
+      )}
     </div>
   );
 }

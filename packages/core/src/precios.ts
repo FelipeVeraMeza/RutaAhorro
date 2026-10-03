@@ -131,6 +131,10 @@ export function validarTramos(tramos: readonly TramoPrecio[], precioLista: numbe
   tramos.forEach((t, i) => {
     if (!Number.isFinite(t.desde) || t.desde < 1) {
       errores.push({ indice: i, mensaje: 'La cantidad tiene que ser 1 o más.' });
+    } else if (!Number.isInteger(t.desde)) {
+      // Desde 0032 todo se vende por unidad: "desde 2,5" en la práctica era
+      // "desde 3", y en Vender salía "Desde 2,5 unidades".
+      errores.push({ indice: i, mensaje: 'La cantidad va en unidades enteras: 2, 3, 6…' });
     }
     if ((t.precio != null) === (t.descuentoPct != null)) {
       errores.push({ indice: i, mensaje: 'La oferta lleva un precio o un porcentaje, no los dos.' });

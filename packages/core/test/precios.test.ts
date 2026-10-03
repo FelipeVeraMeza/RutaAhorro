@@ -93,6 +93,8 @@ describe('tramos por porcentaje (0021)', () => {
     expect(validarTramos([{ desde: 6, descuentoPct: 10 }], 2000)).toEqual([]);
     expect(validarTramos([{ desde: 6, descuentoPct: 12.25 }], 2000)).toEqual([]);
     expect(validarTramos([{ desde: 6, descuentoPct: 0 }], 2000)).toHaveLength(1);
+    // docs/29 · todo por unidad: "desde 2,5" no existe.
+    expect(validarTramos([{ desde: 2.5, precio: 900 }], 1000).map((e) => e.mensaje)).toEqual(['La cantidad va en unidades enteras: 2, 3, 6…']);
     expect(validarTramos([{ desde: 6, descuentoPct: 100 }], 2000)).toHaveLength(1);
     expect(validarTramos([{ desde: 6, descuentoPct: 10.123 }], 2000)).toHaveLength(1);
     expect(validarTramos([{ desde: 6, precio: 1000, descuentoPct: 10 }], 2000)).toHaveLength(1);

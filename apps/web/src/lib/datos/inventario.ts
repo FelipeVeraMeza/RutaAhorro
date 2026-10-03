@@ -2,6 +2,7 @@
 
 import { admiteDecimales } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
+import { todasLasFilas } from './paginas';
 import { DEMO_ACTIVO } from '../demo';
 import { db } from '../offline/db';
 import { syncCatalog } from '../offline/catalog';
@@ -227,10 +228,17 @@ const repoLocal: RepositorioInventario = {
     let diferencias = 0;
     let valorDiferencia = 0;
 
+    // Como fn_apply_stock_count (0037): se valida todo antes de escribir. La
+    // maqueta aceptaba decimales y, con un error a la mitad, dejaba aplicada
+    // la mitad de la toma (la base no aplica nada).
+    for (const it of items) {
+      if (!(it.contado >= 0)) throw new Error('CANTIDAD_NEGATIVA');
+      if (!Number.isInteger(it.contado)) throw new Error('CANTIDAD_ENTERA');
+    }
+
     for (const it of items) {
       const p = await db().products.get(it.productoId);
       if (!p) continue;
-      if (it.contado < 0) throw new Error('CANTIDAD_NEGATIVA');
       const delta = it.contado - p.stock;
       if (delta === 0) continue;
 
@@ -253,12 +261,14 @@ const repoSupabase: RepositorioInventario = {
     // v_expiring_lots trae los tres estados, no solo los que vencen: el nombre
     // engaña un poco. El `estado` lo calcula la vista con el
     // `expiry_alert_days` de cada producto.
-    const { data, error } = await supabase()
+    // Por páginas: con más de 1.000 lotes los que vencían más tarde no
+    // salían en Vencimientos ni contaban en "valor en riesgo".
+    const data = await todasLasFilas<Record<string, unknown>>((desde, hasta) => supabase()
       .from('v_expiring_lots')
       .select('lot_id, product_id, product_name, lot_code, expiry_date, quantity, unit_cost, value_at_risk, days_to_expiry, expiry_status, unit')
-      .order('expiry_date', { ascending: true });
-    if (error) throw error;
-    return (data ?? []).map((l) => ({
+      .order('expiry_date', { ascending: true }).order('lot_id')
+      .range(desde, hasta));
+    return data.map((l) => ({
       id: l.lot_id as string,
       productoId: l.product_id as string,
       productoNombre: (l.product_name as string) ?? 'Producto',

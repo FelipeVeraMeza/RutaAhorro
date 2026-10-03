@@ -17,6 +17,14 @@ describe('celdaCSV', () => {
     expect(celdaCSV('')).toBe('');
   });
 
+  // Inyección de fórmulas: Excel ejecuta lo que empieza con = + - @.
+  it('un texto que Excel tomaría como fórmula sale como texto', () => {
+    expect(celdaCSV('=HYPERLINK("http://x","clic")')).toBe('"\'=HYPERLINK(""http://x"",""clic"")"');
+    expect(celdaCSV('@SUM(A1)')).toBe("'@SUM(A1)");
+    expect(celdaCSV('+56 9 1234 5678')).toBe("'+56 9 1234 5678");
+    expect(celdaCSV(-1500)).toBe('-1500');
+  });
+
   it('un entero no gana decimales', () => {
     expect(celdaCSV(2290)).toBe('2290');
   });

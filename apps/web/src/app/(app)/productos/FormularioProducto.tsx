@@ -128,6 +128,11 @@ export function FormularioProducto({
   // formulario seguía en "Crear producto": tocarlo otra vez creaba un segundo
   // producto igual (y otra categoría nueva igual).
   const [creadoId, setCreadoId] = useState<string | null>(null);
+  // El `updated_at` contra el que se guarda (0020). Después de guardar el
+  // producto hay que tomar el nuevo: si fallaban las ofertas y se tocaba
+  // "Guardar" otra vez, la base decía "alguien cambió este producto mientras
+  // lo editabas" (era uno mismo) y no dejaba reintentar.
+  const [esperadoEn, setEsperadoEn] = useState<string | undefined>(producto?.actualizadoEn);
   const [error, setError] = useState<string | null>(null);
   const [avisoCodigo, setAvisoCodigo] = useState<string | null>(null);
   // Otro producto que ya se llama igual: el catálogo se llenaba de "Arroz"
@@ -266,9 +271,11 @@ export function FormularioProducto({
         // en cero, y con él el margen y el inventario valorizado.
         await repo.actualizar(producto.id, {
           ...base,
-          esperadoEn: producto.actualizadoEn,
+          esperadoEn,
           ...(puedeVerCostos && costo.trim() !== '' ? { costo: costoNum } : {}),
         });
+        const fresco = await repo.obtener(producto.id, false).catch(() => null);
+        if (fresco) setEsperadoEn(fresco.actualizadoEn);
       } else if (creadoId) {
         idGuardado = creadoId;
       } else {

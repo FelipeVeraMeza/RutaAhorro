@@ -1,4 +1,4 @@
-import { admin, activeTenants } from '../supabase.js';
+import { admin, activeTenants, todasLasFilas } from '../supabase.js';
 import { sendEmail, renderEmail, money } from '../mailer.js';
 import { log } from '../logger.js';
 
@@ -8,15 +8,17 @@ export async function runLowStockCheck() {
   let created = 0;
 
   for (const tenant of tenants) {
-    const { data, error } = await admin
+    // Por páginas: con más de 1.000 productos bajo mínimo (un local recién
+    // cargado con mínimos y sin stock) los demás no avisaban nunca. Un error
+    // ya no queda como "ok, 0 alertas" en job_runs.
+    const data = await todasLasFilas<{ product_id: string; name: string; quantity: number; min_stock: number }>((a, b) => admin
       .from('v_low_stock')
       .select('product_id, name, quantity, min_stock')
-      .eq('tenant_id', tenant.id);
-    // Antes el error se ignoraba: el trabajo quedaba "ok, 0 alertas" en
-    // job_runs y nadie se enteraba de que no había revisado nada.
-    if (error) throw new Error(`No se pudo leer el stock bajo mínimo: ${error.message}`);
+      .eq('tenant_id', tenant.id)
+      .order('product_id')
+      .range(a, b));
 
-    for (const p of data ?? []) {
+    for (const p of data) {
       // No repetir la alerta si ya hay una sin leer del mismo producto:
       // un panel con la misma alerta cuarenta veces deja de leerse.
       const { data: existing } = await admin
@@ -49,14 +51,19 @@ export async function runExpiryCheck() {
   let created = 0;
 
   for (const tenant of tenants) {
-    const { data, error } = await admin
+    // Por páginas, como el stock bajo mínimo.
+    const data = await todasLasFilas<{
+      lot_id: string; product_id: string; product_name: string; expiry_date: string; quantity: number;
+      value_at_risk: number; expiry_status: string; days_to_expiry: number;
+    }>((a, b) => admin
       .from('v_expiring_lots')
       .select('lot_id, product_id, product_name, expiry_date, quantity, value_at_risk, expiry_status, days_to_expiry')
       .eq('tenant_id', tenant.id)
-      .in('expiry_status', ['vencido', 'por_vencer']);
-    if (error) throw new Error(`No se pudieron leer los vencimientos: ${error.message}`);
+      .in('expiry_status', ['vencido', 'por_vencer'])
+      .order('lot_id')
+      .range(a, b));
 
-    for (const lot of data ?? []) {
+    for (const lot of data) {
       const { data: existing } = await admin
         .from('alerts')
         .select('id')
@@ -177,21 +184,32 @@ export async function runIntegrityCheck() {
 
     // ADR-007: el stock de un perecible vive en stock_levels Y en product_lots.
     // Si difieren, FEFO descontará de lotes que no reflejan el saldo real.
-    const { data: byLot } = await admin
-      .from('v_stock_by_lot')
-      .select('product_id, product_name, total_quantity')
-      .eq('tenant_id', tenant.id);
+    // Por páginas y de una vez (antes, una consulta por producto y sin
+    // paginar). Se recorren también los perecibles con stock y SIN ningún lote
+    // con cantidad: no aparecen en v_stock_by_lot, así que su descuadre (stock
+    // 12, lotes 0) no se detectaba nunca y la venta no tenía de dónde
+    // descontar por FEFO.
+    const byLot = await todasLasFilas<{ product_id: string; product_name: string; total_quantity: number }>((a, b) => admin
+      .from('v_stock_by_lot').select('product_id, product_name, total_quantity')
+      .eq('tenant_id', tenant.id).order('product_id').range(a, b));
+    const niveles = await todasLasFilas<{ product_id: string; quantity: number; products: unknown }>((a, b) => admin
+      .from('stock_levels').select('product_id, quantity, products!inner(name, tracks_expiry)')
+      .eq('tenant_id', tenant.id).eq('products.tracks_expiry', true)
+      .order('product_id').order('store_id').range(a, b));
+    const stockDe = new Map<string, { cantidad: number; nombre: string }>();
+    for (const n of niveles) {
+      const x = stockDe.get(n.product_id) ?? { cantidad: 0, nombre: (n.products as { name?: string } | null)?.name ?? 'Producto' };
+      x.cantidad += Number(n.quantity ?? 0);
+      stockDe.set(n.product_id, x);
+    }
+    const lotesDe = new Map(byLot.map((r) => [r.product_id, r]));
+    const revisar = new Set<string>([...lotesDe.keys(), ...[...stockDe].filter(([, x]) => x.cantidad > 0).map(([id]) => id)]);
 
     let lotMismatches = 0;
-    for (const row of byLot ?? []) {
-      const { data: level } = await admin
-        .from('stock_levels')
-        .select('quantity')
-        .eq('tenant_id', tenant.id)
-        .eq('product_id', row.product_id)
-        .maybeSingle();
-
-      const diff = Math.abs((level?.quantity ?? 0) - (row.total_quantity ?? 0));
+    for (const productId of revisar) {
+      const enStock = stockDe.get(productId)?.cantidad ?? 0;
+      const enLotes = Number(lotesDe.get(productId)?.total_quantity ?? 0);
+      const diff = Math.abs(enStock - enLotes);
       if (diff > 0.001) {
         lotMismatches++;
         // Una por producto mientras no se lea, como los otros chequeos: cada
@@ -199,17 +217,17 @@ export async function runIntegrityCheck() {
         const { data: existing } = await admin
           .from('alerts').select('id')
           .eq('tenant_id', tenant.id).eq('type', 'lot_stock_mismatch').eq('is_read', false)
-          .contains('payload', { product_id: row.product_id }).limit(1);
+          .contains('payload', { product_id: productId }).limit(1);
         if ((existing ?? []).length > 0) continue;
         await admin.from('alerts').insert({
           tenant_id: tenant.id,
           type: 'lot_stock_mismatch',
           severity: 'critical',
           payload: {
-            product_id: row.product_id,
-            product_name: row.product_name,
-            stock_levels: level?.quantity ?? 0,
-            sum_of_lots: row.total_quantity,
+            product_id: productId,
+            product_name: lotesDe.get(productId)?.product_name ?? stockDe.get(productId)?.nombre,
+            stock_levels: enStock,
+            sum_of_lots: enLotes,
             difference: diff,
           },
         });

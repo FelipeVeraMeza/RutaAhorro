@@ -4,9 +4,73 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-10-02.**
+> **Corte: 2026-10-03.**
 
 ---
+
+## CÓMO SEGUIR — corte 2026-10-03 (8ª ronda: 50 errores más, 251–300), léelo antes que todo
+
+**Dónde está:** en GitHub, rama `ccr-d1747f17-ru4skw` (no en `main`, sin PR).
+Detalle de cada error en [docs/29](docs/29-revision-por-rol-50-errores.md);
+la 7ª ronda (docs/28) sigue abajo y vale igual.
+
+**Antes de llevar esto a `main` (Railway despliega `main` apenas llega):**
+1. Aplicar en Supabase **0029 a 0038**, en orden (`npm run db:instalar` y
+   `npm run db:aplicar -- --aplicar`). Siguen siendo **46 funciones**.
+2. **Cambios de comportamiento de 0038:**
+   - `current_tenant_id()` ahora exige `is_active`: **una cuenta desactivada
+     queda sin local al instante**, con la sesión abierta o no. Puede leer su
+     propio perfil (`profiles_read_self`) para que la app le diga "Tu cuenta
+     está desactivada".
+   - Las políticas `for all` de `stores`, `categories`, `product_barcodes`,
+     `suppliers` y `product_suppliers` piden el rol también al crear. Bodega
+     sigue creando categorías y supervisor/bodega proveedores (políticas solo
+     de inserción). Si una pantalla nueva crea filas en esas tablas, revisar
+     qué rol la usa.
+   - Un aviso (`alerts`) solo se marca como visto, y `read_by` es uno mismo.
+3. Lo de 0037 sigue valiendo: una cuenta creada a mano en el panel de
+   Supabase no queda vinculada (crearla desde Usuarios o con
+   `tools/crear-cuentas.mjs`).
+
+**`db:test` ya corre en el contenedor** (como root `initdb` se niega; se usa
+el usuario `ubuntu`):
+
+```sh
+npm run db:instalar && chmod o+w supabase/instalar.sql
+runuser -u ubuntu -- env HOME=/tmp/ubuntu-home PATH="$PATH" \
+  node --test --test-concurrency=1 --test-timeout=120000 "tools/pg-test/*.test.mjs"
+chmod o-w supabase/instalar.sql
+```
+
+Para ver fallar una prueba nueva sin su migración: mover el `.sql` fuera de
+`supabase/migrations`, correr solo ese archivo de prueba y devolverlo.
+
+**Lo grueso de la ronda:**
+- **Una lista vacía no es lo mismo que un error.** Fiado, Clientes, Caja,
+  Recibir mercadería y el perfil (layout) mostraban "no hay nada" o "no estás
+  vinculado" cuando Supabase fallaba. Regla para lo que venga: con error, se
+  muestra el error y no el estado vacío.
+- **RLS: `using` no se mira al insertar.** Una política `for all` con el rol
+  solo en `using` deja crear a cualquiera; el rol va también en `with check`.
+- **Exportar CSV:** `celdaCSV` neutraliza `= + - @` al inicio (inyección de
+  fórmulas). Usarla en toda exportación nueva.
+- Worker: `todasLasFilas` también en `apps/worker/src/supabase.ts`; el
+  resumen diario procesa cada local por separado y marca el trabajo como
+  fallido al final si alguno falló.
+- La toma de inventario guarda el conteo a medias en `localStorage`
+  (`toma:borrador`) y avisa al salir.
+
+**Verificado al cierre:** core 465/465 · `tsc` web y worker sin errores ·
+`next build` de producción OK · worker `npm test` 0 fallas (6 omitidas) ·
+`db:check` 182 cuerpos · **`db:test` 201 pasan + 1 TODO (T-45), 0 fallas** ·
+`revision-0038` 7/7 con la migración y 0/7 sin ella. **No corrido:** los
+recorridos de la maqueta (`tools/ui`).
+
+**Quedó anotado sin corregir** (docs/29, al final): T-45 (el vendedor lee
+costos); la toma pisa las ventas hechas entre el conteo y "Aplicar"; descartar
+una factura cuyo error fue al firmar; el resumen diario va a un solo correo
+global; Inventario relee todos los lotes en cada búsqueda; la revisión semanal
+manda su correo sin la zona del local.
 
 ## CÓMO SEGUIR — corte 2026-10-02 (7ª ronda: 150 errores más, 101–250), léelo antes que todo
 
@@ -18,7 +82,7 @@ Detalle de cada error en [docs/28](docs/28-revision-por-rol-150-errores.md).
    `npm run db:aplicar -- --aplicar`). Siguen siendo **46 funciones**.
 2. **Correr `npm run db:test`** con un usuario que no sea root: en la sesión
    de esta ronda no se pudo (initdb rechaza root). `revision-0037.test.mjs`
-   (9 pruebas) está **escrita y nunca corrida**; regla 16: verla fallar sin
+   (9 pruebas) **se corrió en la 8ª ronda: 9/9 con 0037 y 0/9 sin ella**; regla 16: verla fallar sin
    0037 y pasar con ella. `banco.mjs` ahora crea los usuarios con
    `crearUsuario()` (autoriza el correo antes), y `concurrencia` y `seguridad`
    lo usan.

@@ -30,12 +30,16 @@ export default async function CajaPage() {
 
   const client = await createClient();
 
-  const { data: session } = await client
+  const { data: session, error: eSesion } = await client
     .from('cash_sessions')
     .select('id, opened_at, opening_amount')
     .eq('user_id', user.id)
     .eq('status', 'abierta')
     .maybeSingle();
+  // Sin esto, un error de lectura mostraba "Abrir caja" con la caja abierta,
+  // y abrirla respondía "ya tienes una caja abierta". Mejor la pantalla de
+  // error, que deja reintentar.
+  if (eSesion) throw new Error(`CAJA_NO_DISPONIBLE: ${eSesion.message}`);
 
   let resumen: Record<string, unknown> | null = null;
   let movimientos: Array<{ id: string; type: string; amount: number; reason: string; created_at: string }> = [];
@@ -76,6 +80,12 @@ export default async function CajaPage() {
         .order('opened_at')
     : sinFilas,
   ]);
+  // Antes un error acá se ignoraba: la caja abierta decía "debería haber
+  // $0" y la lista de ingresos y retiros salía vacía. Se cuenta el cajón
+  // contra ese número.
+  const eResumen = 'error' in rResumen ? rResumen.error : null;
+  const eMovs = 'error' in rMovs ? rMovs.error : null;
+  if (eResumen || eMovs) throw new Error(`CAJA_NO_DISPONIBLE: ${(eResumen ?? eMovs)?.message}`);
   resumen = (rResumen.data as Record<string, unknown>) ?? null;
   movimientos = (rMovs.data ?? []) as typeof movimientos;
 

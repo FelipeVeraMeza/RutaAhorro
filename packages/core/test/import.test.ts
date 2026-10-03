@@ -414,3 +414,29 @@ describe('docs/28 · lo que la planilla no trae', () => {
     expect(r.errores.map((e) => `${e.fila}:${e.columna}`)).toEqual(['2:precio_venta', '3:precio_venta', '4:costo', '5:stock_minimo']);
   });
 });
+
+describe('docs/29 · perecible y días de alerta', () => {
+  it('"S" o "Sí." es sí; lo que no se entiende es un error, no un "no" callado', () => {
+    const r = parsearFilas([
+      ['nombre', 'precio_venta', 'perecible'],
+      ['Leche', '990', 'S'], ['Yogur', '590', 'Sí.'], ['Pan', '1000', 'no'], ['Queso', '4990', 'quizás'],
+    ]);
+    expect(r.errores.map((e) => `${e.fila}:${e.columna}`)).toEqual(['5:perecible']);
+    expect(r.filas.map((f) => f.perecible)).toEqual([true, true, false]);
+  });
+
+  it('días de alerta inválidos o en cero se avisan al revisar, no al cargar', () => {
+    const r = parsearFilas([
+      ['nombre', 'precio_venta', 'perecible', 'dias_alerta'],
+      ['A', '990', 'si', 'abc'], ['B', '990', 'si', '0'], ['C', '990', 'si', ''],
+    ]);
+    expect(r.errores.map((e) => `${e.fila}:${e.columna}`)).toEqual(['2:dias_alerta', '3:dias_alerta']);
+    expect(r.filas[0].dias_alerta).toBe(30);
+  });
+
+  it('un perecible con stock avisa que entra sin lote', () => {
+    const r = parsearFilas([['nombre', 'precio_venta', 'perecible', 'stock_inicial'], ['Leche', '990', 'si', '12']]);
+    expect(r.ok).toBe(true);
+    expect(r.avisos.map((a) => a.columna)).toContain('stock_inicial');
+  });
+});

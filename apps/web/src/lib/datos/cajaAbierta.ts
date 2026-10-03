@@ -17,7 +17,11 @@ export async function miCajaAbierta(): Promise<{ abiertaEn: string } | null> {
   const { data: sesion } = await supabase().auth.getSession();
   const uid = sesion.session?.user.id;
   if (!uid) return null;
-  const { data } = await supabase().from('cash_sessions').select('opened_at')
+  const { data, error } = await supabase().from('cash_sessions').select('opened_at')
     .eq('user_id', uid).eq('status', 'abierta').maybeSingle();
+  // Sin red, Supabase no lanza: devuelve el error y data null. Antes eso era
+  // "no tienes caja abierta" (Recibir mercadería mandaba a abrir una caja que
+  // ya estaba abierta). Se lanza: quien llama decide qué hacer sin saberlo.
+  if (error) throw error;
   return data ? { abiertaEn: data.opened_at as string } : null;
 }
