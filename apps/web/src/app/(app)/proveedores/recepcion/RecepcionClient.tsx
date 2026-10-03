@@ -202,13 +202,21 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
   useEffect(() => { if (escaneando) void start(); else stop(); }, [escaneando, start, stop]);
 
   useEffect(() => {
-    void repoProveedores().listar().then(setProveedores).catch(() => {});
+    // Sin el aviso, con la red caída la lista quedaba en "Sin especificar" y
+    // parecía que el proveedor no existía: se creaba otro igual con "+ Nuevo".
+    void repoProveedores().listar().then(setProveedores)
+      .catch((e) => setError(`No se pudo cargar la lista de proveedores: ${toUserMessage(e)}`));
   }, []);
 
   useEffect(() => {
     if (busqueda.trim().length < 2) { setResultados([]); setBuscado(''); return; }
     let vivo = true;
-    void buscarParaRecepcion(busqueda).then((r) => { if (vivo) { setResultados(r); setBuscado(busqueda); } });
+    // Si la búsqueda falla (sin red) se vacía la lista: antes quedaban los
+    // resultados de lo escrito antes ("leche" mientras decía "lechuga") y se
+    // agregaba a la recepción un producto que no era.
+    void buscarParaRecepcion(busqueda)
+      .then((r) => { if (vivo) { setResultados(r); setBuscado(busqueda); } })
+      .catch((e) => { if (vivo) { setResultados([]); setBuscado(''); setError(`No se pudo buscar: ${toUserMessage(e)}`); } });
     return () => { vivo = false; };
   }, [busqueda]);
 

@@ -62,13 +62,14 @@ describe('partir líneas', () => {
 
 describe('importación válida', () => {
   it('carga un archivo correcto', () => {
-    const csv = [ENC,
-      'Arroz 1 kg;ARR-1K;7801234000018;Abarrotes;1590;1100;unidad;40;10;no;30',
-      'Leche 1 L;LEC-1L;7801234000056;Lácteos;1190;850;unidad;36;20;si;10',
+    const csv = [`${ENC};vencimiento`,
+      'Arroz 1 kg;ARR-1K;7801234000018;Abarrotes;1590;1100;unidad;40;10;no;30;',
+      'Leche 1 L;LEC-1L;7801234000056;Lácteos;1190;850;unidad;36;20;si;10;31-12-2099',
     ].join('\n');
 
     const r = parsearProductos(csv);
     expect(r.ok).toBe(true);
+    expect(r.filas[1].vencimiento).toBe('2099-12-31');
     expect(r.errores).toHaveLength(0);
     expect(r.filas).toHaveLength(2);
     expect(r.filas[0].nombre).toBe('Arroz 1 kg');
@@ -412,5 +413,36 @@ describe('docs/28 · lo que la planilla no trae', () => {
       ['A', '0', '', ''], ['B', '1590,5', '', ''], ['C', '1000', '800,5', ''], ['D', '1000', '', '-3'],
     ]);
     expect(r.errores.map((e) => `${e.fila}:${e.columna}`)).toEqual(['2:precio_venta', '3:precio_venta', '4:costo', '5:stock_minimo']);
+  });
+});
+
+describe('8ª ronda: vencimiento y días de aviso', () => {
+  it('un perecible con stock y sin vencimiento no se carga', () => {
+    const r = parsearProductos([ENC, 'Leche 1 L;LEC-1L;;Lácteos;1190;850;unidad;36;20;si;10'].join('\n'));
+    expect(r.ok).toBe(false);
+    expect(r.errores[0].columna).toBe('vencimiento');
+  });
+
+  it('un perecible sin stock no necesita vencimiento', () => {
+    const r = parsearProductos([ENC, 'Leche 1 L;LEC-1L;;Lácteos;1190;850;unidad;0;20;si;10'].join('\n'));
+    expect(r.ok).toBe(true);
+    expect(r.filas[0].vencimiento).toBeNull();
+  });
+
+  it('acepta el vencimiento como 2026-10-31, 31-10-2026 o 31/10/2026 y rechaza una fecha que no existe', () => {
+    for (const f of ['2026-10-31', '31-10-2026', '31/10/2026']) {
+      const r = parsearProductos([`${ENC};vencimiento`, `Yogur;YOG;;Lácteos;590;300;unidad;5;0;si;5;${f}`].join('\n'));
+      expect(r.filas[0]?.vencimiento, f).toBe('2026-10-31');
+    }
+    const malo = parsearProductos([`${ENC};vencimiento`, 'Yogur;YOG;;Lácteos;590;300;unidad;5;0;si;5;31-02-2026'].join('\n'));
+    expect(malo.ok).toBe(false);
+  });
+
+  it('días de aviso escritos mal se rechazan en vez de quedar en 30 o en 0', () => {
+    for (const d of ['treinta', '-5', '2,5', '0']) {
+      const r = parsearProductos([ENC, `Arroz;ARR;;Abarrotes;1590;1100;unidad;0;0;no;${d}`].join('\n'));
+      expect(r.ok, d).toBe(false);
+      expect(r.errores[0].columna).toBe('dias_alerta');
+    }
   });
 });

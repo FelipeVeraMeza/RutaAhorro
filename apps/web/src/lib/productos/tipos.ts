@@ -110,7 +110,7 @@ export type ProductoEditable = Omit<ProductoNuevo, 'stockInicialSala' | 'stockIn
      * PRODUCTO_CAMBIO_MIENTRAS_EDITABAS en vez de pisarle el trabajo (0020).
      * Ausente = no comprobar (la carga masiva).
      */
-    esperadoEn?: string;
+    esperadoEn?: string | null;
   };
 
 export interface Categoria {

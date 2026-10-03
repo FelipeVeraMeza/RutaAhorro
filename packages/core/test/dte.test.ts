@@ -133,3 +133,15 @@ describe('montosDevolucion', () => {
     expect(() => montosDevolucion(ya, 6190, 6190, [{ id: 'b', cantidad: 1 }])).toThrow('CANTIDAD_A_DEVOLVER_INVALIDA');
   });
 });
+
+describe('montosDevolucion · la misma línea dos veces (8ª ronda)', () => {
+  const lineas = [{ id: 'a', cantidad: 3, subtotal: 1000, devuelto: 0 }];
+  it('se suma: 2 + 2 de una línea con 3 no pasa', () => {
+    expect(() => montosDevolucion(lineas, 1000, 0, [{ id: 'a', cantidad: 2 }, { id: 'a', cantidad: 2 }]))
+      .toThrow('CANTIDAD_A_DEVOLVER_INVALIDA');
+  });
+  it('1 + 1 de 3 sí, y no se cobra como si fuera todo', () => {
+    const r = montosDevolucion(lineas, 1000, 0, [{ id: 'a', cantidad: 1 }, { id: 'a', cantidad: 1 }]);
+    expect(r.reduce((s, x) => s + x.monto, 0)).toBe(666);
+  });
+});

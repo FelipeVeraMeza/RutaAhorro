@@ -149,6 +149,15 @@ function LoginForm() {
       return;
     }
     recordarCorreo(email.trim());
+    // Las copias de Vender y Consultar precio que guarda el service worker
+    // traen el nombre, el rol y el tope de descuento de quien las abrió. Se
+    // borraban solo al tocar "Salir": si la sesión vencía y entraba otra
+    // persona, sin red se le mostraba la pantalla del anterior (con su tope).
+    try {
+      if ('caches' in window) {
+        for (const k of await caches.keys()) if (k.startsWith('ra-paginas')) await caches.delete(k);
+      }
+    } catch { /* no impide entrar */ }
 
     // Directo a la pantalla de su rol, sin pasar por "/" y rebotar. Si el
     // perfil no se puede leer, "/" decide igual.

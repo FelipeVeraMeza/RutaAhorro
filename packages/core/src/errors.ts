@@ -127,6 +127,11 @@ export const ERROR_MESSAGES: Record<string, string> = {
   VENTA_YA_ANULADA: 'Esta venta ya estaba anulada',
   RECEPCION_YA_ANULADA: 'Esta recepción ya estaba anulada',
   VENCIMIENTO_REQUERIDO: 'Este producto es perecible: indica la fecha de vencimiento',
+  // 0038 · La categoría elegida ya no existe (o es de otro local).
+  // 0038 · El worker la dejó en error después de que el SII la emitió.
+  FACTURA_YA_EMITIDA_EN_SII: 'Esta factura ya está emitida en el SII: no se reintenta ni se descarta. Avisa a soporte para dejarla registrada',
+  CODIGO_SII_INVALIDO: 'El código SII es un número mayor que cero, como 27 o 271',
+  CATEGORIA_NO_ENCONTRADA: 'Esa categoría ya no existe. Recarga la pantalla y elige otra',
   LOTE_YA_VENCIDO: 'No puedes recibir un producto que ya está vencido',
   TOMA_YA_APLICADA: 'Esta toma de inventario ya fue aplicada',
   TIPO_MOVIMIENTO_INVALIDO: 'Tipo de movimiento no válido',

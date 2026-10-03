@@ -26,6 +26,12 @@ export interface FilaProducto {
   perecible: boolean;
   dias_alerta: number;
   /**
+   * Vencimiento del stock inicial (AAAA-MM-DD), o null. Un perecible con
+   * stock lo necesita (decisión 4 de 0032): sin fecha entraba sin lote, sin
+   * FEFO ni aviso de vencimiento.
+   */
+  vencimiento?: string | null;
+  /**
    * Los datos opcionales que esta fila NO trae (columna ausente o celda en
    * blanco). Al actualizar un producto que ya existe, esos quedan como
    * estaban. Antes se escribían los valores por omisión: una planilla del
@@ -58,8 +64,23 @@ export interface ResultadoImportacion {
 /** Columnas de la plantilla. El orden no importa; los nombres sí. */
 export const COLUMNAS = [
   'nombre', 'descripcion', 'sku', 'codigo_barras', 'categoria', 'precio_venta',
-  'costo', 'unidad', 'stock_inicial', 'stock_minimo', 'perecible', 'dias_alerta',
+  'costo', 'unidad', 'stock_inicial', 'stock_minimo', 'perecible', 'dias_alerta', 'vencimiento',
 ] as const;
+
+/** "2026-10-31", "31-10-2026" o "31/10/2026" → "2026-10-31"; null si no es una fecha real. */
+export function leerFecha(texto: string): string | null {
+  const t = texto.trim();
+  let a: number, m: number, d: number;
+  let r = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+  if (r) { a = +r[1]; m = +r[2]; d = +r[3]; } else {
+    r = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/.exec(t);
+    if (!r) return null;
+    d = +r[1]; m = +r[2]; a = +r[3];
+  }
+  const f = new Date(Date.UTC(a, m - 1, d));
+  if (f.getUTCFullYear() !== a || f.getUTCMonth() !== m - 1 || f.getUTCDate() !== d) return null;
+  return `${a}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
 
 export const COLUMNAS_OBLIGATORIAS = ['nombre', 'precio_venta'] as const;
 
@@ -322,7 +343,25 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
     const perecibleBruto = campo(cols, 'perecible');
     const perecible = leerBooleano(perecibleBruto);
     const diasBruto = campo(cols, 'dias_alerta');
-    const dias = diasBruto === '' ? 30 : (leerNumero(diasBruto) ?? 30);
+    // Antes "treinta" o "-5" pasaban: el primero quedaba en 30 sin aviso y el
+    // segundo en 0, que la base rechaza producto por producto al cargar.
+    const diasLeido = diasBruto === '' ? 30 : leerNumero(diasBruto);
+    if (diasLeido === null || diasLeido < 1 || !Number.isInteger(diasLeido)) {
+      errores.push({ fila: nFila, columna: 'dias_alerta', mensaje: 'Los días de aviso van en días enteros, 1 o más', valor: diasBruto });
+    }
+    const dias = diasLeido ?? 30;
+
+    const vencBruto = campo(cols, 'vencimiento');
+    const vencimiento = vencBruto === '' ? null : leerFecha(vencBruto);
+    if (vencBruto !== '' && vencimiento === null) {
+      errores.push({ fila: nFila, columna: 'vencimiento', mensaje: 'El vencimiento no es una fecha válida (escríbelo como 31-12-2026)', valor: vencBruto });
+    } else if (perecible && stock !== null && stock > 0 && vencimiento === null) {
+      errores.push({
+        fila: nFila, columna: 'vencimiento',
+        mensaje: 'Un perecible con stock necesita la fecha de vencimiento (o deja el stock en 0 y recíbelo con su fecha)',
+        valor: '',
+      });
+    }
 
     // Solo se agrega si esta fila no aportó errores
     const filaTieneError = errores.some((e) => e.fila === nFila);
@@ -339,7 +378,8 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
         stock_inicial: stock,
         stock_minimo: minimo,
         perecible,
-        dias_alerta: Math.max(0, Math.round(dias)),
+        dias_alerta: dias,
+        vencimiento: perecible ? vencimiento : null,
         fila: nFila,
         sinDato: ([
           ['descripcion', campo(cols, 'descripcion')], ['sku', campo(cols, 'sku')],
@@ -363,9 +403,10 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
 export function plantillaCSV(): string {
   const ejemplo = [
     COLUMNAS.join(';'),
-    'Arroz grado 1 · 1 kg;Arroz grado 1, bolsa de 1 kilo;ARR-1K;7801234000018;Abarrotes;1590;1100;unidad;40;10;no;30',
-    'Leche entera · 1 L;Leche entera, caja de 1 litro;LEC-1L;7801234000056;Lácteos;1190;850;unidad;36;20;si;10',
-    'Detergente · 3 L;;DET-3L;;Limpieza;5990;4300;unidad;9;4;no;30',
+    'Arroz grado 1 · 1 kg;Arroz grado 1, bolsa de 1 kilo;ARR-1K;7801234000018;Abarrotes;1590;1100;unidad;40;10;no;30;',
+    // Perecible: sin fecha de vencimiento entra sin stock, y se recibe con su fecha.
+    'Leche entera · 1 L;Leche entera, caja de 1 litro;LEC-1L;7801234000056;Lácteos;1190;850;unidad;0;20;si;10;',
+    'Detergente · 3 L;;DET-3L;;Limpieza;5990;4300;unidad;9;4;no;30;',
   ];
   // BOM para que Excel en Windows abra los acentos correctamente
   return '﻿' + ejemplo.join('\r\n') + '\r\n';

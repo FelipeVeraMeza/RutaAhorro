@@ -63,7 +63,9 @@ export function DevolucionClient({ verCostos = false }: { verCostos?: boolean })
   useEffect(() => {
     if (busqueda.trim().length < 2) { setResultados([]); return; }
     let vivo = true;
-    void buscarParaRecepcion(busqueda).then((r) => { if (vivo) setResultados(r); });
+    // Igual que Recibir: sin red quedaban los resultados de la búsqueda anterior.
+    void buscarParaRecepcion(busqueda).then((r) => { if (vivo) setResultados(r); })
+      .catch((e) => { if (vivo) { setResultados([]); setAviso({ tipo: 'error', texto: `No se pudo buscar: ${toUserMessage(e)}` }); } });
     return () => { vivo = false; };
   }, [busqueda]);
 

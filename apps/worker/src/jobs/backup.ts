@@ -1,3 +1,4 @@
+import { diaLocal } from '@rutaahorro/core';
 import { admin, activeTenants } from '../supabase.js';
 import { env } from '../env.js';
 import { log } from '../logger.js';
@@ -85,7 +86,7 @@ export async function runBackup() {
           generated_at: new Date().toISOString(),
           tenant_id: tenant.id,
           tenant_name: tenant.name,
-          schema_version: '0037',
+          schema_version: '0038',
           tables: TABLES.length,
           rows: totalRows,
         },
@@ -95,7 +96,11 @@ export async function runBackup() {
       0,
     );
 
-    const date = new Date().toISOString().slice(0, 10);
+    // El día del local (regla 17), no el de UTC: un respaldo pedido a mano
+    // después de las 20:00 o 21:00 quedaba con la fecha de mañana, y el de
+    // esa madrugada lo pisaba (mismo nombre): se perdía un día de respaldo.
+    const zona = String((tenant.settings as { timezone?: string } | undefined)?.timezone || 'America/Santiago');
+    const date = diaLocal(new Date(), zona);
     const file = `${tenant.id}/backup-${date}.json`;
 
     const { error } = await admin.storage

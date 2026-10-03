@@ -104,6 +104,9 @@ where p.is_active
 group by p.tenant_id, p.id, p.name, sl.quantity, p.avg_cost, p.created_at;
 
 -- Mermas y ajustes por período
+-- 0038 le agrega `movement_id` al final: sin este drop, reinstalar falla
+-- con "cannot drop columns from view" (regla 22).
+drop view if exists v_adjustments;
 create or replace view v_adjustments
 with (security_invoker = true) as
 select

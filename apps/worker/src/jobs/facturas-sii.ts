@@ -77,8 +77,17 @@ async function emitirUna(): Promise<'nada' | 'emitida' | 'error'> {
           .upload(pdfPath, r.pdf, { contentType: 'application/pdf', upsert: true });
         if (eSubir) pdfPath = null; // la factura igual está emitida
       }
-      const { error: eReg } = await admin.rpc('fn_sii_registrar_emision', {
-        p_factura: factura.id, p_folio: r.folio, p_pdf_path: pdfPath });
+      // Con el folio en la mano, registrar se reintenta: antes un corte de un
+      // segundo con Supabase dejaba en "error" una factura que el SII YA
+      // emitió, y la pantalla ofrecía "Reintentar" (otra factura, otro folio)
+      // o "Descartar" (el stock volvía aunque la mercadería salió).
+      let eReg: { message: string } | null = null;
+      for (let intento = 0; intento < 4; intento++) {
+        if (intento > 0) await new Promise((ok) => setTimeout(ok, 2000 * 2 ** (intento - 1)));
+        ({ error: eReg } = await admin.rpc('fn_sii_registrar_emision', {
+          p_factura: factura.id, p_folio: r.folio, p_pdf_path: pdfPath }));
+        if (!eReg) break;
+      }
       if (eReg) {
         // Emitida en el SII y no registrada acá: queda "emitiendo" y a los 15
         // minutos pasa a error pidiendo revisar el portal. Nunca se reintenta sola.

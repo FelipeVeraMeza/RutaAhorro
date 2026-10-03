@@ -62,6 +62,7 @@ todo lo demás es tu contrato de implementación.
 | [26 — Revisión por rol: 50 errores](26-revision-por-rol-50-errores.md) | Errores 1–50, encontrados usando el sistema con cada rol, y cómo se verificó cada arreglo |
 | [27 — Revisión por rol: 50 más](27-revision-por-rol-50-errores-mas.md) | Errores 51–100 y la migración 0031 |
 | [28 — Revisión por rol: 150 más](28-revision-por-rol-150-errores.md) | Errores 101–250: listas cortadas en 1.000 filas, ventas sin red, guardias de la base (migración 0037) |
+| [29 — Revisión por rol: 50 más (ronda 8)](29-revision-por-rol-50-errores.md) | Errores 251–300: cuentas desactivadas, políticas RLS, facturas del SII emitidas dos veces, CSV con fórmulas (migración 0038) |
 
 ---
 

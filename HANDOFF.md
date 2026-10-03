@@ -4,9 +4,64 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-10-02.**
+> **Corte: 2026-10-03.**
 
 ---
+
+## CÓMO SEGUIR — corte 2026-10-03 (8ª ronda: 50 errores más, 251–300), léelo antes que todo
+
+**Dónde está:** en GitHub, rama `ccr-a54fcc8a-btvmx9`, encima de
+`ccr-d1747f17-ru4skw` (la 7ª ronda). Ninguna de las dos está en `main` ni
+tiene PR. Detalle en [docs/29](docs/29-revision-por-rol-50-errores.md).
+
+**Antes de llevar esto a `main` (Railway despliega `main` apenas llega):**
+1. Aplicar en Supabase **0029 a 0038**, en orden (`npm run db:instalar` y
+   `npm run db:aplicar -- --aplicar`). Siguen siendo **46 funciones**.
+2. **0038 cambia comportamiento a propósito** (ver docs/29): una cuenta
+   desactivada deja de ver datos al instante; `products` solo admite UPDATE
+   directo de `is_active` y ningún INSERT directo; nadie cambia el correo de su
+   perfil; un perecible con stock inicial necesita vencimiento; vendedor ya no
+   crea proveedores ni categorías (supervisor y bodega sí).
+3. 0005 y 0013 se tocaron: `drop view if exists v_adjustments` antes de
+   crearla (0038 le suma `movement_id`; sin el drop, reinstalar fallaba).
+
+**`db:test` ya se corre (y pasa):** como root `initdb` se niega, así que:
+```
+useradd -m pgtest
+chmod o+rx /home/user /home/user/rutaahorro && chmod o+w supabase
+npm run build -w @rutaahorro/core          # las pruebas importan core/dist
+runuser -u pgtest -- env HOME=/home/pgtest npm run db:test
+```
+Resultado al cierre: **207 + 1 TODO (T-45), 0 fallas**. La 0037 se vio por
+primera vez: 9/9 con ella, 9/9 fallan sin ella. `revision-0038.test.mjs`:
+13/13 con 0038, 13/13 fallan sin ella.
+
+**Lo grueso de la ronda:**
+- **Las políticas RLS se revisaron consultando `pg_policies` en la réplica**,
+  no leyendo el SQL. Lo que apareció: ninguna miraba `is_active`
+  (`current_tenant_id()` ahora vuelve null para una cuenta desactivada), y las
+  "for all" de 0004 no revisaban el rol al insertar. **Regla para lo que
+  venga:** una política "for all" lleva el rol también en WITH CHECK, y una
+  tabla que la app escribe directo lleva permiso por columna.
+- **Robot del SII:** registrar una emisión se reintenta; una factura con
+  "El SII emitió el folio" no se reintenta ni se descarta (pantalla y base).
+- **Worker:** `todasLasFilas` también en el worker (`supabase.ts`); la
+  revisión semanal parte de los perecibles con stock; el resumen diario mira
+  sus errores.
+- **Importar:** columna `vencimiento`; `dias_alerta` mal escrito es error.
+- **CSV:** `celdaCSV` neutraliza fórmulas (`=`, `+`, `-`, `@`).
+- **/recuperar** quita la marca de contraseña temporal (pasa por
+  `/api/cuenta/clave` y renueva el token).
+
+**Verificado al cierre:** core 470/470 · `tsc` web y worker · `next build` de
+producción OK · worker `npm test` **6/6 con `CHROME_PATH`** (Chromium del
+contenedor) · `db:check` 185 cuerpos · `db:test` 207 + 1 TODO. **No corrido:**
+los recorridos de `tools/ui` y nada contra Supabase real.
+
+**Quedó anotado sin corregir** (docs/29, al final): convertir en perecible un
+producto con stock lo deja sin lote; la copia sin red de Vender puede creer
+que hay caja abierta; orden del kardex dentro de una transacción;
+`alerts_update` deja reescribir el payload.
 
 ## CÓMO SEGUIR — corte 2026-10-02 (7ª ronda: 150 errores más, 101–250), léelo antes que todo
 

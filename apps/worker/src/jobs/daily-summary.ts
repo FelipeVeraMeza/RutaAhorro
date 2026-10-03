@@ -1,5 +1,5 @@
 import { diaLocal, rangoDeDias } from '@rutaahorro/core';
-import { admin, activeTenants } from '../supabase.js';
+import { admin, activeTenants, todasLasFilas } from '../supabase.js';
 import { sendEmail, renderEmail, money, escapar } from '../mailer.js';
 import { log } from '../logger.js';
 
@@ -26,19 +26,24 @@ export async function runDailySummary() {
     // Ventas del día, netas de devoluciones, como el Inicio (v_sales_daily).
     // Antes se traían las ventas de a una, y la API corta en 1.000: un día
     // bueno salía con el total corto.
-    const { data: dia } = await admin
+    // Cada lectura mira su error: antes, con Supabase lento o caído, el
+    // correo salía igual con "Total vendido $0" y sin cajas abiertas, y el
+    // dueño creía que el local no había vendido.
+    const { data: dia, error: eDia } = await admin
       .from('v_sales_daily')
       .select('sales_count, total_amount, average_ticket')
       .eq('tenant_id', tenant.id)
       .eq('sale_date', today)
       .maybeSingle();
-    const { count: voidedCount } = await admin
+    if (eDia) throw new Error(`No se pudieron leer las ventas del día: ${eDia.message}`);
+    const { count: voidedCount, error: eAnuladas } = await admin
       .from('sales')
       .select('id', { count: 'exact', head: true })
       .eq('tenant_id', tenant.id)
       .eq('status', 'anulada')
       .gte('sold_at', rango.desde)
       .lt('sold_at', rango.hasta);
+    if (eAnuladas) throw new Error(`No se pudieron contar las ventas anuladas: ${eAnuladas.message}`);
 
     const completed = { length: Number(dia?.sales_count ?? 0) };
     const voided = { length: voidedCount ?? 0 };
@@ -48,39 +53,56 @@ export async function runDailySummary() {
     // Cajas: las cerradas hoy con diferencia y TODAS las que siguen abiertas.
     // Antes solo las abiertas hoy: la caja olvidada desde ayer, que es la
     // que hay que avisar, no salía en el resumen.
-    const { data: abiertas } = await admin
+    const { data: abiertas, error: eAbiertas } = await admin
       .from('v_cash_sessions_summary')
       .select('full_name, status, difference, sales_total')
       .eq('tenant_id', tenant.id)
       .eq('status', 'abierta');
-    const { data: cerradasHoy } = await admin
+    if (eAbiertas) throw new Error(`No se pudieron leer las cajas abiertas: ${eAbiertas.message}`);
+    const { data: cerradasHoy, error: eCerradas } = await admin
       .from('v_cash_sessions_summary')
       .select('full_name, status, difference, sales_total')
       .eq('tenant_id', tenant.id)
       .eq('status', 'cerrada')
       .gte('closed_at', rango.desde)
       .lt('closed_at', rango.hasta);
+    if (eCerradas) throw new Error(`No se pudieron leer las cajas cerradas: ${eCerradas.message}`);
 
     const open = abiertas ?? [];
     const withDiff = (cerradasHoy ?? []).filter((s) => (s.difference ?? 0) !== 0);
 
-    // Stock bajo mínimo
-    const { data: lowStock } = await admin
-      .from('v_low_stock')
-      .select('name, quantity, min_stock')
-      .eq('tenant_id', tenant.id)
-      .limit(15);
+    // Stock bajo mínimo: todos, por páginas, aunque el correo muestre 15.
+    // Antes se leían 15 y el correo no decía que había más.
+    const bajos = await todasLasFilas<{ product_id: string; name: string; quantity: number; min_stock: number }>(
+      (a, b) => admin
+        .from('v_low_stock')
+        .select('product_id, name, quantity, min_stock')
+        .eq('tenant_id', tenant.id)
+        .order('shortfall', { ascending: false })
+        .order('product_id')
+        .range(a, b),
+    );
+    const lowStock = bajos.slice(0, 15);
 
-    // Vencimientos (ADR-007)
-    const { data: expiring } = await admin
-      .from('v_expiring_lots')
-      .select('product_name, expiry_date, quantity, value_at_risk, expiry_status, days_to_expiry')
-      .eq('tenant_id', tenant.id)
-      .in('expiry_status', ['vencido', 'por_vencer'])
-      .order('days_to_expiry', { ascending: true })
-      .limit(15);
+    // Vencimientos (ADR-007). El valor en riesgo es de TODOS los lotes
+    // vencidos o por vencer: antes sumaba solo los 15 que se listan, y con
+    // más lotes el correo decía un riesgo menor que el real.
+    const porVencer = await todasLasFilas<{
+      lot_id: string; product_name: string; expiry_date: string; quantity: number;
+      value_at_risk: number; expiry_status: string; days_to_expiry: number;
+    }>(
+      (a, b) => admin
+        .from('v_expiring_lots')
+        .select('lot_id, product_name, expiry_date, quantity, value_at_risk, expiry_status, days_to_expiry')
+        .eq('tenant_id', tenant.id)
+        .in('expiry_status', ['vencido', 'por_vencer'])
+        .order('days_to_expiry', { ascending: true })
+        .order('lot_id')
+        .range(a, b),
+    );
+    const expiring = porVencer.slice(0, 15);
 
-    const valueAtRisk = (expiring ?? []).reduce((s, l) => s + (l.value_at_risk ?? 0), 0);
+    const valueAtRisk = porVencer.reduce((s, l) => s + (l.value_at_risk ?? 0), 0);
 
     const sections = [
       {
@@ -108,17 +130,21 @@ export async function runDailySummary() {
         heading: 'Vencimientos',
         rows: [
           ...(valueAtRisk > 0 ? [['<strong>Valor en riesgo</strong>', `<strong>${money(valueAtRisk)}</strong>`]] : []),
-          ...(expiring ?? []).map((l) => [
+          ...expiring.map((l) => [
             `${l.expiry_status === 'vencido' ? '🔴' : '🟡'} ${escapar(l.product_name)} · ${
               l.expiry_status === 'vencido' ? `venció hace ${Math.abs(l.days_to_expiry)} d` : `vence en ${l.days_to_expiry} d`
             }`,
             money(l.value_at_risk ?? 0),
           ]),
+          ...(porVencer.length > expiring.length ? [[`… y ${porVencer.length - expiring.length} lotes más`, '']] : []),
         ],
       },
       {
         heading: 'Stock bajo mínimo',
-        rows: (lowStock ?? []).map((p) => [escapar(p.name), `${p.quantity} / mín. ${p.min_stock}`]),
+        rows: [
+          ...lowStock.map((p) => [escapar(p.name), `${p.quantity} / mín. ${p.min_stock}`]),
+          ...(bajos.length > lowStock.length ? [[`… y ${bajos.length - lowStock.length} más`, '']] : []),
+        ],
       },
     ];
 

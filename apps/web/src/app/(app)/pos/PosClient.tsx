@@ -388,13 +388,16 @@ export function PosClient({
       setResults([]);
       return;
     }
+    // Un código que no está en el catálogo dice que no está. Antes caía en
+    // "un solo resultado": el lector escribe tan rápido que `results` era el
+    // de un pedazo del código ("7801…", que calza con el SKU de otro), y se
+    // agregaba ese otro producto sin que nadie lo notara.
+    if (/^\d{4,}$/.test(texto)) { await onScan(texto); return; }
     if (results.length === 1) {
       agregar(results[0]);
       setQuery('');
       setResults([]);
-      return;
     }
-    if (/^\d{4,}$/.test(texto)) await onScan(texto);
   }
 
   // Búsqueda incremental, 100 % local (RNF-02)

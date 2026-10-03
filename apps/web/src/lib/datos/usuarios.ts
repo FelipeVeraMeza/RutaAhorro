@@ -181,22 +181,29 @@ const repoSupabase: RepositorioUsuarios = {
     await llamar('/api/usuarios/clave', { id, clave });
   },
 
+  // Con `select`: si la política no deja tocar la fila (quien cambia ya no es
+  // admin, o su cuenta fue desactivada en otro celular) el update no da
+  // error, no cambia nada, y la pantalla decía "listo" igual.
   async cambiarRol(id, rol) {
-    const { error } = await supabase()
+    const { data, error } = await supabase()
       .from('profiles')
       .update({ role: rol, max_discount_pct: await topeDescuentoDe(rol) })
-      .eq('id', id);
+      .eq('id', id)
+      .select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('SIN_PERMISO');
   },
 
   async desactivar(id) {
-    const { error } = await supabase().from('profiles').update({ is_active: false }).eq('id', id);
+    const { data, error } = await supabase().from('profiles').update({ is_active: false }).eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('SIN_PERMISO');
   },
 
   async reactivar(id) {
-    const { error } = await supabase().from('profiles').update({ is_active: true }).eq('id', id);
+    const { data, error } = await supabase().from('profiles').update({ is_active: true }).eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('SIN_PERMISO');
   },
 };
 

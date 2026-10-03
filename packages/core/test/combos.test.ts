@@ -82,3 +82,11 @@ describe('validarCombo', () => {
     expect(validarCombo({ ...COMBO, items: [...COMBO.items, { productId: 'pan', cantidad: 1 }] }, precio)).toMatch(/repetido/);
   });
 });
+
+describe('validarCombo · por unidad (8ª ronda)', () => {
+  const precio = (id: string) => ({ beb: 1200, pan: 1000 } as Record<string, number>)[id];
+  it('rechaza "1,5 × Pan"', () => {
+    expect(validarCombo({ ...COMBO, items: [{ productId: 'beb', cantidad: 2 }, { productId: 'pan', cantidad: 1.5 }] }, precio))
+      .toMatch(/por unidad/);
+  });
+});

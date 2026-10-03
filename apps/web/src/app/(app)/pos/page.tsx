@@ -27,7 +27,7 @@ export default async function PosPage() {
 
   // ¿Tiene caja abierta? Sin caja no se puede vender (RF-M5-16).
   // Las dos consultas no dependen una de la otra: van en paralelo.
-  const [{ data: session }, { data: tenant }] = await Promise.all([client
+  const [{ data: session, error: eSesion }, { data: tenant }] = await Promise.all([client
     .from('cash_sessions')
     .select('id, opened_at, opening_amount')
     .eq('user_id', user.id)
@@ -42,6 +42,11 @@ export default async function PosPage() {
     .select('name')
     .eq('id', user.tenantId)
     .maybeSingle()]);
+
+  // Con Supabase lento o caído decía "Abre tu caja para vender" a quien la
+  // tenía abierta, y en Caja le salía que ya tenía una. La pantalla de error
+  // deja reintentar.
+  if (eSesion) throw new Error(`No se pudo leer la caja: ${eSesion.message}`);
 
   return (
     <PosClient

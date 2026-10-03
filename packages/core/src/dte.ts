@@ -267,6 +267,15 @@ export function montosDevolucion(
 ): Array<{ id: string; cantidad: number; monto: number }> {
   const sumaSub = lineas.reduce((s, l) => s + l.subtotal, 0);
   const porId = new Map(lineas.map((l) => [l.id, l]));
+  // La misma línea pedida dos veces se suma, como en la base: antes cada
+  // pedido se medía solo, "2 + 2" de una línea con 3 pasaba, y como "no
+  // quedaba nada" se devolvía el total de la venta.
+  const pedidoPorLinea = new Map<string, number>();
+  for (const p of pedido) pedidoPorLinea.set(p.id, (pedidoPorLinea.get(p.id) ?? 0) + p.cantidad);
+  for (const [id, cant] of pedidoPorLinea) {
+    const l = porId.get(id);
+    if (l && cant > l.cantidad - l.devuelto + 1e-9) throw new Error('CANTIDAD_A_DEVOLVER_INVALIDA');
+  }
   const salida = pedido.map((p) => {
     const l = porId.get(p.id);
     if (!l) throw new Error('LINEA_NO_ES_DE_LA_VENTA');

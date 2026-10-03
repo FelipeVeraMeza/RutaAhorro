@@ -483,13 +483,27 @@ const repoSupabase: RepositorioReportes = {
   },
 
   async ajustes({ desde, hasta }) {
-    const data = await todas((a, b) => supabase()
-      .from('v_adjustments')
-      .select('adj_date, movement_type, product_name, quantity, reason, value_impact, created_by_name')
-      .gte('adj_date', desde)
-      .lte('adj_date', hasta)
-      .order('adj_date', { ascending: false }).order('product_id').order('movement_type').order('quantity')
-      .range(a, b));
+    // El orden tiene que terminar en una columna única: dos ajustes iguales
+    // del mismo producto y día caían en el borde de una página y salían
+    // repetidos o no salían. `movement_id` llega con 0038; mientras la base no
+    // la tenga (regla 23) se pide sin ella, como antes.
+    const pedir = (conId: boolean) => todas((a, b) => {
+      let q = supabase()
+        .from('v_adjustments')
+        .select('adj_date, movement_type, product_name, quantity, reason, value_impact, created_by_name')
+        .gte('adj_date', desde)
+        .lte('adj_date', hasta)
+        .order('adj_date', { ascending: false }).order('product_id').order('movement_type').order('quantity');
+      if (conId) q = q.order('movement_id');
+      return q.range(a, b);
+    });
+    let data: Awaited<ReturnType<typeof pedir>>;
+    try {
+      data = await pedir(true);
+    } catch (e) {
+      if ((e as { code?: string })?.code !== '42703') throw e;
+      data = await pedir(false);
+    }
     return data.map((a) => ({
       fecha: a.adj_date as string,
       tipo: a.movement_type as string,

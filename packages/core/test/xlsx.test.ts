@@ -94,7 +94,10 @@ describe('leerXlsx', () => {
     // La prueba que importa: el .xlsx entra por el mismo validador que el CSV.
     it('lo que sale se puede validar con parsearProductos', async () => {
       const { filas } = await leerXlsx(fixture('productos-basico.xlsx'));
-      const r = parsearProductos(filas.map((f) => f.join(';')).join('\n'));
+      // La planilla trae un perecible con stock: desde la 8ª ronda necesita su
+      // vencimiento, que se agrega como columna al final.
+      const conFecha = filas.map((f, i) => [...f, i === 0 ? 'vencimiento' : '31-12-2099']);
+      const r = parsearProductos(conFecha.map((f) => f.join(';')).join('\n'));
       expect(r.ok).toBe(true);
       expect(r.filas).toHaveLength(3);
       expect(r.filas[0].nombre).toBe('Coca-Cola 1.5L');

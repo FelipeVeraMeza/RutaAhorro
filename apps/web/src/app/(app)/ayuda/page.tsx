@@ -20,6 +20,7 @@ const GUIAS: Guia[] = [
     'Abre tu caja en Caja si todavía no lo hiciste (se pide una sola vez por turno).',
     'Escanea el código o escribe parte del nombre. Sin tildes también encuentra.',
     'Toca la cantidad para cambiarla. Si te equivocas, "Deshacer" recupera la línea quitada.',
+    'Para rebajar un producto, toca "Descuento" en su línea ($ o %). Si pasa tu tope, "Pedir autorización y cobrar": el administrador o el supervisor pone su PIN en tu celular (necesita internet).',
     'Cobrar → elige el medio de pago y, en efectivo, escribe cuánto te pasaron: el vuelto sale solo.',
     'En efectivo el total se redondea a la decena (Ley 20.956): $1.463 se cobra $1.460. El comprobante lo explica.',
     'Si se cae internet, sigue vendiendo: la venta se envía sola cuando vuelve.',
@@ -42,9 +43,12 @@ const GUIAS: Guia[] = [
   { titulo: 'Consultar un precio', roles: TODOS, ir: { href: '/precio', texto: 'Consultar precio' }, pasos: [
     'Escanea o escribe el nombre. Funciona sin internet con el catálogo guardado.',
   ] },
-  { titulo: 'Crear o cambiar un producto', roles: MANDO, ir: { href: '/productos', texto: 'Ir a Productos' }, pasos: [
+  // Bodega también crea y edita productos (Productos y Recibir mercadería), y
+  // no tenía esta guía; los precios y ofertas sí son de admin y supervisor.
+  { titulo: 'Crear o cambiar un producto', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/productos', texto: 'Ir a Productos' }, pasos: [
     'Productos → "Nuevo producto", o "Editar" en uno existente.',
-    '"Cambiar precio" cambia solo el precio, rápido; avisa si el cambio es grande.',
+    'Si es perecible y cargas stock, la fecha de vencimiento es obligatoria.',
+    'El precio de un producto que ya existe y sus ofertas los cambian el administrador o el supervisor ("Cambiar precio" avisa si el cambio es grande).',
     '"Revisar datos" lista los productos a los que les falta código, costo, mínimo o categoría.',
   ] },
   { titulo: 'Imprimir etiquetas y carteles de góndola', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/productos/etiquetas', texto: 'Ir a Etiquetas' }, pasos: [
@@ -61,7 +65,8 @@ const GUIAS: Guia[] = [
     'Escribe lo contado; el sistema muestra la diferencia antes de guardar.',
   ] },
   { titulo: 'Recibir mercadería', roles: ['admin', 'supervisor', 'bodega'], ir: { href: '/proveedores/recepcion', texto: 'Recibir mercadería' }, pasos: [
-    'Compras → "Recibir mercadería": elige el proveedor y escanea lo que llegó.',
+    'Compras → "Recibir mercadería": elige el proveedor y escanea lo que llegó. Si no existe, "+ Nuevo".',
+    'Un perecible no se recibe sin su fecha de vencimiento.',
     'Con factura a crédito, indica cuándo vence (30 o 60 días): queda en "Por pagar".',
     'Confirma: el stock sube y el costo queda registrado.',
     '"Qué comprar" arma el pedido por proveedor y lo manda por WhatsApp.',

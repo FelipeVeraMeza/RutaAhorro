@@ -185,3 +185,10 @@ describe('precio por cliente (0022)', () => {
     expect(describirCliente({ ...mayorista, descuentoPct: 0, precios: {} })).toBe('precio normal');
   });
 });
+
+describe('validarTramos · por unidad (8ª ronda)', () => {
+  it('rechaza "desde 2,5"', () => {
+    const e = validarTramos([{ desde: 2.5, precio: 900 }], 1000);
+    expect(e.some((x) => /por unidad/.test(x.mensaje))).toBe(true);
+  });
+});

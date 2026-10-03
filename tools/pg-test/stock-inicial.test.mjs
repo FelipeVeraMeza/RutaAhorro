@@ -63,14 +63,21 @@ test('no se puede cargar mercadería ya vencida', async () => {
   assert.match(r.error, /VENCIMIENTO_PASADO/);
 });
 
-test('sin fecha funciona como antes, y un producto que no vence no crea lote', async () => {
+// 0038 · Decisión 4 de 0032: un perecible con stock entra con su fecha.
+// Antes "sin fecha funcionaba como antes" y quedaba stock sin lote (sin FEFO,
+// sin aviso). Sin stock no hace falta fecha; un producto que no vence no crea
+// lote aunque traiga una.
+test('perecible con stock y sin fecha se rechaza; sin stock pasa; uno que no vence no crea lote', async () => {
   const L = await nuevoLocal(banco);
   const adm = await banco.como(L.admin);
   const { manana } = await hoyYManana(L);
-  const sinFecha = await rpc(adm, 'fn_create_product', crear({ p_initial_stock_sala: 5 }));
+  const r = await intentar(rpc(adm, 'fn_create_product', crear({ p_initial_stock_sala: 5 })));
+  assert.equal(r.ok, false);
+  assert.match(r.error, /VENCIMIENTO_REQUERIDO/);
+  const sinStock = await rpc(adm, 'fn_create_product', crear({}));
   const noVence = await rpc(adm, 'fn_create_product', crear({ p_tracks_expiry: false, p_initial_stock_sala: 5, p_initial_expiry: manana }));
   const { rows } = await banco.su.query(
-    `select count(*)::int as n from product_lots where product_id in ($1, $2)`, [sinFecha.product_id, noVence.product_id]);
+    `select count(*)::int as n from product_lots where product_id in ($1, $2)`, [sinStock.product_id, noVence.product_id]);
   assert.equal(rows[0].n, 0);
-  assert.equal(Number(sinFecha.stock_sala), 5);
+  assert.equal(Number(noVence.stock_sala), 5);
 });

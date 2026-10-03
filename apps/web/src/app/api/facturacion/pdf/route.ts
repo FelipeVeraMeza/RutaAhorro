@@ -16,7 +16,12 @@ export async function GET(request: Request) {
   }
   const id = new URL(request.url).searchParams.get('id') ?? '';
   const sesion = await createClient();
-  const { data: f } = await sesion.from('facturas').select('pdf_path').eq('id', id).maybeSingle();
+  const { data: f, error: eLeer } = await sesion.from('facturas').select('pdf_path').eq('id', id).maybeSingle();
+  // Con Supabase caído decía "Esa factura no tiene PDF del SII", y el
+  // administrador iba a buscarlo al portal creyendo que el robot no lo bajó.
+  if (eLeer && eLeer.code !== '22P02') {
+    return NextResponse.json({ error: { code: 'SIN_CONEXION', message: 'No se pudo consultar la factura. Vuelve a intentar.' } }, { status: 503 });
+  }
   if (!f?.pdf_path) {
     return NextResponse.json({ error: { code: 'NO_ENCONTRADO', message: 'Esa factura no tiene PDF del SII' } }, { status: 404 });
   }

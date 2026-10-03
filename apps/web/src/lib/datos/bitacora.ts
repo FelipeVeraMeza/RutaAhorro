@@ -108,14 +108,21 @@ export async function leerBitacora(desde: string, hasta: string, accion: string 
   const { data, error } = await q;
   if (error) throw error;
   // El registro guarda el id del producto, no su nombre: se busca aparte.
-  const ids = [...new Set((data ?? []).filter((e) => e.entity_type === 'products' && e.entity_id).map((e) => e.entity_id as string))];
+  // Las ofertas (fn_guardar_precios_producto, fn_aplicar_oferta_masiva,
+  // fn_quitar_ofertas) anotan 'product' en singular y los cambios de precio
+  // 'products': con solo el plural, "Ofertas" salía sin decir de qué producto.
+  const esProducto = (t: unknown) => t === 'products' || t === 'product';
+  const ids = [...new Set((data ?? []).filter((e) => esProducto(e.entity_type) && e.entity_id).map((e) => e.entity_id as string))];
   const nombres = new Map<string, string>();
   if (ids.length) {
-    const { data: ps } = await supabase().from('products_public').select('id, name').in('id', ids);
-    for (const p of ps ?? []) nombres.set(p.id as string, p.name as string);
+    // Más de ~300 ids no caben en la URL de un solo `in`: de a 100.
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data: ps } = await supabase().from('products_public').select('id, name').in('id', ids.slice(i, i + 100));
+      for (const p of ps ?? []) nombres.set(p.id as string, p.name as string);
+    }
   }
   return (data ?? []).map((e) => {
-    const producto = e.entity_type === 'products' ? nombres.get(e.entity_id as string) : undefined;
+    const producto = esProducto(e.entity_type) ? nombres.get(e.entity_id as string) : undefined;
     const texto = detalle(e.action as string, (e.entity_type as string) ?? null,
       e.old_values as Record<string, unknown> | null, e.new_values as Record<string, unknown> | null);
     return {

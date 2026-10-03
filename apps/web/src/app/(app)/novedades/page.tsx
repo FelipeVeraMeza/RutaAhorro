@@ -8,7 +8,11 @@ export const metadata = { title: 'Novedades' };
 /** Versión instalada y qué cambió (RF-M9-09). Cada rol ve lo que le toca. */
 export default async function NovedadesPage() {
   const user = await exigirRol(['admin', 'supervisor', 'vendedor', 'bodega']);
-  const ve = (para: string) => para === 'todos' || user.role === 'admin' || para === user.role;
+  // El supervisor también vende y recibe mercadería (Vender, Caja, Recibir):
+  // antes solo veía lo marcado "supervisor" y no se enteraba de cambios en el
+  // mostrador como el descuento con PIN. El admin ve todo.
+  const ve = (para: string) => para === 'todos' || user.role === 'admin' || para === user.role
+    || (user.role === 'supervisor' && (para === 'vendedor' || para === 'bodega'));
   return (
     <div className="px-4 py-5 max-w-2xl mx-auto">
       <Encabezado

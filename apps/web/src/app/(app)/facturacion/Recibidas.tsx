@@ -116,7 +116,12 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
   // registrar. Desde ahí el botón solo cierra.
   const [yaRegistrada, setYaRegistrada] = useState(false);
 
-  useEffect(() => { void repoProveedores().listar().then(setProveedores).catch(() => {}); }, []);
+  // Sin la lista el RUT no se reconoce y la factura queda sin proveedor (y no
+  // pasa a Por pagar a su nombre). Antes el fallo se callaba.
+  useEffect(() => {
+    void repoProveedores().listar().then(setProveedores)
+      .catch((e) => setError(`No se pudo cargar la lista de proveedores: ${toUserMessage(e)}`));
+  }, []);
   // La lista llega después de abrir: un RUT escrito antes no se reconocía
   // nunca (lo encontró tools/ui/facturacion.mjs). Se busca de nuevo al llegar.
   useEffect(() => {

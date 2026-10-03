@@ -30,12 +30,16 @@ export default async function CajaPage() {
 
   const client = await createClient();
 
-  const { data: session } = await client
+  const { data: session, error: eSesion } = await client
     .from('cash_sessions')
     .select('id, opened_at, opening_amount')
     .eq('user_id', user.id)
     .eq('status', 'abierta')
     .maybeSingle();
+  // Sin esto, con Supabase lento o caído la pantalla decía "Abrir caja" a
+  // quien la tenía abierta: contaba la plata otra vez y al abrir le salía que
+  // ya tenía una. Mejor la pantalla de error, que deja reintentar.
+  if (eSesion) throw new Error(`No se pudo leer la caja: ${eSesion.message}`);
 
   let resumen: Record<string, unknown> | null = null;
   let movimientos: Array<{ id: string; type: string; amount: number; reason: string; created_at: string }> = [];
@@ -76,6 +80,9 @@ export default async function CajaPage() {
         .order('opened_at')
     : sinFilas,
   ]);
+  // El resumen vacío mostraba "Debería haber $0" en una caja con ventas.
+  if ('error' in rResumen && rResumen.error) throw new Error(`No se pudo leer el resumen de la caja: ${rResumen.error.message}`);
+  if ('error' in rMovs && rMovs.error) throw new Error(`No se pudieron leer los movimientos: ${rMovs.error.message}`);
   resumen = (rResumen.data as Record<string, unknown>) ?? null;
   movimientos = (rMovs.data ?? []) as typeof movimientos;
 

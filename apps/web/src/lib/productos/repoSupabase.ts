@@ -378,6 +378,9 @@ export const repoSupabase: RepositorioProductos = {
             // bodega, que es donde llega la mercadería (0014).
             stockInicialSala: 0,
             stockInicialBodega: fila.stock_inicial,
+            // Un perecible con stock entra como lote con su fecha (0024):
+            // antes la planilla no tenía columna y entraba sin lote.
+            vencimientoInicial: fila.vencimiento ?? null,
           });
           resultado.creados++;
         }

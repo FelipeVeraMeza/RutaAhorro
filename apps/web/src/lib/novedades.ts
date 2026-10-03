@@ -16,6 +16,22 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.6.4',
+    fecha: '2026-10-03',
+    titulo: 'Cuarta revisión por rol: 50 arreglos',
+    cambios: [
+      { para: 'vendedor', texto: 'Vender: un código que no está en el catálogo ya no agrega otro producto por error; dice que no está.' },
+      { para: 'vendedor', texto: 'Si el sistema no alcanza a leer tu caja, Vender y Caja lo dicen y dejan reintentar (antes pedían abrir una caja que ya estaba abierta).' },
+      { para: 'todos', texto: 'Si recuperas tu contraseña por correo, ya no te la vuelve a pedir al entrar.' },
+      { para: 'todos', texto: 'Devoluciones, notas de crédito, combos y ofertas por cantidad van por unidad: ya no se aceptan medias unidades.' },
+      { para: 'bodega', texto: 'Planilla de productos: columna nueva "vencimiento". Un perecible con stock necesita su fecha (o cárgalo en 0 y recíbelo con su fecha).' },
+      { para: 'bodega', texto: 'Recibir y Devolver: si la búsqueda falla por la conexión, lo dice y no deja elegir resultados viejos.' },
+      { para: 'admin', texto: 'Una cuenta desactivada deja de ver los datos del local al instante, aunque tenga la sesión abierta en su celular.' },
+      { para: 'admin', texto: 'Facturas del SII: si el SII ya la emitió pero no alcanzó a quedar registrada, no se puede reintentar ni descartar (evita una segunda factura).' },
+      { para: 'admin', texto: 'Los reportes exportados a Excel ya no ejecutan fórmulas escritas en un nombre o motivo. El resumen diario por correo avisa si no pudo leer los datos en vez de decir $0.' },
+    ],
+  },
+  {
     version: '0.6.3',
     fecha: '2026-10-02',
     titulo: 'Tercera revisión por rol: 150 arreglos',

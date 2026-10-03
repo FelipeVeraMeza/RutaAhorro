@@ -45,7 +45,11 @@ export function celdaCSV(valor: CeldaCSV): string {
     // Los enteros se dejan tal cual: un monto en pesos no lleva decimales, y
     // "2290,0" se ve como un error de quien exportó.
     ? (Number.isInteger(valor) ? String(valor) : String(valor).replace('.', ','))
-    : valor;
+    // Un texto que empieza con = + - @ (o tab/retorno) Excel lo ejecuta como
+    // fórmula: un nombre de producto o un motivo escrito por cualquier
+    // usuario ("=HYPERLINK(…)") corría en el computador del dueño al abrir
+    // el reporte. Con un apóstrofo delante queda como texto (y no se ve).
+    : /^[=+\-@\t\r]/.test(valor) ? `'${valor}` : valor;
 
   return /[;"\r\n]/.test(texto) ? `"${texto.replace(/"/g, '""')}"` : texto;
 }

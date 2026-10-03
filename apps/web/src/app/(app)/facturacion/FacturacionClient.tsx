@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCLP, formatCantidad, toUserMessage, validarCantidad, diaLocal } from '@rutaahorro/core';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
@@ -135,11 +135,19 @@ function Emitidas({ mes, onUsarComoBase }: { mes: string; onUsarComoBase: (b: Ba
   const [corrigiendo, setCorrigiendo] = useState<Factura | null>(null);
   const [descartando, setDescartando] = useState<Factura | null>(null);
 
+  // Número de pedido, como Ventas y Reportes: al pasar de mes rápido (o con
+  // la recarga de cada 15 s en vuelo) la respuesta del mes anterior llegaba
+  // después y la lista mostraba las facturas de otro mes bajo este título.
+  const pedido = useRef(0);
   const cargar = useCallback(async () => {
+    const mio = ++pedido.current;
     try {
-      setFacturas(await repoFacturacion().emitidas(mes));
+      const lista = await repoFacturacion().emitidas(mes);
+      if (mio !== pedido.current) return;
+      setFacturas(lista);
       setError(null);
     } catch (e) {
+      if (mio !== pedido.current) return;
       setError(toUserMessage(e));
     }
   }, [mes]);
@@ -154,6 +162,13 @@ function Emitidas({ mes, onUsarComoBase }: { mes: string; onUsarComoBase: (b: Ba
   }, [enCola, cargar]);
 
   async function reintentar(f: Factura) {
+    // "El SII emitió el folio N, pero no se pudo registrar": no es "puede
+    // estar emitida", ES una factura emitida. Antes bastaba confirmar el
+    // aviso y salía otra con otro folio por la misma venta.
+    if (/emiti[óo] el folio/i.test(f.ultimoError ?? '')) {
+      setError('Esta factura ya está emitida en el SII (el error trae su folio): reintentar emitiría otra. Descárgala del portal del SII y avisa a soporte para dejarla registrada acá.');
+      return;
+    }
     // Si el robot alcanzó a apretar "Firmar" (o no terminó), la factura puede
     // estar emitida en el SII: reintentar emite OTRA con otro folio. Descartar
     // ya lo advertía; Reintentar la volvía a mandar sin preguntar.
@@ -228,7 +243,16 @@ function Emitidas({ mes, onUsarComoBase }: { mes: string; onUsarComoBase: (b: Ba
                           className="tap px-3 rounded-lg border border-[var(--borde)] text-sm">Reintentar</button>
                 )}
                 {(f.estado === 'error' || f.estado === 'por_emitir') && (
-                  <button onClick={() => setDescartando(f)}
+                  <button onClick={() => {
+                    // Descartar devuelve el stock: con una factura que el SII
+                    // ya emitió, la mercadería salió y el inventario quedaba
+                    // con unidades que no están.
+                    if (/emiti[óo] el folio/i.test(f.ultimoError ?? '')) {
+                      setError('Esta factura ya está emitida en el SII: no se descarta (devolvería el stock). Avisa a soporte para dejarla registrada.');
+                      return;
+                    }
+                    setDescartando(f);
+                  }}
                           className="tap px-3 rounded-lg border border-[var(--borde)] text-sm text-[var(--color-alerta)]">Descartar</button>
                 )}
                 <button
@@ -274,6 +298,11 @@ function NotaCreditoFactura({ factura, onCerrar, onHecho }: { factura: Factura; 
 
   const pedido = pendientes.map((l) => {
     const v = validarCantidad(cantidades[l.id] ?? '', { permiteVacio: true, maximo: l.cantidad - l.devuelto });
+    // Un producto se devuelve por unidad (0032): "1,5" volvía media unidad al
+    // stock. Una línea escrita a mano (un servicio) sí admite decimales.
+    if (v.valido && l.productId && !Number.isInteger(v.valor)) {
+      return { l, v: { valido: false, valor: 0, error: 'Se devuelve por unidad: escribe 1, 2, 3…' } };
+    }
     return { l, v };
   });
   const invalida = pedido.find((p) => !p.v.valido);

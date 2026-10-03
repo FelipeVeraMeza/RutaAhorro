@@ -54,7 +54,15 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
   if (ePerfil || !perfil) throw ePerfil ?? new Error('SIN_PERFIL');
   const cambioDeDueno = await asegurarDueno(`tenant:${perfil.tenant_id as string}`);
 
-  const since = force || cambioDeDueno ? null : (await getMeta(MARCA_KEY)) ?? (await getMeta(LAST_SYNC_KEY));
+  const marca = force || cambioDeDueno ? null : (await getMeta(MARCA_KEY)) ?? (await getMeta(LAST_SYNC_KEY));
+  // Con 5 minutos de margen hacia atrás. `updated_at` es la hora en que
+  // EMPEZÓ la transacción que editó el producto: una edición que tardó en
+  // confirmarse (o dos con la misma hora) podía quedar con un updated_at
+  // anterior a la marca del último producto bajado, y con `gt` ese cambio no
+  // llegaba nunca al celular. Bajar de nuevo unos pocos es barato.
+  const since = marca && Number.isFinite(Date.parse(marca))
+    ? new Date(Date.parse(marca) - 5 * 60_000).toISOString()
+    : marca;
   const startedAt = new Date().toISOString();
 
   // --- Productos ---

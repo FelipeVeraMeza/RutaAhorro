@@ -149,6 +149,18 @@ const MOTIVOS = ['Producto vencido o en mal estado', 'Cambio de producto', 'El c
  * calcula core igual que la base (lo que se pagó por unidad, con su parte del
  * descuento), y la base es la que manda: si difiere, vale lo de la base.
  */
+/**
+ * Desde 0032 todo se vende por unidad: "1,5" se aceptaba y devolvía media
+ * unidad al stock (y la base también lo dejaba pasar, 0038).
+ */
+function leerCantidad(t: string) {
+  const v = validarCantidad(t, { permiteVacio: true, maximo: 1_000_000 });
+  if (v.valido && !Number.isInteger(v.valor)) {
+    return { valido: false, valor: 0, error: 'Se devuelve por unidad: escribe 1, 2, 3…' };
+  }
+  return v;
+}
+
 export function DevolverVenta({ venta, onCerrar, onHecho }: {
   venta: VentaDetallada;
   onCerrar: () => void;
@@ -169,7 +181,7 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
     return l.cantidad - (l.devuelto ?? 0);
   };
   const pedido = useMemo(() => lineas
-    .map((l) => ({ id: l.id!, v: validarCantidad(cantidades[l.id!] ?? '', { permiteVacio: true, maximo: 1_000_000 }) }))
+    .map((l) => ({ id: l.id!, v: leerCantidad(cantidades[l.id!] ?? '') }))
     .filter((x) => x.v.valido && x.v.valor > 0)
     .map((x) => ({ id: x.id, cantidad: x.v.valor })), [cantidades, lineas]);
 
@@ -177,7 +189,7 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
   // devolvía solo lo demás.
   const malEscrita = lineas.find((l) => {
     const t = cantidades[l.id!] ?? '';
-    return t.trim() !== '' && !validarCantidad(t, { permiteVacio: true, maximo: 1_000_000 }).valido;
+    return t.trim() !== '' && !leerCantidad(t).valido;
   });
 
   const devueltoAntes = venta.devoluciones.reduce((s, d) => s + d.monto, 0);
@@ -237,7 +249,7 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
                   </span>
                 </span>
                 <input
-                  inputMode="decimal" disabled={q <= 0}
+                  inputMode="numeric" disabled={q <= 0}
                   value={cantidades[l.id!] ?? ''}
                   onChange={(e) => setCantidades((c) => ({ ...c, [l.id!]: e.target.value }))}
                   aria-label={`Unidades de ${l.productoNombre} que vuelven`}

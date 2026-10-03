@@ -140,6 +140,9 @@ left join profiles pr on pr.id = s.sold_by
 where s.status = 'completada'
 group by 1, 2, 3, 4;
 
+-- 0038 le agrega `movement_id` al final: sin este drop, reinstalar falla
+-- con "cannot drop columns from view" (regla 22).
+drop view if exists v_adjustments;
 create or replace view v_adjustments
 with (security_invoker = true) as
 select

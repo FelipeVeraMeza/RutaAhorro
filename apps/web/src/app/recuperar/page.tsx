@@ -102,7 +102,31 @@ function Recuperar() {
     if (clave.length < MINIMO) { setError(`La contraseña debe tener al menos ${MINIMO} caracteres`); return; }
     if (clave !== repetida) { setError('Las dos contraseñas no son iguales'); return; }
     setTrabajando(true);
-    const { error: e2 } = await supabase().auth.updateUser({ password: clave });
+    // Por el servidor, como "Mi cuenta": además de cambiar la clave quita la
+    // marca de contraseña temporal (vive en app_metadata y el navegador no
+    // la puede tocar). Con `updateUser` directo, quien tenía una temporal y
+    // la cambiaba por el correo volvía a /clave a pedirle otra al entrar.
+    let res: Response | null = null;
+    try {
+      res = await fetch('/api/cuenta/clave', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clave }),
+      });
+    } catch {
+      setTrabajando(false);
+      setError('No hay conexión con el servidor. Revisa internet y vuelve a intentar: el enlace sigue sirviendo.');
+      return;
+    }
+    if (!res.ok && res.status !== 401) {
+      setTrabajando(false);
+      const j = await res.json().catch(() => ({})) as { error?: { message?: string } };
+      setError(j.error?.message ?? 'No se pudo guardar la contraseña. Pide un enlace nuevo.');
+      return;
+    }
+    // 401: la cuenta todavía no tiene perfil (no hay marca que quitar). Se
+    // guarda directo, como antes.
+    const { error: e2 } = res.ok ? { error: null } : await supabase().auth.updateUser({ password: clave });
+    // El token todavía trae la marca vieja: sin renovarlo, "/" mandaba a /clave.
+    if (res.ok) await supabase().auth.refreshSession().catch(() => {});
     setTrabajando(false);
     if (e2) {
       setError(sinConexion(e2)

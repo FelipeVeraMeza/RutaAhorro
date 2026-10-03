@@ -182,10 +182,13 @@ function EditarImpuesto({ inicial, onCerrar, onGuardado }: {
     setError(null);
     if (!nombre.trim()) { setError('El impuesto necesita un nombre'); return; }
     if (!vTasa.valido || vTasa.valor <= 0) { setError('La tasa tiene que ser un porcentaje mayor que 0'); return; }
+    // La base guarda dos decimales: "18,555" quedaba en 18,56 y el aviso
+    // decía 18,555.
+    if (Math.abs(vTasa.valor * 100 - Math.round(vTasa.valor * 100)) > 1e-6) { setError('La tasa admite hasta dos decimales, como 20,5'); return; }
     if (!vCodigo.valido) { setError(vCodigo.error); return; }
     // El código del SII es un número entero: "27,5" se redondeaba a 28 sin
     // aviso, y 28 es otro impuesto en la boleta.
-    if (codigo.trim() && !Number.isInteger(vCodigo.valor)) { setError('El código SII es un número entero, como 27 o 271'); return; }
+    if (codigo.trim() && (!Number.isInteger(vCodigo.valor) || vCodigo.valor <= 0)) { setError('El código SII es un número entero, como 27 o 271'); return; }
     setGuardando(true);
     try {
       await repoPrecios().guardarImpuesto({
@@ -410,12 +413,14 @@ function OperacionDelLocal({ config, onGuardado, onError }: {
           {(p) => <input {...p} inputMode="numeric" value={horas} onChange={(e) => setHoras(e.target.value)}
                          className="tap w-24 px-3 py-2 rounded-lg border border-[var(--borde)] num text-right" />}
         </Campo>
-        <Campo etiqueta="Avisar si el costo de compra cambia más de (%)" error={!vVar.valido ? vVar.error : vVar.valor < 1 ? 'Tiene que ser al menos 1 %' : null}>
+        {/* Entero, como lo exige la base: "12,5" se aceptaba acá y al guardar
+            salía "no se pudo guardar la configuración" sin decir qué campo. */}
+        <Campo etiqueta="Avisar si el costo de compra cambia más de (%)" error={!vVar.valido ? vVar.error : vVar.valor < 1 ? 'Tiene que ser al menos 1 %' : !Number.isInteger(vVar.valor) ? 'En porcentaje entero: 5, 10, 15…' : null}>
           {(p) => <input {...p} inputMode="numeric" value={variacion} onChange={(e) => setVariacion(e.target.value)}
                          className="tap w-24 px-3 py-2 rounded-lg border border-[var(--borde)] num text-right" />}
         </Campo>
         <button
-          disabled={guardando || !vEf.valido || !vHoras.valido || !vVar.valido || vHoras.valor < 1 || !Number.isInteger(vHoras.valor) || vVar.valor < 1}
+          disabled={guardando || !vEf.valido || !vHoras.valido || !vVar.valido || vHoras.valor < 1 || !Number.isInteger(vHoras.valor) || vVar.valor < 1 || !Number.isInteger(vVar.valor)}
           onClick={() => void guardar({
             efectivo_inicial_sugerido: vEf.valor,
             cash_alert_hours: Math.round(vHoras.valor),

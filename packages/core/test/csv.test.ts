@@ -108,3 +108,15 @@ describe('nombreArchivoReporte', () => {
     expect(nombreArchivoReporte('  ¿Margen?  ')).toBe('margen.csv');
   });
 });
+
+describe('celdaCSV · fórmulas (8ª ronda)', () => {
+  it('un texto que empieza con = + - @ no se ejecuta en Excel', () => {
+    expect(celdaCSV('=HYPERLINK("http://x")')).toBe(`"'=HYPERLINK(""http://x"")"`);
+    expect(celdaCSV('+56 9 1234')).toBe("'+56 9 1234");
+    expect(celdaCSV('@SUMA')).toBe("'@SUMA");
+    expect(celdaCSV('-5 por merma')).toBe("'-5 por merma");
+  });
+  it('los números negativos siguen siendo números', () => {
+    expect(celdaCSV(-1500)).toBe('-1500');
+  });
+});

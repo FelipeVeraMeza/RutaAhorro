@@ -1,4 +1,4 @@
-import { admin, activeTenants } from '../supabase.js';
+import { admin, activeTenants, todasLasFilas } from '../supabase.js';
 import { sendEmail, renderEmail, money } from '../mailer.js';
 import { log } from '../logger.js';
 
@@ -8,15 +8,22 @@ export async function runLowStockCheck() {
   let created = 0;
 
   for (const tenant of tenants) {
-    const { data, error } = await admin
-      .from('v_low_stock')
-      .select('product_id, name, quantity, min_stock')
-      .eq('tenant_id', tenant.id);
     // Antes el error se ignoraba: el trabajo quedaba "ok, 0 alertas" en
-    // job_runs y nadie se enteraba de que no había revisado nada.
-    if (error) throw new Error(`No se pudo leer el stock bajo mínimo: ${error.message}`);
+    // job_runs y nadie se enteraba de que no había revisado nada. Y sin
+    // páginas la API cortaba en 1.000 productos: los demás no avisaban nunca.
+    let data: Array<{ product_id: string; name: string; quantity: number; min_stock: number }>;
+    try {
+      data = await todasLasFilas((a, b) => admin
+        .from('v_low_stock')
+        .select('product_id, name, quantity, min_stock')
+        .eq('tenant_id', tenant.id)
+        .order('product_id')
+        .range(a, b));
+    } catch (e) {
+      throw new Error(`No se pudo leer el stock bajo mínimo: ${(e as Error).message}`);
+    }
 
-    for (const p of data ?? []) {
+    for (const p of data) {
       // No repetir la alerta si ya hay una sin leer del mismo producto:
       // un panel con la misma alerta cuarenta veces deja de leerse.
       const { data: existing } = await admin
@@ -49,14 +56,24 @@ export async function runExpiryCheck() {
   let created = 0;
 
   for (const tenant of tenants) {
-    const { data, error } = await admin
-      .from('v_expiring_lots')
-      .select('lot_id, product_id, product_name, expiry_date, quantity, value_at_risk, expiry_status, days_to_expiry')
-      .eq('tenant_id', tenant.id)
-      .in('expiry_status', ['vencido', 'por_vencer']);
-    if (error) throw new Error(`No se pudieron leer los vencimientos: ${error.message}`);
+    // Por páginas: con más de 1.000 lotes por vencer, los demás no avisaban.
+    let data: Array<{
+      lot_id: string; product_id: string; product_name: string; expiry_date: string; quantity: number;
+      value_at_risk: number; expiry_status: string; days_to_expiry: number;
+    }>;
+    try {
+      data = await todasLasFilas((a, b) => admin
+        .from('v_expiring_lots')
+        .select('lot_id, product_id, product_name, expiry_date, quantity, value_at_risk, expiry_status, days_to_expiry')
+        .eq('tenant_id', tenant.id)
+        .in('expiry_status', ['vencido', 'por_vencer'])
+        .order('lot_id')
+        .range(a, b));
+    } catch (e) {
+      throw new Error(`No se pudieron leer los vencimientos: ${(e as Error).message}`);
+    }
 
-    for (const lot of data ?? []) {
+    for (const lot of data) {
       const { data: existing } = await admin
         .from('alerts')
         .select('id')
@@ -177,21 +194,45 @@ export async function runIntegrityCheck() {
 
     // ADR-007: el stock de un perecible vive en stock_levels Y en product_lots.
     // Si difieren, FEFO descontará de lotes que no reflejan el saldo real.
-    const { data: byLot } = await admin
-      .from('v_stock_by_lot')
-      .select('product_id, product_name, total_quantity')
-      .eq('tenant_id', tenant.id);
+    //
+    // Se parte de los perecibles CON stock y no de `v_stock_by_lot`: esa vista
+    // solo trae productos con algún lote activo, así que un perecible con
+    // stock y sin ningún lote (justo el peor descuadre) no aparecía. Además se
+    // leía sin páginas y sin mirar el error: un fallo era "0 descuadres".
+    const niveles = await todasLasFilas<{ product_id: string; quantity: number; products: { name: string; tracks_expiry: boolean } | null }>(
+      (a, b) => admin
+        .from('stock_levels')
+        .select('product_id, quantity, products!inner(name, tracks_expiry)')
+        .eq('tenant_id', tenant.id)
+        .eq('products.tracks_expiry', true)
+        .order('product_id')
+        .order('store_id')
+        .range(a, b) as unknown as PromiseLike<{ data: Array<{ product_id: string; quantity: number; products: { name: string; tracks_expiry: boolean } | null }> | null; error: { message: string } | null }>,
+    );
+    const lotes = await todasLasFilas<{ product_id: string; product_name: string; total_quantity: number }>(
+      (a, b) => admin
+        .from('v_stock_by_lot')
+        .select('product_id, product_name, total_quantity')
+        .eq('tenant_id', tenant.id)
+        .order('product_id')
+        .range(a, b),
+    );
+    const enLotes = new Map(lotes.map((l) => [l.product_id, l]));
+    const filas = new Map<string, { nombre: string; nivel: number; lotes: number }>();
+    for (const n of niveles) {
+      const f = filas.get(n.product_id) ?? { nombre: n.products?.name ?? '', nivel: 0, lotes: 0 };
+      f.nivel += Number(n.quantity ?? 0);
+      filas.set(n.product_id, f);
+    }
+    for (const l of lotes) {
+      const f = filas.get(l.product_id) ?? { nombre: l.product_name, nivel: 0, lotes: 0 };
+      f.lotes = Number(enLotes.get(l.product_id)?.total_quantity ?? 0);
+      filas.set(l.product_id, f);
+    }
 
     let lotMismatches = 0;
-    for (const row of byLot ?? []) {
-      const { data: level } = await admin
-        .from('stock_levels')
-        .select('quantity')
-        .eq('tenant_id', tenant.id)
-        .eq('product_id', row.product_id)
-        .maybeSingle();
-
-      const diff = Math.abs((level?.quantity ?? 0) - (row.total_quantity ?? 0));
+    for (const [productId, f] of filas) {
+      const diff = Math.abs(f.nivel - f.lotes);
       if (diff > 0.001) {
         lotMismatches++;
         // Una por producto mientras no se lea, como los otros chequeos: cada
@@ -199,17 +240,17 @@ export async function runIntegrityCheck() {
         const { data: existing } = await admin
           .from('alerts').select('id')
           .eq('tenant_id', tenant.id).eq('type', 'lot_stock_mismatch').eq('is_read', false)
-          .contains('payload', { product_id: row.product_id }).limit(1);
+          .contains('payload', { product_id: productId }).limit(1);
         if ((existing ?? []).length > 0) continue;
         await admin.from('alerts').insert({
           tenant_id: tenant.id,
           type: 'lot_stock_mismatch',
           severity: 'critical',
           payload: {
-            product_id: row.product_id,
-            product_name: row.product_name,
-            stock_levels: level?.quantity ?? 0,
-            sum_of_lots: row.total_quantity,
+            product_id: productId,
+            product_name: f.nombre,
+            stock_levels: f.nivel,
+            sum_of_lots: f.lotes,
             difference: diff,
           },
         });

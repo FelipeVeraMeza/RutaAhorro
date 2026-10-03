@@ -85,7 +85,10 @@ export function CajaClient({
   const diferencia = cont.valor - esperado;
 
   /** El query builder de Supabase es un thenable, no una Promise: por eso PromiseLike. */
-  async function accion(fn: () => PromiseLike<{ error: { message: string } | null }>) {
+  async function accion(
+    fn: () => PromiseLike<{ error: { message: string } | null; data?: unknown }>,
+    alTerminar?: (data: unknown) => void,
+  ) {
     setCargando(true);
     setError(null);
     // Un corte de red lanza en vez de devolver `error`: sin el catch la
@@ -93,7 +96,9 @@ export function CajaClient({
     // caja no se había abierto.
     let e: { message: string } | null;
     try {
-      ({ error: e } = await fn());
+      const r = await fn();
+      e = r.error;
+      if (!e) alTerminar?.(r.data);
     } catch (err) {
       e = { message: err instanceof Error ? err.message : String(err) };
     }
@@ -373,6 +378,11 @@ export function CajaClient({
             <button
               disabled={cargando || !cont.valido || (necesitaNota && nota.trim() === '')}
               onClick={async () => {
+                // El papel sale con lo que la base cerró (fn_close_cash_session
+                // devuelve el resumen final), no con el de la pantalla: una
+                // venta sin red que se sincronizó recién quedaba en el cierre
+                // guardado y no en el papel, y los dos no cuadraban.
+                let final: Record<string, unknown> | null = null;
                 const ok = await accion(() =>
                   DEMO_ACTIVO
                     ? cajaDemo.cerrar(usuarioId, nombre, cont.valor, nota.trim())
@@ -381,9 +391,12 @@ export function CajaClient({
                         p_counted_amount: cont.valor,
                         p_notes: nota.trim() || null,
                       }),
+                  (d) => { if (d && typeof d === 'object') final = d as Record<string, unknown>; },
                 );
                 if (ok) {
-                  setCierreHecho({ esperado, contado: cont.valor, nota: nota.trim(), resumen: resumen ?? {}, abierta: session.opened_at });
+                  const rf = (final ?? resumen ?? {}) as Record<string, unknown>;
+                  const esperadoFinal = typeof rf.expected_amount === 'number' ? rf.expected_amount : esperado;
+                  setCierreHecho({ esperado: esperadoFinal, contado: cont.valor, nota: nota.trim(), resumen: rf, abierta: session.opened_at });
                   setCerrando(false); setContado(''); setNota(''); setBilletes({});
                 }
               }}

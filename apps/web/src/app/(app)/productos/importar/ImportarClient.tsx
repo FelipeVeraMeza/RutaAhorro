@@ -414,6 +414,8 @@ function Cabecera() {
 
 const DESCRIPCIONES: Record<string, string> = {
   nombre: 'cómo se llama el producto',
+  // Faltaba: la lista mostraba "descripcion —" sin decir qué era.
+  descripcion: 'opcional: qué es, en palabras (sale al escanearlo)',
   sku: 'tu código interno; si se repite, el producto se actualiza en vez de duplicarse',
   codigo_barras: 'el código del envase',
   categoria: 'se crea sola si no existe',
@@ -424,4 +426,5 @@ const DESCRIPCIONES: Record<string, string> = {
   stock_minimo: 'bajo esta cantidad te avisamos',
   perecible: 'si o no; si es sí, se controla por lote y vencimiento',
   dias_alerta: 'opcional: cuántos días antes avisar (30 si va vacío)',
+  vencimiento: 'obligatoria si es perecible y tiene stock: cuándo vence lo que tienes (31-12-2026)',
 };

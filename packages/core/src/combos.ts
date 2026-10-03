@@ -137,6 +137,9 @@ export function validarCombo(
   if (distintos.size < 2) return 'Un combo lleva al menos dos productos distintos. Para uno solo, usa una oferta por cantidad.';
   if (distintos.size !== c.items.length) return 'Hay un producto repetido: súmale la cantidad.';
   if (c.items.some((i) => !(i.cantidad > 0))) return 'Cada producto necesita una cantidad mayor que cero.';
+  // Todo se vende por unidad (0032): "1,5 × Pan" pasaba y el combo nunca
+  // calzaba con lo que se cobra.
+  if (c.items.some((i) => !Number.isInteger(i.cantidad))) return 'Las cantidades del combo van por unidad: 1, 2, 3…';
   if (!Number.isInteger(c.precio) || c.precio <= 0) return 'El precio del combo tiene que ser un monto mayor que cero.';
   let normal = 0;
   for (const i of c.items) {

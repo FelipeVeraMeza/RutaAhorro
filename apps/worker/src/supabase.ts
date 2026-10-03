@@ -66,3 +66,22 @@ export async function recordJobRun(
     return { ok: false, error: message };
   }
 }
+
+/**
+ * Todas las filas de una consulta, de a 1.000 (la API de Supabase no entrega
+ * más, y no avisa que cortó). Igual que `todasLasFilas` de la web: la consulta
+ * tiene que traer un orden estable que termine en una columna única.
+ */
+export async function todasLasFilas<T>(
+  pedir: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  tope = 100_000,
+): Promise<T[]> {
+  const filas: T[] = [];
+  for (let desde = 0; desde < tope; desde += 1000) {
+    const { data, error } = await pedir(desde, desde + 999);
+    if (error) throw new Error(error.message);
+    filas.push(...(data ?? []));
+    if ((data ?? []).length < 1000) break;
+  }
+  return filas;
+}
