@@ -124,7 +124,8 @@ export interface RepositorioVentas {
   listar(filtro: FiltroVentas): Promise<Venta[]>;
   resumen(desde: string, hasta: string): Promise<ResumenVentas>;
   detalle(id: string): Promise<VentaDetallada | null>;
-  anular(id: string, motivo: string): Promise<void>;
+  /** `efectivoDevuelto`: lo que salió de la caja de quien anula (N° 170, 0037). */
+  anular(id: string, motivo: string): Promise<{ efectivoDevuelto: number }>;
   /**
    * Devolución parcial (algunas líneas o unidades) o total, con nota de
    * crédito si la venta tenía boleta o factura (`fn_devolver_venta`, 0019).
@@ -327,6 +328,7 @@ const repoLocal: RepositorioVentas = {
       }
     }
     await db().meta.put({ key: KEY_VENTAS, value: JSON.stringify(ventas) });
+    return { efectivoDevuelto: 0 };
   },
 };
 
@@ -526,11 +528,13 @@ const repoSupabase: RepositorioVentas = {
   },
 
   async anular(id, motivo) {
-    const { error } = await supabase().rpc('fn_void_sale', {
+    const { data, error } = await supabase().rpc('fn_void_sale', {
       p_sale_id: id,
       p_reason: motivo,
     });
     if (error) throw error;
+    // Sin 0037 la respuesta no lo trae: no salió nada de la caja.
+    return { efectivoDevuelto: Number((data as { efectivo_devuelto?: number } | null)?.efectivo_devuelto ?? 0) };
   },
 };
 

@@ -23,13 +23,14 @@ Va después de 0029 a 0036. Antes de aplicarla:
 1. Correr `npm run db:test` como usuario sin privilegios (initdb no corre como
    root; en esta sesión el entorno no dejó crear el usuario). Las pruebas
    nuevas están escritas y nunca se ejecutaron: `seguridad.test.mjs` (S-37 y
-   tres más de 0037) y `redondeo-fiado.test.mjs` (abonos por medio). Se
+   tres más de 0037), `redondeo-fiado.test.mjs` (abonos por medio) y
+   `anulacion-caja.test.mjs` (N° 170). Se
    cambiaron `banco.mjs` y `concurrencia.test.mjs` para crear los usuarios de
    prueba con `raw_app_meta_data`, como lo hace el servidor.
 2. Revisar en vivo que `handle_new_user`, `current_tenant_id`,
    `current_user_role`, `current_store_id`, `fn_adjust_stock` (0032),
    `fn_close_cash_session`/`fn_add_cash_movement` (0012),
-   `fn_abonar_cuenta`/`fn_cash_session_summary` (0029) y la política
+   `fn_abonar_cuenta`/`fn_cash_session_summary` (0029), `fn_void_sale` (0019) y la política
    `suppliers_write` sean las que 0037 reemplaza. Todas con la misma firma.
 
 Qué hace 0037 (detalle en el encabezado del archivo):
@@ -65,16 +66,18 @@ Qué hace 0037 (detalle en el encabezado del archivo):
 - **Bloqueo** en localStorage por cuenta; el login lo reinicia.
 - La configuración del local se guarda en el celular para usarla sin red.
 
-**Verificado:** core 463 · typecheck · `db:check` 169 · build de producción ·
+**Verificado:** core 463 · typecheck · `db:check` 170 · build de producción ·
 `peso-js` 28/28 bajo 270 kB (12/28 en 250) · maqueta: `demo-ronda7.mjs`
 **15/15 (nuevo; con el código anterior 3/15)** · ronda6 14 · ronda5 22 ·
 ronda4 44 · ronda3 45 · ronda2 15 · flujo 19 · datos 11 · descuento 11 ·
 devolución 12 · bodega-unidad 26 · demo-roles 192 pantallas · sin-red 5/5.
 **No se corrió:** `db:test`, nada contra Supabase ni Railway.
 
-**Decisiones que tomé (confirmar):** ver docs/28 → "Decisiones de negocio".
-**Pregunta abierta (N° 170):** anular una venta en efectivo de otro día no
-deja el egreso en la caja de hoy.
+**Felipe, 2026-10-04: "No me preguntes, es sí siempre".** Desde ahora se
+decide y se documenta, sin preguntar. Las decisiones de esta ronda quedan
+tomadas (docs/28 → "Decisiones de negocio"), y la N° 170 se respondió "sí":
+anular una venta en efectivo de una caja ya cerrada deja el egreso en la caja
+abierta de quien anula (0037, sección 7; `anulacion-caja.test.mjs`).
 
 **Sigue pendiente (de antes):** aplicar 0029 a 0037 en Supabase (en orden,
 `npm run db:aplicar -- --aplicar`; después deben salir 46 funciones, 0037 no
@@ -1766,6 +1769,12 @@ contemplaban: **hay que revisar precio y plazo** (T-41).
 ## CÓMO QUIERO QUE TRABAJES
 
 Como **jefe de proyecto y QA**, no como programador que ejecuta órdenes.
+
+- **No preguntar decisiones: decidir y documentar** (Felipe, 2026-10-04: "No
+  me preguntes, es sí siempre"). Se elige lo más seguro para la plata y el
+  stock, se escribe en el documento de la ronda y en HANDOFF, y se avisa en el
+  resumen. Lo que sí sigue en manos de Felipe es lo que no se programa:
+  aplicar migraciones en Supabase, llaves de Railway y el contador.
 
 - **Verifica el estado real, no lo asumas.** Ya aparecieron tres requerimientos
   marcados como hechos que no funcionaban en producción, un plan de despliegue

@@ -52,6 +52,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   STOCK_INSUFICIENTE_EN_UBICACION: 'No hay tanto en ese lugar para traspasar',
   TRASPASO_MISMA_UBICACION: 'El origen y el destino del traspaso son el mismo lugar',
   CAJA_NO_ABIERTA_DEVOLUCION: 'Para devolver en efectivo abre tu caja: la plata sale de ahí',
+  CAJA_NO_ABIERTA_ANULACION: 'Esa venta es de una caja ya cerrada y se pagó en efectivo: abre tu caja para anularla, la plata que se devuelve sale de ahí',
   NO_DISPONIBLE_EN_DEMO: 'Esto no está disponible en el modo demo',
   PRODUCTO_NO_ENCONTRADO: 'No encontramos ese producto',
   PRODUCTO_INACTIVO: 'Ese producto está desactivado',

@@ -29,6 +29,7 @@ export const NOVEDADES: Novedad[] = [
       { para: 'admin', texto: 'Recibir mercadería pide la fecha de la factura (para el libro de compras) y pregunta antes de recibir algo con costo $0.' },
       { para: 'admin', texto: 'Caja: el resumen impreso trae ventas en efectivo, ingresos y egresos; los abonos de fiado con tarjeta aparecen en el cuadre.' },
       { para: 'supervisor', texto: 'Compras: editar un proveedor es solo del administrador (antes el botón aparecía y no guardaba nada).' },
+      { para: 'admin', texto: 'Anular una venta en efectivo de una caja ya cerrada saca la plata de tu caja abierta y la deja como egreso (sin caja abierta no se puede).' },
       { para: 'admin', texto: 'Inicio y Reportes comparan con el período anterior sin contar hoy, que va en curso: a primera hora ya no sale siempre "a la baja".' },
     ],
   },

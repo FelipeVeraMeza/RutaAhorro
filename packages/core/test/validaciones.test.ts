@@ -94,6 +94,7 @@ describe('mensajes de error en lenguaje del negocio (RNF-20)', () => {
 
   it('los códigos de 0037 tienen su mensaje (no el genérico)', () => {
     expect(toUserMessage({ message: 'MERMA_SUMA' })).toMatch(/merma resta/);
+    expect(toUserMessage({ message: 'CAJA_NO_ABIERTA_ANULACION' })).toMatch(/caja ya cerrada/);
   });
 
   it('nombra el producto concreto cuando falta stock', () => {

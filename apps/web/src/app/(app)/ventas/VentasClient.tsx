@@ -146,8 +146,9 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
     setEnCurso(true);
     setError(null);
     try {
-      await repoVentas().anular(anulando.id, motivo.trim());
-      setExito(`Venta ${anulando.folio} anulada. El stock volvió al inventario.`);
+      const { efectivoDevuelto } = await repoVentas().anular(anulando.id, motivo.trim());
+      setExito(`Venta ${anulando.folio} anulada. El stock volvió al inventario.`
+        + (efectivoDevuelto > 0 ? ` Salieron ${formatCLP(efectivoDevuelto)} de tu caja (quedó como egreso).` : ''));
       setAnulando(null);
       setDetalle(null);
       await cargar();
@@ -515,6 +516,14 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
               motivo. El stock vuelve por el historial de inventario, con su propio movimiento.
               Si el producto tiene lotes, vuelve a los lotes exactos de los que salió.
             </p>
+            {/* N° 170 · de una caja ya cerrada, la plata sale de la caja de hoy. */}
+            {diaLocal(anulando.fecha, zona) !== hoyLocal(zona)
+              && 'pagos' in anulando && (anulando as VentaDetallada).pagos.some((p) => p.metodo === 'efectivo') && (
+              <p className="text-xs text-[var(--color-aviso)] bg-amber-50 px-3 py-2 rounded-lg">
+                Es de otro día y se pagó en efectivo: si su caja ya se cerró, lo que le devuelves al cliente sale de
+                tu caja abierta y queda como egreso. Sin caja abierta no se puede anular.
+              </p>
+            )}
 
             <Campo etiqueta="Motivo" obligatorio ayuda="Queda escrito en la venta y en el historial.">
               {(props) => (

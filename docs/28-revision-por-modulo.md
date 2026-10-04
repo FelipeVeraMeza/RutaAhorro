@@ -48,8 +48,8 @@ que mueven plata y permisos. De ahí salieron los más graves:
 | **Total** | **83** |
 
 Por gravedad: 2 críticas, 17 altas,
-36 medias, 28 bajas. Corregidos: 82; una es
-pregunta de negocio (N° 170).
+36 medias, 28 bajas. Corregidos: los 83 (la N° 170 era pregunta
+de negocio; Felipe respondió "sí, siempre").
 
 M7, M8 y M10 tienen pocos hallazgos propios porque varios de sus defectos se
 anotaron en el módulo donde se corrigieron (los cortes de 1.000 filas de
@@ -137,7 +137,7 @@ sesión (ver abajo).
 | 167 | M9 | Jefe | Media | Respaldo: paginaba sin ordenar; con ventas entrando mientras se arma, Postgres puede repetir o saltarse filas entre páginas y el respaldo quedaba incompleto sin decirlo. Ahora ordena por la llave de cada tabla. | Corregido | typecheck (sin prueba propia) |
 | 168 | M1 | Jefe | CRÍTICA | Seguridad (base): desactivar a un usuario solo lo frenaba en la pantalla. Su sesión sigue viva (el token se renueva solo) y todas las políticas preguntan por el local con `current_tenant_id()`, que no miraba si la cuenta estaba activa: un ex empleado podía seguir leyendo ventas, clientes y proveedores por la API y escribir donde su rol lo dejaba. 0037: las funciones de identidad devuelven nulo para una cuenta desactivada; su propio perfil lo sigue viendo para que la app le diga que está desactivada. | Corregido | pg (seguridad.test.mjs, escrita, sin correr acá) |
 | 169 | M6 | Vendedor | Media | Cierre de caja (base): aceptaba un monto contado nulo o negativo; con nulo no pedía motivo y la caja quedaba cerrada "sin contar". Y cerrar o registrar ingresos/egresos no revisaba que la cuenta siguiera activa. 0037. | Corregido | db:check (sin prueba propia corrida) |
-| 170 | M6 | Jefe | Media | Anular una venta en efectivo de OTRO día (solo el admin puede) no registra la salida de la plata en la caja de hoy: el cajón de hoy queda con faltante. Las devoluciones sí lo hacen. | Pregunta de negocio | — (ver "Decisiones") |
+| 170 | M6 | Jefe | Media | Anular una venta en efectivo de una caja ya cerrada (otro día; solo el admin puede) no registraba la salida de la plata: el cajón de hoy quedaba con faltante. Felipe: "sí, siempre". 0037: queda un egreso en la caja abierta de quien anula; sin caja abierta no se anula. (Una venta solo en efectivo lleva boleta y se devuelve, no se anula; esto cubre las de pago mixto y las anteriores a la boleta.) | Corregido | pg (anulacion-caja.test.mjs, escrita, sin correr acá) · core: validaciones.test.ts |
 | 171 | M1 | Todos | Media | Cambiar la contraseña no borraba la huella guardada para desbloquear sin red: quien supiera la contraseña VIEJA seguía desbloqueando ese celular sin internet. | Corregido | typecheck |
 | 172 | M5 | Vendedor | Media | Sin internet, Vender abre la última copia guardada de la pantalla, que era de cuando la caja estaba abierta: cerrar la caja y quedarse sin red dejaba seguir vendiendo en una caja cerrada, y la base rechazaba esas ventas después. Cerrar la caja ahora borra esa copia. | Corregido | typecheck (el service worker solo corre en producción) |
 | 173 | M8 | Jefe | Baja | Inicio → "Avisos del sistema (20)": se traen los 20 más nuevos y el número se leía como el total. Ahora "20 o más". | Corregido | typecheck |
@@ -152,7 +152,10 @@ sesión (ver abajo).
 | 182 | M7 | Jefe | Media | Inicio → "Últimos 30 días": comparaba 30 días que incluyen HOY (en curso) contra 30 días completos: a primera hora la variación salía siempre negativa. Ahora compara los 29 días cerrados contra los 29 anteriores. | Corregido | demo-ronda2 (texto) |
 | 183 | M7 | Jefe | Media | Reportes → Ventas: con el período terminando hoy, la variación contra el período anterior incluía el día en curso contra días completos y salía a la baja. Ahora compara hasta ayer y lo dice ("sin contar hoy"). | Corregido | typecheck |
 
-## Decisiones de negocio que tomé y hay que confirmar
+## Decisiones de negocio que tomé
+
+Felipe, 2026-10-04: "No me preguntes, es sí siempre". Quedan tomadas así;
+si alguna no sirve, se cambia en una línea.
 
 1. **Proveedores (N° 158/159):** crear uno lo pueden admin, supervisor y bodega
    (al recibir mercadería, como pidió Felipe en T-55); **cambiarlo o borrarlo,
@@ -166,22 +169,13 @@ sesión (ver abajo).
 4. **Bloqueo (N° 163):** queda en el celular por cuenta, no por pestaña. Si
    otra persona entra en ese celular con su contraseña, a ella no se le bloquea.
 
-## Pregunta de negocio abierta (N° 170)
-
-**Anular una venta en efectivo de otro día.** Solo el administrador puede, y
-la base la saca de la caja de ese día (ya cerrada): la plata que se le
-devuelve al cliente sale del cajón de hoy y el cierre de hoy queda con
-faltante. Las devoluciones sí registran el egreso en la caja abierta. ¿Anular
-una venta antigua tiene que dejar también el egreso en la caja de quien
-anula? (Es un cambio chico en `fn_void_sale` una vez decidido.)
-
 ## Lo que NO se pudo verificar en esta sesión
 
 - **`npm run db:test` no corrió.** Necesita un usuario sin privilegios (initdb
   no corre como root) y el entorno no permitió crearlo. La migración 0037 pasa
   `db:check` (compila), y sus pruebas están **escritas pero no ejecutadas**:
   `seguridad.test.mjs` (S-37 cuentas, desactivado sin acceso, proveedores,
-  merma), `redondeo-fiado.test.mjs` (abonos por medio). También se ajustaron
+  merma), `redondeo-fiado.test.mjs` (abonos por medio), `anulacion-caja.test.mjs` (N° 170). También se ajustaron
   `banco.mjs` y `concurrencia.test.mjs` para crear los usuarios de prueba como
   lo hace el servidor (con `raw_app_meta_data`). **Hay que correr `db:test`
   antes de aplicar 0037.**
@@ -191,7 +185,7 @@ anula? (Es un cambio chico en `fn_void_sale` una vez decidido.)
 
 ## Verificado
 
-core **463** (+11) · typecheck · `db:check` (169 cuerpos) · build de
+core **463** (+11) · typecheck · `db:check` (170 cuerpos) · build de
 producción (maqueta) · recorridos de la maqueta: **demo-ronda7 15/15 (nuevo)**
 —y con el código anterior **3/15**: 12 comprobaciones se vieron fallar antes
 del arreglo (regla 16)— · ronda6 14/14 · ronda5 22/22 · ronda4 44/44 (se

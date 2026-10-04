@@ -407,3 +407,96 @@ begin
     'average_ticket', case when v_count > 0 then round(v_total::numeric / v_count)::integer else 0 end,
     'by_payment_method', v_methods);
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- 7. Anular una venta en efectivo de una caja ya cerrada (docs/28, N° 170)
+-- ---------------------------------------------------------------------------
+-- La venta salía de las cuentas de su caja, que ya estaba cerrada (y no se
+-- modifica), pero la plata que se le devuelve al cliente sale del cajón de
+-- HOY: el cierre de hoy quedaba con faltante sin nada que lo explicara.
+-- Felipe, 2026-10-04: "sí, siempre". Ahora, si la caja de la venta está
+-- cerrada y se pagó (algo) en efectivo, queda un egreso por eso en la caja
+-- abierta de quien anula; sin caja abierta, no se anula
+-- (CAJA_NO_ABIERTA_ANULACION). Si la caja de la venta sigue abierta no
+-- cambia nada: la venta sale de su "debería haber", como antes. Las
+-- devoluciones ya hacían esto (0019). Misma firma que 0019.
+create or replace function public.fn_void_sale(p_sale_id uuid, p_reason text)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_tenant   uuid := current_tenant_id();
+  v_user     uuid := auth.uid();
+  v_role     user_role := current_user_role();
+  v_sale     sales%rowtype;
+  v_item     sale_items%rowtype;
+  v_cerrada  boolean;
+  v_efectivo integer;
+  v_session  uuid;
+begin
+  if coalesce(trim(p_reason),'') = '' then
+    raise exception 'MOTIVO_REQUERIDO' using errcode = 'P0001';
+  end if;
+
+  select * into v_sale from sales where id = p_sale_id and tenant_id = v_tenant for update;
+  if not found then raise exception 'VENTA_NO_ENCONTRADA' using errcode = 'P0001'; end if;
+  if v_sale.status = 'anulada' then
+    raise exception 'VENTA_YA_ANULADA' using errcode = 'P0001';
+  end if;
+  if exists (select 1 from dte_documentos where sale_id = p_sale_id) then
+    raise exception 'VENTA_CON_DOCUMENTO_USAR_DEVOLUCION' using errcode = 'P0001';
+  end if;
+  if exists (select 1 from sale_returns where sale_id = p_sale_id) then
+    raise exception 'VENTA_CON_DEVOLUCIONES' using errcode = 'P0001';
+  end if;
+  if coalesce(v_role::text, '') not in ('admin','supervisor') then
+    raise exception 'SIN_PERMISO_ANULAR' using errcode = '42501';
+  end if;
+  if v_role = 'supervisor'
+     and (v_sale.sold_at at time zone fn_tenant_timezone(v_tenant))::date
+      <> (now()           at time zone fn_tenant_timezone(v_tenant))::date then
+    raise exception 'SIN_PERMISO_ANULAR' using errcode = '42501';
+  end if;
+
+  -- N° 170 · la plata de una caja cerrada sale de la caja abierta de quien anula.
+  select coalesce(sum(amount), 0) into v_efectivo from sale_payments
+   where sale_id = p_sale_id and method = 'efectivo';
+  select status = 'cerrada' into v_cerrada from cash_sessions where id = v_sale.cash_session_id;
+  if coalesce(v_cerrada, false) and v_efectivo > 0 then
+    select id into v_session from cash_sessions
+     where user_id = v_user and status = 'abierta' limit 1 for share;
+    if v_session is null then
+      raise exception 'CAJA_NO_ABIERTA_ANULACION' using errcode = 'P0001';
+    end if;
+    insert into cash_movements (tenant_id, cash_session_id, type, amount, reason, created_by)
+    values (v_tenant, v_session, 'egreso', v_efectivo,
+            'Anulación de la venta N° ' || v_sale.folio || ': ' || trim(p_reason), v_user);
+  end if;
+
+  perform fn_lock_stock(v_tenant, v_sale.store_id, array(
+    select product_id from sale_items where sale_id = p_sale_id));
+
+  for v_item in select * from sale_items where sale_id = p_sale_id loop
+    update product_lots pl
+       set quantity = pl.quantity + sil.quantity
+      from sale_item_lots sil
+     where sil.sale_item_id = v_item.id and pl.id = sil.lot_id;
+
+    perform fn_post_movement(v_tenant, v_sale.store_id, v_item.product_id,
+                             'anulacion_venta', v_item.quantity, v_item.unit_cost,
+                             'sale_void', p_sale_id, p_reason, v_user);
+  end loop;
+
+  update sales set status = 'anulada', voided_by = v_user,
+                   voided_at = now(), void_reason = p_reason
+   where id = p_sale_id;
+
+  insert into audit_log (tenant_id, user_id, action, entity_type, entity_id, old_values, new_values)
+  values (v_tenant, v_user, 'sale_void', 'sales', p_sale_id,
+          jsonb_build_object('status','completada','total',v_sale.total),
+          jsonb_build_object('status','anulada','reason',p_reason,
+                             'egreso_caja', case when v_session is not null then v_efectivo end));
+
+  return jsonb_build_object('sale_id', p_sale_id, 'status', 'anulada',
+                            'efectivo_devuelto', case when v_session is not null then v_efectivo else 0 end);
+end $$;
