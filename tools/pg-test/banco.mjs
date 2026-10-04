@@ -43,6 +43,8 @@ create table auth.users (
   id                 uuid primary key default gen_random_uuid(),
   email              text,
   raw_user_meta_data jsonb not null default '{}'::jsonb,
+  -- Lo escribe solo la llave de servicio. Desde 0037 el perfil sale de acá.
+  raw_app_meta_data  jsonb not null default '{}'::jsonb,
   created_at         timestamptz not null default now()
 );
 -- Igual que en Supabase: PostgREST deja el sub del JWT en esta variable.
@@ -189,7 +191,8 @@ export async function nuevoLocal(banco, nombre = 'Local') {
   const usuario = async (rol, alias) => {
     const meta = { tenant_id: tenant, store_id: store, role: rol, full_name: alias };
     const id = (await su.query(
-      `insert into auth.users (email, raw_user_meta_data) values ($1, $2) returning id`,
+      // En los dos campos, como lo hacen las rutas del servidor: sirve con y sin 0037.
+      `insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ($1, $2, $2) returning id`,
       [`${alias}@${tenant.slice(0, 8)}.cl`, meta])).rows[0].id;
     return { id, rol, alias };
   };

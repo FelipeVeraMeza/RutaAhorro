@@ -22,7 +22,17 @@ const GUIAS: Guia[] = [
     'Toca la cantidad para cambiarla. Si te equivocas, "Deshacer" recupera la línea quitada.',
     'Cobrar → elige el medio de pago y, en efectivo, escribe cuánto te pasaron: el vuelto sale solo.',
     'En efectivo el total se redondea a la decena (Ley 20.956): $1.463 se cobra $1.460. El comprobante lo explica.',
-    'Si se cae internet, sigue vendiendo: la venta se envía sola cuando vuelve.',
+    'Si se cae internet, sigue vendiendo: la venta se envía sola cuando vuelve. Fiar y pedir autorización de un descuento sí necesitan internet.',
+  ] },
+  // 0036 · no tenía guía: el vendedor no sabía que el descuento existía ni cómo se autoriza.
+  { titulo: 'Hacer un descuento', roles: CAJA, ir: { href: '/pos', texto: 'Ir a Vender' }, pasos: [
+    'En Vender, "Descuento" en la línea del producto: en pesos o en porcentaje.',
+    'Si pasa tu tope, el botón dice "Pedir autorización y cobrar": el administrador o un supervisor escribe su PIN en tu celular.',
+    'La autorización sirve para esa venta y por 15 minutos.',
+  ] },
+  { titulo: 'Crear mi PIN para autorizar descuentos', roles: MANDO, ir: { href: '/cuenta', texto: 'Ir a Mi cuenta' }, pasos: [
+    'Mi cuenta → "PIN para autorizar descuentos": 4 a 6 números, dos veces.',
+    'Autorizas hasta tu propio tope. Cinco PIN malos seguidos te bloquean 15 minutos.',
   ] },
   { titulo: 'Reimprimir o compartir un comprobante', roles: CAJA, ir: { href: '/ventas', texto: 'Ir a Ventas' }, pasos: [
     'En Ventas, toca la venta.',

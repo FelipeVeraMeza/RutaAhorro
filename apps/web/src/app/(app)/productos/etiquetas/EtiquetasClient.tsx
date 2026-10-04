@@ -51,6 +51,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
 
   const cargar = useCallback(async () => {
     setCargando(true);
+    setError(null);
     try {
       setProductos(await repoProductos().listar({ busqueda, soloActivos: true }, puedeVerCostos));
     } catch (e) {
@@ -116,6 +117,10 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
         perecible: p.perecible,
         diasAlerta: p.diasAlerta,
         codigos: [...p.codigos, codigo],
+        // Si otra persona cambió el producto desde que se abrió esta pantalla
+        // (el precio, el nombre), se rechaza en vez de escribir encima lo de
+        // antes: Etiquetas manda el producto completo (0020, RF-M10).
+        esperadoEn: p.actualizadoEn,
       });
       setAviso(`${p.nombre} quedó con el código ${codigo}`);
       setCantidades((c) => ({ ...c, [p.id]: c[p.id] ?? 1 }));

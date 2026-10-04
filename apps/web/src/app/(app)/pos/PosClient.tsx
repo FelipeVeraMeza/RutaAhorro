@@ -11,7 +11,7 @@ import {
   cantidadAtipica,
   type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta, type RegistroDte, coincide
 } from '@rutaahorro/core';
-import { findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO, ultimaActualizacionCatalogo } from '@/lib/offline/catalog';
+import { findByBarcode, desactivadoConCodigo, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO, ultimaActualizacionCatalogo } from '@/lib/offline/catalog';
 import { contarVendidos, masVendidos } from '@/lib/offline/frecuentes';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { sembrarCatalogoDemo } from '@/lib/demo/seed';
@@ -363,6 +363,13 @@ export function PosClient({
       agregar(product);
       return;
     }
+    const desactivado = await desactivadoConCodigo(code).catch(() => null);
+    if (desactivado) {
+      notificar('error', `${desactivado} está desactivado: no se vende. Un administrador lo reactiva en Productos`);
+      // Sin limpiar, el buscador seguía ofreciendo "Crear el producto con este código".
+      setQuery('');
+      return;
+    }
     // RF-M5-04: código desconocido ofrece crear el producto, sin perder el carrito
     notificar('error', `Código ${code} no está en el catálogo`);
     setQuery(code);
@@ -388,8 +395,12 @@ export function PosClient({
       setResults([]);
       return;
     }
-    if (results.length === 1) {
-      agregar(results[0]);
+    // La búsqueda de la pantalla puede ser la de lo escrito hace un instante
+    // (corre aparte): con el lector, Enter llega antes de que se actualice y
+    // se agregaba el producto de la búsqueda anterior.
+    const actuales = await searchProducts(texto);
+    if (actuales.length === 1) {
+      agregar(actuales[0]);
       setQuery('');
       setResults([]);
       return;
@@ -467,6 +478,12 @@ export function PosClient({
         await db().saleQueue.delete(clientUuid);
         setErrorCobro(toUserMessage(fila.lastError ?? ''));
         return false;
+      }
+      if (fila) {
+        // La red se cortó a mitad del envío (esErrorDeRed): la venta queda en
+        // la cola como una sin conexión. Se reenvía con el mismo clientUuid,
+        // así que si sí había llegado no se duplica.
+        await db().saleQueue.update(clientUuid, { sinConexion: true });
       }
       registrada = respuestaDe(clientUuid) as typeof registrada;
     }
@@ -698,7 +715,7 @@ export function PosClient({
                       )}
                       {formatCLP(l.unitPrice)} {admiteDecimales(l.unidad) ? `el ${l.unidad}` : 'c/u'}
                       {typeof l.stockAvailable === 'number' && l.stockAvailable < l.quantity && (
-                        <span className="text-[var(--color-aviso)]"> · stock {l.stockAvailable}</span>
+                        <span className="text-[var(--color-aviso)]"> · en bodega {formatCantidad(Math.max(0, l.stockAvailable))}</span>
                       )}
                     </p>
                     <OfertaDeLinea linea={l} zona={config.zonaHoraria} />

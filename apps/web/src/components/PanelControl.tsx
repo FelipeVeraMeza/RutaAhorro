@@ -105,7 +105,9 @@ export function PanelControl({ usuarioId, verCostos, verPorPagar = false }: {
       {avisos && avisos.length > 0 && (
         <div>
           <div className="flex items-baseline justify-between gap-2 mb-1">
-            <p className="text-xs font-medium text-[var(--texto-suave)]">Avisos del sistema ({avisos.length})</p>
+            {/* Se traen los 20 más nuevos: con 20 puede haber más, y decir "(20)"
+                hacía creer que eran todos. */}
+            <p className="text-xs font-medium text-[var(--texto-suave)]">Avisos del sistema ({avisos.length >= 20 ? '20 o más' : avisos.length})</p>
             <button onClick={() => void marcarLeidos()} disabled={marcando} className="tap -my-2 px-1 text-xs underline text-[var(--texto-suave)]">
               {marcando ? 'Marcando…' : 'Marcar como vistos'}
             </button>

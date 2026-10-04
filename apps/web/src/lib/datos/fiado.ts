@@ -1,6 +1,7 @@
 'use client';
 
 import { supabase } from '../supabase/client';
+import { todas } from './paginar';
 import { DEMO_ACTIVO } from '../demo';
 // IndexedDB y la caja de demo solo hacen falta en la maqueta (RNF-62).
 const getMeta = async (k: string) => (await import('../offline/db')).getMeta(k);
@@ -64,12 +65,21 @@ const cuenta = (clienteId: string, nombre: string, tope: number, saldo: number, 
 // ---------------------------------------------------------------------------
 const base = {
   async cuentas(): Promise<CuentaCliente[]> {
-    const { data, error } = await supabase().from('v_cuenta_clientes')
-      .select('cliente_id, nombre, credito_tope, saldo, ultimo_abono, is_active').order('nombre');
-    if (error) throw error;
-    return (data ?? []).map((r) => cuenta(
+    // Por páginas: con más de 1.000 clientes la API cortaba la lista.
+    const data = await todas((a, b) => supabase().from('v_cuenta_clientes')
+      .select('cliente_id, nombre, credito_tope, saldo, ultimo_abono, is_active')
+      .order('nombre').order('cliente_id').range(a, b));
+    return data.map((r) => cuenta(
       r.cliente_id as string, r.nombre as string, Number(r.credito_tope ?? 0), Number(r.saldo ?? 0),
       (r.ultimo_abono as string) ?? null, r.is_active !== false));
+  },
+  async una(clienteId: string): Promise<CuentaCliente | null> {
+    const { data, error } = await supabase().from('v_cuenta_clientes')
+      .select('cliente_id, nombre, credito_tope, saldo, ultimo_abono, is_active')
+      .eq('cliente_id', clienteId).maybeSingle();
+    if (error) throw error;
+    return data ? cuenta(data.cliente_id as string, data.nombre as string, Number(data.credito_tope ?? 0),
+      Number(data.saldo ?? 0), (data.ultimo_abono as string) ?? null, data.is_active !== false) : null;
   },
   async movimientos(clienteId: string): Promise<MovimientoCuenta[]> {
     const { data, error } = await supabase().from('cuenta_cliente_movimientos')
@@ -117,7 +127,9 @@ async function saldoDemo(clienteId: string): Promise<number> {
 async function agregarDemo(m: Omit<MovDemo, 'id' | 'fecha'>) {
   const movs = await leer<MovDemo[]>(CLAVE_MOVS, []);
   movs.unshift({ ...m, id: crypto.randomUUID(), fecha: new Date().toISOString() });
-  await setMeta(CLAVE_MOVS, JSON.stringify(movs.slice(0, 500)));
+  // Sin recortar: el saldo se calcula sumando los movimientos, y cortar los
+  // viejos cambiaba lo que debía cada cliente de la maqueta.
+  await setMeta(CLAVE_MOVS, JSON.stringify(movs));
 }
 
 const demo: typeof base = {
@@ -130,6 +142,9 @@ const demo: typeof base = {
       const saldo = propios.reduce((s, m) => s + signoMovimiento(m.tipo) * m.monto, 0);
       return cuenta(c.id, c.nombre, topes[c.id] ?? 0, saldo, propios.find((m) => m.tipo === 'abono')?.fecha ?? null, c.activo !== false);
     }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  },
+  async una(clienteId) {
+    return (await demo.cuentas()).find((c) => c.clienteId === clienteId) ?? null;
   },
   async movimientos(clienteId) {
     return (await leer<MovDemo[]>(CLAVE_MOVS, [])).filter((m) => m.clienteId === clienteId);
@@ -165,7 +180,9 @@ export const fijarTopeCredito = (clienteId: string, tope: number) => repo().fija
 
 /** La cuenta de un cliente (tope, saldo, disponible), o null si no se pudo leer. */
 export async function cuentaDe(clienteId: string): Promise<CuentaCliente | null> {
-  return (await cuentasClientes()).find((c) => c.clienteId === clienteId) ?? null;
+  // La de ese cliente, no todas: el cobro la pide con el cliente esperando, y
+  // pasado el cliente N° 1.000 la lista completa ya no lo traía (sin "Fiado").
+  return repo().una(clienteId);
 }
 
 /**

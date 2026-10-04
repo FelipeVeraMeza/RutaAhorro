@@ -24,6 +24,13 @@ describe('totales del carrito', () => {
     expect(t.total).toBe(1500);
   });
 
+  it('una línea no descuenta más de lo que vale (igual que la base)', () => {
+    // 3.000 de descuento a una línea de 2.000: la línea queda en 0 y la otra intacta.
+    const t = cartTotals([linea('a', 1000, 2, { discountAmount: 3000 }), linea('b', 500, 1)]);
+    expect(t.total).toBe(500);
+    expect(t.total).toBe(lineSubtotal(linea('a', 1000, 2, { discountAmount: 3000 })) + 500);
+  });
+
   it('nunca da un total negativo', () => {
     const t = cartTotals([linea('a', 1000, 1)], 5000);
     expect(t.total).toBe(0);
@@ -65,6 +72,21 @@ describe('agregar al carrito', () => {
     const original = [linea('a', 1990)];
     addToCart(original, linea('b', 990));
     expect(original).toHaveLength(1);
+  });
+});
+
+describe('el descuento a mano sigue a la cantidad (RQ-15)', () => {
+  it('bajar la cantidad baja el descuento en la misma proporción', () => {
+    const l = setQuantity([linea('a', 1000, 3, { discountAmount: 300 })], 'a', 1);
+    expect(l[0].discountAmount).toBe(100);
+  });
+  it('volver a escanear lo sube en la misma proporción', () => {
+    const l = addToCart([linea('a', 1000, 2, { discountAmount: 200 })], linea('a', 1000, 1));
+    expect(l[0].quantity).toBe(3);
+    expect(l[0].discountAmount).toBe(300);
+  });
+  it('sin descuento no agrega uno', () => {
+    expect(setQuantity([linea('a', 1000, 2)], 'a', 5)[0].discountAmount).toBeUndefined();
   });
 });
 

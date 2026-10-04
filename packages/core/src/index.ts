@@ -32,3 +32,4 @@ export * from './impuestos.js';
 export * from './dte.js';
 export * from './facturacion.js';
 export * from './cifrado.js';
+export * from './paginar.js';

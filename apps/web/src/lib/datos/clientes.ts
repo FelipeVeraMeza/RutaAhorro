@@ -2,6 +2,7 @@
 
 import type { ClienteConPrecios } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
+import { todas } from './paginar';
 import { DEMO_ACTIVO } from '../demo';
 import { getMeta, setMeta } from '../offline/db';
 
@@ -46,13 +47,14 @@ const aDatos = (d: DatosCliente) => ({
 });
 
 async function leerDeBase(soloActivos: boolean): Promise<Cliente[]> {
+  // Por páginas: pasado el cliente N° 1.000 la API los cortaba, y en Vender
+  // (sin conexión) no se podía elegir a los que quedaban fuera.
   let q = supabase().from('clientes')
     .select('id, rut, nombre, giro, direccion, comuna, telefono, email, descuento_pct, notas, is_active')
-    .order('nombre');
+    .order('nombre').order('id');
   if (soloActivos) q = q.eq('is_active', true);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []).map((r) => ({
+  const data = await todas((a, b) => q.range(a, b));
+  return data.map((r) => ({
     id: r.id as string,
     rut: (r.rut as string) ?? null,
     nombre: r.nombre as string,

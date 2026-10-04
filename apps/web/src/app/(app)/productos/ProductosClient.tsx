@@ -66,6 +66,10 @@ export function ProductosClient({
   const [orden, setOrden] = useState<Orden>('nombre');
   // RF-M2-18 · ver solo los que tienen datos por completar.
   const [revisando, setRevisando] = useState(false);
+  // Se dibujan de a 200 (un celular se pone lento con 3.000 filas), pero el
+  // filtro, el orden, "Revisar datos" y Exportar trabajan sobre todos.
+  const [mostrar, setMostrar] = useState(200);
+  useEffect(() => { setMostrar(200); }, [busqueda, categoriaId, estado, verInactivos, orden, revisando]);
   const [cambiandoPrecio, setCambiandoPrecio] = useState<Producto | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -343,7 +347,7 @@ export function ProductosClient({
         </EstadoVacio>
       ) : (
         <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden">
-          {visibles.map((p) => {
+          {visibles.slice(0, mostrar).map((p) => {
             const est = estadoStock(p);
             const problemas = revisando ? calidad.porProducto.get(p.id) ?? [] : [];
             return (
@@ -419,6 +423,11 @@ export function ProductosClient({
             );
           })}
         </ul>
+      )}
+      {!cargando && visibles.length > mostrar && (
+        <button onClick={() => setMostrar((n) => n + 200)} className="tap w-full mt-3 rounded-xl border border-[var(--borde)] text-sm font-medium">
+          Ver más ({visibles.length - mostrar} {visibles.length - mostrar === 1 ? 'queda' : 'quedan'})
+        </button>
       )}
 
       {!puedeVerCostos && productos.length > 0 && (

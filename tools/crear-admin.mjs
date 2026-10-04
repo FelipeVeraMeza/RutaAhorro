@@ -99,6 +99,9 @@ const { data: creado, error: errCrear } = await db.auth.admin.createUser({
     role: rol,
     full_name: nombre,
   },
+  // Desde 0037 el disparador lee el local y el rol de app_metadata (solo el
+  // servidor lo escribe). user_metadata queda para una base sin 0037.
+  app_metadata: { tenant_id: tenant.id, store_id: tienda.id, role: rol, full_name: nombre },
 });
 
 if (errCrear) {

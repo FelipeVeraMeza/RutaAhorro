@@ -275,6 +275,9 @@ export function Cobro({
               inputMode="numeric"
               value={recibido}
               onChange={(e) => setRecibido(e.target.value)}
+              // "Listo"/Enter del teclado del celular confirma, como el botón.
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void confirmar(); } }}
+              enterKeyHint="done"
               placeholder="0"
               className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] text-xl num text-right"
             />

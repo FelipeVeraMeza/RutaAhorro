@@ -47,13 +47,20 @@ function copiaDe(v: VentaDetallada, local: string, ivaPct: number, pie: string |
     nombre: l.productoNombre, cantidad: l.cantidad, precioUnitario: l.precioUnitario,
     descuento: l.descuento, subtotal: l.subtotal,
   }));
+  // `v.descuento` (sales.discount_total) YA trae los descuentos de las líneas:
+  // antes se sumaban otra vez y la copia decía el doble de descuento. Y el neto
+  // es el que guardó la base: total − IVA dejaba adentro el impuesto adicional
+  // (IABA, ILA) y la copia no lo mostraba.
+  const adicionales = v.adicionales ?? [];
   return {
     folio: v.folio, fecha: v.fecha, local, cajero: v.vendedor ?? '',
     lineas,
-    subtotal: lineas.reduce((s, l) => s + Math.round(l.precioUnitario * l.cantidad), 0),
-    descuento: lineas.reduce((s, l) => s + l.descuento, 0) + v.descuento,
-    total: v.total, iva: v.iva, neto: v.total - v.iva, adicionales: [], totalAdicionales: 0, ivaPct,
-    pagos: v.pagos.map((p) => ({ metodo: p.metodo, monto: p.monto })), vuelto: 0,
+    subtotal: v.subtotal || lineas.reduce((s, l) => s + Math.round(l.precioUnitario * l.cantidad), 0),
+    descuento: v.descuento,
+    total: v.total, iva: v.iva, neto: v.neto ?? v.total - v.iva,
+    adicionales, totalAdicionales: adicionales.reduce((s, a) => s + a.monto, 0), ivaPct,
+    pagos: v.pagos.map((p) => ({ metodo: p.metodo, monto: p.monto, recibido: p.recibido ?? undefined })),
+    vuelto: v.pagos.reduce((s, p) => s + (p.vuelto ?? 0), 0),
     // RF-M5-28 · Lo cobrado en efectivo es lo que registró la base; la
     // diferencia con el total es el redondeo.
     ...ajusteDe(v),

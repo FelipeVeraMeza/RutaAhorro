@@ -93,9 +93,16 @@ export function PedirAutorizacion({ pct, tope, onAutorizado, onCerrar }: {
 
   useEffect(() => {
     void repoAutorizaciones().autorizadores()
-      .then((l) => { setAutorizadores(l); if (l.length === 1) setQuien(l[0].id); })
+      // Se elige solo si hay uno que alcance: antes se elegía al único aunque su
+      // tope no alcanzara (su botón desactivado y marcado), y el PIN fallaba.
+      .then((l) => {
+        setAutorizadores(l);
+        const alcanzan = l.filter((a) => a.tope + 0.01 >= pedido);
+        if (alcanzan.length === 1) setQuien(alcanzan[0].id);
+        else if (l.length > 0 && alcanzan.length === 0) setError('Nadie con PIN puede autorizar este descuento: es mayor que el tope de todos. Bájalo.');
+      })
       .catch((e) => { setAutorizadores([]); setError(toUserMessage(e)); });
-  }, []);
+  }, [pedido]);
 
   async function autorizar() {
     setError(null);

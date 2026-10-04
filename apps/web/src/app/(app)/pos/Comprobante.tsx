@@ -8,6 +8,7 @@ import {
   type Comprobante as DatosComprobante,
 } from '@rutaahorro/core';
 import { Timbre } from '@/components/Timbre';
+import { Modal } from '@/components/Modal';
 
 /**
  * Comprobante que se le muestra y entrega al cliente (RF-M5-14).
@@ -52,13 +53,12 @@ export function Comprobante({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center"
-      role="dialog"
-      aria-modal="true"
-      aria-label={copia ? 'Copia del comprobante' : 'Comprobante de la venta'}
-    >
-      <div className="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl max-h-[92vh] flex flex-col">
+    // Con <Modal> (regla 10). Era un diálogo hecho a mano: abierto como COPIA
+    // encima del detalle de una venta, Escape cerraba el detalle de atrás y
+    // dejaba el comprobante flotando, y Tab llevaba el foco a la pantalla de
+    // atrás. Escape ahora cierra el comprobante (= "Nueva venta").
+    <Modal titulo={copia ? 'Copia del comprobante' : 'Comprobante de la venta'} onCerrar={onCerrar}>
+      <div className="max-h-[92vh] flex flex-col">
         <div className="px-4 pt-4 pb-3 text-center border-b border-[var(--borde)]">
           {!copia && <p className="text-3xl mb-1" aria-hidden>✅</p>}
           {/* Sin folio es una venta hecha sin internet: está guardada en el
@@ -170,10 +170,8 @@ export function Comprobante({
           </div>
         </div>
 
-        <div
-          className="px-4 pt-3 pb-4 border-t border-[var(--borde)] no-imprimir"
-          style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
-        >
+        {/* El margen de la barra del sistema lo pone <Modal>. */}
+        <div className="px-4 pt-3 pb-4 border-t border-[var(--borde)] no-imprimir">
           {copiado && (
             <p role="status" className="text-xs text-center text-[var(--texto-suave)] mb-2">
               Comprobante copiado. Pégalo en WhatsApp.
@@ -201,7 +199,7 @@ export function Comprobante({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

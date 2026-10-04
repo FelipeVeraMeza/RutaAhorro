@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parsearProductos, parsearFilas, partirLinea, detectarSeparador, leerNumero, plantillaCSV,
+  parsearProductos, parsearFilas, partirLinea, detectarSeparador, leerNumero, plantillaCSV, datosDeActualizacion,
 } from '../src/import.js';
 
 const ENC = 'nombre;sku;codigo_barras;categoria;precio_venta;costo;unidad;stock_inicial;stock_minimo;perecible;dias_alerta';
@@ -113,6 +113,27 @@ describe('importación válida', () => {
       ].join('\n'));
       expect(r.filas[0].perecible, `valor "${v}"`).toBe(true);
     }
+  });
+});
+
+describe('planilla que solo actualiza precios (docs/28, N° 179)', () => {
+  const actual = { descripcion: 'Bolsa de 1 kilo', costo: 1100, stock_minimo: 10, perecible: false, dias_alerta: 30 };
+
+  it('lo que viene en blanco no borra lo que el producto ya tenía', () => {
+    const r = parsearProductos('nombre;sku;precio_venta\nArroz 1 kg;ARR-1K;1690');
+    expect(r.ok).toBe(true);
+    const d = datosDeActualizacion(r.filas[0], actual);
+    expect(d.costo).toBeNull();               // null = no tocar el costo promedio (antes 0)
+    expect(d.stock_minimo).toBe(10);          // antes 0
+    expect(d.descripcion).toBe('Bolsa de 1 kilo');
+    expect(r.filas[0].vacias).toContain('categoria');
+  });
+
+  it('lo que sí viene se aplica, aunque sea 0', () => {
+    const r = parsearProductos('nombre;sku;precio_venta;costo;stock_minimo\nArroz 1 kg;ARR-1K;1690;1200;0');
+    const d = datosDeActualizacion(r.filas[0], actual);
+    expect(d.costo).toBe(1200);
+    expect(d.stock_minimo).toBe(0);
   });
 });
 

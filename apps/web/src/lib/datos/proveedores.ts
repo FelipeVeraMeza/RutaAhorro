@@ -2,6 +2,7 @@
 
 import { weightedAverageCost } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
+import { todas } from './paginar';
 import { DEMO_ACTIVO } from '../demo';
 import { db } from '../offline/db';
 import { syncCatalog } from '../offline/catalog';
@@ -242,17 +243,21 @@ const repoSupabase: RepositorioProveedores = {
     return { id: data.id as string };
   },
 
+  // Con `select`: un update que RLS no deja pasar no da error (bodega editando
+  // un proveedor, por ejemplo), y la pantalla decía que se guardó.
   async actualizar(id, p) {
-    const { error } = await supabase().from('suppliers').update({
+    const { data, error } = await supabase().from('suppliers').update({
       name: p.nombre, rut: p.rut, contact_name: p.contacto,
       phone: p.telefono, email: p.email,
-    }).eq('id', id);
+    }).eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('SIN_PERMISO');
   },
 
   async desactivar(id) {
-    const { error } = await supabase().from('suppliers').update({ is_active: false }).eq('id', id);
+    const { data, error } = await supabase().from('suppliers').update({ is_active: false }).eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('SIN_PERMISO');
   },
 
   async recepciones(limite = 30) {
@@ -382,12 +387,14 @@ export async function ultimoProveedorPorProducto(): Promise<Map<string, { id: st
     }
     return mapa;
   }
-  const { data, error } = await supabase().from('purchase_receipt_items')
-    .select('product_id, recepcion:purchase_receipts!inner(received_at, status, supplier_id, proveedor:suppliers(name))')
+  // Por páginas y ordenadas: `.limit(5000)` recibía 1.000 filas cualquiera
+  // (la API corta ahí), y el "último proveedor" de muchos productos era uno
+  // viejo o ninguno.
+  const data = await todas((a, b) => supabase().from('purchase_receipt_items')
+    .select('id, product_id, recepcion:purchase_receipts!inner(received_at, status, supplier_id, proveedor:suppliers(name))')
     .eq('recepcion.status', 'confirmada')
-    .limit(5000);
-  if (error) throw error;
-  const filas = (data ?? []).map((f) => {
+    .order('id').range(a, b));
+  const filas = data.map((f) => {
     const r = f.recepcion as unknown as { received_at: string; supplier_id: string | null; proveedor: { name: string } | null };
     return { productId: f.product_id as string, fecha: r.received_at, id: r.supplier_id, nombre: r.proveedor?.name ?? null };
   }).sort((a, b) => b.fecha.localeCompare(a.fecha));

@@ -55,6 +55,9 @@ export interface Venta {
   motivoAnulacion: string | null;
   /** Qué documento correspondía por esta venta (0015). */
   documento: DocumentoVenta;
+  /** Neto e impuestos adicionales congelados por la base (0018). Sin ellos, total − IVA. */
+  neto?: number;
+  adicionales?: Array<{ tasa: number; nombre: string | null; neto: number; monto: number }>;
 }
 
 export interface DocumentoEmitido extends RegistroDte {
@@ -73,7 +76,8 @@ export interface Devolucion {
 
 export interface VentaDetallada extends Venta {
   lineas: LineaVenta[];
-  pagos: Array<{ metodo: string; monto: number }>;
+  /** `recibido` y `vuelto`: lo que pasó por el mostrador, para la copia. */
+  pagos: Array<{ metodo: string; monto: number; recibido?: number | null; vuelto?: number }>;
   /** Boleta o factura y notas de crédito (0019). Vacío con tarjeta o en la maqueta. */
   documentos: DocumentoEmitido[];
   devoluciones: Devolucion[];
@@ -247,8 +251,9 @@ function aVenta(v: VentaDemo): Venta {
     folio: v.folio,
     fecha: v.fecha,
     total: v.total,
-    subtotal: v.total,
-    descuento: 0,
+    // Como la base: subtotal sin descuentos y el descuento de las líneas.
+    subtotal: v.lineas.reduce((t, l) => t + Math.round(l.precioUnitario * l.cantidad), 0),
+    descuento: v.lineas.reduce((t, l) => t + l.descuento, 0),
     iva,
     vendedor: 'Modo demo',
     anulada: v.anulada,
@@ -332,7 +337,7 @@ const repoLocal: RepositorioVentas = {
 const SELECT_VENTA =
   'id, folio, sold_at, total, subtotal, discount_total, tax_amount, status, ' +
   'voided_at, void_reason, document_type, receptor_rut, receptor_razon_social, ' +
-  'receptor_giro, receptor_direccion, profiles!sales_sold_by_fkey(full_name)';
+  'receptor_giro, receptor_direccion, neto, impuestos_detalle, profiles!sales_sold_by_fkey(full_name)';
 
 interface FilaVenta {
   id: string;
@@ -350,6 +355,8 @@ interface FilaVenta {
   receptor_razon_social?: string | null;
   receptor_giro?: string | null;
   receptor_direccion?: string | null;
+  neto?: number | null;
+  impuestos_detalle?: Array<{ tasa: number; nombre: string | null; neto: number; monto: number }> | null;
   profiles?: { full_name: string } | null;
 }
 
@@ -362,6 +369,10 @@ function aVentaBD(f: FilaVenta): Venta {
     subtotal: Number(f.subtotal ?? 0),
     descuento: Number(f.discount_total ?? 0),
     iva: Number(f.tax_amount ?? 0),
+    neto: f.neto == null ? undefined : Number(f.neto),
+    adicionales: (f.impuestos_detalle ?? []).map((a) => ({
+      tasa: Number(a.tasa), nombre: a.nombre ?? null, neto: Number(a.neto ?? 0), monto: Number(a.monto ?? 0),
+    })),
     vendedor: f.profiles?.full_name ?? null,
     anulada: f.status === 'anulada',
     anuladaPor: null,
@@ -463,7 +474,7 @@ const repoSupabase: RepositorioVentas = {
       client.from('sale_items')
         .select('id, product_name, quantity, unit_price, discount_amount, subtotal, sale_return_items(cantidad)')
         .eq('sale_id', id).order('id'),
-      client.from('sale_payments').select('method, amount').eq('sale_id', id),
+      client.from('sale_payments').select('method, amount, received_amount, change_amount').eq('sale_id', id),
       client.from('dte_documentos')
         .select('id, tipo, folio, ambiente, estado, fecha_emision, emitido_en, emisor, receptor, detalle, neto, exento, iva, iva_pct, impuestos_detalle, total, referencia')
         .eq('sale_id', id).order('emitido_en'),
@@ -487,6 +498,8 @@ const repoSupabase: RepositorioVentas = {
       pagos: (pagos ?? []).map((p) => ({
         metodo: p.method as string,
         monto: Number(p.amount ?? 0),
+        recibido: p.received_amount == null ? null : Number(p.received_amount),
+        vuelto: Number(p.change_amount ?? 0),
       })),
       documentos: (docs ?? []) as unknown as DocumentoEmitido[],
       devoluciones: (devs ?? []).map((d) => ({

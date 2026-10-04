@@ -24,6 +24,9 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+  // Aparte del error de carga: si no se podía copiar, la pantalla entera se
+  // reemplazaba por el mensaje y el pedido armado desaparecía.
+  const [errorCopia, setErrorCopia] = useState<string | null>(null);
   // RF-M3-12 · el proveedor de la última recepción de cada producto.
   const [proveedorDe, setProveedorDe] = useState<Map<string, { id: string; nombre: string }>>(new Map());
   const [proveedorElegido, setProveedorElegido] = useState('');
@@ -73,7 +76,7 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
   const texto = textoPedido(pedido, local);
   async function copiar() {
     try { await navigator.clipboard.writeText(texto); setCopiado(true); setTimeout(() => setCopiado(false), 2500); }
-    catch { setError('No se pudo copiar. Mantén presionado el texto para copiarlo.'); }
+    catch { setErrorCopia('No se pudo copiar. Usa "Enviar por WhatsApp" o "Exportar".'); }
   }
   function exportar() {
     const csv = aCSV(pedido, [
@@ -125,7 +128,7 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
               </div>
               <label className="shrink-0 text-right">
                 <span className="block text-[11px] text-[var(--texto-suave)]">Pedir</span>
-                <input inputMode="decimal" value={cantidades[l.id] ?? formatCantidad(l.pedir)} disabled={!incluido}
+                <input inputMode="numeric" value={cantidades[l.id] ?? formatCantidad(l.pedir)} disabled={!incluido}
                   onChange={(e) => setCantidades((c) => ({ ...c, [l.id]: e.target.value }))}
                   aria-label={`Cantidad a pedir de ${l.nombre}`}
                   className="tap w-20 px-2 rounded-lg border border-[var(--borde)] num text-right" />
@@ -140,11 +143,14 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
       <div className="tarjeta p-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm">
           <strong>{pedido.length}</strong> {pedido.length === 1 ? 'producto' : 'productos'} en el pedido
-          {verCostos && costoEstimado(pedido) > 0 && <> · costo estimado <strong className="num">{formatCLP(costoEstimado(pedido))}</strong></>}
+          {/* El costo promedio es neto (docs/26 N° 13): que no se lea como lo que se va a pagar. */}
+          {verCostos && costoEstimado(pedido) > 0 && <> · costo estimado <strong className="num">{formatCLP(costoEstimado(pedido))}</strong> + IVA</>}
         </p>
       </div>
+      {errorCopia && <p role="alert" className="text-sm text-[var(--color-alerta)]">{errorCopia}</p>}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <a href={`https://wa.me/?text=${encodeURIComponent(texto)}`} target="_blank" rel="noopener noreferrer"
+           aria-disabled={!pedido.length} tabIndex={pedido.length ? undefined : -1}
            className={`btn btn-primario ${pedido.length ? '' : 'pointer-events-none opacity-50'}`}>
           Enviar por WhatsApp
         </a>

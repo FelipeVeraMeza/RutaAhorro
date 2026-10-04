@@ -77,7 +77,12 @@ export function lineSubtotal(line: CartLine): number {
 
 export function cartTotals(lines: CartLine[], globalDiscount = 0): CartTotals {
   const gross = lines.reduce((sum, l) => sum + clp(l.unitPrice * l.quantity), 0);
-  const lineDiscounts = lines.reduce((sum, l) => sum + descuentoDeLinea(l), 0);
+  // Cada línea descuenta a lo más lo que vale, como `lineSubtotal` y como la
+  // base (fn_register_sale deja el subtotal de la línea en 0, no negativo).
+  // Antes el sobrante se restaba de las otras líneas: la pantalla cobraba
+  // menos que la base y la venta fallaba con PAGO_NO_CUADRA.
+  const lineDiscounts = lines.reduce(
+    (sum, l) => sum + Math.min(descuentoDeLinea(l), clp(l.unitPrice * l.quantity)), 0);
   const discountTotal = clp(lineDiscounts + globalDiscount);
   return {
     subtotal: clp(gross),
@@ -88,18 +93,30 @@ export function cartTotals(lines: CartLine[], globalDiscount = 0): CartTotals {
   };
 }
 
+/**
+ * La línea con otra cantidad. El descuento a mano (RQ-15) se mantiene en la
+ * misma proporción: 10 % a 3 unidades sigue siendo 10 % a 2. Antes quedaba el
+ * monto en pesos: $3.000 de descuento a 3 bebidas de $1.000, bajando a 1,
+ * regalaba la bebida y el resto se descontaba de otras líneas.
+ */
+function conCantidad(l: CartLine, quantity: number): CartLine {
+  const d = l.discountAmount ?? 0;
+  if (d <= 0 || l.quantity <= 0) return { ...l, quantity };
+  return { ...l, quantity, discountAmount: clp((d * quantity) / l.quantity) };
+}
+
 /** Agrega un producto: si ya está, suma cantidad en vez de duplicar la línea (US-14). */
 export function addToCart(lines: CartLine[], incoming: CartLine): CartLine[] {
   const idx = lines.findIndex((l) => l.productId === incoming.productId);
   if (idx === -1) return [...lines, incoming];
   const next = [...lines];
-  next[idx] = { ...next[idx], quantity: next[idx].quantity + incoming.quantity };
+  next[idx] = conCantidad(next[idx], next[idx].quantity + incoming.quantity);
   return next;
 }
 
 export function setQuantity(lines: CartLine[], productId: string, quantity: number): CartLine[] {
   if (quantity <= 0) return lines.filter((l) => l.productId !== productId);
-  return lines.map((l) => (l.productId === productId ? { ...l, quantity } : l));
+  return lines.map((l) => (l.productId === productId ? conCantidad(l, quantity) : l));
 }
 
 export function removeFromCart(lines: CartLine[], productId: string): CartLine[] {

@@ -1,6 +1,6 @@
 'use client';
 
-import { normalizeBarcode,
+import { datosDeActualizacion, normalizeBarcode,
   codigosDesdeImportacion, planCodigos, toUserMessage, type FilaProducto,
 } from '@rutaahorro/core';
 import { db, normalizeSearch, type LocalProduct } from '../offline/db';
@@ -149,7 +149,8 @@ export const repoLocal: RepositorioProductos = {
     }
 
     todos.sort((a, b) => a.name.localeCompare(b.name, 'es'));
-    const pagina = todos.slice(0, filtro.limite ?? 200);
+    // Sin límite, todos: igual que repoSupabase.
+    const pagina = filtro.limite ? todos.slice(0, filtro.limite) : todos;
     return Promise.all(pagina.map((p) => aProducto(p, verCostos, cats, costos)));
   },
 
@@ -292,7 +293,7 @@ export const repoLocal: RepositorioProductos = {
     filas: FilaProducto[],
     onProgreso?: (hechas: number, total: number) => void,
   ): Promise<ResultadoLote> {
-    const resultado: ResultadoLote = { creados: 0, actualizados: 0, errores: [] };
+    const resultado: ResultadoLote = { creados: 0, actualizados: 0, stockSinCargar: 0, errores: [] };
     const cats = await leerCategorias();
 
     for (const [i, fila] of filas.entries()) {
@@ -326,20 +327,26 @@ export const repoLocal: RepositorioProductos = {
             .map((b) => b.barcode);
           const codigos = codigosDesdeImportacion(previos, fila.codigo_barras);
 
+          // Lo que la fila trae en blanco no se toca (N° 179), como en repoSupabase.
+          const d = datosDeActualizacion(fila, {
+            descripcion: existente.description ?? null, costo: (await leerCostos())[existente.id] ?? 0,
+            stock_minimo: existente.minStock, perecible: existente.tracksExpiry, dias_alerta: 30,
+          });
           await this.actualizar(existente.id, {
             nombre: fila.nombre,
-            descripcion: fila.descripcion,
+            descripcion: d.descripcion,
             sku: fila.sku,
-            categoriaId,
+            categoriaId: (fila.vacias ?? []).includes('categoria') ? existente.categoryId : categoriaId,
             unidad: fila.unidad,
             precioVenta: fila.precio_venta,
-            costo: fila.costo,
-            stockMinimo: fila.stock_minimo,
-            perecible: fila.perecible,
-            diasAlerta: fila.dias_alerta,
+            ...(d.costo !== null ? { costo: d.costo } : {}),
+            stockMinimo: d.stock_minimo,
+            perecible: d.perecible,
+            diasAlerta: d.dias_alerta,
             ...(codigos ? { codigos } : {}),
           });
           resultado.actualizados++;
+          if (fila.stock_inicial > 0) resultado.stockSinCargar = (resultado.stockSinCargar ?? 0) + 1;
         } else {
           await this.crear({
             nombre: fila.nombre,

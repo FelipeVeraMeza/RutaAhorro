@@ -16,6 +16,22 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.7.0',
+    fecha: '2026-10-04',
+    titulo: 'Revisión por módulo: ventas que no se pierden, cuentas más seguras y listas completas',
+    cambios: [
+      { para: 'vendedor', texto: 'Ventas sin internet: una venta que quedó a medio enviar (se cerró la app o se apagó el celular) ahora se envía sola. Si la red se corta justo al cobrar, la venta queda guardada y no hay que cobrar de nuevo.' },
+      { para: 'vendedor', texto: 'Cerrar caja primero envía las ventas que quedaron en el celular; si alguna no se puede enviar, no deja cerrar y dice por qué.' },
+      { para: 'vendedor', texto: 'Vender: el descuento de una línea sigue a la cantidad (10 % de 3 sigue siendo 10 % de 2). Enter en "¿Con cuánto paga?" confirma. Escanear un producto desactivado lo dice.' },
+      { para: 'todos', texto: 'El bloqueo por inactividad ya no se salta cerrando la app o abriendo otra pestaña. Cambiar la contraseña borra la huella vieja del celular.' },
+      { para: 'admin', texto: 'Desactivar a una persona le corta el acceso de verdad, también por fuera de la pantalla. Y nadie puede crearse una cuenta de administrador por su cuenta (necesita la migración 0037).' },
+      { para: 'admin', texto: 'Productos, Inventario, Reportes, Qué comprar, Por pagar, Clientes y el respaldo traen TODO: antes se cortaban en 200 o 1.000 filas sin avisar. Productos muestra de a 200 con "Ver más".' },
+      { para: 'admin', texto: 'Recibir mercadería pide la fecha de la factura (para el libro de compras) y pregunta antes de recibir algo con costo $0.' },
+      { para: 'admin', texto: 'Caja: el resumen impreso trae ventas en efectivo, ingresos y egresos; los abonos de fiado con tarjeta aparecen en el cuadre.' },
+      { para: 'supervisor', texto: 'Compras: editar un proveedor es solo del administrador (antes el botón aparecía y no guardaba nada).' },
+    ],
+  },
+  {
     version: '0.6.2',
     fecha: '2026-10-01',
     titulo: 'Descuentos con autorización',

@@ -252,3 +252,68 @@ test('La bitácora y el kardex no se editan ni se borran, ni siquiera como dueñ
     }
   }
 });
+
+// 0037 · El registro público de Supabase deja escribir user_metadata a
+// cualquiera. Un vendedor que conoce el id de su local se creaba otra cuenta
+// con `{tenant_id, role: 'admin'}` y quedaba de administrador.
+test('S-37 · una cuenta con el local y el rol solo en user_metadata no queda en ningún local', async () => {
+  const id = (await banco.su.query(
+    `insert into auth.users (email, raw_user_meta_data) values ('intruso@x.cl', $1) returning id`,
+    [{ tenant_id: A.tenant, store_id: A.store, role: 'admin', full_name: 'Intruso' }])).rows[0].id;
+  const r = await filas(banco.su, `select role from profiles where id = $1`, [id]);
+  assert.deepEqual(r, [], 'se creó un perfil desde user_metadata');
+});
+
+test('S-37 · la cuenta que crea el servidor (app_metadata) sí queda en su local con su rol', async () => {
+  const id = (await banco.su.query(
+    `insert into auth.users (email, raw_app_meta_data) values ('nuevo@x.cl', $1) returning id`,
+    [{ tenant_id: A.tenant, store_id: A.store, role: 'bodega', full_name: 'Nuevo' }])).rows[0].id;
+  const [p] = await filas(banco.su, `select tenant_id, role from profiles where id = $1`, [id]);
+  assert.equal(p?.tenant_id, A.tenant);
+  assert.equal(p?.role, 'bodega');
+});
+
+test('0037 · una merma que suma se rechaza, y el tipo del ajuste sigue al signo real', async () => {
+  const p = await A.producto({ stock: 10 });
+  const sup = await banco.como(A.supervisor);
+  rechazado(await intentar(rpc(sup, 'fn_adjust_stock', {
+    p_product_id: p, p_new_quantity: 12, p_movement_type: 'merma', p_reason: 'error' })), 'una merma sumó stock');
+  // La pantalla dijo "positivo" mirando un stock viejo; la base resta: queda negativo.
+  await rpc(sup, 'fn_adjust_stock', {
+    p_product_id: p, p_new_quantity: 8, p_movement_type: 'ajuste_positivo', p_reason: 'conteo' });
+  const [m] = await filas(banco.su,
+    `select movement_type, quantity from inventory_movements where product_id = $1 order by created_at desc limit 1`, [p]);
+  assert.equal(m.movement_type, 'ajuste_negativo');
+  assert.equal(Number(m.quantity), -2);
+});
+
+test('0037 · un vendedor no crea proveedores, y el supervisor no cambia uno existente', async () => {
+  const ven = await banco.como(A.cajero1);
+  const r = await intentar(ven.query(
+    `insert into suppliers (tenant_id, name) values ($1, 'Proveedor trucho') returning id`, [A.tenant]));
+  rechazado(r, 'un vendedor creó un proveedor');
+  const prov = (await banco.su.query(
+    `insert into suppliers (tenant_id, name) values ($1, 'Original') returning id`, [A.tenant])).rows[0].id;
+  const sup = await banco.como(A.supervisor);
+  const u = await intentar(sup.query(`update suppliers set name = 'Cambiado' where id = $1`, [prov]));
+  assert.equal(u.ok && (u.valor.rowCount ?? 0) > 0, false, 'el supervisor cambió un proveedor');
+  // Bodega sí lo crea al recibir mercadería (T-55).
+  const bod = await banco.como(A.bodega);
+  assert.ok((await intentar(bod.query(
+    `insert into suppliers (tenant_id, name) values ($1, 'Nuevo al recibir') returning id`, [A.tenant]))).ok);
+});
+
+// 0037 · Desactivar tenía que cortar el acceso, no solo esconder la pantalla.
+test('0037 · un usuario desactivado no ve las ventas del local por la API, pero sí su propio perfil', async () => {
+  const L = await nuevoLocal(banco, 'Local desactivado');
+  const p = await L.producto({ stock: 5 });
+  const caj = await banco.como(L.cajero1);
+  await rpc(caj, 'fn_open_cash_session', { p_opening_amount: 0 });
+  await rpc(caj, 'fn_register_sale', venta(p, 1, 1000));
+  assert.ok((await filas(caj, `select id from sales`)).length > 0, 'activo, tenía que ver su venta');
+  await banco.su.query(`update profiles set is_active = false where id = $1`, [L.cajero1.id]);
+  assert.deepEqual(await filas(caj, `select id from sales`), [], 'desactivado, seguía viendo las ventas');
+  assert.deepEqual(await filas(caj, `select id from products`), [], 'desactivado, seguía viendo el catálogo');
+  const yo = await filas(caj, `select is_active from profiles where id = $1`, [L.cajero1.id]);
+  assert.equal(yo[0]?.is_active, false, 'no pudo leer su propio perfil (la app no sabría decirle que está desactivado)');
+});

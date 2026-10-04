@@ -77,6 +77,12 @@ export function FormularioProducto({
   const [descripcion, setDescripcion] = useState(origen?.descripcion ?? '');
   const [categoriaId, setCategoriaId] = useState(origen?.categoriaId ?? '');
   const [nuevaCategoria, setNuevaCategoria] = useState('');
+  // La categoría nueva se crea una sola vez: si lo que sigue fallaba, tocar
+  // Guardar de nuevo intentaba crearla otra vez y chocaba con la recién creada.
+  const [categoriasCreadas, setCategoriasCreadas] = useState<Categoria[]>([]);
+  // El producto nuevo ya quedó creado y falló lo de después (ofertas o
+  // impuesto): Guardar otra vez reintenta solo eso. Antes creaba otro igual.
+  const [creadoId, setCreadoId] = useState<string | null>(null);
   // 0032 · Todo se vende y se cuenta por unidad: no hay kg, litro ni ml.
   const unidad = 'unidad';
   const { ivaPct } = useConfiguracion();
@@ -157,7 +163,8 @@ export function FormularioProducto({
   // mínimo de "1.5" kg se convertía en 15. Ver docs/21.
   const vPrecio = validarMonto(precio, { etiqueta: 'precio de venta', permiteCero: false, maximo: 50_000_000 });
   const vCosto = validarMonto(costo, { etiqueta: 'costo', permiteVacio: true, maximo: 50_000_000 });
-  const vStockMinimo = validarCantidad(stockMinimo, { permiteVacio: true, maximo: 1_000_000 });
+  // Por unidad (0032): "1,5" de mínimo no existe.
+  const vStockMinimo = validarCantidadStock(stockMinimo, unidad, { permiteVacio: true, maximo: 1_000_000 });
   const vStockSala = validarCantidadStock(stockSala, unidad, { permiteVacio: true, maximo: 1_000_000 });
   const vDiasAlerta = validarCantidad(diasAlerta, { permiteVacio: true, maximo: 3650 });
 
@@ -181,7 +188,9 @@ export function FormularioProducto({
       return;
     }
     // Verificación contra el catálogo: RF-M2-03
-    const dueño = await repoProductos().codigoEnUso(code, producto?.id);
+    // Sin red la consulta lanzaba y el código no se agregaba, sin ningún aviso.
+    // La base igual rechaza un código repetido al guardar.
+    const dueño = await repoProductos().codigoEnUso(code, producto?.id).catch(() => null);
     if (dueño) {
       setAvisoCodigo(`Ese código ya pertenece a "${dueño}"`);
       return;
@@ -233,7 +242,11 @@ export function FormularioProducto({
 
       let catId: string | null = categoriaId || null;
       if (nuevaCategoria.trim()) {
-        catId = (await repo.crearCategoria(nuevaCategoria.trim())).id;
+        const nueva = await repo.crearCategoria(nuevaCategoria.trim());
+        catId = nueva.id;
+        setCategoriasCreadas((c) => [...c, nueva]);
+        setCategoriaId(nueva.id);
+        setNuevaCategoria('');
       }
 
       const base = {
@@ -260,6 +273,8 @@ export function FormularioProducto({
           esperadoEn: producto.actualizadoEn,
           ...(puedeVerCostos && costo.trim() !== '' ? { costo: costoNum } : {}),
         });
+      } else if (creadoId) {
+        idGuardado = creadoId;
       } else {
         idGuardado = (await repo.crear({
           ...base,
@@ -269,6 +284,7 @@ export function FormularioProducto({
           stockInicialBodega: 0,
           vencimientoInicial: perecible && vencimiento ? vencimiento : null,
         })).id;
+        setCreadoId(idGuardado);
       }
 
       // Ofertas e impuesto: solo si cambiaron. Si fallan, el producto ya
@@ -597,7 +613,7 @@ export function FormularioProducto({
                         className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
                       >
                         <option value="">Sin categoría</option>
-                        {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                        {[...categorias, ...categoriasCreadas].map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                       </select>
                       <input
                         value={nuevaCategoria}
@@ -619,7 +635,7 @@ export function FormularioProducto({
                     {(p) => (
                       <input
                         {...p}
-                        inputMode="decimal" value={stockMinimo}
+                        inputMode="numeric" value={stockMinimo}
                         onChange={(e) => setStockMinimo(e.target.value)}
                         className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
                       />

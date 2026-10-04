@@ -15,12 +15,15 @@ import {
   repoProveedores, buscarParaRecepcion, productoParaRecepcion,
   type Proveedor, type LineaRecepcion,
 } from '@/lib/datos/proveedores';
-import { findByBarcode } from '@/lib/offline/catalog';
+import { findByBarcode, desactivadoConCodigo } from '@/lib/offline/catalog';
 import { useScanner } from '@/lib/scanner/useScanner';
 import { configuracionLocal, CONFIGURACION_POR_OMISION, useConfiguracion } from '@/lib/datos/configuracion';
 import { repoProductos, type Categoria } from '@/lib/productos';
-import { FormularioProducto } from '../../productos/FormularioProducto';
-import { FormProveedor } from '../FormProveedor';
+import dynamic from 'next/dynamic';
+// RNF-62 · El alta de producto y de proveedor se bajan recién al abrirlas: con
+// los arreglos de docs/28 la pantalla pasaba los 270 kB, y casi nunca se usan.
+const FormularioProducto = dynamic(() => import('../../productos/FormularioProducto').then((m) => m.FormularioProducto), { ssr: false });
+const FormProveedor = dynamic(() => import('../FormProveedor').then((m) => m.FormProveedor), { ssr: false });
 
 const TIPOS = [
   { id: 'guia', label: 'Guía de despacho' },
@@ -43,6 +46,7 @@ interface Borrador {
   documento: string;
   /** El vencimiento de la factura por pagar (antes se perdía al volver). */
   vence?: string;
+  fechaDoc?: string;
   pago?: Pago;
   costosConIva?: boolean;
   totalDoc?: string;
@@ -92,6 +96,10 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
   const [documento, setDocumento] = useState('');
   // RF-M3-13 · con factura a crédito, cuándo vence.
   const [vence, setVence] = useState('');
+  // La fecha que trae la factura: el libro de compras la ubica en ese mes. Se
+  // anotaba con la fecha de hoy, y una factura del 30 recibida el 2 caía en el
+  // IVA crédito del mes siguiente.
+  const [fechaDoc, setFechaDoc] = useState('');
   const [pago, setPago] = useState<Pago>('transferencia');
   /**
    * Los costos se guardan NETOS (docs/26 N° 13, decidido el 2026-10-01). La
@@ -137,7 +145,7 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
   useEffect(() => {
     const b = leerBorrador(usuarioId);
     if (b) {
-      setProveedorId(b.proveedorId); setTipoDoc(b.tipoDoc); setDocumento(b.documento); setVence(b.vence ?? '');
+      setProveedorId(b.proveedorId); setTipoDoc(b.tipoDoc); setDocumento(b.documento); setVence(b.vence ?? ''); setFechaDoc(b.fechaDoc ?? '');
       setPago(b.pago ?? (b.vence ? 'credito' : 'transferencia'));
       setCostosConIva(b.costosConIva ?? false); setTotalDoc(b.totalDoc ?? '');
       setLineas(b.lineas);
@@ -146,8 +154,8 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
     setRestaurado(true);
   }, [usuarioId]);
   useEffect(() => {
-    if (restaurado) guardarBorrador({ usuario: usuarioId, proveedorId, tipoDoc, documento, vence, pago, costosConIva, totalDoc, lineas });
-  }, [restaurado, usuarioId, proveedorId, tipoDoc, documento, vence, pago, costosConIva, totalDoc, lineas]);
+    if (restaurado) guardarBorrador({ usuario: usuarioId, proveedorId, tipoDoc, documento, vence, fechaDoc, pago, costosConIva, totalDoc, lineas });
+  }, [restaurado, usuarioId, proveedorId, tipoDoc, documento, vence, fechaDoc, pago, costosConIva, totalDoc, lineas]);
 
   const agregar = useCallback((p: {
     productId: string; nombre: string; perecible: boolean;
@@ -180,6 +188,10 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
       const prod = await findByBarcode(code);
       if (!prod) {
         setEscaneando(false);
+        // Un producto desactivado no se "crea" de nuevo con su código (la base
+        // lo rechaza por repetido): se dice qué es.
+        const desactivado = await desactivadoConCodigo(code).catch(() => null);
+        if (desactivado) { setAviso(`${desactivado} está desactivado: reactívalo en Productos para recibirlo`); return; }
         setCodigoSinProducto(code);
         return;
       }
@@ -269,6 +281,15 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
       }
     }
     if (!vTotalDoc.valido) { setError(vTotalDoc.error); return; }
+    if (fechaDoc && fechaDoc > hoy()) { setError('La fecha de la factura no puede ser futura.'); return; }
+    // El aviso de cada línea con costo 0 se pasaba por alto en una recepción
+    // larga: el costo promedio se diluye y el margen deja de servir.
+    const sinCosto = lineas.filter((l) => l.costoUnitario === 0);
+    if (sinCosto.length && !window.confirm(
+      `${sinCosto.length === 1 ? `${sinCosto[0].nombre} va` : `${sinCosto.length} productos van`} con costo $0. `
+      + '¿Es mercadería sin costo (regalo o bonificación del proveedor)?')) {
+      return;
+    }
     if (totalDoc.trim() && !cuadraDoc && !window.confirm(
       `El documento dice ${formatCLP(vTotalDoc.valor)} y lo anotado suma ${formatCLP(totalConIva)} `
       + `(${diferenciaDoc > 0 ? 'faltan' : 'sobran'} ${formatCLP(Math.abs(diferenciaDoc))}). ¿Recibir igual?`)) {
@@ -326,7 +347,7 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
           try {
             await repoFacturacion().registrarRecibida({
               supplierId: prov.id, rutEmisor: prov.rut, razonSocial: prov.nombre, tipo: 33, folio,
-              fechaEmision: hoy(), neto: totalNeto, exento: 0, iva: totalIva, otrosImpuestos: 0,
+              fechaEmision: fechaDoc || hoy(), neto: totalNeto, exento: 0, iva: totalIva, otrosImpuestos: 0,
               notas: 'Desde Recibir mercadería', receiptId: r.id,
             });
             hecho.push('Quedó en el libro de compras.');
@@ -400,6 +421,15 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
             />
           </div>
         </div>
+
+        {tipoDoc === 'factura' && puedePagar && (
+          <div>
+            <label htmlFor="fecha-doc" className="block text-sm font-medium mb-1.5">Fecha de la factura</label>
+            <input id="fecha-doc" type="date" value={fechaDoc} max={hoy()} onChange={(e) => setFechaDoc(e.target.value)}
+                   className="tap px-3 py-2 rounded-xl border border-[var(--borde)]" />
+            <p className="text-xs text-[var(--texto-suave)] mt-1">La del papel. En blanco, hoy. Decide el mes del libro de compras.</p>
+          </div>
+        )}
 
         {/* Cómo se paga. "Efectivo de la caja" deja el egreso en la caja abierta
             (antes el arqueo salía con faltante); "A crédito" queda en Por pagar. */}

@@ -1,6 +1,6 @@
 'use client';
 
-import { normalizeBarcode, codigosDesdeImportacion, toUserMessage, type FilaProducto } from '@rutaahorro/core';
+import { normalizeBarcode, codigosDesdeImportacion, datosDeActualizacion, toUserMessage, type FilaProducto } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { db, normalizeSearch } from '../offline/db';
 import type {
@@ -44,6 +44,13 @@ const SELECT_BASE =
   'categories(name), product_barcodes(barcode), stock_levels(quantity), stock_ubicaciones(ubicacion, quantity)';
 
 const SELECT_CON_COSTO = SELECT_BASE.replace('sale_price,', 'sale_price, avg_cost,');
+
+/** Lo que la importación necesita del producto que ya existe (N° 179). */
+const SELECT_IMPORTAR = 'id, description, category_id, avg_cost, min_stock, tracks_expiry, expiry_alert_days, product_barcodes(barcode)';
+interface FilaImportar {
+  description: string | null; category_id: string | null; avg_cost: number | null;
+  min_stock: number | null; tracks_expiry: boolean | null; expiry_alert_days: number | null;
+}
 
 function aProducto(f: FilaBD): Producto {
   return {
@@ -114,10 +121,23 @@ export const repoSupabase: RepositorioProductos = {
       ].join(','));
     }
 
-    const { data, error } = await q.order('name').limit(filtro.limite ?? 200);
-    if (error) throw error;
+    // Por páginas de 1.000 hasta `limite` (sin límite: todos). Antes era
+    // `.limit(limite ?? 200)`: Productos mostraba los 200 primeros por nombre y
+    // filtraba "Agotados", ordenaba por precio y exportaba SOLO esos; y los que
+    // pedían 5.000 (Qué comprar, Ofertas, Combos) recibían 1.000, porque la API
+    // corta ahí sin avisar.
+    const tope = filtro.limite ?? Number.POSITIVE_INFINITY;
+    const filas: unknown[] = [];
+    q = q.order('name').order('id');
+    for (let desde = 0; desde < tope; desde += 1000) {
+      const hasta = Math.min(desde + 1000, tope) - 1;
+      const { data, error } = await q.range(desde, hasta);
+      if (error) throw error;
+      filas.push(...(data ?? []));
+      if ((data ?? []).length < hasta - desde + 1) break;
+    }
 
-    let productos = (data ?? []).map((f) => aProducto(f as unknown as FilaBD));
+    let productos = filas.map((f) => aProducto(f as unknown as FilaBD));
 
     // El filtro por estado se aplica en el cliente: depende del stock, que
     // viene de una tabla relacionada y no se puede filtrar en la consulta.
@@ -287,12 +307,13 @@ export const repoSupabase: RepositorioProductos = {
     filas: FilaProducto[],
     onProgreso?: (hechas: number, total: number) => void,
   ): Promise<ResultadoLote> {
-    const resultado: ResultadoLote = { creados: 0, actualizados: 0, errores: [] };
+    const resultado: ResultadoLote = { creados: 0, actualizados: 0, stockSinCargar: 0, errores: [] };
     const cats = await this.categorias();
 
     for (const [i, fila] of filas.entries()) {
       try {
         let categoriaId: string | null = null;
+        const sinCategoria = (fila.vacias ?? []).includes('categoria');
         if (fila.categoria) {
           const existente = cats.find(
             (c) => c.nombre.toLowerCase() === fila.categoria!.toLowerCase(),
@@ -305,7 +326,7 @@ export const repoSupabase: RepositorioProductos = {
         let { data: previo } = fila.sku
           ? await supabase()
               .from('products')
-              .select('id, product_barcodes(barcode)')
+              .select(SELECT_IMPORTAR)
               .eq('sku', fila.sku)
               .maybeSingle()
           : { data: null };
@@ -317,7 +338,7 @@ export const repoSupabase: RepositorioProductos = {
             .select('product_id').eq('barcode', fila.codigo_barras).maybeSingle();
           if (cod) {
             ({ data: previo } = await supabase().from('products')
-              .select('id, product_barcodes(barcode)').eq('id', cod.product_id as string).maybeSingle());
+              .select(SELECT_IMPORTAR).eq('id', cod.product_id as string).maybeSingle());
           }
         }
 
@@ -331,15 +352,25 @@ export const repoSupabase: RepositorioProductos = {
             .map((b) => b.barcode);
           const codigos = codigosDesdeImportacion(previos, fila.codigo_barras);
 
+          // Lo que la fila trae en blanco no se toca (N° 179): una planilla
+          // que solo actualiza precios dejaba el costo promedio y el mínimo en
+          // 0, y los productos sin categoría.
+          const p = previo as unknown as FilaImportar;
+          const d = datosDeActualizacion(fila, {
+            descripcion: p.description ?? null, costo: Number(p.avg_cost ?? 0),
+            stock_minimo: Number(p.min_stock ?? 0), perecible: Boolean(p.tracks_expiry),
+            dias_alerta: Number(p.expiry_alert_days ?? 30),
+          });
           await this.actualizar(previo.id as string, {
-            nombre: fila.nombre, descripcion: fila.descripcion,
-            sku: fila.sku, categoriaId, unidad: fila.unidad,
-            precioVenta: fila.precio_venta, costo: fila.costo,
-            stockMinimo: fila.stock_minimo, perecible: fila.perecible,
-            diasAlerta: fila.dias_alerta,
+            nombre: fila.nombre, descripcion: d.descripcion,
+            sku: fila.sku, categoriaId: sinCategoria ? (p.category_id ?? null) : categoriaId, unidad: fila.unidad,
+            precioVenta: fila.precio_venta, ...(d.costo !== null ? { costo: d.costo } : {}),
+            stockMinimo: d.stock_minimo, perecible: d.perecible,
+            diasAlerta: d.dias_alerta,
             ...(codigos ? { codigos } : {}),
           });
           resultado.actualizados++;
+          if (fila.stock_inicial > 0) resultado.stockSinCargar = (resultado.stockSinCargar ?? 0) + 1;
         } else {
           await this.crear({
             nombre: fila.nombre, descripcion: fila.descripcion,

@@ -117,11 +117,15 @@ export const DEMO_VENTAS_HOY = {
 
 export const DEMO_CAJA = {
   id: 'caja-demo',
-  opened_at: (() => {
+  // Se calcula cada vez, no al arrancar el servidor: así quedaba fija en el
+  // día del arranque (pasada la medianoche la caja de ejemplo era "de otro
+  // día") y antes de las 09:15 se abría en el futuro ("abierta 09:15,
+  // cerrada 05:02"). Hoy a las 09:15, o hace una hora si todavía no son.
+  get opened_at() {
     const d = new Date();
     d.setHours(9, 15, 0, 0);
-    return d.toISOString();
-  })(),
+    return (d.getTime() <= Date.now() ? d : new Date(Date.now() - 3_600_000)).toISOString();
+  },
   opening_amount: 30_000,
   cash_sales: 121_300,
   cash_in: 0,

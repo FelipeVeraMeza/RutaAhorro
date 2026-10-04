@@ -61,7 +61,7 @@ test('CP-02 · 50 ventas desde 5 cajas: folios consecutivos, sin repetir ni salt
   for (let i = 0; i < 5; i++) {
     const u = i === 0 ? local.cajero1 : i === 1 ? local.cajero2 : null;
     const usuario = u ?? { id: (await banco.su.query(
-      `insert into auth.users (email, raw_user_meta_data) values ($1, $2) returning id`,
+      `insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ($1, $2, $2) returning id`,
       [`extra${i}@x.cl`, { tenant_id: local.tenant, store_id: local.store, role: 'vendedor' }])).rows[0].id };
     cajeros.push(await abrirCaja(usuario));
   }
@@ -314,7 +314,7 @@ test('Anular la misma recepción dos veces descuenta el stock una sola vez', asy
     p_supplier_id: prov, p_items: [{ product_id: p, quantity: 10, unit_cost: 500 }] });
 
   const segundoAdmin = { id: (await banco.su.query(
-    `insert into auth.users (email, raw_user_meta_data) values ('adm2@x.cl', $1) returning id`,
+    `insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ('adm2@x.cl', $1, $1) returning id`,
     [{ tenant_id: local.tenant, store_id: local.store, role: 'admin' }])).rows[0].id };
   const [r1, r2] = await dosVeces(adm, await banco.como(segundoAdmin),
     'fn_void_receipt', { p_receipt_id: receipt_id, p_reason: 'guía equivocada' });

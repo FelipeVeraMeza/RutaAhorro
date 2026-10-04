@@ -6,6 +6,14 @@ import { BotonSalir } from './BotonSalir';
 import { Icono } from './Icono';
 
 const BLOQUEADO = 'ra:bloqueado';
+/** Última actividad, para bloquear al volver a abrir la app después del plazo. */
+const ULTIMA = 'ra:ultima-actividad';
+// localStorage y no sessionStorage: el bloqueo vivía solo en la pestaña, y
+// cerrar la app (o abrir otra pestaña) y volver a entrar lo saltaba entero.
+const guardar = (k: string, v: string | null) => {
+  try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* sin almacenamiento */ }
+};
+const leer = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const HUELLA = 'ra:huella-clave';
 const EVENTOS = ['pointerdown', 'keydown', 'touchstart', 'wheel'] as const;
 
@@ -40,6 +48,13 @@ async function verificar(correo: string, clave: string, demo: boolean): Promise<
   try {
     const { supabase } = await import('@/lib/supabase/client');
     const { error } = await supabase().auth.signInWithPassword({ email: correo, password: clave });
+    // Un corte de red no es una contraseña mala: contaba como intento fallido
+    // y, con señal mala, terminaba en la pausa de 30 s. Se prueba la huella.
+    if (error && (error.status === 0 || error.name === 'AuthRetryableFetchError' || /fetch|network/i.test(error.message))) {
+      const h = guardada[correo.toLowerCase()];
+      if (!h) return 'sin-red';
+      return (await huella(correo, clave)) === h ? 'ok' : 'mal';
+    }
     if (error) return 'mal';
   } catch {
     return 'sin-red';
@@ -54,8 +69,8 @@ async function verificar(correo: string, clave: string, demo: boolean): Promise<
 /**
  * Bloqueo por inactividad (RF-M1-19). Se activa en Mi cuenta, por celular.
  * Tapa la pantalla sin desmontarla: una venta a medio cobrar sigue ahí al
- * volver. Sobrevive a recargar la página (sessionStorage), así que recargar
- * no sirve para saltárselo.
+ * volver. Sobrevive a recargar la página, a cerrar la app y a abrir otra
+ * pestaña (localStorage): ninguna de esas sirve para saltárselo.
  */
 export function BloqueoInactividad({ correo, nombre, demo }: { correo: string | null; nombre: string; demo: boolean }) {
   const [minutos, setMinutos] = useState(0);
@@ -71,24 +86,39 @@ export function BloqueoInactividad({ correo, nombre, demo }: { correo: string | 
   const ultima = useRef(Date.now());
 
   useEffect(() => {
-    const leer = () => setMinutos(leerPreferencias().bloqueoMin);
-    leer();
+    const leerMin = () => setMinutos(leerPreferencias().bloqueoMin);
+    leerMin();
     // Se guarda el correo de quien quedó bloqueado: si sale y entra otra
-    // persona en la misma pestaña, a ella no se le bloquea.
-    try { if (correo && sessionStorage.getItem(BLOQUEADO) === correo) setBloqueado(true); } catch { /* nada */ }
-    window.addEventListener(EVENTO_PREFERENCIAS, leer);
-    return () => window.removeEventListener(EVENTO_PREFERENCIAS, leer);
+    // persona en el mismo celular, a ella no se le bloquea.
+    if (correo && leer(BLOQUEADO) === correo) setBloqueado(true);
+    // La app se cerró sin usar más que el plazo: al volver, bloqueada.
+    const min = leerPreferencias().bloqueoMin;
+    // La marca es de esta persona: la de otra cuenta del mismo celular no cuenta.
+    const [deQuien, cuando] = (leer(ULTIMA) ?? '').split('|');
+    const ultimaGuardada = deQuien === correo ? Number(cuando ?? 0) : 0;
+    if (correo && min && ultimaGuardada && Date.now() - ultimaGuardada >= min * 60_000) {
+      guardar(BLOQUEADO, correo);
+      setBloqueado(true);
+    }
+    window.addEventListener(EVENTO_PREFERENCIAS, leerMin);
+    return () => window.removeEventListener(EVENTO_PREFERENCIAS, leerMin);
   }, [correo]);
 
   const bloquear = useCallback(() => {
-    try { if (correo) sessionStorage.setItem(BLOQUEADO, correo); } catch { /* nada */ }
+    if (correo) guardar(BLOQUEADO, correo);
     setBloqueado(true);
   }, [correo]);
 
   useEffect(() => {
     if (!minutos || !correo) return;
     ultima.current = Date.now();
-    const marcar = () => { ultima.current = Date.now(); };
+    guardar(ULTIMA, `${correo}|${ultima.current}`);
+    let guardadaEn = ultima.current;
+    const marcar = () => {
+      ultima.current = Date.now();
+      // A lo más una escritura cada 15 s: no se escribe en cada toque.
+      if (ultima.current - guardadaEn > 15_000) { guardadaEn = ultima.current; guardar(ULTIMA, `${correo}|${guardadaEn}`); }
+    };
     for (const e of EVENTOS) window.addEventListener(e, marcar, { passive: true });
     const revisar = () => { if (Date.now() - ultima.current >= minutos * 60_000) bloquear(); };
     const t = window.setInterval(revisar, 10_000);
@@ -110,8 +140,9 @@ export function BloqueoInactividad({ correo, nombre, demo }: { correo: string | 
     const r = await verificar(correo, clave, demo);
     setVerificando(false);
     if (r === 'ok') {
-      try { sessionStorage.removeItem(BLOQUEADO); } catch { /* nada */ }
+      guardar(BLOQUEADO, null);
       ultima.current = Date.now();
+      guardar(ULTIMA, `${correo}|${ultima.current}`);
       setClave('');
       setBloqueado(false);
     } else {

@@ -39,6 +39,10 @@ export function CambiarClave({ nombre, obligatorio, demo, volverA }: {
       // El aviso de "clave temporal" viaja en el token: se pide uno nuevo para
       // que la app deje de mandar acá.
       await supabase().auth.refreshSession().catch(() => {});
+      // La huella para desbloquear sin red (BloqueoInactividad) era de la
+      // contraseña VIEJA: quien la supiera seguía desbloqueando este celular
+      // sin internet. Se borra; la próxima vez se guarda la nueva.
+      try { localStorage.removeItem('ra:huella-clave'); } catch { /* nada */ }
       setListo(true);
       setClave(''); setRepetida('');
       setTimeout(() => { router.push(volverA); router.refresh(); }, 1200);

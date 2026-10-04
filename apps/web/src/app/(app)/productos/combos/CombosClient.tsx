@@ -182,7 +182,7 @@ function EditarCombo({ combo, productos, onCerrar, onGuardado }: {
               const p = porId.get(i.productId);
               return (
                 <li key={i.productId} className="flex items-center gap-2">
-                  <input inputMode="decimal" value={i.cantidad}
+                  <input inputMode="numeric" value={i.cantidad}
                          aria-label={`Cantidad de ${p?.nombre ?? 'producto'}`}
                          onChange={(e) => setItems((xs) => xs.map((x, j) => (j === k ? { ...x, cantidad: e.target.value } : x)))}
                          className="tap w-16 px-2 rounded-lg border border-[var(--borde)] num text-right" />

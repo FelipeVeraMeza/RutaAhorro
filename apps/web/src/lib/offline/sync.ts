@@ -58,7 +58,10 @@ export async function pendingCount(): Promise<number> {
  */
 export async function pendingSales(): Promise<QueuedSale[]> {
   const yo = await usuarioActual();
-  const rows = await db().saleQueue.where('status').anyOf('pendiente', 'error').toArray();
+  // 'enviando' también: si la pestaña se cerró (o el celular se apagó) a mitad
+  // del envío, la venta quedaba en ese estado para siempre, sin contarse ni
+  // volver a enviarse. Reenviarla es seguro: la base deduplica por clientUuid.
+  const rows = await db().saleQueue.where('status').anyOf('pendiente', 'enviando', 'error').toArray();
   return rows
     .filter((s) => !s.userId || s.userId === yo)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -80,7 +83,21 @@ export interface SyncResult {
   remaining: number;
 }
 
-let syncing = false;
+let enCurso: Promise<SyncResult> | null = null;
+
+/**
+ * Un error de red (sin respuesta de la base) no es un rechazo: la venta pudo
+ * no llegar, o llegar y perderse la respuesta. Queda pendiente y se reenvía
+ * con el mismo clientUuid, que la base deduplica. Antes se marcaba "error" y
+ * el POS la sacaba de la cola: si sí había llegado, al cobrar de nuevo quedaba
+ * dos veces.
+ */
+export function esErrorDeRed(error: { message?: string; code?: string } | null | undefined): boolean {
+  if (!error) return false;
+  if (error.code) return false;
+  return /failed to fetch|networkerror|network request failed|load failed|fetch failed|timeout|aborted/i
+    .test(error.message ?? '');
+}
 
 /**
  * Lo que respondió la base por cada venta enviada en esta sesión: el folio y
@@ -93,96 +110,109 @@ export function respuestaDe(clientUuid: string): unknown {
   return respuestas.get(clientUuid);
 }
 
-/** Envía la cola al servidor. Es seguro llamarla muchas veces. */
+/**
+ * Envía la cola al servidor. Es seguro llamarla muchas veces.
+ *
+ * Si ya hay un envío en curso, espera a que termine y hace otra pasada. Antes
+ * volvía de inmediato: una venta cobrada justo mientras corría la
+ * sincronización automática (cada 60 s) no se enviaba, el POS entregaba el
+ * comprobante sin esperar a la base (regla 19) y la venta salía un minuto
+ * después, cuando la base ya podía rechazarla.
+ */
 export async function syncQueue(): Promise<SyncResult> {
-  const result: SyncResult = { sent: 0, duplicated: 0, failed: 0, remaining: 0 };
+  while (enCurso) await enCurso.catch(() => undefined);
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return { sent: 0, duplicated: 0, failed: 0, remaining: await pendingCount() };
+  }
+  const p = enviarCola();
+  enCurso = p;
+  try { return await p; } finally { if (enCurso === p) enCurso = null; }
+}
 
-  if (syncing || typeof navigator !== 'undefined' && !navigator.onLine) {
+async function enviarCola(): Promise<SyncResult> {
+  const result: SyncResult = { sent: 0, duplicated: 0, failed: 0, remaining: 0 };
+  const queue = await pendingSales();
+
+  // En demo no hay servidor: se simula una sincronización exitosa para poder
+  // ver el indicador de "por sincronizar" y cómo se vacía.
+  if (DEMO_ACTIVO) {
+    for (const sale of queue) {
+      try {
+        // La maqueta también entrega el folio: el comprobante decía
+        // "N° pendiente de sincronizar" en una venta ya registrada.
+        respuestas.set(sale.clientUuid, { folio: await registrarVentaDemo(sale) });
+      } catch (e) {
+        // Igual que un rechazo de la base: queda con su error en la cola.
+        result.failed++;
+        await db().saleQueue.update(sale.clientUuid, {
+          status: 'error', attempts: sale.attempts + 1, lastError: (e as Error).message,
+        });
+        continue;
+      }
+      await db().saleQueue.delete(sale.clientUuid);
+      result.sent++;
+    }
     result.remaining = await pendingCount();
     return result;
   }
 
-  syncing = true;
-  try {
-    const queue = await pendingSales();
+  const client = supabase();
 
-    // En demo no hay servidor: se simula una sincronización exitosa para poder
-    // ver el indicador de "por sincronizar" y cómo se vacía.
-    if (DEMO_ACTIVO) {
-      for (const sale of queue) {
-        try {
-          // La maqueta también entrega el folio: el comprobante decía
-          // "N° pendiente de sincronizar" en una venta ya registrada.
-          respuestas.set(sale.clientUuid, { folio: await registrarVentaDemo(sale) });
-        } catch (e) {
-          // Igual que un rechazo de la base: queda con su error en la cola.
-          result.failed++;
-          await db().saleQueue.update(sale.clientUuid, {
-            status: 'error', attempts: sale.attempts + 1, lastError: (e as Error).message,
-          });
-          continue;
-        }
-        await db().saleQueue.delete(sale.clientUuid);
-        result.sent++;
-      }
-      result.remaining = await pendingCount();
-      return result;
+  for (const sale of queue) {
+    await db().saleQueue.update(sale.clientUuid, { status: 'enviando' });
+
+    const { data, error } = await client.rpc('fn_register_sale', {
+      p_client_uuid: sale.clientUuid,
+      p_items: sale.items.map(({ name: _name, ...rest }) => rest),
+      p_payments: sale.payments,
+      p_sold_at: sale.soldAt,
+      p_discount_total: sale.discountTotal,
+      p_force: sale.sinConexion === true,
+      // La base lo valida de nuevo y decide si viene null: la pantalla no es
+      // la única forma de registrar una venta (regla 6).
+      // El cliente (0022) viaja en el mismo objeto: la firma de la función
+      // no cambia y la cola vieja sigue sirviendo.
+      p_document: sale.documento || sale.clienteId || sale.autorizacion
+        ? {
+            tipo: sale.documento?.tipo ?? null,
+            rut: sale.documento?.receptor?.rut ?? null,
+            razon_social: sale.documento?.receptor?.razonSocial ?? null,
+            giro: sale.documento?.receptor?.giro ?? null,
+            direccion: sale.documento?.receptor?.direccion ?? null,
+            cliente_id: sale.clienteId ?? null,
+            autorizacion: sale.autorizacion ?? null,
+          }
+        : null,
+    });
+
+    if (esErrorDeRed(error)) {
+      // Sin respuesta: queda por enviar y no se sigue (las demás tampoco
+      // llegarían). La próxima pasada la reenvía con el mismo clientUuid.
+      await db().saleQueue.update(sale.clientUuid, { status: 'pendiente', attempts: sale.attempts + 1 });
+      break;
     }
-
-    const client = supabase();
-
-    for (const sale of queue) {
-      await db().saleQueue.update(sale.clientUuid, { status: 'enviando' });
-
-      const { data, error } = await client.rpc('fn_register_sale', {
-        p_client_uuid: sale.clientUuid,
-        p_items: sale.items.map(({ name: _name, ...rest }) => rest),
-        p_payments: sale.payments,
-        p_sold_at: sale.soldAt,
-        p_discount_total: sale.discountTotal,
-        p_force: sale.sinConexion === true,
-        // La base lo valida de nuevo y decide si viene null: la pantalla no es
-        // la única forma de registrar una venta (regla 6).
-        // El cliente (0022) viaja en el mismo objeto: la firma de la función
-        // no cambia y la cola vieja sigue sirviendo.
-        p_document: sale.documento || sale.clienteId || sale.autorizacion
-          ? {
-              tipo: sale.documento?.tipo ?? null,
-              rut: sale.documento?.receptor?.rut ?? null,
-              razon_social: sale.documento?.receptor?.razonSocial ?? null,
-              giro: sale.documento?.receptor?.giro ?? null,
-              direccion: sale.documento?.receptor?.direccion ?? null,
-              cliente_id: sale.clienteId ?? null,
-              autorizacion: sale.autorizacion ?? null,
-            }
-          : null,
+    if (error) {
+      result.failed++;
+      await db().saleQueue.update(sale.clientUuid, {
+        status: 'error',
+        attempts: sale.attempts + 1,
+        lastError: error.message,
       });
-
-      if (error) {
-        result.failed++;
-        await db().saleQueue.update(sale.clientUuid, {
-          status: 'error',
-          attempts: sale.attempts + 1,
-          lastError: error.message,
-        });
-        // Se sigue con la siguiente: una venta con un producto que alguien
-        // desactivó no puede impedir que se sincronicen las otras del turno.
-        continue;
-      }
-
-      respuestas.set(sale.clientUuid, data);
-      if ((data as { already_existed?: boolean })?.already_existed) result.duplicated++;
-      else result.sent++;
-
-      // Solo aquí se borra de la cola: cuando el servidor confirmó.
-      await db().saleQueue.delete(sale.clientUuid);
+      // Se sigue con la siguiente: una venta con un producto que alguien
+      // desactivó no puede impedir que se sincronicen las otras del turno.
+      continue;
     }
-    // El stock que muestra el POS es el del celular. Sin esto quedaba el de
-    // antes de vender hasta la sincronización periódica, 10 minutos después.
-    if (result.sent > 0) void syncCatalog().catch(() => {});
-  } finally {
-    syncing = false;
+
+    respuestas.set(sale.clientUuid, data);
+    if ((data as { already_existed?: boolean })?.already_existed) result.duplicated++;
+    else result.sent++;
+
+    // Solo aquí se borra de la cola: cuando el servidor confirmó.
+    await db().saleQueue.delete(sale.clientUuid);
   }
+  // El stock que muestra el POS es el del celular. Sin esto quedaba el de
+  // antes de vender hasta la sincronización periódica, 10 minutos después.
+  if (result.sent > 0) void syncCatalog().catch(() => {});
 
   result.remaining = await pendingCount();
   return result;

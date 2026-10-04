@@ -293,7 +293,7 @@ function NotaCreditoFactura({ factura, onCerrar, onHecho }: { factura: Factura; 
     <Modal titulo={`Nota de crédito · Factura N° ${factura.folio}`} encabezado="visible" onCerrar={onCerrar} bloqueado={guardando} ancho="md">
       <div className="p-4 space-y-3">
         <p className="text-sm text-[var(--texto-suave)]">
-          Lo que es del catálogo vuelve al stock (a la sala, y a los lotes de donde salió). La factura no se edita: la nota
+          Lo que es del catálogo vuelve al stock (a la bodega, y a los lotes de donde salió). La factura no se edita: la nota
           de crédito la corrige.
         </p>
         <ul className="divide-y divide-[var(--borde)] tarjeta">

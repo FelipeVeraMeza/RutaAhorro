@@ -136,6 +136,8 @@ test('RF-M5-30 · fiado hasta el tope, no entra a la caja; el abono en efectivo 
   res = await resumenCaja(caj);
   assert.equal(res.abonos_efectivo, 2000);
   assert.equal(res.expected_amount, 12000, 'el abono en efectivo entró al cajón; la transferencia no');
+  // 0037 · pero la transferencia sí queda en el cuadre por medio de pago.
+  assert.deepEqual(res.abonos_por_medio, { efectivo: 2000, transferencia: 500 });
 
   // Inmutable: nada se edita ni se borra, ni siquiera el dueño de la base.
   const borrar = await intentar(banco.su.query('delete from cuenta_cliente_movimientos where cliente_id = $1', [cliente]));

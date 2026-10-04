@@ -51,17 +51,27 @@ export function InventarioClient({
   const [ajustando, setAjustando] = useState<Producto | null>(null);
   const [conteo, setConteo] = useState<Record<string, string>>({});
   const [aplicandoToma, setAplicandoToma] = useState(false);
+  // Todo producto que pasó por la lista, aunque el filtro de ahora lo esconda:
+  // la revisión de la toma mostraba "Producto" y "sistema 0 → 5" para lo
+  // contado con otro filtro, y la base después aplicaba otra diferencia.
+  const [vistos, setVistos] = useState<Record<string, Producto>>({});
   const [revisandoToma, setRevisandoToma] = useState(false);
 
+  // RF-M4-04 · el kardex se ve de a 80; "Ver más" trae más (decía "historial
+  // completo" y mostraba los últimos 80 sin forma de ver los anteriores).
+  const [limiteKardex, setLimiteKardex] = useState(80);
   const cargar = useCallback(async () => {
     setCargando(true);
+    // Un error anterior (p. ej. sin red) quedaba pegado aunque esta carga funcionara.
+    setError(null);
     try {
       const [ps, ms, ls] = await Promise.all([
         repoProductos().listar({ busqueda }, verCostos),
-        repoInventario().kardex(null, 80),
+        repoInventario().kardex(null, limiteKardex),
         repoInventario().lotes(),
       ]);
       setProductos(ps);
+      setVistos((v) => ({ ...v, ...Object.fromEntries(ps.map((p) => [p.id, p])) }));
       setMovimientos(ms);
       setLotes(ls);
     } catch (e) {
@@ -69,7 +79,7 @@ export function InventarioClient({
     } finally {
       setCargando(false);
     }
-  }, [busqueda, verCostos]);
+  }, [busqueda, verCostos, limiteKardex]);
 
   useEffect(() => {
     const t = setTimeout(() => void cargar(), 200);
@@ -103,7 +113,7 @@ export function InventarioClient({
    */
   const aplicables = Object.entries(conteo)
     .map(([productoId, texto]) => {
-      const producto = productos.find((p) => p.id === productoId);
+      const producto = vistos[productoId];
       const v = validarCantidadStock(texto, producto?.unidad, { permiteVacio: true });
       return { productoId, texto, v, producto };
     })
@@ -183,11 +193,11 @@ export function InventarioClient({
           {verCostos && (
             <div className="grid grid-cols-2 gap-2 mb-3">
               <div className="tarjeta p-3">
-                <p className="text-[11px] text-[var(--texto-suave)]">Valor al costo</p>
+                <p className="text-[11px] text-[var(--texto-suave)]">Valor al costo{busqueda.trim() ? ' (de lo buscado)' : ''}</p>
                 <p className="num text-lg font-bold">{formatCLP(valorTotal)}</p>
               </div>
               <div className="tarjeta p-3">
-                <p className="text-[11px] text-[var(--texto-suave)]">Bajo mínimo</p>
+                <p className="text-[11px] text-[var(--texto-suave)]">Bajo mínimo{busqueda.trim() ? ' (de lo buscado)' : ''}</p>
                 <p className={`num text-lg font-bold ${bajoMinimo > 0 ? 'text-[var(--color-aviso)]' : ''}`}>
                   {bajoMinimo}
                 </p>
@@ -331,8 +341,8 @@ export function InventarioClient({
       {vista === 'kardex' && (
         <>
           <p className="text-xs text-[var(--texto-suave)] mb-3">
-            Historial completo e inmutable. Un movimiento nunca se edita ni se borra:
-            si algo se corrige, se agrega el movimiento contrario.
+            Los últimos movimientos, del más nuevo al más antiguo. Un movimiento nunca se edita ni
+            se borra: si algo se corrige, se agrega el movimiento contrario.
           </p>
           {movimientos.length === 0 ? (
             <p className="text-center text-sm text-[var(--texto-suave)] py-8">
@@ -363,12 +373,18 @@ export function InventarioClient({
                       }`}>
                         {m.cantidad > 0 ? '+' : ''}{formatCantidad(m.cantidad)}
                       </p>
-                      <p className="text-[11px] text-[var(--texto-suave)] num">saldo {m.saldo}</p>
+                      <p className="text-[11px] text-[var(--texto-suave)] num">saldo {formatCantidad(m.saldo)}</p>
                     </div>
                   </div>
                 </li>
               ))}
             </ul>
+          )}
+          {movimientos.length >= limiteKardex && (
+            <button onClick={() => setLimiteKardex((n) => n + 200)} disabled={cargando}
+                    className="tap w-full mt-3 rounded-xl border border-[var(--borde)] text-sm font-medium disabled:opacity-50">
+              {cargando ? 'Cargando…' : 'Ver movimientos anteriores'}
+            </button>
           )}
         </>
       )}
@@ -385,7 +401,11 @@ export function InventarioClient({
             <Icono nombre="descargar" tamano={16} /> Imprimir hoja para contar
           </button>
           <div id="hoja-conteo" aria-hidden>
-            <h2 style={{ fontSize: 14, fontWeight: 700 }}>Hoja de conteo · {diaCorto(diaLocal(new Date(), zona))}</h2>
+            <h2 style={{ fontSize: 14, fontWeight: 700 }}>
+              Hoja de conteo · {diaCorto(diaLocal(new Date(), zona))}
+              {/* Con algo escrito en el filtro la hoja sale parcial: que el papel lo diga. */}
+              {busqueda.trim() && ` · solo «${busqueda.trim()}»`}
+            </h2>
             <p style={{ fontSize: 10, margin: '2px 0 6px' }}>Contó: ______________________ · Revisó: ______________________</p>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead><tr>
@@ -584,6 +604,9 @@ function DialogoAjuste({
     if (!v.valido) { setError(v.error); return; }
     if (motivo.trim() === '') { setError('El motivo es obligatorio'); return; }
     if (delta === 0) { setError('La cantidad es la misma: no hay nada que ajustar'); return; }
+    // Una merma es producto perdido: resta. Marcada con una cantidad mayor,
+    // quedaba en el historial una "merma" que sumaba stock.
+    if (esMerma && delta > 0) { setError('Una merma resta: la cantidad real tiene que ser menor que la del sistema'); return; }
 
     setGuardando(true);
     try {

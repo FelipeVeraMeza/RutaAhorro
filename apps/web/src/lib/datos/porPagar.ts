@@ -2,6 +2,7 @@
 
 import { diaLocal, diasEntre } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
+import { todas } from './paginar';
 import { DEMO_ACTIVO } from '../demo';
 // La maqueta (IndexedDB, la caja de demo, los proveedores de ejemplo) se
 // carga solo en demo: este módulo lo usa el Inicio y no debe sumarle peso
@@ -57,11 +58,13 @@ export const diasParaVencer = (vence: string, hoy: string) => diasEntre(hoy, ven
 // ---------------------------------------------------------------------------
 const base = {
   async listar(): Promise<FacturaProveedor[]> {
-    const { data, error } = await supabase().from('facturas_proveedor')
+    // Por páginas: con el historial de pagadas, pasadas las 1.000 facturas la
+    // API cortaba las de vencimiento más lejano, justo las pendientes, y el
+    // Inicio dejaba de avisarlas.
+    const data = await todas((a, b) => supabase().from('facturas_proveedor')
       .select('id, supplier_id, numero, emitida, vence, monto, nota, pagada_en, pago_metodo, anulada_en, suppliers(name)')
-      .order('vence');
-    if (error) throw error;
-    return (data ?? []).map((r) => ({
+      .order('vence').order('id').range(a, b));
+    return data.map((r) => ({
       id: r.id as string,
       proveedorId: r.supplier_id as string,
       proveedor: (r.suppliers as unknown as { name: string } | null)?.name ?? '—',

@@ -186,22 +186,28 @@ const repoSupabase: RepositorioUsuarios = {
     await llamar('/api/usuarios/clave', { id, clave });
   },
 
+  // Con `select`: si RLS no deja, el update no da error, simplemente no toca
+  // ninguna fila, y la pantalla decía "listo" sin que nada cambiara (igual que
+  // en Productos, docs/21).
   async cambiarRol(id, rol) {
-    const { error } = await supabase()
+    const { data, error } = await supabase()
       .from('profiles')
       .update({ role: rol, max_discount_pct: await topeDescuentoDe(rol) })
-      .eq('id', id);
+      .eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('SIN_PERMISO');
   },
 
   async desactivar(id) {
-    const { error } = await supabase().from('profiles').update({ is_active: false }).eq('id', id);
+    const { data, error } = await supabase().from('profiles').update({ is_active: false }).eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('SIN_PERMISO');
   },
 
   async reactivar(id) {
-    const { error } = await supabase().from('profiles').update({ is_active: true }).eq('id', id);
+    const { data, error } = await supabase().from('profiles').update({ is_active: true }).eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('SIN_PERMISO');
   },
 };
 

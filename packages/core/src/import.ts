@@ -25,6 +25,43 @@ export interface FilaProducto {
   stock_minimo: number;
   perecible: boolean;
   dias_alerta: number;
+  /**
+   * Las columnas opcionales que venían vacías (o no estaban) en esta fila.
+   * Al ACTUALIZAR un producto que ya existe, esas no se tocan: una planilla
+   * que solo cambia precios no trae costo, mínimo ni categoría, y antes los
+   * dejaba en 0 o vacíos (docs/28, N° 179).
+   */
+  vacias?: CampoOpcional[];
+}
+
+/** Columnas que una planilla de actualización puede dejar en blanco. */
+export type CampoOpcional = 'descripcion' | 'categoria' | 'costo' | 'stock_minimo' | 'perecible' | 'dias_alerta';
+
+/** Lo que ya tiene el producto, para lo que la planilla deja en blanco. */
+export interface ProductoActual {
+  descripcion: string | null;
+  costo: number;
+  stock_minimo: number;
+  perecible: boolean;
+  dias_alerta: number;
+}
+
+/**
+ * Los datos con que se ACTUALIZA un producto existente desde una fila: lo que
+ * la fila trae, y lo que tenía el producto donde la fila venía en blanco. El
+ * costo en blanco queda `null` (= no tocar el costo promedio).
+ */
+export function datosDeActualizacion(fila: FilaProducto, actual: ProductoActual): {
+  descripcion: string | null; costo: number | null; stock_minimo: number; perecible: boolean; dias_alerta: number;
+} {
+  const v = new Set(fila.vacias ?? []);
+  return {
+    descripcion: v.has('descripcion') ? actual.descripcion : fila.descripcion,
+    costo: v.has('costo') ? null : fila.costo,
+    stock_minimo: v.has('stock_minimo') ? actual.stock_minimo : fila.stock_minimo,
+    perecible: v.has('perecible') ? actual.perecible : fila.perecible,
+    dias_alerta: v.has('dias_alerta') ? actual.dias_alerta : fila.dias_alerta,
+  };
 }
 
 export interface ErrorFila {
@@ -314,6 +351,8 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
         stock_minimo: minimo,
         perecible,
         dias_alerta: Math.max(0, Math.round(dias)),
+        vacias: (['descripcion', 'categoria', 'costo', 'stock_minimo', 'perecible', 'dias_alerta'] as const)
+          .filter((c) => campo(cols, c) === ''),
       });
     }
   }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatCLP, toUserMessage, validarMonto, isValidRut, formatRut, diaLocal, coincide, sumarDias } from '@rutaahorro/core';
 import { registrarFacturaProveedor } from '@/lib/datos/porPagar';
 import { Modal } from '@/components/Modal';
+import { useConfiguracion } from '@/lib/datos/configuracion';
 import { Campo } from '@/components/Campo';
 import { useFormatoFecha, diaCorto } from '@/lib/formatoFecha';
 import { repoProveedores, type Proveedor } from '@/lib/datos/proveedores';
@@ -89,6 +90,7 @@ export function Recibidas({ mes }: { mes: string }) {
 }
 
 function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHecho: () => void }) {
+  const { ivaPct } = useConfiguracion();
   const { zona } = useFormatoFecha();
   const hoy = diaLocal(new Date(), zona);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -127,7 +129,8 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
   const vExento = validarMonto(exento, { etiqueta: 'exento', permiteVacio: true });
   const vOtros = validarMonto(otros, { etiqueta: 'otros impuestos', permiteVacio: true });
   // El IVA se propone (19 % del neto) y se puede corregir: se copia del papel.
-  const ivaPropuesto = tipo === 34 ? 0 : Math.round(vNeto.valor * 0.19);
+  // Con el IVA del local (regla 13), no un 19 escrito acá.
+  const ivaPropuesto = tipo === 34 ? 0 : Math.round(vNeto.valor * ivaPct / 100);
   const vIva = validarMonto(ivaEditado ? iva : String(ivaPropuesto), { etiqueta: 'IVA', permiteVacio: true });
   const total = vNeto.valor + vExento.valor + vIva.valor + vOtros.valor;
   const vFolio = Number(folio.replace(/\D/g, ''));

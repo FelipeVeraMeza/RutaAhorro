@@ -45,7 +45,7 @@ export async function POST(request: Request) {
 
   const descuento = rol === 'admin' ? 100 : rol === 'supervisor' ? 10 : 0;
 
-  const { error } = await admin.auth.admin.inviteUserByEmail(email, {
+  const { data: invitado, error } = await admin.auth.admin.inviteUserByEmail(email, {
     // El tenant y el rol NO vienen del cliente: se toman del administrador que
     // invita. Aceptarlos del navegador permitiría invitar a otro local.
     data: {
@@ -71,6 +71,31 @@ export async function POST(request: Request) {
       },
       { status: yaExiste ? 409 : 500 },
     );
+  }
+
+  // El correo de invitación no lleva app_metadata. Desde 0037 el disparador
+  // solo cree en app_metadata (user_metadata lo escribe cualquiera al
+  // registrarse), así que el local y el rol se ponen acá, con la llave de
+  // servicio, y el perfil se crea si el disparador no lo creó.
+  const id = invitado?.user?.id;
+  if (id) {
+    await admin.auth.admin.updateUserById(id, {
+      app_metadata: { tenant_id: actor.tenantId, store_id: actor.storeId, role: rol, full_name: nombre },
+    });
+    const { data: perfil } = await admin.from('profiles').select('id').eq('id', id).maybeSingle();
+    if (!perfil) {
+      const { error: ePerfil } = await admin.from('profiles').insert({
+        id, tenant_id: actor.tenantId, store_id: actor.storeId, full_name: nombre,
+        email: String(email).trim().toLowerCase(), role: rol, max_discount_pct: descuento,
+      });
+      if (ePerfil) {
+        await admin.auth.admin.deleteUser(id).catch(() => {});
+        return NextResponse.json(
+          { error: { code: 'SIN_PERFIL', message: 'La invitación no quedó vinculada al local. Vuelve a intentarlo' } },
+          { status: 500 },
+        );
+      }
+    }
   }
 
   return NextResponse.json({ ok: true });

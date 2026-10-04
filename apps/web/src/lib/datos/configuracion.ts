@@ -31,6 +31,8 @@ export { CONFIGURACION_POR_OMISION, type ConfiguracionLocal };
 let cache: Promise<ConfiguracionLocal> | null = null;
 
 const CLAVE_DEMO = 'demo:configuracion';
+/** La última configuración leída de la base, para usarla sin internet. */
+const CLAVE_CELULAR = 'config:local';
 
 async function leer(): Promise<ConfiguracionLocal> {
   if (DEMO_ACTIVO) {
@@ -40,12 +42,20 @@ async function leer(): Promise<ConfiguracionLocal> {
     return desdeSettings({ redondeo_efectivo: true, ...(guardada ? JSON.parse(guardada) : {}) });
   }
 
-  const { data, error } = await supabase().from('tenants').select('settings').maybeSingle();
-  // Si no se puede leer, se sigue con los valores por omisión: quedarse sin
-  // vender porque no cargó la configuración sería mucho peor que cobrar con el
-  // IVA por omisión, que además es el que corresponde en Chile.
-  if (error || !data) return CONFIGURACION_POR_OMISION;
-
+  const { data, error } = await supabase().from('tenants').select('settings').maybeSingle()
+    .then((r) => r, () => ({ data: null, error: new Error('SIN_RED') }));
+  const { getMeta, setMeta } = await import('../offline/db');
+  // Sin red (o si no se pudo leer) se usa la última que se leyó en ESTE
+  // celular. Antes eran los valores por omisión: sin internet, un local que
+  // vende sin stock dejaba de poder hacerlo, y el efectivo no se redondeaba.
+  // Va en `meta`, que se borra si en el celular entra otro local (regla 18).
+  if (error || !data) {
+    const guardada = await getMeta(CLAVE_CELULAR).catch(() => null);
+    // Si tampoco hay copia, los valores por omisión: quedarse sin vender
+    // porque no cargó la configuración sería mucho peor.
+    return guardada ? desdeSettings(JSON.parse(guardada)) : CONFIGURACION_POR_OMISION;
+  }
+  void setMeta(CLAVE_CELULAR, JSON.stringify(data.settings ?? {})).catch(() => {});
   return desdeSettings(data.settings);
 }
 

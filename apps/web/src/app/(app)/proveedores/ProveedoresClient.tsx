@@ -44,11 +44,16 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
   const [anulacionEnCurso, setAnulacionEnCurso] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
 
+  // Se ven las últimas 30; "Ver más antiguas" trae más. La pestaña decía
+  // "Recepciones (30)" como si fueran todas, y una recepción de hace dos
+  // meses no se podía ver ni anular.
+  const [limiteRec, setLimiteRec] = useState(30);
   const cargar = useCallback(async () => {
     setCargando(true);
+    setError(null);
     try {
       const repo = repoProveedores();
-      const [ps, rs] = await Promise.all([repo.listar(), repo.recepciones()]);
+      const [ps, rs] = await Promise.all([repo.listar(), repo.recepciones(limiteRec)]);
       setProveedores(ps);
       setRecepciones(rs);
     } catch (e) {
@@ -56,7 +61,7 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [limiteRec]);
 
   useEffect(() => { void cargar(); }, [cargar]);
 
@@ -104,7 +109,7 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
         {([
           ['comprar', 'Qué comprar'],
           ['proveedores', `Proveedores (${proveedores.length})`],
-          ['recepciones', `Recepciones (${recepciones.length})`],
+          ['recepciones', recepciones.length >= limiteRec ? `Recepciones (últimas ${recepciones.length})` : `Recepciones (${recepciones.length})`],
           ...(verPorPagar ? [['pagar', pendientesPago == null ? 'Por pagar' : `Por pagar (${pendientesPago})`] as const] : []),
         ] as const).map(([id, label]) => (
           <button
@@ -178,12 +183,17 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
                         </p>
                       )}
                     </div>
+                    {/* Cambiar un proveedor es del administrador (matriz del doc 02,
+                        política de 0037): a los demás el botón les decía
+                        "guardado" sin que nada cambiara. */}
+                    {puedeAnular && (
                     <button
                       onClick={() => setEditando(p)}
                       className="tap px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)] shrink-0"
                     >
                       Editar
                     </button>
+                    )}
                   </div>
                 </li>
               ))}
@@ -239,6 +249,12 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
             ))}
           </ul>
         )
+      )}
+      {!cargando && pestana === 'recepciones' && recepciones.length >= limiteRec && (
+        <button onClick={() => setLimiteRec((n) => n + 30)}
+                className="tap w-full mt-3 rounded-xl border border-[var(--borde)] text-sm font-medium">
+          Ver recepciones más antiguas
+        </button>
       )}
 
       {(creando || editando) && (

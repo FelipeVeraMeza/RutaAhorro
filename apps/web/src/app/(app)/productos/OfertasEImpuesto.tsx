@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import {
-  formatCLP, validarMonto, validarCantidad, validarTramos, etiquetaAdicional, precioDelTramo,
+  formatCLP, validarMonto, validarCantidad, validarCantidadStock, validarTramos, etiquetaAdicional, precioDelTramo,
   type TramoPrecio,
 } from '@rutaahorro/core';
 import type { ImpuestoAdicional } from '@/lib/datos/precios';
@@ -54,7 +54,8 @@ export function tramosDesdeFilas(
   const tramos: TramoPrecio[] = [];
   for (const [i, f] of filas.entries()) {
     const n = `Oferta ${i + 1}: `;
-    const vDesde = validarCantidad(f.desde, { maximo: 1_000_000 });
+    // Por unidad (0032): "desde 2,5" no existe.
+    const vDesde = validarCantidadStock(f.desde, 'unidad', { maximo: 1_000_000 });
     if (!vDesde.valido) return { tramos: [], error: n + vDesde.error };
     let monto: Pick<TramoPrecio, 'precio' | 'descuentoPct'>;
     if (f.modo === 'pct') {

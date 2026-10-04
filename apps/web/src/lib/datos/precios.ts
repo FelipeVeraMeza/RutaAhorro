@@ -2,6 +2,7 @@
 
 import { validarTramos, type TramoPrecio } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
+import { todas } from './paginar';
 import { DEMO_ACTIVO } from '../demo';
 import { db, getMeta, setMeta } from '../offline/db';
 import { syncCatalog } from '../offline/catalog';
@@ -84,14 +85,14 @@ const deFila = (r: Record<string, unknown>): TramoPrecio => ({
 
 const supabaseRepo: RepositorioPrecios = {
   async impuestos() {
-    const [{ data, error }, { data: prods, error: e2 }] = await Promise.all([
+    const [{ data, error }, prods] = await Promise.all([
       supabase().from('impuestos_adicionales').select('id, nombre, codigo_sii, tasa, is_active').order('tasa'),
-      supabase().from('products').select('impuesto_adicional_id').not('impuesto_adicional_id', 'is', null).eq('is_active', true),
+      todas((a, b) => supabase().from('products').select('id, impuesto_adicional_id')
+        .not('impuesto_adicional_id', 'is', null).eq('is_active', true).order('id').range(a, b)),
     ]);
     if (error) throw error;
-    if (e2) throw e2;
     const cuenta = new Map<string, number>();
-    for (const p of prods ?? []) {
+    for (const p of prods) {
       const id = p.impuesto_adicional_id as string;
       cuenta.set(id, (cuenta.get(id) ?? 0) + 1);
     }
@@ -146,9 +147,8 @@ const supabaseRepo: RepositorioPrecios = {
   },
 
   async impuestoPorProducto() {
-    const { data, error } = await supabase().from('products').select('id, impuesto_adicional_id');
-    if (error) throw error;
-    return new Map((data ?? []).map((r) => [r.id as string, (r.impuesto_adicional_id as string) ?? null]));
+    const data = await todas((a, b) => supabase().from('products').select('id, impuesto_adicional_id').order('id').range(a, b));
+    return new Map(data.map((r) => [r.id as string, (r.impuesto_adicional_id as string) ?? null]));
   },
 
   async aplicarOfertaMasiva(productoIds, tramo) {
@@ -169,11 +169,11 @@ const supabaseRepo: RepositorioPrecios = {
   },
 
   async tramosPorProducto() {
-    const { data, error } = await supabase().from('product_price_tiers')
-      .select('product_id, desde, precio, descuento_pct, vigente_desde, vigente_hasta').order('desde');
-    if (error) throw error;
+    const data = await todas((a, b) => supabase().from('product_price_tiers')
+      .select('id, product_id, desde, precio, descuento_pct, vigente_desde, vigente_hasta')
+      .order('desde').order('id').range(a, b));
     const mapa = new Map<string, TramoPrecio[]>();
-    for (const r of data ?? []) {
+    for (const r of data) {
       const id = r.product_id as string;
       mapa.set(id, [...(mapa.get(id) ?? []), deFila(r)]);
     }

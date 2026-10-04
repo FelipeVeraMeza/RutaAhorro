@@ -86,7 +86,8 @@ for (const rol of roles) {
   let accion;
   const { data: creado, error } = await db.auth.admin.createUser({
     email: correo, password: clave, email_confirm: true,
-    user_metadata: meta, app_metadata: { debe_cambiar_clave: cambiarAlEntrar },
+    // app_metadata: desde 0037 el disparador solo cree en lo que escribe el servidor.
+    user_metadata: meta, app_metadata: { ...meta, debe_cambiar_clave: cambiarAlEntrar },
   });
   if (error) {
     if (!/already|registered|exists/i.test(error.message)) morir(`${correo}: ${error.message}`);

@@ -130,6 +130,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   TOMA_YA_APLICADA: 'Esta toma de inventario ya fue aplicada',
   TIPO_MOVIMIENTO_INVALIDO: 'Tipo de movimiento no válido',
   CANTIDAD_INVALIDA: 'La cantidad ingresada no es válida',
+  MERMA_SUMA: 'Una merma resta: la cantidad real tiene que ser menor que la del sistema',
   REGISTRO_INMUTABLE: 'Este registro no se puede modificar ni eliminar',
   NO_ENCONTRADO: 'No encontramos lo que buscas',
   LIMITE_PETICIONES: 'Demasiados intentos. Espera un momento',

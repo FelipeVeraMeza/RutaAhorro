@@ -235,7 +235,8 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
                   </span>
                 </span>
                 <input
-                  inputMode="decimal" disabled={q <= 0}
+                  // Todo se vende por unidad desde 0032: el teclado numérico, sin coma.
+                  inputMode="numeric" disabled={q <= 0}
                   value={cantidades[l.id!] ?? ''}
                   onChange={(e) => setCantidades((c) => ({ ...c, [l.id!]: e.target.value }))}
                   aria-label={`Unidades de ${l.productoNombre} que vuelven`}

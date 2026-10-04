@@ -8,7 +8,7 @@ import {
 } from '@rutaahorro/core';
 import { useConfiguracion } from '@/lib/datos/configuracion';
 import {
-  findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO,
+  findByBarcode, desactivadoConCodigo, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO,
 } from '@/lib/offline/catalog';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { sembrarCatalogoDemo } from '@/lib/demo/seed';
@@ -124,6 +124,8 @@ export function PrecioClient({ usuarioId = '', puedeVender = false, puedeCrearPr
       setScannerOn(false);
       return;
     }
+    const desactivado = await desactivadoConCodigo(code).catch(() => null);
+    if (desactivado) { notificar(`${desactivado} está desactivado: no se vende`); setQuery(''); return; }
     notificar(`El código ${code} no está en el catálogo`);
     setQuery(code);
   }, [notificar, elegir]);
@@ -160,7 +162,11 @@ export function PrecioClient({ usuarioId = '', puedeVender = false, puedeCrearPr
           e.preventDefault();
           const texto = query.trim();
           if (/^\d{4,}$/.test(texto)) void onScan(texto);
-          else if (resultados.length === 1) { elegir(resultados[0]); setQuery(''); }
+          // La búsqueda de la pantalla puede ser la del texto anterior (corre
+          // aparte): se busca de nuevo con lo escrito ahora, como en Vender.
+          else if (texto.length >= 2) {
+            void searchProducts(texto).then((r) => { if (r.length === 1) { elegir(r[0]); setQuery(''); } });
+          }
         }}
         enterKeyHint="search"
         placeholder="Buscar por nombre o código…"

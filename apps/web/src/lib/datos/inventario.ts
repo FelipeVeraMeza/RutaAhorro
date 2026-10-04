@@ -1,6 +1,7 @@
 'use client';
 
 import { supabase } from '../supabase/client';
+import { todas } from './paginar';
 import { DEMO_ACTIVO } from '../demo';
 import { db } from '../offline/db';
 import { syncCatalog } from '../offline/catalog';
@@ -245,12 +246,11 @@ const repoSupabase: RepositorioInventario = {
     // v_expiring_lots trae los tres estados, no solo los que vencen: el nombre
     // engaña un poco. El `estado` lo calcula la vista con el
     // `expiry_alert_days` de cada producto.
-    const { data, error } = await supabase()
+    const data = await todas((a, b) => supabase()
       .from('v_expiring_lots')
       .select('lot_id, product_id, product_name, lot_code, expiry_date, quantity, unit_cost, value_at_risk, days_to_expiry, expiry_status, unit')
-      .order('expiry_date', { ascending: true });
-    if (error) throw error;
-    return (data ?? []).map((l) => ({
+      .order('expiry_date', { ascending: true }).order('lot_id').range(a, b));
+    return data.map((l) => ({
       id: l.lot_id as string,
       productoId: l.product_id as string,
       productoNombre: (l.product_name as string) ?? 'Producto',

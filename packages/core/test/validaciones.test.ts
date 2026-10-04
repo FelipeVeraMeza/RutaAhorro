@@ -92,6 +92,10 @@ describe('mensajes de error en lenguaje del negocio (RNF-20)', () => {
     expect(toUserMessage({ message: 'UNA_SOLA_BODEGA' })).toMatch(/una sola bodega/);
   });
 
+  it('los códigos de 0037 tienen su mensaje (no el genérico)', () => {
+    expect(toUserMessage({ message: 'MERMA_SUMA' })).toMatch(/merma resta/);
+  });
+
   it('nombra el producto concreto cuando falta stock', () => {
     expect(toUserMessage({ message: 'STOCK_INSUFICIENTE: Coca-Cola 1.5L' }))
       .toBe('No hay stock suficiente de Coca-Cola 1.5L');

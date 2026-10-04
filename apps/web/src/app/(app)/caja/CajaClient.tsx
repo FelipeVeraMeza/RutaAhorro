@@ -27,11 +27,6 @@ interface CajaAjena {
 }
 
 
-/** AAAA-MM-DD en la zona del navegador. */
-function diaLocal(iso: string): string {
-  return new Date(iso).toLocaleDateString('sv');
-}
-
 export function CajaClient({
   session, resumen, movimientos, historial, cajasAjenas = [], usuarioId = '', nombre = '',
 }: {
@@ -61,12 +56,32 @@ export function CajaClient({
   // RF-M6-13 · contar por billete y moneda en vez de sumar de cabeza.
   const [porBillete, setPorBillete] = useState(false);
   const [billetes, setBilletes] = useState<Record<number, string>>({});
+  // "De otro día" se decide después de montar: la hora del servidor y la del
+  // navegador no son la misma y no calzaría al hidratar. (Antes guardaba el día
+  // en la zona del celular, que no se usaba para nada más: regla 17.)
+  const [montado, setMontado] = useState(false);
+  useEffect(() => setMontado(true), []);
   // RF-M6-14 · el resumen del cierre que se acaba de hacer, para imprimirlo.
-  // El día de hoy se calcula en el navegador (su zona horaria), después de
-  // montar: en el servidor sería otra zona y no calzaría al hidratar.
-  const [hoyLocal, setHoyLocal] = useState<string | null>(null);
-  useEffect(() => setHoyLocal(diaLocal(new Date().toISOString())), []);
-  const [cierreHecho, setCierreHecho] = useState<{ esperado: number; contado: number; nota: string; resumen: Record<string, unknown>; abierta: string } | null>(null);
+  const [cierreHecho, setCierreHecho] = useState<{ esperado: number; contado: number; nota: string; resumen: Record<string, unknown>; abierta: string; cerrada: string } | null>(null);
+
+  // Ventas de este celular que todavía no llegan a la base. Si la caja se
+  // cierra antes, llegan después a una caja cerrada (CAJA_NO_ABIERTA): la plata
+  // ya se contó en el cierre como sobrante y la venta queda rechazada.
+  const [cola, setCola] = useState<{ pendientes: number; conError: number } | null>(null);
+  useEffect(() => {
+    if (!cerrando || DEMO_ACTIVO) { setCola(null); return; }
+    let vivo = true;
+    void import('@/lib/offline/sync').then(async (m) => {
+      const r = await m.syncQueue().catch(() => null);
+      const conError = (await m.ventasConError()).length;
+      const pendientes = (await m.pendingCount()) - conError;
+      if (!vivo) return;
+      setCola({ pendientes, conError });
+      // Lo recién enviado cambia el "debería haber".
+      if (r && r.sent > 0) router.refresh();
+    });
+    return () => { vivo = false; };
+  }, [cerrando, router]);
 
   const [forzando, setForzando] = useState<CajaAjena | null>(null);
   const [contadoAjeno, setContadoAjeno] = useState('');
@@ -143,6 +158,14 @@ export function CajaClient({
             />
           )}
         </Campo>
+
+        {/* Como en el cierre propio: cuánto falta o sobra, antes de confirmar. */}
+        {contadoAjeno.trim() !== '' && contAjeno.valido && typeof forzando.expected_amount === 'number' && (
+          <p role="status" className="text-sm num">
+            {contAjeno.valor === forzando.expected_amount ? 'Cuadra'
+              : `${contAjeno.valor < forzando.expected_amount ? 'Faltante' : 'Sobrante'} ${formatCLP(Math.abs(contAjeno.valor - forzando.expected_amount))}`}
+          </p>
+        )}
 
         <Campo etiqueta="Por qué la cierras tú" ayuda="Queda en el cierre.">
           {(props) => (
@@ -361,6 +384,19 @@ export function CajaClient({
             </div>
           )}
 
+          {cola && cola.pendientes > 0 && (
+            <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">
+              Hay {cola.pendientes} {cola.pendientes === 1 ? 'venta' : 'ventas'} de este celular sin enviar. Conéctate a
+              internet y espera a que se envíen (barra de arriba): si cierras antes, quedan fuera de esta caja.
+            </p>
+          )}
+          {cola && cola.conError > 0 && (
+            <p role="status" className="text-sm text-[var(--color-aviso)] bg-amber-50 px-3 py-2 rounded-lg">
+              {cola.conError === 1 ? 'Una venta no se pudo registrar' : `${cola.conError} ventas no se pudieron registrar`} (barra
+              roja de arriba): su plata está en el cajón pero no en el "esperado". Anótalo en la nota del cierre.
+            </p>
+          )}
+
           {error && <p role="alert" className="text-sm text-[var(--color-alerta)]">{error}</p>}
 
           <div className="flex gap-2">
@@ -371,7 +407,7 @@ export function CajaClient({
               Volver
             </button>
             <button
-              disabled={cargando || !cont.valido || (necesitaNota && nota.trim() === '')}
+              disabled={cargando || !cont.valido || (necesitaNota && nota.trim() === '') || (cola?.pendientes ?? 0) > 0}
               onClick={async () => {
                 const ok = await accion(() =>
                   DEMO_ACTIVO
@@ -383,7 +419,13 @@ export function CajaClient({
                       }),
                 );
                 if (ok) {
-                  setCierreHecho({ esperado, contado: cont.valor, nota: nota.trim(), resumen: resumen ?? {}, abierta: session.opened_at });
+                  // La copia de Vender guardada para usar sin red (sw.js) es de
+                  // una caja abierta: sin borrarla, sin internet se seguía
+                  // vendiendo en la caja cerrada y la base rechazaba todo después.
+                  try {
+                    for (const k of await caches.keys()) if (k.startsWith('ra-paginas')) await caches.delete(k);
+                  } catch { /* sin service worker */ }
+                  setCierreHecho({ esperado, contado: cont.valor, nota: nota.trim(), resumen: resumen ?? {}, abierta: session.opened_at, cerrada: new Date().toISOString() });
                   setCerrando(false); setContado(''); setNota(''); setBilletes({});
                 }
               }}
@@ -401,7 +443,7 @@ export function CajaClient({
   const r = resumen ?? {};
   // El día del LOCAL (regla 17), no el del navegador: un celular con otra
   // zona marcaba "de otro día" una caja abierta hoy en la mañana.
-  const deOtroDia = hoyLocal !== null && diaDelLocal(session.opened_at, zona) !== diaDelLocal(new Date(), zona);
+  const deOtroDia = montado && diaDelLocal(session.opened_at, zona) !== diaDelLocal(new Date(), zona);
   return (
     <div className="px-4 py-5 space-y-4">
       <div className="tarjeta p-4">
@@ -447,7 +489,7 @@ export function CajaClient({
         {/* fn_cash_session_summary lo calculaba desde el primer día y la
             pantalla no lo mostraba: al cerrar, el cajero no tenía cómo cuadrar
             lo de la máquina de tarjetas ni las transferencias. */}
-        <PorMedioDePago medios={r.by_payment_method} />
+        <PorMedioDePago medios={r.by_payment_method} abonos={r.abonos_por_medio} />
         <NotasDelCuadre resumen={r} />
       </div>
 
@@ -629,12 +671,18 @@ function CajasAjenas({
   );
 }
 
-function PorMedioDePago({ medios }: { medios: unknown }) {
+function PorMedioDePago({ medios, abonos }: { medios: unknown; abonos?: unknown }) {
   const filas = Object.entries((medios ?? {}) as Record<string, number>)
     .map(([m, v]) => [m, Number(v)] as const)
     .filter(([, v]) => v > 0)
     .sort((a, b) => b[1] - a[1]);
-  if (filas.length === 0) return null;
+  // 0037 · los abonos de fiado con tarjeta o transferencia también pasan por la
+  // máquina o la cuenta: sin ellos, lo de la máquina no cuadraba al cerrar.
+  // (Los de efectivo ya están en "Abonos de fiado en efectivo".)
+  const deAbonos = Object.entries((abonos ?? {}) as Record<string, number>)
+    .map(([m, v]) => [m, Number(v)] as const)
+    .filter(([m, v]) => m !== 'efectivo' && v > 0);
+  if (filas.length === 0 && deAbonos.length === 0) return null;
   return (
     <div className="mt-3 pt-3 border-t border-[var(--borde)]">
       <p className="text-xs text-[var(--texto-suave)] mb-1">Cobrado por medio de pago</p>
@@ -642,6 +690,12 @@ function PorMedioDePago({ medios }: { medios: unknown }) {
         {filas.map(([m, v]) => (
           <div key={m} className="flex justify-between">
             <dt>{ETIQUETA_PAGO[m] ?? m}{m !== 'efectivo' && <span className="text-xs text-[var(--texto-suave)]"> · no entra al cajón</span>}</dt>
+            <dd className="num">{formatCLP(v)}</dd>
+          </div>
+        ))}
+        {deAbonos.map(([m, v]) => (
+          <div key={`abono-${m}`} className="flex justify-between">
+            <dt>Abonos de fiado · {ETIQUETA_PAGO[m] ?? m}<span className="text-xs text-[var(--texto-suave)]"> · no entra al cajón</span></dt>
             <dd className="num">{formatCLP(v)}</dd>
           </div>
         ))}
@@ -728,7 +782,7 @@ function Historial({ cierres }: { cierres: Cierre[] }) {
  * guardarlo junto al dinero. Es lo que el dueño pide ver al final del día.
  */
 function ResumenCierre({ c, onListo }: {
-  c: { esperado: number; contado: number; nota: string; resumen: Record<string, unknown>; abierta: string };
+  c: { esperado: number; contado: number; nota: string; resumen: Record<string, unknown>; abierta: string; cerrada: string };
   onListo: () => void;
 }) {
   const { fecha, hora } = useFormatoFecha();
@@ -740,7 +794,8 @@ function ResumenCierre({ c, onListo }: {
       <div id="ticket" className="font-mono text-[12px] leading-5 text-black">
         <p className="font-bold text-center">RESUMEN DE CIERRE DE CAJA</p>
         <p>Abierta: {fecha(c.abierta)} {hora(c.abierta)}</p>
-        <p>Cerrada: {fecha(new Date().toISOString())} {hora(new Date().toISOString())}</p>
+        {/* La hora del cierre, no la de cada vez que se dibuja (cambiaba al imprimir). */}
+        <p>Cerrada: {fecha(c.cerrada)} {hora(c.cerrada)}</p>
         <div className="border-t border-dashed border-black my-1" />
         <p className="flex justify-between"><span>Ventas</span><span>{String(c.resumen.sales_count ?? 0)}</span></p>
         <p className="flex justify-between"><span>Total vendido</span><span>{formatCLP(Number(c.resumen.sales_total ?? 0))}</span></p>
@@ -748,12 +803,24 @@ function ResumenCierre({ c, onListo }: {
           <p key={m} className="flex justify-between"><span>&nbsp;&nbsp;{ETIQUETA_PAGO[m] ?? m}</span><span>{formatCLP(Number(v))}</span></p>
         ))}
         <div className="border-t border-dashed border-black my-1" />
+        {/* Las mismas filas que "Debería haber" en pantalla: sin ventas en
+            efectivo, ingresos y egresos el papel no sumaba lo que decía. */}
         <p className="flex justify-between"><span>Efectivo inicial</span><span>{formatCLP(Number(c.resumen.opening_amount ?? 0))}</span></p>
+        <p className="flex justify-between"><span>Ventas en efectivo</span><span>{formatCLP(Number(c.resumen.cash_sales ?? 0))}</span></p>
+        {Number(c.resumen.cash_in ?? 0) > 0 && (
+          <p className="flex justify-between"><span>Ingresos</span><span>{formatCLP(Number(c.resumen.cash_in))}</span></p>
+        )}
+        {Number(c.resumen.cash_out ?? 0) > 0 && (
+          <p className="flex justify-between"><span>Egresos</span><span>-{formatCLP(Number(c.resumen.cash_out))}</span></p>
+        )}
         {Number(c.resumen.abonos_efectivo ?? 0) > 0 && (
           <p className="flex justify-between"><span>Abonos de fiado</span><span>{formatCLP(Number(c.resumen.abonos_efectivo))}</span></p>
         )}
         {Number(c.resumen.ajuste_redondeo ?? 0) !== 0 && (
-          <p className="flex justify-between"><span>Redondeo efectivo</span><span>{Number(c.resumen.ajuste_redondeo) > 0 ? '+' : '-'}{formatCLP(Math.abs(Number(c.resumen.ajuste_redondeo)))}</span></p>
+          <p className="flex justify-between"><span>&nbsp;&nbsp;(redondeo incluido)</span><span>{Number(c.resumen.ajuste_redondeo) > 0 ? '+' : '-'}{formatCLP(Math.abs(Number(c.resumen.ajuste_redondeo)))}</span></p>
+        )}
+        {Number(c.resumen.fiado ?? 0) > 0 && (
+          <p className="flex justify-between"><span>Fiado (no en caja)</span><span>{formatCLP(Number(c.resumen.fiado))}</span></p>
         )}
         <p className="flex justify-between"><span>Debía haber</span><span>{formatCLP(c.esperado)}</span></p>
         <p className="flex justify-between"><span>Contado</span><span>{formatCLP(c.contado)}</span></p>

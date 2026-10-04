@@ -151,7 +151,9 @@ export function ImportarClient() {
               type="file"
               accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="sr-only"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void elegirArchivo(f); }}
+              // Se vacía después de leer: corregir la planilla y elegir el MISMO
+              // archivo otra vez no disparaba nada (el valor no cambiaba).
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void elegirArchivo(f); }}
             />
           </label>
           <p className="text-xs text-[var(--texto-suave)] mt-3">
@@ -362,6 +364,12 @@ export function ImportarClient() {
           {(resultado?.actualizados ?? 0) > 0 && ` · ${resultado?.actualizados} actualizados`}
           {(resultado?.errores.length ?? 0) > 0 && ` · ${resultado?.errores.length} con problemas`}
         </p>
+        {(resultado?.stockSinCargar ?? 0) > 0 && (
+          <p role="status" className="text-sm text-[var(--color-aviso)] bg-amber-50 px-3 py-2 rounded-lg mb-4 text-left">
+            {resultado?.stockSinCargar} {resultado?.stockSinCargar === 1 ? 'producto ya existía' : 'productos ya existían'} y
+            traían stock en la planilla: ese stock no se cargó. Para cambiarlo usa Inventario → Ajustar o Recibir mercadería.
+          </p>
+        )}
 
         {(resultado?.errores.length ?? 0) > 0 && (
           <ul className="text-left text-sm border-t border-[var(--borde)] pt-3 mb-4 space-y-1">

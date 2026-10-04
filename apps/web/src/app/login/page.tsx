@@ -76,6 +76,9 @@ function LoginForm() {
    * al POS, bodega incluida.
    */
   function entrar(rol: Rol | null) {
+    // Recién se escribió la contraseña: el bloqueo por inactividad parte de
+    // cero (si no, la marca de una sesión vieja lo bloqueaba al entrar).
+    try { localStorage.removeItem('ra:bloqueado'); localStorage.removeItem('ra:ultima-actividad'); } catch { /* nada */ }
     const next = params.get('next');
     router.push(next ? destinoSeguro(next) : rol ? inicioPara(rol) : '/');
     router.refresh();
@@ -127,6 +130,14 @@ function LoginForm() {
       return;
     }
 
+    // Un corte de red llega como error (no lanza) y se contaba como contraseña
+    // mala: con señal mala, la persona terminaba esperando la pausa de 30 s.
+    const ae = authError as { status?: number; name?: string; message?: string } | null;
+    if (ae && (ae.status === 0 || ae.name === 'AuthRetryableFetchError' || /fetch|network/i.test(ae.message ?? ''))) {
+      setError('No hay conexión con el servidor. Revisa internet y vuelve a intentar.');
+      setLoading(false);
+      return;
+    }
     if (authError) {
       // Nunca revelar si el correo existe: eso permite enumerar usuarios.
       fallo('Correo o contraseña incorrectos');

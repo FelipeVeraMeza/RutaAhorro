@@ -37,6 +37,8 @@ export function FiadoClient({ puedeDarCredito }: { puedeDarCredito: boolean }) {
   const [viendo, setViendo] = useState<CuentaCliente | null>(null);
   const [topeDe, setTopeDe] = useState<CuentaCliente | null>(null);
   const [eligiendo, setEligiendo] = useState(false);
+  // Con cientos de clientes, la lista de "Dar crédito" no se podía recorrer.
+  const [buscaCliente, setBuscaCliente] = useState('');
 
   const cargar = useCallback(async () => {
     try {
@@ -158,8 +160,15 @@ export function FiadoClient({ puedeDarCredito }: { puedeDarCredito: boolean }) {
               <Link href="/clientes" prefetch={false} className="underline inline-flex items-center min-h-[44px]">Clientes</Link>.
             </p>
           )}
+          {sinCredito.length > 8 && (
+            <div className="px-4 pt-4">
+              <input type="search" value={buscaCliente} onChange={(e) => setBuscaCliente(e.target.value)} autoFocus
+                     placeholder="Buscar cliente…" aria-label="Buscar cliente para darle crédito"
+                     className="tap w-full px-3 rounded-lg border border-[var(--borde)] bg-white" />
+            </div>
+          )}
           <ul className="p-4 space-y-2">
-            {sinCredito.map((c) => (
+            {sinCredito.filter((c) => !buscaCliente.trim() || coincide(c.nombre, buscaCliente.trim().toLowerCase())).slice(0, 50).map((c) => (
               <li key={c.clienteId}>
                 <button onClick={() => { setEligiendo(false); setTopeDe(c); }} className="tap w-full tarjeta px-3 text-left">
                   {c.nombre}

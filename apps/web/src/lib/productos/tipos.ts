@@ -123,12 +123,19 @@ export interface FiltroProductos {
   soloActivos?: boolean;
   /** 'bajo' = por debajo del mínimo, 'agotado' = sin stock */
   estado?: 'todos' | 'normal' | 'bajo' | 'agotado';
+  /** Cuántos como máximo. Sin él, todos (de a 1.000 por la API). */
   limite?: number;
 }
 
 export interface ResultadoLote {
   creados: number;
   actualizados: number;
+  /**
+   * Productos que ya existían y traían stock en la planilla: ese stock no se
+   * carga (se cambia en Inventario, con su motivo). Antes no se decía y se
+   * creía cargado.
+   */
+  stockSinCargar?: number;
   errores: Array<{ fila: number; nombre: string; mensaje: string }>;
 }
 

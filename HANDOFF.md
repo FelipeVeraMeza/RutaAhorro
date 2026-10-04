@@ -4,7 +4,85 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-10-01.**
+> **Corte: 2026-10-04.**
+
+---
+
+## CÓMO SEGUIR — corte 2026-10-04 (7ª ronda: revisión por módulo), léelo antes que todo
+
+**2026-10-04 · Versión 0.7.0.** Pedido: "revisa el sistema como lo usaría cada
+rol… encuentra 100 falencias en cada módulo". **Se encontraron 81 reales
+(N° 101 a 181), no 1.000**, y no se rellenó la lista; el detalle, por qué y
+con qué se verificó cada uno está en **[docs/28](docs/28-revision-por-modulo.md)**.
+Rama `ccr-4f3fffd1-33r988`, sobre 09569bb (que ya traía 0.5.0 a 0.6.2 y las
+migraciones 0029 a 0036: los puntos 1 a 6 del pedido anterior ya estaban
+hechos ahí).
+
+**⚠️ Migración nueva 0037 (sin aplicar, y `db:test` NO se corrió acá).**
+Va después de 0029 a 0036. Antes de aplicarla:
+1. Correr `npm run db:test` como usuario sin privilegios (initdb no corre como
+   root; en esta sesión el entorno no dejó crear el usuario). Las pruebas
+   nuevas están escritas y nunca se ejecutaron: `seguridad.test.mjs` (S-37 y
+   tres más de 0037) y `redondeo-fiado.test.mjs` (abonos por medio). Se
+   cambiaron `banco.mjs` y `concurrencia.test.mjs` para crear los usuarios de
+   prueba con `raw_app_meta_data`, como lo hace el servidor.
+2. Revisar en vivo que `handle_new_user`, `current_tenant_id`,
+   `current_user_role`, `current_store_id`, `fn_adjust_stock` (0032),
+   `fn_close_cash_session`/`fn_add_cash_movement` (0012),
+   `fn_abonar_cuenta`/`fn_cash_session_summary` (0029) y la política
+   `suppliers_write` sean las que 0037 reemplaza. Todas con la misma firma.
+
+Qué hace 0037 (detalle en el encabezado del archivo):
+- **CRÍTICO · cuentas:** el perfil (local y ROL) salía de `user_metadata`, que
+  cualquiera escribe con `auth.signUp` y la llave pública: un vendedor podía
+  crearse un admin de su local. Ahora sale solo de `app_metadata`. Las rutas
+  `/api/usuarios/crear` e `/invitar` y `tools/crear-*.mjs` mandan los dos, así
+  que **publicar antes o después de migrar no rompe la creación de cuentas**.
+  La invitación crea el perfil ella misma si el disparador no lo hizo.
+- **CRÍTICO · desactivados:** `current_tenant_id()` y compañía devuelven null
+  para una cuenta desactivada: antes desactivar solo frenaba la pantalla y la
+  API seguía abierta. Política nueva `profiles_self_read` para que vea su
+  propio perfil ("Tu cuenta está desactivada").
+- Proveedores: crear admin/supervisor/bodega; cambiar y borrar solo admin
+  (antes cualquier rol podía crear por la API).
+- `fn_adjust_stock`: el tipo sigue al signo real; merma que suma →
+  `MERMA_SUMA`. Cierre de caja: monto nulo o negativo rechazado; cierre e
+  ingresos/egresos exigen cuenta activa. Abonos de fiado con tarjeta quedan en
+  la caja y el resumen trae `abonos_por_medio` (la pantalla tolera que falte).
+
+**Lo más importante del código (sin migración):**
+- **Cortes silenciosos de 1.000 filas** (la API de Supabase): catálogo del
+  celular (¡códigos de barras!), Productos (pedía 200), Reportes, Por pagar,
+  Clientes, Qué comprar, respaldo. Regla nueva en core: `todasLasPaginas`
+  (`lib/datos/paginar.ts` la reexporta como `todas`). **Toda consulta que
+  pueda pasar de mil filas va por ahí, ordenada por algo único.**
+- **Cola sin conexión** (`lib/offline/sync.ts`): reenvía las que quedaron en
+  "enviando", espera la pasada en curso en vez de saltarla, y un corte de red
+  deja la venta pendiente (no "error"). Cerrar caja envía la cola primero y
+  no deja cerrar con ventas pendientes.
+- **Importar:** lo que viene en blanco no pisa lo del producto existente
+  (`datosDeActualizacion` en core).
+- **Bloqueo** en localStorage por cuenta; el login lo reinicia.
+- La configuración del local se guarda en el celular para usarla sin red.
+
+**Verificado:** core 463 · typecheck · `db:check` 169 · build de producción ·
+`peso-js` 28/28 bajo 270 kB (12/28 en 250) · maqueta: `demo-ronda7.mjs`
+**15/15 (nuevo; con el código anterior 3/15)** · ronda6 14 · ronda5 22 ·
+ronda4 44 · ronda3 45 · ronda2 15 · flujo 19 · datos 11 · descuento 11 ·
+devolución 12 · bodega-unidad 26 · demo-roles 192 pantallas · sin-red 5/5.
+**No se corrió:** `db:test`, nada contra Supabase ni Railway.
+
+**Decisiones que tomé (confirmar):** ver docs/28 → "Decisiones de negocio".
+**Pregunta abierta (N° 170):** anular una venta en efectivo de otro día no
+deja el egreso en la caja de hoy.
+
+**Sigue pendiente (de antes):** aplicar 0029 a 0037 en Supabase (en orden,
+`npm run db:aplicar -- --aplicar`; después deben salir 46 funciones, 0037 no
+agrega ninguna) · `SUPABASE_SECRET_KEY` en Railway · `npm run db:cuentas` ·
+recorridos contra Railway con cuentas reales · RF-M5-08/10 (descuento a la
+venta y pago mixto, con el contador) · RF-M10-03 (aviso de edición simultánea:
+productos ya lo tiene desde 0020; clientes, proveedores y combos no — los
+proveedores ni siquiera tienen `updated_at`) · el React #418 intermitente.
 
 ---
 

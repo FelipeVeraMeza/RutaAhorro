@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  formatCLP, toUserMessage, validarMonto, validarCantidad, validarTramos,
+  formatCLP, toUserMessage, validarMonto, validarCantidad, validarCantidadStock, validarTramos,
   precioDelTramo, describirTramo, type TramoPrecio, coincide
 } from '@rutaahorro/core';
 import { repoPrecios } from '@/lib/datos/precios';
@@ -75,7 +75,8 @@ export function OfertasMasivasClient({ esAdmin }: { esAdmin: boolean }) {
   // La oferta escrita, o el primer problema en palabras. Lo que depende de
   // cada producto (que sea más barata que su precio) se ve en la lista.
   const oferta = useMemo((): { tramo: TramoPrecio | null; error: string | null } => {
-    const vD = validarCantidad(desde, { maximo: 1_000_000 });
+    // Por unidad (0032): "desde 2,5" no existe y se cobraba igual que desde 3.
+    const vD = validarCantidadStock(desde, 'unidad', { maximo: 1_000_000 });
     if (!vD.valido) return { tramo: null, error: `Desde cuántas unidades: ${vD.error}` };
     if (valor.trim() === '') return { tramo: null, error: null };
     let tramo: TramoPrecio;
@@ -215,7 +216,7 @@ export function OfertasMasivasClient({ esAdmin }: { esAdmin: boolean }) {
         <div className="flex gap-2">
           <label className="flex-1 min-w-0">
             <span className="block text-xs mb-1">Desde (unidades)</span>
-            <input inputMode="decimal" value={desde} onChange={(e) => setDesde(e.target.value)}
+            <input inputMode="numeric" value={desde} onChange={(e) => setDesde(e.target.value)}
                    aria-label="Desde cuántas unidades" className={`${campo} num text-right`} />
           </label>
           <label className="flex-1 min-w-0">

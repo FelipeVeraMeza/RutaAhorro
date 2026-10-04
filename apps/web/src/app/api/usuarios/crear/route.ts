@@ -44,13 +44,23 @@ export async function POST(request: Request) {
     password: clave,
     email_confirm: true,
     // El local y la tienda NO vienen del navegador: son los del administrador.
+    // Van en app_metadata, que solo el servidor escribe: desde 0037 el
+    // disparador ya no cree en user_metadata, que cualquiera puede poner al
+    // registrarse con la llave pública (un vendedor se creaba un admin de su
+    // local). Se repiten en user_metadata para la base que aún no tiene 0037.
     user_metadata: {
       full_name: nombre,
       tenant_id: actor.tenantId,
       store_id: actor.storeId,
       role: rol,
     },
-    app_metadata: { debe_cambiar_clave: true },
+    app_metadata: {
+      debe_cambiar_clave: true,
+      tenant_id: actor.tenantId,
+      store_id: actor.storeId,
+      role: rol,
+      full_name: nombre,
+    },
   });
 
   if (error || !creado?.user) {
