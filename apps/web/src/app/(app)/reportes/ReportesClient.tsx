@@ -4,7 +4,7 @@ import { Icono } from '@/components/Icono';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatCLP, formatCantidad, formatPct, toUserMessage, aCSV, nombreArchivoReporte, type ColumnaCSV,
-  periodoAnterior, variacionPct, serieCompleta, diasEnRango, ventasPorHora, clasificacionABC,
+  periodoAnterior, variacionPct, serieCompleta, diasEnRango, ventasPorHora, clasificacionABC, sumarDias,
 } from '@rutaahorro/core';
 import { useFormatoFecha } from '@/lib/formatoFecha';
 import { GraficoVentas } from '@/components/GraficoVentas';
@@ -57,7 +57,8 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
 
   const [ventas, setVentas] = useState<VentaPorDia[]>([]);
   // RF-M7-11 · lo mismo en el período anterior de igual largo.
-  const [anterior, setAnterior] = useState<{ total: number; ventas: number; desde: string; hasta: string } | null>(null);
+  // `hastaComparado`: con "hasta" = hoy se compara sin el día en curso (N° 182).
+  const [anterior, setAnterior] = useState<{ total: number; ventas: number; desde: string; hasta: string; hastaComparado: string } | null>(null);
   const [productos, setProductos] = useState<VentaPorProducto[]>([]);
   const [usuarios, setUsuarios] = useState<VentaPorUsuario[]>([]);
   const [inventario, setInventario] = useState<FilaInventarioValorizado[]>([]);
@@ -95,7 +96,12 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
     try {
       const repo = repoReportes();
       if (vista === 'ventas') {
-        const previo = periodoAnterior(rango.desde, rango.hasta);
+        // Hoy va en curso: contra un período anterior completo, la variación
+        // salía siempre a la baja. Con "hasta" = hoy se comparan los días
+        // cerrados (hasta ayer) contra igual cantidad de días anteriores.
+        const enCurso = rango.hasta === hoyLocal(zona) && rango.desde < rango.hasta;
+        const hastaComparado = enCurso ? sumarDias(rango.hasta, -1) : rango.hasta;
+        const previo = periodoAnterior(rango.desde, hastaComparado);
         const [actual, antes] = await Promise.all([repo.ventasPorDia(rango), repo.ventasPorDia(previo)]);
         if (!vigente()) return;
         setVentas(actual);
@@ -103,6 +109,7 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
           total: antes.reduce((s, d) => s + d.total, 0),
           ventas: antes.reduce((s, d) => s + d.ventas, 0),
           ...previo,
+          hastaComparado,
         });
       }
       if (vista === 'productos') { const r = await repo.ventasPorProducto(rango, verCostos); if (vigente()) setProductos(r); }
@@ -283,8 +290,8 @@ export function ReportesClient({ verCostos, vistaInicial }: { verCostos: boolean
             >
               {anterior && (
                 <p className="mb-3">
-                  <Variacion pct={variacionPct(totalVendido, anterior.total)}
-                    contra={`${fechaCorta(anterior.desde)} al ${fechaCorta(anterior.hasta)} (${formatCLP(anterior.total)})`} />
+                  <Variacion pct={variacionPct(ventas.filter((d) => d.fecha <= anterior.hastaComparado).reduce((t, d) => t + d.total, 0), anterior.total)}
+                    contra={`${fechaCorta(anterior.desde)} al ${fechaCorta(anterior.hasta)} (${formatCLP(anterior.total)})${anterior.hastaComparado !== hasta ? ', sin contar hoy' : ''}`} />
                 </p>
               )}
               {diasEnRango(desde, hasta) <= 62 && (

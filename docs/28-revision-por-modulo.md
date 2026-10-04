@@ -1,4 +1,4 @@
-# 28 — Revisión por módulo (ronda 7, del 101 al 181)
+# 28 — Revisión por módulo (ronda 7, del 101 al 183)
 
 **Fecha:** 2026-10-04 · **Versión:** 0.7.0 · **Pedido:** "Revisa el sistema
 como lo usaría cada rol (jefe, QA, vendedor), busca errores en flujos, botones
@@ -8,7 +8,7 @@ con honestidad… Encuentra 100 falencias en cada módulo".
 ## Lo primero, con honestidad: no son 100 por módulo
 
 Se pidieron 100 falencias **por módulo** (unas 1.000). Se encontraron
-**81 reales**, y no se rellenó la lista: después de seis rondas
+**83 reales**, y no se rellenó la lista: después de seis rondas
 anteriores (docs/26 y 27, 100 errores ya corregidos), inventar o partir en
 pedazos defectos para llegar a la cifra habría sido mentir en el documento que
 se usa para decidir. Lo que sí se hizo fue ir más hondo que las rondas
@@ -40,15 +40,15 @@ que mueven plata y permisos. De ahí salieron los más graves:
 | M4 · Inventario y stock | 9 |
 | M5 · Punto de venta (y fiado, clientes) | 23 |
 | M6 · Caja | 8 |
-| M7 · Reportes | 2 |
+| M7 · Reportes | 4 |
 | M8 · Alertas (Inicio) | 2 |
 | M9 · Administración, respaldo y ayuda | 5 |
 | M10 · Trabajo simultáneo | 1 |
 | QA · Maqueta y herramientas | 2 |
-| **Total** | **81** |
+| **Total** | **83** |
 
 Por gravedad: 2 críticas, 17 altas,
-34 medias, 28 bajas. Corregidos: 80; una es
+36 medias, 28 bajas. Corregidos: 82; una es
 pregunta de negocio (N° 170).
 
 M7, M8 y M10 tienen pocos hallazgos propios porque varios de sus defectos se
@@ -149,6 +149,8 @@ sesión (ver abajo).
 | 179 | M2 | Jefe/Bodega | Alta | Importar: una planilla para ACTUALIZAR precios (sin columnas de costo, mínimo, categoría o descripción) dejaba a los productos que ya existían con costo promedio $0, mínimo 0 y sin categoría: lo vacío se escribía encima. Ahora lo que viene en blanco no se toca. | Corregido | core: import.test.ts |
 | 180 | M2 | Jefe/Bodega | Media | Importar: el stock inicial de productos que ya existían se ignoraba sin decirlo; quien cargaba la planilla creía que el stock había entrado. Ahora el resultado lo avisa y dice dónde se cambia. | Corregido | typecheck |
 | 181 | M9 | Jefe | Baja | Facturación → Recibidas: el IVA propuesto era el 19 % escrito en el código, no el IVA del local (regla 13). | Corregido | typecheck |
+| 182 | M7 | Jefe | Media | Inicio → "Últimos 30 días": comparaba 30 días que incluyen HOY (en curso) contra 30 días completos: a primera hora la variación salía siempre negativa. Ahora compara los 29 días cerrados contra los 29 anteriores. | Corregido | demo-ronda2 (texto) |
+| 183 | M7 | Jefe | Media | Reportes → Ventas: con el período terminando hoy, la variación contra el período anterior incluía el día en curso contra días completos y salía a la baja. Ahora compara hasta ayer y lo dice ("sin contar hoy"). | Corregido | typecheck |
 
 ## Decisiones de negocio que tomé y hay que confirmar
 

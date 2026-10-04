@@ -30,7 +30,7 @@ let p = await pagina('admin');
 await ir(p, '/');
 ok('RF-M7-10', await p.getByText('Últimos 30 días').count() === 1 && await p.locator('figure table tbody tr').count() === 30,
   'el Inicio muestra los últimos 30 días, día por día');
-ok('RF-M7-11', /vs los 30 días anteriores/.test(await texto(p)), 'y los compara con los 30 anteriores');
+ok('RF-M7-11', /vs los 29 días anteriores \(sin contar hoy/.test(await texto(p)), 'y los compara con los anteriores, sin el día en curso (docs/28 N° 182)');
 await p.screenshot({ path: `${SP}/r2-inicio.png`, fullPage: true });
 
 await ir(p, '/reportes');

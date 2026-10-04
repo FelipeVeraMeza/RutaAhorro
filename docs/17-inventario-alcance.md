@@ -507,4 +507,4 @@ impedir que el local empiece a operar.
 | 1.1 | 2026-09-15 | Felipe Vera | Módulo de productos terminado: alta, edición, baja y carga masiva. M2 de 3 a 9 ✅ |
 | 1.2 | 2026-09-15 | QA | Re-verificación contra el código de M1, M3 y M4: 14 filas corregidas (usuarios, proveedores, recepción, ajustes, kardex y toma ya tienen pantalla). M4-06 baja a 🟡: no existe filtro por categoría. Contadores por módulo pendientes de recalcular |
 | 1.3 | 2026-09-15 | QA | Auditoría de pantallas. M4-12 baja de ✅ a 🟡: la pantalla de kardex existe pero no tiene los filtros que pide el requerimiento; la marca ✅ de la v1.2 fue generosa. Ver informe en 21 |
-| 1.4 | 2026-10-04 | QA | Revisión por módulo, ronda 7: 81 hallazgos (docs/28), 2 críticos de seguridad en la base (0037, sin aplicar). Ningún requerimiento cambia de estado: lo nuevo con prueba propia está en docs/28; lo que no la tiene queda 🟡 |
+| 1.4 | 2026-10-04 | QA | Revisión por módulo, ronda 7: 83 hallazgos (docs/28), 2 críticos de seguridad en la base (0037, sin aplicar). Ningún requerimiento cambia de estado: lo nuevo con prueba propia está en docs/28; lo que no la tiene queda 🟡 |

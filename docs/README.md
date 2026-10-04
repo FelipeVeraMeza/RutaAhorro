@@ -61,7 +61,7 @@ todo lo demás es tu contrato de implementación.
 | [25 — Cincuenta requerimientos nuevos](25-requerimientos-nuevos.md) | Los 50 requerimientos que faltaban (40 RF + 10 RNF), con motivo, criterios de aceptación, prioridad y evidencia. Salen de usar el sistema como dueño, QA y vendedor |
 | [26 — Revisión por rol: 50 errores](26-revision-por-rol-50-errores.md) | Ronda 5: errores 1 a 50, por rol, con gravedad y con qué se verificó |
 | [27 — Revisión por rol: 50 errores más](27-revision-por-rol-50-errores-mas.md) | Ronda 6: errores 51 a 100 |
-| [28 — Revisión por módulo](28-revision-por-modulo.md) | Ronda 7: hallazgos 101 a 181, dos críticos de seguridad (0037) y los cortes silenciosos de 1.000 filas |
+| [28 — Revisión por módulo](28-revision-por-modulo.md) | Ronda 7: hallazgos 101 a 183, dos críticos de seguridad (0037) y los cortes silenciosos de 1.000 filas |
 
 ---
 

@@ -68,7 +68,6 @@ export function Tendencia() {
   }
 
   const actual = sumaTotales(datos.serie);
-  const antes = sumaTotales(datos.anterior);
   const hoy = datos.serie[datos.serie.length - 1];
   const haceUnaSemana = datos.serie[datos.serie.length - 8];
   const [y, m, d] = hoy.fecha.split('-').map(Number);
@@ -81,7 +80,11 @@ export function Tendencia() {
         <p className="num font-bold">{formatCLP(actual.total)}</p>
       </div>
       <div className="flex flex-col gap-1 mt-1 mb-3">
-        <Variacion pct={variacionPct(actual.total, antes.total)} contra="los 30 días anteriores" />
+        {/* Sin hoy, que va en curso: a las 9 de la mañana hoy suma casi cero y
+            los 30 días "bajaban" siempre contra 30 días completos. Se comparan
+            los 29 días cerrados contra los 29 anteriores. */}
+        <Variacion pct={variacionPct(sumaTotales(datos.serie.slice(0, -1)).total, sumaTotales(datos.anterior.slice(1)).total)}
+                   contra="los 29 días anteriores (sin contar hoy, que va en curso)" />
         {haceUnaSemana && datos.semanaPasadaHastaAhora != null && (
           <Variacion pct={variacionPct(hoy.total, datos.semanaPasadaHastaAhora)}
                      contra={`el ${diaSemana} pasado a esta hora`} />

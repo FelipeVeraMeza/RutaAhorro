@@ -11,8 +11,8 @@
 ## CÓMO SEGUIR — corte 2026-10-04 (7ª ronda: revisión por módulo), léelo antes que todo
 
 **2026-10-04 · Versión 0.7.0.** Pedido: "revisa el sistema como lo usaría cada
-rol… encuentra 100 falencias en cada módulo". **Se encontraron 81 reales
-(N° 101 a 181), no 1.000**, y no se rellenó la lista; el detalle, por qué y
+rol… encuentra 100 falencias en cada módulo". **Se encontraron 83 reales
+(N° 101 a 183), no 1.000**, y no se rellenó la lista; el detalle, por qué y
 con qué se verificó cada uno está en **[docs/28](docs/28-revision-por-modulo.md)**.
 Rama `ccr-4f3fffd1-33r988`, sobre 09569bb (que ya traía 0.5.0 a 0.6.2 y las
 migraciones 0029 a 0036: los puntos 1 a 6 del pedido anterior ya estaban
