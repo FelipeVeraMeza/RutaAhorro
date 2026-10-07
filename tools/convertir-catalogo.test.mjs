@@ -62,3 +62,27 @@ test('una planilla con repetidos, internos y comillas sale importable', () => {
   assert.ok(inf.revisarPrecio.some((x) => x.startsWith('BILZ PET3000')), 'BILZ a $19.900 (le faltó la coma) se marca para revisar');
   assert.equal(inf.iaba18.length, 1);
 });
+
+test('lo ya cargado en el local queda fuera; lo parecido sin código se avisa', async () => {
+  const { leerExistentes, parecido } = await import('./convertir-catalogo.mjs');
+  assert.ok(parecido('Nutella 350g', 'nutella 350 grs') === 1);
+  assert.ok(parecido('Galleta bon o bon blanco 95g', 'BON O BON BLANCO COOKIES') >= 0.6);
+  assert.ok(parecido('Nutella 350g', 'MANTECOL LINGOTE') === 0);
+  const existentes = leerExistentes(leerTexto([
+    '\uFEFFnombre;codigo_interno;codigos_de_barra;categoria;precio_venta',
+    'Galleta bon o bon blanco 95g;;7802225640848;;1450',
+    'Nutella 350g;;;;5490',
+  ].join('\r\n')));
+  const txt = [
+    'Descripción\tID interno\tSKU\tPrecio de Venta Neto\tImpuesto Adicional',
+    'BON O BON BLANCO COOKIES\t3642197\t7802225640848\t1218\t',
+    'nutella 350 grs\t3553732\t80177173\t5033,61\t',
+    'MANTECOL LINGOTE\t4480746\t7790380026402\t5033\t',
+  ].join('\n');
+  const { csv, inf } = convertirCatalogo(leerTexto(txt), existentes);
+  const filas = csv.trim().split('\r\n');
+  assert.equal(filas.length, 3, 'el bon o bon blanco ya estaba: queda fuera');
+  assert.equal(inf.yaCargado.length, 1);
+  assert.equal(inf.posibleDuplicado.length, 1, 'nutella se parece a la que ya está, sin código');
+  assert.match(inf.posibleDuplicado[0], /Nutella 350g/);
+});

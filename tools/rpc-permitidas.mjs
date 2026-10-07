@@ -13,6 +13,8 @@ export const RPC_PERMITIDAS = [
   'fn_add_cash_movement', 'fn_adjust_stock', 'fn_apply_stock_count',
   'fn_cash_session_summary', 'fn_close_cash_session', 'fn_confirm_receipt',
   'fn_create_product', 'fn_open_cash_session', 'fn_register_sale',
+  // 0038 · carga masiva en lotes
+  'fn_importar_productos',
   'fn_transfer_stock', 'fn_update_product', 'fn_void_receipt', 'fn_void_sale', 'fn_write_off_lot',
   // 0018 · ofertas e impuestos adicionales
   'fn_asignar_impuesto', 'fn_guardar_configuracion', 'fn_guardar_impuesto', 'fn_guardar_precios_producto',

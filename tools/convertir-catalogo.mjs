@@ -4,6 +4,14 @@
  * plantilla de Productos → Importar.
  *
  *   node tools/convertir-catalogo.mjs catalogo.xlsx      (o .csv / .txt copiado de Excel)
+ *   node tools/convertir-catalogo.mjs catalogo.txt --existentes=catalogo-2026-10-07.csv
+ *
+ * Con --existentes (lo que baja Productos → Exportar) quedan fuera los
+ * productos que el local ya cargó: si el código de barras coincide, el
+ * importador los actualizaría con el nombre y el precio del sistema anterior,
+ * y "Galleta bon o bon blanco 95g" pasaría a "BON O BON BLANCO COOKIES". Los
+ * que se parecen por nombre pero no tienen el código se listan para revisar:
+ * pueden quedar duplicados.
  *
  * Deja al lado `<nombre>-para-importar.csv` y `<nombre>-informe.txt`. No toca
  * la base: el archivo se sube en Productos → Importar, que muestra la vista
@@ -107,10 +115,43 @@ export function leerTexto(texto) {
   return lineas.map((l) => dividir(l, sep));
 }
 
+// ------------------------------------------------- productos ya cargados
+const PALABRAS_VACIAS = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'con', 'sin', 'y', 'sabor', 'a', 'en', 'x',
+  'g', 'gr', 'grs', 'gramos', 'kg', 'k', 'kilo', 'ml', 'cc', 'l', 'lt', 'lts', 'litro', 'un', 'u', 'unidades']);
+
+/** "Galleta bon o bon blanco 95g" → {galleta, bon, blanco, 95}: para comparar nombres escritos distinto. */
+export function palabrasDe(nombre) {
+  return new Set(String(nombre ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/(\d)([a-z])/g, '$1 $2').replace(/([a-z])(\d)/g, '$1 $2')
+    .split(/[^a-z0-9ñ]+/).filter((p) => p.length > 1 && !PALABRAS_VACIAS.has(p) || /^\d+$/.test(p)));
+}
+
+/** Cuánto se parecen dos nombres: palabras en común sobre las del más corto (0 a 1). */
+export function parecido(a, b) {
+  const pa = palabrasDe(a), pb = palabrasDe(b);
+  if (!pa.size || !pb.size) return 0;
+  let comunes = 0;
+  for (const x of pa) if (pb.has(x)) comunes++;
+  return comunes / Math.min(pa.size, pb.size);
+}
+
+/** El CSV de Productos → Exportar → [{ nombre, codigos }]. */
+export function leerExistentes(filas) {
+  const enc = filas[0].map((h) => h.trim().toLowerCase());
+  const iNombre = enc.indexOf('nombre'), iCodigos = enc.indexOf('codigos_de_barra');
+  if (iNombre < 0) throw new Error('El archivo de existentes no es el que baja Productos → Exportar (falta "nombre")');
+  return filas.slice(1).filter((f) => String(f[iNombre] ?? '').trim()).map((f) => ({
+    nombre: String(f[iNombre]).trim(),
+    codigos: iCodigos < 0 ? [] : String(f[iCodigos] ?? '').split(/\s+/).map((c) => codigoDeBarras(c) ?? c).filter(Boolean),
+  }));
+}
+
 const csv = (v) => (/[;"\r\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
 
 /** Filas de la planilla anterior (con encabezado) → CSV para importar + informe. */
-export function convertirCatalogo(filas) {
+export function convertirCatalogo(filas, existentes = []) {
+  const yaCargados = new Map();
+  for (const e of existentes) for (const c of e.codigos) yaCargados.set(c, e.nombre);
   const enc = filas[0].map((h) => h.trim().toLowerCase());
   const col = (nombre) => {
     const i = enc.indexOf(nombre.toLowerCase());
@@ -123,7 +164,7 @@ export function convertirCatalogo(filas) {
   const salida = [['nombre', 'descripcion', 'sku', 'codigo_barras', 'categoria', 'precio_venta', 'costo', 'unidad',
     'stock_inicial', 'stock_minimo', 'perecible', 'dias_alerta'].join(';')];
   const inf = { total: 0, sinPrecio: [], codigoInterno: [], codigoMalo: [], codigoRepetido: [], nombreRepetido: [],
-    iaba10: [], iaba18: [], bebidaSinImpuesto: [], revisarPrecio: [], idRepetido: [] };
+    iaba10: [], iaba18: [], bebidaSinImpuesto: [], revisarPrecio: [], idRepetido: [], yaCargado: [], posibleDuplicado: [] };
   const codigos = new Map(), nombres = new Map(), ids = new Set();
 
   for (const f of filas.slice(1)) {
@@ -146,6 +187,15 @@ export function convertirCatalogo(filas) {
     // El sistema anterior no marcaba el impuesto en todas las bebidas: una
     // Coca-Cola sin él queda con solo IVA y se vende más barata de lo que debe.
     if (tasa === 0 && precio > 0 && BEBIDA.test(nombre) && !/\b(ATUN|GALLETA|MERMELADA)\b/i.test(nombre)) inf.bebidaSinImpuesto.push(`${etiqueta}: $${precio.toLocaleString('es-CL')}`);
+
+    // Ya está en el local con ese código: se deja como lo cargaron (nombre y precio).
+    const cYa = codigoDeBarras(crudo);
+    if (cYa && yaCargados.has(cYa)) {
+      inf.yaCargado.push(`${etiqueta} = "${yaCargados.get(cYa)}" (${cYa})`);
+      continue;
+    }
+    const parecidos = existentes.filter((e) => parecido(e.nombre, nombre) >= 0.6);
+    if (parecidos.length) inf.posibleDuplicado.push(`${etiqueta} ≈ ${parecidos.map((e) => `"${e.nombre}"`).join(', ')}`);
 
     let codigo = null, descripcion = '';
     if (crudo) {
@@ -172,6 +222,9 @@ export function convertirCatalogo(filas) {
 
   const lista = (titulo, xs, nota = '') => (xs.length ? `\n## ${titulo} (${xs.length})${nota ? `\n${nota}` : ''}\n${xs.map((x) => `  · ${x}`).join('\n')}\n` : '');
   const informe = `Catálogo convertido: ${salida.length - 1} productos de ${inf.total} filas.\n`
+    + lista('Ya cargados en el local: quedan fuera (conservan su nombre y precio)', inf.yaCargado)
+    + lista('Se parecen a uno ya cargado que no tiene ese código: pueden quedar duplicados', inf.posibleDuplicado,
+      'Si es el mismo, agrégale el código al producto que ya existe (Productos → Editar) antes de importar, o bórralo de este archivo.')
     + lista('Sin precio: quedan en $0', inf.sinPrecio, 'Venían con precio 0 o 1. Ponles precio antes de venderlos.')
     + lista('IABA 18 % (bebidas con alto azúcar)', inf.iaba18, 'El precio final ya lo incluye. Después de importar: Configuración → Impuestos → "IABA bebidas con alto azúcar" → Elegir productos.')
     + lista('IABA 10 % (bebidas sin azúcar añadida)', inf.iaba10, 'Igual, con "IABA bebidas sin azúcar añadida".')
@@ -201,7 +254,10 @@ if (esPrincipal) {
   } else {
     filas = leerTexto(fs.readFileSync(archivo, 'utf8'));
   }
-  const { csv: salida, informe } = convertirCatalogo(filas);
+  const rutaExistentes = process.argv.find((a) => a.startsWith('--existentes='))?.slice('--existentes='.length);
+  const existentes = rutaExistentes ? leerExistentes(leerTexto(fs.readFileSync(rutaExistentes, 'utf8'))) : [];
+  if (rutaExistentes) console.log(`\nYa cargados en el local: ${existentes.length} productos (${rutaExistentes})`);
+  const { csv: salida, informe } = convertirCatalogo(filas, existentes);
   const base = archivo.replace(/\.[^.]+$/, '');
   fs.writeFileSync(`${base}-para-importar.csv`, salida);
   fs.writeFileSync(`${base}-informe.txt`, informe);

@@ -1,6 +1,6 @@
 'use client';
 
-import { normalizeBarcode, codigosDesdeImportacion, toUserMessage, type FilaProducto } from '@rutaahorro/core';
+import { normalizeBarcode, toUserMessage, type FilaProducto } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { db, normalizeSearch } from '../offline/db';
 import type {
@@ -283,89 +283,33 @@ export const repoSupabase: RepositorioProductos = {
     return (data.products as unknown as { name: string } | null)?.name ?? 'otro producto';
   },
 
+  /**
+   * Carga masiva en lotes de 100, cada uno en una sola llamada a la base
+   * (0038, fn_importar_productos). Antes era producto por producto desde el
+   * navegador: 714 productos tardaban más de diez minutos y cerrar la pestaña
+   * los dejaba a medias. Y al actualizar uno que ya existía le pisaba el
+   * costo, la categoría y el perecible con lo que la planilla no traía: la
+   * función de la base ya no lo hace.
+   */
   async importarLote(
     filas: FilaProducto[],
     onProgreso?: (hechas: number, total: number) => void,
   ): Promise<ResultadoLote> {
     const resultado: ResultadoLote = { creados: 0, actualizados: 0, errores: [] };
-    const cats = await this.categorias();
-
-    for (const [i, fila] of filas.entries()) {
-      try {
-        let categoriaId: string | null = null;
-        if (fila.categoria) {
-          const existente = cats.find(
-            (c) => c.nombre.toLowerCase() === fila.categoria!.toLowerCase(),
-          );
-          const cat = existente ?? (await this.crearCategoria(fila.categoria));
-          if (!existente) cats.push(cat);
-          categoriaId = cat.id;
-        }
-
-        let { data: previo } = fila.sku
-          ? await supabase()
-              .from('products')
-              .select('id, product_barcodes(barcode)')
-              .eq('sku', fila.sku)
-              .maybeSingle()
-          : { data: null };
-        // Sin SKU (o SKU nuevo), el código de barras identifica al producto:
-        // una planilla del proveedor sin SKU fallaba fila por fila con
-        // "ese código ya está en otro producto" en vez de actualizar.
-        if (!previo && fila.codigo_barras) {
-          const { data: cod } = await supabase().from('product_barcodes')
-            .select('product_id').eq('barcode', fila.codigo_barras).maybeSingle();
-          if (cod) {
-            ({ data: previo } = await supabase().from('products')
-              .select('id, product_barcodes(barcode)').eq('id', cod.product_id as string).maybeSingle());
-          }
-        }
-
-        if (previo) {
-          // Una planilla que actualiza precios no trae columna de código de
-          // barra, y antes eso se traducía en "el producto queda sin códigos":
-          // la planilla del proveedor dejaba el catálogo invisible al escáner.
-          // Sin código en la fila no se toca nada; con código, se suma a los
-          // que ya tenía en vez de reemplazarlos.
-          const previos = ((previo.product_barcodes ?? []) as Array<{ barcode: string }>)
-            .map((b) => b.barcode);
-          const codigos = codigosDesdeImportacion(previos, fila.codigo_barras);
-
-          await this.actualizar(previo.id as string, {
-            nombre: fila.nombre, descripcion: fila.descripcion,
-            sku: fila.sku, categoriaId, unidad: fila.unidad,
-            precioVenta: fila.precio_venta, costo: fila.costo,
-            stockMinimo: fila.stock_minimo, perecible: fila.perecible,
-            diasAlerta: fila.dias_alerta,
-            ...(codigos ? { codigos } : {}),
-          });
-          resultado.actualizados++;
-        } else {
-          await this.crear({
-            nombre: fila.nombre, descripcion: fila.descripcion,
-            sku: fila.sku, categoriaId, unidad: fila.unidad,
-            precioVenta: fila.precio_venta, costo: fila.costo,
-            stockMinimo: fila.stock_minimo, perecible: fila.perecible,
-            diasAlerta: fila.dias_alerta,
-            codigos: fila.codigo_barras ? [fila.codigo_barras] : [],
-            // La carga masiva trae una sola columna de cantidad: entra a la
-            // bodega, que es donde llega la mercadería (0014).
-            stockInicialSala: 0,
-            stockInicialBodega: fila.stock_inicial,
-          });
-          resultado.creados++;
-        }
-      } catch (e) {
-        // `toUserMessage` y no `e.message`: lo que sale de Postgres es
-        // "duplicate key value violates unique constraint …", y el almacenero
-        // que sube su planilla no tiene por qué leer eso.
-        resultado.errores.push({
-          fila: i + 2,
-          nombre: fila.nombre,
-          mensaje: toUserMessage(e),
-        });
+    const LOTE = 100;
+    for (let desde = 0; desde < filas.length; desde += LOTE) {
+      const lote = filas.slice(desde, desde + LOTE);
+      const { data, error } = await supabase().rpc('fn_importar_productos', { p_filas: lote });
+      if (error) throw error;
+      const r = data as { creados: number; actualizados: number; errores: Array<{ indice: number; nombre: string; codigo: string }> };
+      resultado.creados += r.creados;
+      resultado.actualizados += r.actualizados;
+      for (const e of r.errores) {
+        // `toUserMessage` y no el texto de Postgres: el almacenero que sube su
+        // planilla no tiene por qué leer "duplicate key value…".
+        resultado.errores.push({ fila: desde + e.indice + 1, nombre: e.nombre, mensaje: toUserMessage(new Error(e.codigo)) });
       }
-      onProgreso?.(i + 1, filas.length);
+      onProgreso?.(Math.min(desde + LOTE, filas.length), filas.length);
     }
     return resultado;
   },

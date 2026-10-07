@@ -344,7 +344,7 @@ export function ImportarClient() {
         </div>
 
         <p className="text-sm text-[var(--texto-suave)] mt-3">
-          No cierres esta pantalla: los productos ya cargados se quedan cargados.
+          Va en lotes de 100 y tarda unos segundos. Si se corta, vuelve a subir el mismo archivo: lo ya cargado se reconoce por su SKU y no se duplica.
         </p>
       </div>
     );
