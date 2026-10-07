@@ -21,6 +21,7 @@ export function CambiarClave({ nombre, obligatorio, completarDatos = false, demo
   const [clave, setClave] = useState('');
   const [nombreReal, setNombreReal] = useState('');
   const [rut, setRut] = useState('');
+  const [rol, setRol] = useState<'vendedor' | 'bodega' | ''>('');
   const [repetida, setRepetida] = useState('');
   const [ver, setVer] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +32,7 @@ export function CambiarClave({ nombre, obligatorio, completarDatos = false, demo
     e.preventDefault();
     setError(null);
     if (completarDatos && nombreReal.trim().length < 2) { setError('Escribe tu nombre'); return; }
+    if (completarDatos && !rol) { setError('Elige qué haces en el local: vender o bodega'); return; }
     if (completarDatos && !isValidRut(rut)) { setError('El RUT no es válido: revisa el dígito verificador'); return; }
     if (clave.length < MINIMO) { setError(`La contraseña debe tener al menos ${MINIMO} caracteres`); return; }
     if (clave !== repetida) { setError('Las dos contraseñas no son iguales'); return; }
@@ -43,7 +45,7 @@ export function CambiarClave({ nombre, obligatorio, completarDatos = false, demo
         const r = await fetch('/api/usuarios/datos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nombre: nombreReal.trim(), rut: formatRut(rut) }),
+          body: JSON.stringify({ nombre: nombreReal.trim(), rut: formatRut(rut), rol }),
         });
         const c = await r.json().catch(() => ({}));
         if (!r.ok) { setError(c?.error?.message ?? 'No se pudieron guardar tus datos'); return; }
@@ -108,6 +110,19 @@ export function CambiarClave({ nombre, obligatorio, completarDatos = false, demo
                   placeholder="12.345.678-5" className={campo + ' num'} />
                 <p className="text-xs text-[var(--texto-suave)] mt-1.5">Con dígito verificador. Para entrar escribirás los números antes del guion.</p>
               </div>
+              <fieldset>
+                <legend className="block text-sm font-medium mb-1.5">¿Qué haces en el local?</legend>
+                <div className="space-y-2">
+                  {([['vendedor', 'Vendo y cobro', 'Vendedor/a o cajero/a: vende, abre y cierra su caja.'],
+                     ['bodega', 'Bodega', 'Recibe mercadería, cuenta y ajusta el inventario. No vende.']] as const).map(([v, t, d]) => (
+                    <label key={v} className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer ${rol === v ? 'border-marca-500 bg-marca-50' : 'border-[var(--borde)]'}`}>
+                      <input type="radio" name="rol" value={v} checked={rol === v} onChange={() => setRol(v)} className="mt-0.5 w-5 h-5" />
+                      <span className="text-sm"><strong className="block">{t}</strong><span className="text-[var(--texto-suave)]">{d}</span></span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-[var(--texto-suave)] mt-1.5">Supervisor o administrador lo da el administrador.</p>
+              </fieldset>
             </>)}
             <div>
               <label htmlFor="clave" className="block text-sm font-medium mb-1.5">Contraseña nueva</label>

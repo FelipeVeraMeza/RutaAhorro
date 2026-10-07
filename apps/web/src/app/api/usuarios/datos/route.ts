@@ -1,4 +1,4 @@
-import { cleanRut, correoDeRut, isValidRut, rutDeCorreo } from '@rutaahorro/core';
+import { cleanRut, correoDeRut, isValidRut, maxDiscountFor, rutDeCorreo } from '@rutaahorro/core';
 import { getCurrentUser } from '@/lib/supabase/server';
 import { clienteAdmin, respuestaError } from '@/lib/supabase/admin';
 
@@ -14,8 +14,11 @@ import { clienteAdmin, respuestaError } from '@/lib/supabase/admin';
  *     (el administrador principal) no se pasa a RUT por acá.
  *
  * El rol, el descuento y desactivar siguen siendo solo del administrador, en
- * sus propias rutas: esto no los toca.
+ * sus propias rutas. Con una excepción: al completar una cuenta provisoria
+ * (primer ingreso), la persona elige si es Vendedor o Bodega (Felipe,
+ * 2026-10-07). Supervisor y Administrador no se eligen: los da el admin.
  */
+const ROLES_AL_COMPLETAR = ['vendedor', 'bodega'] as const;
 export async function POST(request: Request) {
   const yo = await getCurrentUser();
   if (!yo || !yo.isActive) return respuestaError('NO_AUTENTICADO', 'Tu sesión expiró. Vuelve a ingresar', 401);
@@ -24,12 +27,16 @@ export async function POST(request: Request) {
   const id = String(cuerpo.id ?? yo.id);
   const nombre = String(cuerpo.nombre ?? '').trim().replace(/\s+/g, ' ');
   const rut = String(cuerpo.rut ?? '').trim();
+  const rol = cuerpo.rol == null ? null : String(cuerpo.rol);
 
   if (id !== yo.id && yo.role !== 'admin') {
     return respuestaError('SIN_PERMISO', 'Solo el administrador cambia los datos de otra persona', 403);
   }
   if (nombre.length < 2 || nombre.length > 80) {
     return respuestaError('DATOS_INVALIDOS', 'Escribe el nombre (entre 2 y 80 letras)', 400);
+  }
+  if (rol !== null && (id !== yo.id || !yo.completarDatos || !ROLES_AL_COMPLETAR.includes(rol as typeof ROLES_AL_COMPLETAR[number]))) {
+    return respuestaError('SIN_PERMISO', 'El rol lo cambia el administrador en Usuarios', 403);
   }
   if (rut && !isValidRut(rut)) {
     return respuestaError('RUT_INVALIDO', 'El RUT no es válido: revisa el dígito verificador', 400);
@@ -67,12 +74,15 @@ export async function POST(request: Request) {
       ? respuestaError('RUT_EN_USO', 'Ese RUT ya es de otra cuenta', 409)
       : respuestaError('ERROR_INTERNO', 'No se pudieron guardar los datos', 500);
   }
-  const { error: e2 } = await admin.from('profiles').update({ full_name: nombre, email }).eq('id', id);
+  const { error: e2 } = await admin.from('profiles').update({
+    full_name: nombre, email,
+    ...(rol ? { role: rol, max_discount_pct: maxDiscountFor(rol as 'vendedor' | 'bodega') } : {}),
+  }).eq('id', id);
   if (e2) return respuestaError('ERROR_INTERNO', 'Se cambió la cuenta, pero no el perfil. Vuelve a guardar', 500);
 
   await admin.from('audit_log').insert({
     tenant_id: yo.tenantId, user_id: yo.id, action: 'datos_usuario', entity_type: 'profiles', entity_id: id,
-    new_values: { nombre, rut: rutDeCorreo(email) },
+    new_values: { nombre, rut: rutDeCorreo(email), ...(rol ? { rol } : {}) },
   });
   return Response.json({ ok: true, rut: rutDeCorreo(email) });
 }

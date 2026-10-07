@@ -7,8 +7,12 @@ import { DEMO_ACTIVO, DEMO_COOKIE, DEMO_COOKIE_CUENTA } from '@/lib/demo';
  * Por POST, no por GET: un enlace GET podría cerrarle la sesión al cajero
  * desde un prefetch del navegador en plena venta.
  */
-export async function POST(request: Request) {
-  const salida = NextResponse.redirect(new URL('/login', request.url), { status: 303 });
+export async function POST() {
+  // Relativa a propósito: detrás de Railway `request.url` es la dirección
+  // interna del contenedor, y "Salir" mandaba a https://localhost:8080/login
+  // (2026-10-07). Con `/login` el navegador la completa con la dirección
+  // pública en que está.
+  const salida = new NextResponse(null, { status: 303, headers: { Location: '/login' } });
   // En la maqueta la sesión es la cookie de la cuenta de ejemplo: salir la
   // borra y vuelve al ingreso, donde se puede entrar con otro rol.
   if (DEMO_ACTIVO) {
