@@ -20,7 +20,7 @@ export default async function ClavePage() {
       obligatorio={Boolean(user.debeCambiarClave)}
       completarDatos={Boolean(user.completarDatos)}
       demo={DEMO_ACTIVO}
-      volverA={inicioPara(user.role)}
+      volverA={(user.rolesPermitidos?.length ?? 0) > 1 ? '/turno' : inicioPara(user.role)}
     />
   );
 }

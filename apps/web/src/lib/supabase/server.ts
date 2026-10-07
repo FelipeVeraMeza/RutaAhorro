@@ -56,6 +56,12 @@ export interface CurrentUser {
    * primer ingreso, además de la clave, tiene que poner su nombre y su RUT.
    */
   completarDatos?: boolean;
+  /**
+   * 2026-10-07 · Los roles que la persona puede tomar al iniciar sesión, si
+   * son más de uno (ej. vender o bodega según el turno). Los da el
+   * administrador; viven en app_metadata, que solo el servidor escribe.
+   */
+  rolesPermitidos?: string[];
 }
 
 /**
@@ -133,7 +139,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const sub = claims?.claims?.sub;
   if (!sub) return null;
   const user = { id: sub, email: (claims.claims.email as string | undefined) ?? null };
-  const appMeta = (claims.claims as { app_metadata?: { debe_cambiar_clave?: boolean; completar_datos?: boolean } }).app_metadata;
+  const appMeta = (claims.claims as { app_metadata?: { debe_cambiar_clave?: boolean; completar_datos?: boolean; roles_permitidos?: string[] } }).app_metadata;
 
   const { data: profile } = await client
     .from('profiles')
@@ -159,5 +165,6 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     isActive: profile.is_active,
     debeCambiarClave: appMeta?.debe_cambiar_clave === true || appMeta?.completar_datos === true,
     completarDatos: appMeta?.completar_datos === true,
+    rolesPermitidos: Array.isArray(appMeta?.roles_permitidos) ? appMeta.roles_permitidos : undefined,
   };
 });

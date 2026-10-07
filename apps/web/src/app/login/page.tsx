@@ -134,13 +134,15 @@ function LoginForm() {
 
     let authError: unknown = null;
     let userId: string | null = null;
+    let roles: unknown = null;
     try {
-      let data: { user: { id: string } | null } | null = null;
+      let data: { user: { id: string; app_metadata?: Record<string, unknown> } | null } | null = null;
       ({ data, error: authError } = await supabase().auth.signInWithPassword({
         email: usuario,
         password,
       }));
       userId = data?.user?.id ?? null;
+      roles = data?.user?.app_metadata?.["roles_permitidos"] ?? null;
     } catch {
       // Sin red, signInWithPassword lanza: antes el botón quedaba en
       // "Ingresando…" para siempre.
@@ -156,6 +158,15 @@ function LoginForm() {
       return;
     }
     recordarCorreo(cuerpoRut ?? email.trim());
+
+    // 2026-10-07 · Quien puede trabajar en más de un rol elige el del turno.
+    // Si además tiene que completar su cuenta, /clave va primero (el layout
+    // lo manda) y de ahí sigue a /turno.
+    if (Array.isArray(roles) && roles.length > 1) {
+      router.push('/turno');
+      router.refresh();
+      return;
+    }
 
     // Directo a la pantalla de su rol, sin pasar por "/" y rebotar. Si el
     // perfil no se puede leer, "/" decide igual.
