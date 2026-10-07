@@ -4,19 +4,23 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Logo } from '@/components/Logo';
-import { MINIMO_CLAVE } from '@rutaahorro/core';
+import { MINIMO_CLAVE, formatRut, isValidRut } from '@rutaahorro/core';
 
 const MINIMO = MINIMO_CLAVE;
 
-export function CambiarClave({ nombre, obligatorio, demo, volverA }: {
+export function CambiarClave({ nombre, obligatorio, completarDatos = false, demo, volverA }: {
   nombre: string;
   /** Entró con la clave temporal del administrador: no puede saltarse esto. */
   obligatorio: boolean;
+  /** Cuenta con nombre y RUT provisorios: también los tiene que poner (2026-10-07). */
+  completarDatos?: boolean;
   demo: boolean;
   volverA: string;
 }) {
   const router = useRouter();
   const [clave, setClave] = useState('');
+  const [nombreReal, setNombreReal] = useState('');
+  const [rut, setRut] = useState('');
   const [repetida, setRepetida] = useState('');
   const [ver, setVer] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,11 +30,24 @@ export function CambiarClave({ nombre, obligatorio, demo, volverA }: {
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (completarDatos && nombreReal.trim().length < 2) { setError('Escribe tu nombre'); return; }
+    if (completarDatos && !isValidRut(rut)) { setError('El RUT no es válido: revisa el dígito verificador'); return; }
     if (clave.length < MINIMO) { setError(`La contraseña debe tener al menos ${MINIMO} caracteres`); return; }
     if (clave !== repetida) { setError('Las dos contraseñas no son iguales'); return; }
     if (demo) { setError('En el modo demo las contraseñas son de ejemplo y no se cambian.'); return; }
     setTrabajando(true);
     try {
+      // Primero el nombre y el RUT: la clave no se acepta mientras el RUT siga
+      // siendo el provisorio (el servidor lo revisa).
+      if (completarDatos) {
+        const r = await fetch('/api/usuarios/datos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre: nombreReal.trim(), rut: formatRut(rut) }),
+        });
+        const c = await r.json().catch(() => ({}));
+        if (!r.ok) { setError(c?.error?.message ?? 'No se pudieron guardar tus datos'); return; }
+      }
       const res = await fetch('/api/cuenta/clave', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -58,11 +75,16 @@ export function CambiarClave({ nombre, obligatorio, demo, volverA }: {
       <div className="w-full max-w-sm mx-auto">
         <div className="text-center mb-6">
           <div className="inline-flex rounded-2xl bg-marca-900 px-5 py-3 mb-4"><Logo tamano={48} /></div>
-          <h1 className="text-2xl font-bold">{obligatorio ? 'Crea tu contraseña' : 'Cambiar mi contraseña'}</h1>
+          <h1 className="text-2xl font-bold">{completarDatos ? 'Completa tu cuenta' : obligatorio ? 'Crea tu contraseña' : 'Cambiar mi contraseña'}</h1>
           <p className="text-sm text-[var(--texto-suave)] mt-1">{nombre}</p>
         </div>
 
-        {obligatorio && (
+        {completarDatos ? (
+          <p className="text-sm bg-amber-50 text-[var(--color-aviso)] px-3 py-2 rounded-lg mb-4">
+            Esta cuenta tiene un nombre y un RUT de prueba. Pon los tuyos y elige tu contraseña:
+            desde ahora entras con tu RUT y todo lo que hagas queda a tu nombre.
+          </p>
+        ) : obligatorio && (
           <p className="text-sm bg-amber-50 text-[var(--color-aviso)] px-3 py-2 rounded-lg mb-4">
             Entraste con una contraseña temporal que te dio el administrador.
             Elige una tuya: desde ahora, lo que hagas en el sistema queda a tu nombre.
@@ -73,9 +95,23 @@ export function CambiarClave({ nombre, obligatorio, demo, volverA }: {
           <p role="status" className="tarjeta p-5 text-center font-medium">✓ Contraseña guardada. Entrando…</p>
         ) : (
           <form onSubmit={guardar} className="tarjeta p-5 space-y-4">
+            {completarDatos && (<>
+              <div>
+                <label htmlFor="nombre-real" className="block text-sm font-medium mb-1.5">Tu nombre</label>
+                <input id="nombre-real" required autoFocus autoComplete="name" value={nombreReal}
+                  onChange={(e) => setNombreReal(e.target.value)} placeholder="Nombre y apellido" className={campo} />
+              </div>
+              <div>
+                <label htmlFor="rut-real" className="block text-sm font-medium mb-1.5">Tu RUT</label>
+                <input id="rut-real" required autoComplete="off" value={rut}
+                  onChange={(e) => setRut(e.target.value)} onBlur={() => { if (isValidRut(rut)) setRut(formatRut(rut)); }}
+                  placeholder="12.345.678-5" className={campo + ' num'} />
+                <p className="text-xs text-[var(--texto-suave)] mt-1.5">Con dígito verificador. Para entrar escribirás los números antes del guion.</p>
+              </div>
+            </>)}
             <div>
               <label htmlFor="clave" className="block text-sm font-medium mb-1.5">Contraseña nueva</label>
-              <input id="clave" type={ver ? 'text' : 'password'} autoComplete="new-password" required autoFocus
+              <input id="clave" type={ver ? 'text' : 'password'} autoComplete="new-password" required autoFocus={!completarDatos}
                 value={clave} onChange={(e) => setClave(e.target.value)} className={campo} />
               <p className="text-xs text-[var(--texto-suave)] mt-1.5">Al menos {MINIMO} caracteres.</p>
             </div>
@@ -91,7 +127,7 @@ export function CambiarClave({ nombre, obligatorio, demo, volverA }: {
             {error && <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
             <button type="submit" disabled={trabajando}
               className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-semibold disabled:opacity-50">
-              {trabajando ? 'Guardando…' : 'Guardar contraseña'}
+              {trabajando ? 'Guardando…' : completarDatos ? 'Guardar y entrar' : 'Guardar contraseña'}
             </button>
           </form>
         )}

@@ -51,6 +51,11 @@ export interface CurrentUser {
    * la escribe) y viaja en el token, así que no cuesta otra consulta.
    */
   debeCambiarClave?: boolean;
+  /**
+   * 2026-10-07 · La cuenta se creó con un nombre y un RUT provisorios: al
+   * primer ingreso, además de la clave, tiene que poner su nombre y su RUT.
+   */
+  completarDatos?: boolean;
 }
 
 /**
@@ -128,7 +133,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const sub = claims?.claims?.sub;
   if (!sub) return null;
   const user = { id: sub, email: (claims.claims.email as string | undefined) ?? null };
-  const appMeta = (claims.claims as { app_metadata?: { debe_cambiar_clave?: boolean } }).app_metadata;
+  const appMeta = (claims.claims as { app_metadata?: { debe_cambiar_clave?: boolean; completar_datos?: boolean } }).app_metadata;
 
   const { data: profile } = await client
     .from('profiles')
@@ -152,6 +157,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     storeId: profile.store_id,
     maxDiscountPct: Number(profile.max_discount_pct ?? 0),
     isActive: profile.is_active,
-    debeCambiarClave: appMeta?.debe_cambiar_clave === true,
+    debeCambiarClave: appMeta?.debe_cambiar_clave === true || appMeta?.completar_datos === true,
+    completarDatos: appMeta?.completar_datos === true,
   };
 });

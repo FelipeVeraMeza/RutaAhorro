@@ -25,6 +25,18 @@ export async function POST(request: Request) {
     return respuestaError('SERVIDOR_SIN_LLAVE', 'El servidor no tiene configurada la llave de Supabase (SUPABASE_SECRET_KEY)', 500);
   }
 
+  // 2026-10-07 · Cuenta con RUT provisorio: no se da por completa hasta que
+  // lo cambie por el suyo. Se mira la cuenta en Auth y no el token, que
+  // todavía trae el correo de antes si recién lo cambió.
+  if (yo.completarDatos) {
+    if (!admin) return respuestaError('SERVIDOR_SIN_LLAVE', 'El servidor no tiene configurada la llave de Supabase (SUPABASE_SECRET_KEY)', 500);
+    const { data: cuenta } = await admin.auth.admin.getUserById(yo.id);
+    const provisorio = (cuenta?.user?.app_metadata as { rut_provisorio?: string } | undefined)?.rut_provisorio;
+    if (provisorio && cuenta?.user?.email?.startsWith(`${provisorio}@`)) {
+      return respuestaError('FALTAN_DATOS', 'Cambia el RUT de prueba por el tuyo antes de seguir', 400);
+    }
+  }
+
   const client = await createClient();
   const { error } = await client.auth.updateUser({ password: clave });
   if (error) {
@@ -37,7 +49,7 @@ export async function POST(request: Request) {
   }
 
   if (admin) {
-    await admin.auth.admin.updateUserById(yo.id, { app_metadata: { debe_cambiar_clave: false } });
+    await admin.auth.admin.updateUserById(yo.id, { app_metadata: { debe_cambiar_clave: false, completar_datos: false } });
   }
   return Response.json({ ok: true });
 }

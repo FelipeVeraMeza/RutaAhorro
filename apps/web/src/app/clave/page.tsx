@@ -18,6 +18,7 @@ export default async function ClavePage() {
     <CambiarClave
       nombre={user.fullName}
       obligatorio={Boolean(user.debeCambiarClave)}
+      completarDatos={Boolean(user.completarDatos)}
       demo={DEMO_ACTIVO}
       volverA={inicioPara(user.role)}
     />
