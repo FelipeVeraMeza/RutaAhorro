@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { toUserMessage, isValidRut, formatRut, cleanRut, rutDeCorreo } from '@rutaahorro/core';
+import { toUserMessage, isValidRut, formatRut, cleanRut, rutDeCorreo, MINIMO_CLAVE } from '@rutaahorro/core';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { repoUsuarios, type Usuario } from '@/lib/datos/usuarios';
 import { NOMBRE_ROL, LEMA_ROL, type Rol } from '@/lib/navegacion';
@@ -102,7 +102,7 @@ export function UsuariosClient({ miId }: { miId: string }) {
     if (nombre.trim() === '') { setError('El nombre es obligatorio'); return; }
     if (modo === 'clave' && !isValidRut(rut)) { setError('El RUT no es válido: revisa el dígito verificador'); return; }
     if (modo === 'correo' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('El correo no es válido'); return; }
-    if (modo === 'clave' && clave.trim().length < 8) { setError('La contraseña temporal necesita al menos 8 caracteres'); return; }
+    if (modo === 'clave' && clave.trim().length < MINIMO_CLAVE) { setError(`La contraseña temporal necesita al menos ${MINIMO_CLAVE} caracteres`); return; }
 
     setEnviando(true);
     try {
@@ -128,7 +128,7 @@ export function UsuariosClient({ miId }: { miId: string }) {
   async function restablecer() {
     if (!restableciendo) return;
     setError(null);
-    if (claveNueva.trim().length < 8) { setError('La contraseña temporal necesita al menos 8 caracteres'); return; }
+    if (claveNueva.trim().length < MINIMO_CLAVE) { setError(`La contraseña temporal necesita al menos ${MINIMO_CLAVE} caracteres`); return; }
     setEnviando(true);
     try {
       await repoUsuarios().restablecerClave(restableciendo.id, claveNueva.trim());
@@ -416,7 +416,7 @@ export function UsuariosClient({ miId }: { miId: string }) {
             </fieldset>
 
             {modo === 'clave' && (
-              <Campo etiqueta="Contraseña temporal" obligatorio ayuda="Al menos 8 caracteres. Puedes dejar la sugerida.">
+              <Campo etiqueta="Contraseña temporal" obligatorio ayuda={`Al menos ${MINIMO_CLAVE} caracteres. Puedes dejar la sugerida.`}>
                 {(p) => (
                   <div className="flex gap-2">
                     <input

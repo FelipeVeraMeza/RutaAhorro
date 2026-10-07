@@ -16,8 +16,8 @@ export function clienteAdmin() {
   });
 }
 
-/** Mínimo de una contraseña, el mismo que pide /recuperar. */
-export const MINIMO_CLAVE = 8;
+/** Mínimo de una contraseña: vive en el core, el mismo para pantallas y rutas. */
+export { MINIMO_CLAVE } from '@rutaahorro/core';
 
 export function respuestaError(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });

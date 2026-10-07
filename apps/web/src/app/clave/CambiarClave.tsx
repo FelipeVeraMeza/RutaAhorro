@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Logo } from '@/components/Logo';
+import { MINIMO_CLAVE } from '@rutaahorro/core';
 
-const MINIMO = 8;
+const MINIMO = MINIMO_CLAVE;
 
 export function CambiarClave({ nombre, obligatorio, demo, volverA }: {
   nombre: string;

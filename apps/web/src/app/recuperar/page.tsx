@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Logo } from '@/components/Logo';
+import { MINIMO_CLAVE } from '@rutaahorro/core';
 
 /**
  * Crear o cambiar la contraseña (RF-M1-05, RF-M1-08, RF-M1-12).
@@ -19,7 +20,7 @@ import { Logo } from '@/components/Logo';
  *  - Con ?code=… (recuperación iniciada desde este navegador): igual.
  *  - Sin nada: se pide el correo y se manda el enlace.
  */
-const MINIMO = 8;
+const MINIMO = MINIMO_CLAVE;
 
 type Modo = 'cargando' | 'pedir' | 'enviado' | 'crear' | 'invalido';
 
