@@ -114,10 +114,20 @@ export const repoSupabase: RepositorioProductos = {
       ].join(','));
     }
 
-    const { data, error } = await q.order('name').limit(filtro.limite ?? 200);
-    if (error) throw error;
+    // 2026-10-07 · Sin tope: antes traía 200 y la pantalla decía "200
+    // productos" con 761 en la base, cortando la lista en la D. Supabase
+    // entrega hasta 1.000 filas por consulta, así que se pide por páginas.
+    const PAGINA = 1000;
+    const filas: unknown[] = [];
+    for (let desde = 0; ; desde += PAGINA) {
+      const hasta = Math.min(desde + PAGINA, filtro.limite ?? Infinity) - 1;
+      const { data, error } = await q.order('name').order('id').range(desde, hasta);
+      if (error) throw error;
+      filas.push(...(data ?? []));
+      if (!data || data.length < hasta - desde + 1 || filas.length >= (filtro.limite ?? Infinity)) break;
+    }
 
-    let productos = (data ?? []).map((f) => aProducto(f as unknown as FilaBD));
+    let productos = filas.map((f) => aProducto(f as unknown as FilaBD));
 
     // El filtro por estado se aplica en el cliente: depende del stock, que
     // viene de una tabla relacionada y no se puede filtrar en la consulta.

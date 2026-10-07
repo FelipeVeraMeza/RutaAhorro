@@ -149,7 +149,7 @@ export const repoLocal: RepositorioProductos = {
     }
 
     todos.sort((a, b) => a.name.localeCompare(b.name, 'es'));
-    const pagina = todos.slice(0, filtro.limite ?? 200);
+    const pagina = filtro.limite ? todos.slice(0, filtro.limite) : todos;
     return Promise.all(pagina.map((p) => aProducto(p, verCostos, cats, costos)));
   },
 

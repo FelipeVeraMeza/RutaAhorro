@@ -169,6 +169,13 @@ export function ProductosClient({
     categoriaId: p.categoriaId, precio: p.precioVenta, perecible: p.perecible,
   })), puedeVerCostos), [productos, puedeVerCostos]);
 
+  // De a 100 por página (Felipe, 2026-10-07: "poder seguir viendo, como
+  // cambiar a la siguiente pestaña de la tabla"): con 700 tarjetas juntas el
+  // celular se pone lento. El buscador y los filtros sí miran todo el catálogo.
+  const POR_PAGINA = 100;
+  const [pagina, setPagina] = useState(0);
+  useEffect(() => { setPagina(0); }, [busqueda, categoriaId, estado, verInactivos, orden, revisando]);
+
   const visibles = useMemo(() => {
     const base = revisando ? productos.filter((p) => calidad.porProducto.has(p.id)) : productos;
     const orden2 = [...base];
@@ -343,7 +350,7 @@ export function ProductosClient({
         </EstadoVacio>
       ) : (
         <ul className="tarjeta divide-y divide-[var(--borde)] overflow-hidden">
-          {visibles.map((p) => {
+          {visibles.slice(pagina * POR_PAGINA, (pagina + 1) * POR_PAGINA).map((p) => {
             const est = estadoStock(p);
             const problemas = revisando ? calidad.porProducto.get(p.id) ?? [] : [];
             return (
@@ -420,6 +427,28 @@ export function ProductosClient({
           })}
         </ul>
       )}
+
+      {/* Páginas: abajo, donde termina de leer. Al cambiar, vuelve arriba. */}
+      {!cargando && visibles.length > POR_PAGINA && (() => {
+        const total = Math.ceil(visibles.length / POR_PAGINA);
+        const ir = (n: number) => { setPagina(n); window.scrollTo({ top: 0 }); };
+        return (
+          <nav aria-label="Páginas de productos" className="flex items-center justify-between gap-2 mt-3">
+            <button onClick={() => ir(pagina - 1)} disabled={pagina === 0} className="btn btn-secundario">
+              ← Anterior
+            </button>
+            <p className="text-sm text-center num">
+              Página {pagina + 1} de {total}
+              <span className="block text-xs text-[var(--texto-suave)]">
+                {pagina * POR_PAGINA + 1}–{Math.min((pagina + 1) * POR_PAGINA, visibles.length)} de {visibles.length}
+              </span>
+            </p>
+            <button onClick={() => ir(pagina + 1)} disabled={pagina >= total - 1} className="btn btn-secundario">
+              Siguiente →
+            </button>
+          </nav>
+        );
+      })()}
 
       {!puedeVerCostos && productos.length > 0 && (
         <p className="text-[11px] text-[var(--texto-suave)] text-center mt-4">
