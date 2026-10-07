@@ -113,7 +113,7 @@ export function BottomNav({ role }: { role: Rol }) {
 
 function celda(activo: boolean): string {
   return `tap flex flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium ${
-    activo ? 'text-marca-600' : 'text-[var(--texto-suave)]'
+    activo ? 'text-marca-900 font-semibold' : 'text-[var(--texto-suave)]'
   }`;
 }
 
@@ -122,7 +122,7 @@ function Subrayado({ activo }: { activo: boolean }) {
   return (
     <span
       aria-hidden
-      className={`block h-0.5 w-6 rounded-full ${activo ? 'bg-marca-600' : 'bg-transparent'}`}
+      className={`block h-0.5 w-6 rounded-full ${activo ? 'bg-acento-500' : 'bg-transparent'}`}
     />
   );
 }

@@ -15,7 +15,7 @@ import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { leerEmisor, guardarEmisor, type Emisor } from '@/lib/datos/emisor';
 import { Encabezado } from '@/components/Encabezado';
-import { Icono } from '@/components/Icono';
+import { Icono, type NombreIcono } from '@/components/Icono';
 import { armarRespaldo, descargarJson } from '@/lib/datos/respaldo';
 
 /**
@@ -26,6 +26,14 @@ import { armarRespaldo, descargarJson } from '@/lib/datos/respaldo';
  * tasa se cambia en un solo lugar y vale para todos los productos que tienen
  * ese impuesto, y se asigna de a muchos productos a la vez.
  */
+type IdPestana = 'caja' | 'impuestos' | 'documentos' | 'respaldo';
+const PESTANAS: Array<{ id: IdPestana; titulo: string; icono: NombreIcono; ayuda: string }> = [
+  { id: 'caja', titulo: 'Caja y ventas', icono: 'caja', ayuda: 'Efectivo inicial, avisos, ofertas y el texto del comprobante.' },
+  { id: 'impuestos', titulo: 'Impuestos', icono: 'productos', ayuda: 'Impuestos de bebidas y alcoholes (IABA, ILA), además del IVA.' },
+  { id: 'documentos', titulo: 'Boletas y facturas', icono: 'facturacion', ayuda: 'Los datos del local que salen en cada documento.' },
+  { id: 'respaldo', titulo: 'Respaldo', icono: 'configuracion', ayuda: 'Descarga una copia de todo lo del local.' },
+];
+
 export function ConfiguracionClient() {
   const [impuestos, setImpuestos] = useState<ImpuestoAdicional[]>([]);
   const [config, setConfig] = useState<ConfiguracionLocal | null>(null);
@@ -47,6 +55,17 @@ export function ConfiguracionClient() {
   }, []);
   useEffect(() => { void cargar(); }, [cargar]);
 
+  const [pestana, setPestana] = useState<IdPestana>('caja');
+  useEffect(() => {
+    const h = window.location.hash.slice(1);
+    if (PESTANAS.some((t) => t.id === h)) setPestana(h as IdPestana);
+  }, []);
+  function elegir(id: IdPestana) {
+    setPestana(id);
+    setAviso(null);
+    history.replaceState(null, '', `#${{id}}`.replace('{{id}}', id));
+  }
+
   const faltantes = IMPUESTOS_ADICIONALES_CHILE.filter(
     (p) => !impuestos.some((i) => i.nombre.toLowerCase() === p.nombre.toLowerCase()));
 
@@ -55,7 +74,7 @@ export function ConfiguracionClient() {
       <Encabezado
         titulo="Configuración"
         icono="configuracion"
-        descripcion="Impuestos, cómo opera la caja y los datos del local. Los cambios rigen para todos desde que guardas."
+        descripcion="Cómo funciona el local. Lo que guardes rige para todos de inmediato."
       />
 
       {aviso && (
@@ -65,76 +84,28 @@ export function ConfiguracionClient() {
         </p>
       )}
 
-      {/* Impuestos adicionales ------------------------------------------------ */}
-      <section aria-labelledby="t-impuestos" className="space-y-3">
-        <div>
-          <h2 id="t-impuestos" className="font-semibold">Impuestos adicionales</h2>
-          <p className="text-sm text-[var(--texto-suave)]">
-            IABA de las bebidas e ILA de vinos, cervezas y licores. El precio de venta ya los
-            incluye; el sistema los separa en la boleta. Cambiar una tasa vale para las ventas
-            de ahora en adelante, nunca para las ya hechas.
-          </p>
-        </div>
-
-        {impuestos.length === 0 && !cargando && (
-          <p className="text-sm tarjeta p-4">Todavía no hay impuestos. Agrega los que usa el local.</p>
-        )}
-
-        <ul className="space-y-2">
-          {impuestos.map((i) => (
-            <li key={i.id} className={`tarjeta p-3 ${i.activo ? '' : 'opacity-70'}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-medium">{etiquetaAdicional(i)}</p>
-                  <p className="text-xs text-[var(--texto-suave)]">
-                    {i.productos} {i.productos === 1 ? 'producto' : 'productos'}
-                    {i.codigoSii != null && ` · código SII ${i.codigoSii}`}
-                    {!i.activo && ' · desactivado (no se cobra)'}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2 mt-2">
-                <button onClick={() => setEditando(i)}
-                        className="tap flex-1 rounded-lg border border-[var(--borde)] text-sm font-medium">
-                  Cambiar tasa
-                </button>
-                <button onClick={() => setAsignando(i)}
-                        className="tap flex-1 rounded-lg border border-[var(--borde)] text-sm font-medium">
-                  Elegir productos
-                </button>
-              </div>
+      {/* 2026-10-07 · Pestañas: en el celular la página era una sola columna
+          larguísima y no se sabía dónde estaba cada cosa (Felipe). Ahora se ve
+          una sección a la vez, con lo más usado primero. La pestaña va en la
+          dirección (#impuestos) para que un enlace lleve directo. */}
+      {/* En el celular, 2×2: en una fila con desplazamiento no se notaba que había más. */}
+      <nav aria-label="Secciones de configuración">
+        <ul className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+          {PESTANAS.map((t) => (
+            <li key={t.id}>
+              <button type="button" onClick={() => elegir(t.id)} aria-current={pestana === t.id ? 'page' : undefined}
+                      className={`tap w-full inline-flex items-center justify-center gap-2 px-3 rounded-xl border text-sm font-medium ${
+                        pestana === t.id ? 'bg-marca-500 border-marca-500 text-white' : 'bg-white border-[var(--borde)]'
+                      }`}>
+                <Icono nombre={t.icono} tamano={17} className="hidden sm:block" /> {t.titulo}
+              </button>
             </li>
           ))}
         </ul>
+      </nav>
+      <p className="-mt-3 text-sm text-[var(--texto-suave)]">{PESTANAS.find((t) => t.id === pestana)?.ayuda}</p>
 
-        {faltantes.length > 0 && (
-          <div className="tarjeta p-3">
-            <p className="text-sm font-medium mb-2">Agregar los de Chile, con su tasa vigente</p>
-            <div className="flex flex-wrap gap-2">
-              {faltantes.map((p) => (
-                <button key={p.nombre}
-                        onClick={() => setEditando({ nombre: p.nombre, codigoSii: p.codigoSii, tasa: p.tasa, activo: true })}
-                        className="tap px-3 rounded-full border border-[var(--borde)] text-sm">
-                  + {p.nombre} {String(p.tasa).replace('.', ',')}%
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        <button onClick={() => setEditando({ nombre: '', codigoSii: null, tasa: 0, activo: true })}
-                className="tap w-full rounded-xl border border-dashed border-[var(--borde)] text-sm font-medium">
-          + Otro impuesto
-        </button>
-      </section>
-
-      {/* Boletas y facturas ---------------------------------------------------- */}
-      <DatosEmisor
-        onGuardado={(texto) => setAviso({ tipo: 'ok', texto })}
-        onError={(texto) => setAviso({ tipo: 'error', texto })}
-      />
-
-      {/* Operación del local ---------------------------------------------------- */}
-      {config && (
+      {pestana === 'caja' && config && (
         <OperacionDelLocal
           config={config}
           onGuardado={(c, texto) => { setConfig(c); setAviso({ tipo: 'ok', texto }); }}
@@ -142,7 +113,77 @@ export function ConfiguracionClient() {
         />
       )}
 
-      <MisDatos />
+      {pestana === 'impuestos' && (
+        <section aria-labelledby="t-impuestos" className="space-y-3">
+          <div>
+            <h2 id="t-impuestos" className="sr-only">Impuestos adicionales</h2>
+            <p className="text-sm text-[var(--texto-suave)]">
+              IABA de las bebidas e ILA de vinos, cervezas y licores. El precio de venta ya los
+              incluye; el sistema los separa en la boleta. Cambiar una tasa vale para las ventas
+              de ahora en adelante, nunca para las ya hechas.
+            </p>
+          </div>
+
+          {impuestos.length === 0 && !cargando && (
+            <p className="text-sm tarjeta p-4">Todavía no hay impuestos. Agrega los que usa el local.</p>
+          )}
+
+          <ul className="space-y-2">
+            {impuestos.map((i) => (
+              <li key={i.id} className={`tarjeta p-3 ${i.activo ? '' : 'opacity-70'}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">{etiquetaAdicional(i)}</p>
+                    <p className="text-xs text-[var(--texto-suave)]">
+                      {i.productos} {i.productos === 1 ? 'producto' : 'productos'}
+                      {i.codigoSii != null && ` · código SII ${i.codigoSii}`}
+                      {!i.activo && ' · desactivado (no se cobra)'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => setEditando(i)}
+                          className="tap flex-1 rounded-lg border border-[var(--borde)] text-sm font-medium">
+                    Cambiar tasa
+                  </button>
+                  <button onClick={() => setAsignando(i)}
+                          className="tap flex-1 rounded-lg border border-[var(--borde)] text-sm font-medium">
+                    Elegir productos
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {faltantes.length > 0 && (
+            <div className="tarjeta p-3">
+              <p className="text-sm font-medium mb-2">Agregar los de Chile, con su tasa vigente</p>
+              <div className="flex flex-wrap gap-2">
+                {faltantes.map((p) => (
+                  <button key={p.nombre}
+                          onClick={() => setEditando({ nombre: p.nombre, codigoSii: p.codigoSii, tasa: p.tasa, activo: true })}
+                          className="tap px-3 rounded-full border border-[var(--borde)] text-sm">
+                    + {p.nombre} {String(p.tasa).replace('.', ',')}%
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <button onClick={() => setEditando({ nombre: '', codigoSii: null, tasa: 0, activo: true })}
+                  className="tap w-full rounded-xl border border-dashed border-[var(--borde)] text-sm font-medium">
+            + Otro impuesto
+          </button>
+        </section>
+      )}
+
+      {pestana === 'documentos' && (
+        <DatosEmisor
+          onGuardado={(texto) => setAviso({ tipo: 'ok', texto })}
+          onError={(texto) => setAviso({ tipo: 'error', texto })}
+        />
+      )}
+
+      {pestana === 'respaldo' && <MisDatos />}
 
       {editando && (
         <EditarImpuesto

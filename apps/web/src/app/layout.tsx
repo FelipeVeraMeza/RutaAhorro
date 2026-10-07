@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#157a4c',
+  themeColor: '#0b1f33',
   width: 'device-width',
   initialScale: 1,
   // No se bloquea el zoom: impedirlo rompe la accesibilidad para quien

@@ -59,3 +59,59 @@ export function generateInternalBarcode(sequence: number): string {
   const body = `200${String(sequence).padStart(9, '0')}`.slice(0, 12);
   return body + String(checkDigit(body));
 }
+
+/**
+ * Cuántas lecturas iguales y seguidas hacen falta para aceptar un código de la
+ * cámara, o 0 si la lectura se descarta.
+ *
+ * La cámara lee ~15 cuadros por segundo y aceptaba el primero. Un cuadro
+ * movido o un código a medio entrar devuelve otro número, y el carrito se
+ * llenaba de productos equivocados o de "no está en el catálogo" (Felipe,
+ * 2026-10-06: "lee muy rápido y no lee bien"). Un EAN/UPC con su dígito de
+ * control bien se confirma con 2 lecturas; ITF, Code 39 y Code 128 se inventan
+ * más fácil a partir de un trozo de otro código y piden 3.
+ */
+export function lecturasNecesarias(code: string, formato?: string): number {
+  const c = String(code ?? '').trim();
+  if (c === '') return 0;
+  const f = (formato ?? '').toLowerCase().replace(/-/g, '_');
+  if (f === 'upc_e') return 2; // su dígito de control es del UPC-A expandido
+  if (f === 'itf' || f === 'code_39' || f === 'codabar') return 3;
+  if (/^\d+$/.test(c) && [8, 12, 13].includes(c.length)) return isValidEan(c) ? 2 : 0;
+  return 3;
+}
+
+/**
+ * Junta las lecturas de la cámara y dice cuándo un código quedó confirmado.
+ *
+ * Confirma una sola vez por racha: mientras el mismo código siga en cuadro no
+ * se vuelve a sumar al carrito. Para el segundo yogur igual hay que sacar el
+ * primero de la cámara (`ventanaMs` sin leerlo) y pasar el otro.
+ */
+export class ConfirmadorLecturas {
+  private candidato = '';
+  private veces = 0;
+  private ultimaLectura = 0;
+
+  constructor(private readonly ventanaMs = 700) {}
+
+  /** Registra una lectura. Devuelve true la vez que el código queda confirmado. */
+  registrar(code: string, ahora: number, formato?: string): boolean {
+    const necesarias = lecturasNecesarias(code, formato);
+    if (necesarias === 0) return false;
+    if (code === this.candidato && ahora - this.ultimaLectura <= this.ventanaMs) {
+      this.veces++;
+    } else {
+      this.candidato = code;
+      this.veces = 1;
+    }
+    this.ultimaLectura = ahora;
+    return this.veces === necesarias;
+  }
+
+  reiniciar(): void {
+    this.candidato = '';
+    this.veces = 0;
+    this.ultimaLectura = 0;
+  }
+}

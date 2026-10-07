@@ -28,12 +28,6 @@ const GUIAS: Guia[] = [
     'En Ventas, toca la venta.',
     '"Reimprimir o compartir el comprobante": sale marcado como COPIA.',
   ] },
-  { titulo: 'Fiar y recibir abonos', roles: CAJA, ir: { href: '/fiado', texto: 'Ir a Fiado' }, pasos: [
-    'En Vender, elige al cliente ("Elegir cliente"). Si tiene crédito, al cobrar aparece "Fiado".',
-    'Se ve cuánto debe y cuánto le queda; si no alcanza, cobra con otro medio.',
-    'Cuando paga: Fiado → "Abonar". En efectivo, la plata entra a tu caja.',
-    'El crédito (tope) lo da el administrador o el supervisor en Fiado.',
-  ] },
   { titulo: 'Cerrar la caja', roles: CAJA, ir: { href: '/caja', texto: 'Ir a Caja' }, pasos: [
     'Cuenta el efectivo. "Contar por billete" suma por ti.',
     'Escribe lo contado y, si hay diferencia, explica por qué.',

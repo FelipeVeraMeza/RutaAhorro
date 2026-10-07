@@ -16,6 +16,24 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.6.3',
+    fecha: '2026-10-07',
+    titulo: 'Colores nuevos, formularios más claros y escáner más seguro',
+    cambios: [
+      { para: 'todos', texto: 'Se entra con el RUT (solo los números antes del guion) y la contraseña. En el celular el campo es numérico. En Mi cuenta cada uno cambia su nombre, su RUT y su contraseña.' },
+      { para: 'admin', texto: 'Usuarios: las cuentas nuevas entran con RUT. "Editar nombre y RUT" en cada persona. Con correo entra solo el administrador principal, desde el computador.' },
+      { para: 'todos', texto: 'Colores nuevos con el logo de RutaAhorro: azul marino y naranjo. "Cobrar" ahora es naranjo.' },
+      { para: 'admin', texto: 'Producto: el formulario va por bloques (Producto, Precio, Stock, Más datos), con lo que se llena siempre arriba. El precio por mayor se ve a la vista y explica con tus números lo que pasa en la caja.' },
+      { para: 'admin', texto: 'Configuración: pestañas (Caja y ventas, Impuestos, Boletas y facturas, Respaldo). En el celular ya no hay que bajar tanto.' },
+      { para: 'admin', texto: 'Emisor SII: se pide RUT, clave del SII, clave del certificado y ciudad. Razón social, giro y dirección los pone el SII. El RUT de la empresa solo si tu clave maneja varias.' },
+      { para: 'todos', texto: 'Fiado salió del menú: el local no fía.' },
+      { para: 'bodega', texto: 'El costo acepta decimales como vienen en la factura (907,58 o 907.58) y se guarda redondeado al peso: $908. Lo dice debajo del campo.' },
+      { para: 'vendedor', texto: 'El escáner confirma el código leyéndolo dos veces antes de sumarlo: ya no agrega productos equivocados por un cuadro movido. Para sumar otro igual, saca el primero de la cámara y pasa el siguiente.' },
+      { para: 'vendedor', texto: 'Si tu caja quedó abierta de otro día, Vender te pide cerrarla primero: así las ventas de cada día no se mezclan.' },
+      { para: 'admin', texto: 'El inicio ya no muestra "Primeros pasos".' },
+    ],
+  },
+  {
     version: '0.6.2',
     fecha: '2026-10-01',
     titulo: 'Descuentos con autorización',

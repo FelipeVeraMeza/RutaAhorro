@@ -55,9 +55,11 @@ function lineaDesde(p: LocalProduct, quantity: number): CartLine {
 }
 
 export function PosClient({
-  hasOpenSession, local = '', cajero = '', usuarioId = '', puedeForzarStock = false, puedeCrearProductos = false,
+  hasOpenSession, cajaAbiertaEl = null, local = '', cajero = '', usuarioId = '', puedeForzarStock = false, puedeCrearProductos = false,
   topeDescuento = 0,
 }: {
+  /** Cuándo se abrió la caja. Si fue otro día del local, no se vende hasta cerrarla. */
+  cajaAbiertaEl?: string | null;
   /** El tope de descuento de quien vende (profiles.max_discount_pct). Pasarlo pide autorización (RQ-17). */
   topeDescuento?: number;
   /** Admin y supervisor: un código desconocido se puede crear desde acá (RF-M5-04). */
@@ -84,6 +86,15 @@ export function PosClient({
   venderSinStockRef.current = config.venderSinStock;
   const zonaRef = useRef(config.zonaHoraria);
   zonaRef.current = config.zonaHoraria;
+  // Una caja que quedó abierta de ayer mezcla las ventas de dos días en un
+  // solo arqueo (Felipe, 2026-10-07). Se calcula al montar: el servidor está
+  // en otra zona y la fecha no calzaría al hidratar.
+  const [cajaDeOtroDia, setCajaDeOtroDia] = useState(false);
+  useEffect(() => {
+    setCajaDeOtroDia(
+      cajaAbiertaEl !== null && diaLocal(cajaAbiertaEl, config.zonaHoraria) !== diaLocal(new Date(), config.zonaHoraria),
+    );
+  }, [cajaAbiertaEl, config.zonaHoraria]);
   const ofertasRef = useRef(config.ofertasActivas);
   ofertasRef.current = config.ofertasActivas;
   // El cliente de la venta: para la factura y el fiado. Desde 0032 no tiene
@@ -533,6 +544,25 @@ export function PosClient({
     );
   }
 
+  if (cajaDeOtroDia) {
+    return (
+      <div className="px-5 py-12 text-center">
+        <span className="inline-grid place-items-center w-16 h-16 rounded-2xl bg-amber-50 text-[var(--color-aviso)] mb-4"><Icono nombre="caja" tamano={32} /></span>
+        <h1 className="text-lg font-semibold mb-2">Cierra la caja de ayer para vender</h1>
+        <p className="text-sm text-[var(--texto-suave)] mb-6 max-w-xs mx-auto">
+          Tu caja quedó abierta de otro día. Ciérrala contando el efectivo que hay ahora y abre una nueva:
+          así las ventas de cada día no se mezclan.
+        </p>
+        <Link
+          href="/caja"
+          className="tap inline-flex items-center px-6 py-3.5 rounded-xl bg-marca-500 text-white font-semibold"
+        >
+          Ir a cerrar la caja
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-[calc(100dvh-8rem)]">
       {/* Aviso flotante */}
@@ -669,7 +699,7 @@ export function PosClient({
         ) : (
           <button onClick={() => setEligiendoCliente(true)}
                   className="tap w-full px-3 rounded-xl border border-dashed border-[var(--borde)] text-sm text-[var(--texto-suave)] text-left">
-            <span className="inline-flex items-center gap-2"><Icono nombre="clientes" tamano={18} /> Elegir cliente (para factura o fiado)</span>
+            <span className="inline-flex items-center gap-2"><Icono nombre="clientes" tamano={18} /> Elegir cliente (para factura)</span>
           </button>
         )}
       </div>
@@ -789,7 +819,8 @@ export function PosClient({
             </button>
             <button
               onClick={() => { setErrorCobro(null); if (faltaAutorizacion) setPidiendoAutorizacion(true); else setCobrando(true); }}
-              className="tap flex-1 py-3.5 rounded-xl bg-marca-500 text-white font-bold text-base active:bg-marca-600"
+              // El naranjo del logo, con texto marino (5,8:1): la acción estrella del local.
+              className="tap flex-1 py-3.5 rounded-xl bg-acento-500 text-marca-900 font-bold text-base active:bg-acento-600"
             >
               {faltaAutorizacion ? 'Pedir autorización y cobrar' : 'Cobrar'}
             </button>

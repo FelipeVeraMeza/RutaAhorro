@@ -46,3 +46,37 @@ export function formatRut(rut: string): string {
   const dv = clean.slice(-1);
   return `${body.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}-${dv}`;
 }
+
+// ---------------------------------------------------------------------------
+// Entrar con RUT (Felipe, 2026-10-07)
+// ---------------------------------------------------------------------------
+//
+// El personal entra con su RUT y su clave, no con correo: en el mostrador
+// nadie se acuerda de un correo y el celular de la caja muestra solo el
+// teclado numérico. Supabase autentica por correo, así que cada cuenta con RUT
+// tiene un correo técnico (`15620607@rut.rutaahorro.local`) que nadie ve ni
+// recibe. Se escribe solo el cuerpo, sin el dígito verificador: así el
+// teclado numérico basta, también cuando el dígito es K.
+
+export const DOMINIO_RUT = 'rut.rutaahorro.local';
+
+/**
+ * Lo que la persona escribe para entrar → el cuerpo del RUT, o null.
+ * "15620607", "15.620.607" y "15.620.607-5" (pegado completo) dan "15620607".
+ */
+export function rutParaEntrar(texto: string | null | undefined): string | null {
+  const cuerpo = String(texto ?? '').split('-')[0].replace(/\D/g, '');
+  return /^\d{7,8}$/.test(cuerpo) ? cuerpo : null;
+}
+
+/** "15620607" → "15620607@rut.rutaahorro.local". */
+export function correoDeRut(cuerpo: string): string {
+  return `${cuerpo}@${DOMINIO_RUT}`;
+}
+
+/** El correo técnico → "15.620.607-5", para mostrarlo; null si es un correo de verdad. */
+export function rutDeCorreo(correo: string | null | undefined): string | null {
+  const m = String(correo ?? '').toLowerCase().match(/^(\d{7,8})@(.+)$/);
+  if (!m || m[2] !== DOMINIO_RUT) return null;
+  return formatRut(m[1] + computeDv(m[1]));
+}

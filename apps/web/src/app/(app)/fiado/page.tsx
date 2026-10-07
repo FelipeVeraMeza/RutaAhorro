@@ -1,10 +1,8 @@
-import { exigirRol } from '@/lib/permisos';
-import { FiadoClient } from './FiadoClient';
+import { redirect } from 'next/navigation';
 
-export const metadata = { title: 'Fiado' };
-
-export default async function FiadoPage() {
-  // Los mismos que fn_abonar_cuenta. El tope lo ponen admin y supervisor.
-  const user = await exigirRol(['admin', 'supervisor', 'vendedor']);
-  return <FiadoClient puedeDarCredito={user.role === 'admin' || user.role === 'supervisor'} />;
+// El local no fía (Felipe, 2026-10-07): Fiado salió del menú y de la ayuda.
+// La pantalla queda en FiadoClient por si algún día se vuelve a usar; la
+// dirección vieja lleva al inicio en vez de mostrar un módulo que no existe.
+export default function FiadoPage() {
+  redirect('/');
 }

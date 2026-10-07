@@ -48,7 +48,8 @@ if (lista.length === 0) morir('No hay credenciales guardadas. Guárdalas en Fact
 if (lista.length > 1) morir(`Hay credenciales de ${lista.length} locales: indica cuál con --local=<id>.`);
 const cred = lista[0];
 
-const receptor = arg('receptor') ?? cred.rut_empresa;
+// Sin --receptor, la factura de ensayo va a la propia empresa (o a la persona, si no se guardó empresa: 0037).
+const receptor = arg('receptor') ?? cred.rut_empresa ?? cred.rut_usuario;
 if (!isValidRut(receptor)) morir(`El RUT del receptor no es válido: ${receptor}`);
 
 // Dos líneas: la segunda es justamente lo que VSV nunca hizo.
@@ -60,14 +61,14 @@ const r = resumenFactura(lineas);
 const plan = planFacturaPortal(lineas.map((l) => ({ ...l, monto: montoLinea(l) })), r.neto, r.iva, r.total);
 
 console.log(`\nEnsayo en el portal del SII — NO se firma ni se emite nada`);
-console.log(`  entra ${cred.rut_usuario} · empresa ${cred.rut_empresa} · receptor ${formatRut(receptor)} · total $${plan.total}\n`);
+console.log(`  entra ${cred.rut_usuario} · empresa ${cred.rut_empresa ?? '(la única de la clave)'} · ciudad ${cred.ciudad ?? '?'} · receptor ${formatRut(receptor)} · total $${plan.total}\n`);
 
 let resultado;
 try {
   const [claveSii, claveCertificado] = await Promise.all([
     descifrar(cred.clave_sii, env.siiClaveCifrado), descifrar(cred.clave_certificado, env.siiClaveCifrado)]);
   resultado = await ensayarEnPortal(
-    { receptor: { rut: formatRut(receptor), razon_social: '' }, formaPago: 'contado', plan },
+    { receptor: { rut: formatRut(receptor), razon_social: '' }, ciudadEmisor: cred.ciudad, formaPago: 'contado', plan },
     { rutUsuario: cred.rut_usuario, claveSii, claveCertificado, rutEmpresa: cred.rut_empresa },
     { chromePath: chrome, headless: !ver, alPaso: (t) => console.log(`  · ${t}`) },
   );

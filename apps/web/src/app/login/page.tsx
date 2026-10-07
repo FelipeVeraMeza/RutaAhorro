@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { destinoSeguro } from '@rutaahorro/core';
+import { destinoSeguro, rutParaEntrar, correoDeRut } from '@rutaahorro/core';
+import { Logo } from '@/components/Logo';
 import { supabase } from '@/lib/supabase/client';
 import {
   DEMO_ACTIVO, DEMO_CLAVE, DEMO_COOKIE, DEMO_COOKIE_CUENTA, DEMO_CUENTAS, type DemoRole,
@@ -12,12 +13,22 @@ import { cuentaDemoPorCorreo } from '@/lib/datos/usuarios';
 import { inicioPara, type Rol } from '@/lib/navegacion';
 
 const CORREO_RECORDADO = 'ra:correo';
+const RUT_RECORDADO = 'ra:rut';
 const INTENTOS_ANTES_DE_ESPERAR = 5;
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const [email, setEmail] = useState('');
+  /**
+   * 2026-10-07 · El personal entra con RUT y clave; con correo, solo el
+   * administrador principal y solo desde el computador (Felipe: "la página no
+   * debe dejar colocar letras desde el celular"). En el celular el campo es
+   * numérico y no acepta letras; "Entrar con correo" aparece en pantallas
+   * anchas. La maqueta sigue con correo: sus cuentas de ejemplo son correos.
+   */
+  const [modo, setModo] = useState<'rut' | 'correo'>(DEMO_ACTIVO ? 'correo' : 'rut');
+  const [rut, setRut] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +44,8 @@ function LoginForm() {
 
   useEffect(() => {
     try {
+      const rutGuardado = localStorage.getItem(RUT_RECORDADO);
+      if (rutGuardado) setRut(rutGuardado);
       const guardado = localStorage.getItem(CORREO_RECORDADO);
       if (guardado) setEmail(guardado);
       else if (localStorage.getItem(CORREO_RECORDADO + ':no')) setRecordar(false);
@@ -47,9 +60,10 @@ function LoginForm() {
   const segundosEspera = Math.max(0, Math.ceil((esperarHasta - ahora) / 1000));
 
   function recordarCorreo(correo: string) {
+    const clave = modo === 'rut' ? RUT_RECORDADO : CORREO_RECORDADO;
     try {
-      if (recordar) { localStorage.setItem(CORREO_RECORDADO, correo); localStorage.removeItem(CORREO_RECORDADO + ':no'); }
-      else { localStorage.removeItem(CORREO_RECORDADO); localStorage.setItem(CORREO_RECORDADO + ':no', '1'); }
+      if (recordar) { localStorage.setItem(clave, correo); localStorage.removeItem(CORREO_RECORDADO + ':no'); }
+      else { localStorage.removeItem(clave); localStorage.setItem(CORREO_RECORDADO + ':no', '1'); }
     } catch { /* sin almacenamiento */ }
   }
 
@@ -110,12 +124,20 @@ function LoginForm() {
       return;
     }
 
+    const cuerpoRut = modo === 'rut' ? rutParaEntrar(rut) : null;
+    if (modo === 'rut' && !cuerpoRut) {
+      setError('Escribe tu RUT sin el dígito verificador: los 7 u 8 números antes del guion.');
+      setLoading(false);
+      return;
+    }
+    const usuario = cuerpoRut ? correoDeRut(cuerpoRut) : email.trim();
+
     let authError: unknown = null;
     let userId: string | null = null;
     try {
       let data: { user: { id: string } | null } | null = null;
       ({ data, error: authError } = await supabase().auth.signInWithPassword({
-        email: email.trim(),
+        email: usuario,
         password,
       }));
       userId = data?.user?.id ?? null;
@@ -128,12 +150,12 @@ function LoginForm() {
     }
 
     if (authError) {
-      // Nunca revelar si el correo existe: eso permite enumerar usuarios.
-      fallo('Correo o contraseña incorrectos');
+      // Nunca revelar si el RUT o el correo existe: eso permite enumerar usuarios.
+      fallo(modo === 'rut' ? 'RUT o contraseña incorrectos' : 'Correo o contraseña incorrectos');
       setLoading(false);
       return;
     }
-    recordarCorreo(email.trim());
+    recordarCorreo(cuerpoRut ?? email.trim());
 
     // Directo a la pantalla de su rol, sin pasar por "/" y rebotar. Si el
     // perfil no se puede leer, "/" decide igual.
@@ -149,34 +171,61 @@ function LoginForm() {
     <main className="min-h-dvh flex flex-col justify-center px-5 py-10">
       <div className="w-full max-w-sm mx-auto">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-marca-500 text-white text-2xl font-bold mb-4">
-            RA
-          </div>
-          <h1 className="text-2xl font-bold">RutaAhorro</h1>
+          <h1 className="inline-flex rounded-2xl bg-marca-900 px-6 py-4 mb-3">
+            <Logo tamano={60} />
+          </h1>
           <p className="text-sm text-[var(--texto-suave)] mt-1">
             Inventario, ventas y caja
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="tarjeta p-5 space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium mb-1.5">
-              Correo
-            </label>
-            <input
-              id="email"
-              type="email"
-              inputMode="email"
-              autoComplete="username"
-              autoCapitalize="none"
-              required
-              autoFocus
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] bg-white focus:outline-none focus:ring-2 focus:ring-marca-500"
-              placeholder="tu@correo.cl"
-            />
-          </div>
+          {modo === 'rut' ? (
+            <div>
+              <label htmlFor="rut" className="block text-sm font-medium mb-1.5">
+                RUT
+              </label>
+              <input
+                id="rut"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="username"
+                maxLength={8}
+                required
+                autoFocus
+                value={rut}
+                // Solo números: lo de después del guion (el dígito) se descarta,
+                // y una letra no llega a escribirse.
+                onChange={(e) => setRut(e.target.value.split('-')[0].replace(/\D/g, '').slice(0, 8))}
+                aria-describedby="ayuda-rut"
+                className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] bg-white num tracking-wide focus:outline-none focus:ring-2 focus:ring-marca-500"
+                placeholder="12345678"
+              />
+              <p id="ayuda-rut" className="text-xs text-[var(--texto-suave)] mt-1">
+                Sin puntos ni dígito verificador: los números antes del guion.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium mb-1.5">
+                Correo
+              </label>
+              <input
+                id="email"
+                type="email"
+                inputMode="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                required
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="tap w-full px-3 py-3 rounded-xl border border-[var(--borde)] bg-white focus:outline-none focus:ring-2 focus:ring-marca-500"
+                placeholder="tu@correo.cl"
+              />
+            </div>
+          )}
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium mb-1.5">
@@ -215,7 +264,7 @@ function LoginForm() {
 
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" className="w-5 h-5" checked={recordar} onChange={(e) => setRecordar(e.target.checked)} />
-            Recordar mi correo en este celular
+            {modo === 'rut' ? 'Recordar mi RUT en este celular' : 'Recordar mi correo en este equipo'}
           </label>
 
           {error && (
@@ -233,16 +282,29 @@ function LoginForm() {
           </button>
         </form>
 
-        {DEMO_ACTIVO && <CuentasDemo onElegir={(correo) => { setEmail(correo); setPassword(DEMO_CLAVE); void entrarDemo(correo, DEMO_CLAVE); }} />}
-
+        {/* El correo es solo para el administrador principal, y desde el
+            computador: en el celular este enlace no aparece. */}
         {!DEMO_ACTIVO && (
-          <p className="text-center text-sm mt-6">
-            <a href="/recuperar" className="tap inline-flex items-center text-marca-700 font-medium">¿Olvidaste tu contraseña?</a>
+          <p className="hidden lg:block text-center text-sm mt-4">
+            <button type="button" onClick={() => { setError(null); setModo(modo === 'rut' ? 'correo' : 'rut'); }}
+                    className="tap text-marca-700 font-medium underline">
+              {modo === 'rut' ? 'Entrar con correo (administrador)' : 'Entrar con RUT'}
+            </button>
           </p>
         )}
-        {!DEMO_ACTIVO && (
-          <p className="text-center text-xs text-[var(--texto-suave)] mt-1">
-            Si no te llega el correo, el administrador puede darte una contraseña temporal desde Usuarios.
+
+        {DEMO_ACTIVO && <CuentasDemo onElegir={(correo) => { setEmail(correo); setPassword(DEMO_CLAVE); void entrarDemo(correo, DEMO_CLAVE); }} />}
+
+        {/* Con RUT no hay correo al que mandar un enlace: la clave la
+            restablece el administrador en Usuarios. */}
+        {!DEMO_ACTIVO && modo === 'rut' && (
+          <p className="text-center text-sm text-[var(--texto-suave)] mt-6">
+            ¿Olvidaste tu contraseña? Pídele al administrador una temporal: la cambia en Usuarios.
+          </p>
+        )}
+        {!DEMO_ACTIVO && modo === 'correo' && (
+          <p className="text-center text-sm mt-6">
+            <a href="/recuperar" className="tap inline-flex items-center text-marca-700 font-medium">¿Olvidaste tu contraseña?</a>
           </p>
         )}
       </div>

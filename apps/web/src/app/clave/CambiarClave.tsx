@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { Logo } from '@/components/Logo';
 
 const MINIMO = 8;
 
@@ -55,7 +56,7 @@ export function CambiarClave({ nombre, obligatorio, demo, volverA }: {
     <main className="min-h-dvh flex flex-col justify-center px-5 py-10">
       <div className="w-full max-w-sm mx-auto">
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-marca-500 text-white text-2xl font-bold mb-4">RA</div>
+          <div className="inline-flex rounded-2xl bg-marca-900 px-5 py-3 mb-4"><Logo tamano={48} /></div>
           <h1 className="text-2xl font-bold">{obligatorio ? 'Crea tu contraseña' : 'Cambiar mi contraseña'}</h1>
           <p className="text-sm text-[var(--texto-suave)] mt-1">{nombre}</p>
         </div>

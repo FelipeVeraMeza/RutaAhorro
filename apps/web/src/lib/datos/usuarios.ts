@@ -1,6 +1,6 @@
 'use client';
 
-import { maxDiscountFor, type UserRole } from '@rutaahorro/core';
+import { maxDiscountFor, cleanRut, correoDeRut, type UserRole } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { topeDescuentoDe } from './configuracion';
 import { DEMO_ACTIVO, DEMO_CLAVE } from '../demo';
@@ -35,7 +35,12 @@ export interface RepositorioUsuarios {
    * Crear la cuenta con una contraseña temporal, sin correo. La persona la
    * cambia por una suya al primer ingreso.
    */
-  crearConClave(datos: { nombre: string; email: string; rol: Rol; clave: string }): Promise<void>;
+  crearConClave(datos: { nombre: string; email?: string; rut?: string; rol: Rol; clave: string }): Promise<void>;
+  /**
+   * Nombre y RUT de una cuenta (2026-10-07). Sin `id`, la propia. El
+   * administrador cambia los de cualquiera; los demás, solo los suyos.
+   */
+  editarDatos(id: string | null, datos: { nombre: string; rut?: string }): Promise<void>;
   /** Contraseña temporal para quien olvidó la suya. */
   restablecerClave(id: string, clave: string): Promise<void>;
   cambiarRol(id: string, rol: Rol): Promise<void>;
@@ -89,7 +94,8 @@ const repoLocal: RepositorioUsuarios = {
     await repoLocal.crearConClave({ nombre, email, rol, clave: DEMO_CLAVE });
   },
 
-  async crearConClave({ nombre, email, rol, clave }) {
+  async crearConClave({ nombre, email: correo, rut, rol, clave }) {
+    const email = rut ? correoDeRut(cleanRut(rut).slice(0, -1)) : (correo ?? '');
     const us = await leerLocal();
     if (us.some((u) => u.email?.toLowerCase() === email.toLowerCase())) {
       throw new Error('CORREO_YA_REGISTRADO');
@@ -102,6 +108,15 @@ const repoLocal: RepositorioUsuarios = {
       clave,
       claveTemporal: true,
     });
+    await guardarLocal(us);
+  },
+
+  async editarDatos(id, { nombre, rut }) {
+    const us = await leerLocal();
+    const u = us.find((x) => x.id === (id ?? 'demo-admin'));
+    if (!u) throw new Error('NO_ENCONTRADO');
+    u.nombre = nombre;
+    if (rut) u.email = correoDeRut(cleanRut(rut).slice(0, -1));
     await guardarLocal(us);
   },
 
@@ -184,6 +199,10 @@ const repoSupabase: RepositorioUsuarios = {
 
   async restablecerClave(id, clave) {
     await llamar('/api/usuarios/clave', { id, clave });
+  },
+
+  async editarDatos(id, datos) {
+    await llamar('/api/usuarios/datos', { ...(id ? { id } : {}), ...datos });
   },
 
   async cambiarRol(id, rol) {

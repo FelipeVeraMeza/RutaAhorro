@@ -112,6 +112,31 @@ export interface OpcionesMonto {
   maximo?: number;
   /** Cómo se llama el campo en el mensaje de error. */
   etiqueta?: string;
+  /**
+   * Acepta centavos y los redondea al peso: 907,58 → 908. Es para el costo,
+   * que se copia de la factura del proveedor y ahí el neto unitario viene con
+   * decimales. Sin esto no había forma de escribirlo (Felipe, 2026-10-06).
+   */
+  redondeaDecimales?: boolean;
+}
+
+/** "907,58", "1.234,5" o "907.58" (punto con 1 o 2 decimales) → número con decimales. */
+function leerConDecimales(limpio: string): number | null {
+  if (/,/.test(limpio)) {
+    if (!/^-?(\d{1,3}(\.\d{3})+|\d+),\d+$/.test(limpio)) return null;
+    return Number(limpio.replace(/\./g, '').replace(',', '.'));
+  }
+  // Con tres dígitos tras el punto es separador de miles (1.990); con uno o
+  // dos no puede serlo, así que es la coma escrita con el teclado en inglés.
+  if (/^-?\d+\.\d{1,2}$/.test(limpio)) return Number(limpio);
+  return null;
+}
+
+/** ¿El monto escrito trae centavos? Para avisar que se guardó redondeado. */
+export function hayDecimales(entrada: string): boolean {
+  const limpio = String(entrada ?? '').trim().replace(/^\$\s*/, '').replace(/\s+/g, '');
+  const n = leerConDecimales(limpio);
+  return n !== null && !Number.isInteger(n);
 }
 
 /**
@@ -133,6 +158,7 @@ export function validarMonto(entrada: string, opciones: OpcionesMonto = {}): Mon
     permiteCero = true,
     maximo,
     etiqueta = 'monto',
+    redondeaDecimales = false,
   } = opciones;
 
   const texto = String(entrada ?? '').trim();
@@ -153,7 +179,14 @@ export function validarMonto(entrada: string, opciones: OpcionesMonto = {}): Mon
   // lo que no es dígito, así que "1990,5" se leía 19.905 y "1.5" se leía 15:
   // un costo o un monto recibido diez veces mayor, sin aviso.
   const limpio = texto.replace(/^\$\s*/, '').replace(/\s+/g, '');
+  const conDecimales = redondeaDecimales ? leerConDecimales(limpio) : null;
+  if (conDecimales !== null) {
+    return validarMonto(String(clp(conDecimales)), { ...opciones, redondeaDecimales: false });
+  }
   if (/,/.test(limpio)) {
+    if (redondeaDecimales) {
+      return { valido: false, valor: 0, error: `Revisa el ${etiqueta}: escríbelo como 907,58 o 1.990` };
+    }
     return { valido: false, valor: 0, error: `Los pesos van sin decimales: escribe el ${etiqueta} sin coma` };
   }
   if (/[^\d.\-]/.test(limpio)) {

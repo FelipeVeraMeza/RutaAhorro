@@ -37,11 +37,15 @@ export async function POST(request: Request) {
 
   const d = await request.json().catch(() => ({})) as Record<string, unknown>;
   const rutUsuario = String(d.rut_usuario ?? '').trim();
+  // 0037: el RUT de la empresa solo hace falta si la clave maneja varias.
   const rutEmpresa = String(d.rut_empresa ?? '').trim();
+  const ciudad = String(d.ciudad ?? '').trim().replace(/\s+/g, ' ');
   const claveSii = String(d.clave_sii ?? '');
   const claveCertificado = String(d.clave_certificado ?? '');
   if (!isValidRut(rutUsuario)) return error('RUT_INVALIDO', 'El RUT de la persona que entra al SII no es válido', 400);
-  if (!isValidRut(rutEmpresa)) return error('RUT_INVALIDO', 'El RUT de la empresa emisora no es válido', 400);
+  if (rutEmpresa !== '' && !isValidRut(rutEmpresa)) return error('RUT_INVALIDO', 'El RUT de la empresa emisora no es válido', 400);
+  // El portal corta la ciudad en 20 letras (EFXP_CIUDAD_ORIGEN).
+  if (ciudad === '' || ciudad.length > 20) return error('DATOS_INVALIDOS', 'Escribe la ciudad (hasta 20 letras)', 400);
   if (claveSii.length < 4 || claveCertificado.length < 4) {
     return error('DATOS_INVALIDOS', 'Faltan la clave tributaria o la clave del certificado', 400);
   }
@@ -56,7 +60,8 @@ export async function POST(request: Request) {
   const { error: e } = await admin.from('sii_credenciales').upsert({
     tenant_id: actor.tenantId,
     rut_usuario: formatRut(rutUsuario),
-    rut_empresa: formatRut(rutEmpresa),
+    rut_empresa: rutEmpresa ? formatRut(rutEmpresa) : null,
+    ciudad,
     clave_sii: cifradas[0],
     clave_certificado: cifradas[1],
     actualizado_por: actor.id,
@@ -67,7 +72,7 @@ export async function POST(request: Request) {
   // Quién y cuándo, sin las claves.
   await admin.from('audit_log').insert({
     tenant_id: actor.tenantId, user_id: actor.id, action: 'credenciales_sii', entity_type: 'sii_credenciales',
-    entity_id: actor.tenantId, new_values: { rut_usuario: formatRut(rutUsuario), rut_empresa: formatRut(rutEmpresa) },
+    entity_id: actor.tenantId, new_values: { rut_usuario: formatRut(rutUsuario), rut_empresa: rutEmpresa ? formatRut(rutEmpresa) : null, ciudad },
   });
   return NextResponse.json({ ok: true });
 }

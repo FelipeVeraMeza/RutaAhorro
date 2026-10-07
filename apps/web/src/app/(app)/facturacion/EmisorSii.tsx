@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { toUserMessage, isValidRut, formatRut } from '@rutaahorro/core';
 import { Campo } from '@/components/Campo';
 import { useFormatoFecha } from '@/lib/formatoFecha';
@@ -12,6 +11,10 @@ import { repoFacturacion, type EstadoEmisionSii } from '@/lib/datos/facturacion'
  * el administrador. Apagado hasta que el cliente entregue su clave tributaria
  * y la del certificado digital (B-04, B-05). Las claves se guardan cifradas en
  * el servidor y no vuelven nunca a la pantalla.
+ *
+ * 0037: se pide lo mismo que pide el portal y nada más: RUT, clave del SII,
+ * clave del certificado y ciudad. Razón social, giro y dirección los pone el
+ * SII; el RUT de la empresa solo si la clave maneja más de una.
  */
 export function EmisorSii() {
   const { fechaHora } = useFormatoFecha();
@@ -20,6 +23,8 @@ export function EmisorSii() {
   const [aviso, setAviso] = useState<string | null>(null);
   const [rutUsuario, setRutUsuario] = useState('');
   const [rutEmpresa, setRutEmpresa] = useState('');
+  const [ciudad, setCiudad] = useState('');
+  const [variasEmpresas, setVariasEmpresas] = useState(false);
   const [claveSii, setClaveSii] = useState('');
   const [claveCert, setClaveCert] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -29,19 +34,23 @@ export function EmisorSii() {
     catch (e) { setError(toUserMessage(e)); }
   }, []);
   useEffect(() => { void cargar(); }, [cargar]);
+  // La ciudad no es secreta: se muestra la guardada para no tener que reescribirla.
+  useEffect(() => { if (estado?.ciudad) setCiudad((c) => c || estado.ciudad || ''); }, [estado?.ciudad]);
 
   async function guardar() {
     setError(null); setAviso(null);
     if (!isValidRut(rutUsuario)) { setError('El RUT de la persona que entra al SII no es válido'); return; }
-    if (!isValidRut(rutEmpresa)) { setError('El RUT de la empresa emisora no es válido'); return; }
+    if (variasEmpresas && !isValidRut(rutEmpresa)) { setError('El RUT de la empresa emisora no es válido'); return; }
     if (claveSii.length < 4 || claveCert.length < 4) { setError('Faltan la clave tributaria o la del certificado'); return; }
+    if (ciudad.trim() === '' || ciudad.trim().length > 20) { setError('Escribe la ciudad (hasta 20 letras)'); return; }
     setGuardando(true);
     try {
       await repoFacturacion().guardarCredenciales({
-        rut_usuario: formatRut(rutUsuario), rut_empresa: formatRut(rutEmpresa), clave_sii: claveSii, clave_certificado: claveCert,
+        rut_usuario: formatRut(rutUsuario), clave_sii: claveSii, clave_certificado: claveCert, ciudad: ciudad.trim(),
+        rut_empresa: variasEmpresas ? formatRut(rutEmpresa) : null,
       });
       setClaveSii(''); setClaveCert('');
-      setAviso('Credenciales guardadas, cifradas. Antes de encender falta el ensayo con ellas (paso 3).');
+      setAviso('Credenciales guardadas, cifradas. Antes de encender falta el ensayo con ellas (paso 2).');
       await cargar();
     } catch (e) {
       setError(e instanceof Error ? e.message : toUserMessage(e));
@@ -76,23 +85,20 @@ export function EmisorSii() {
             </p>
             <p className="text-sm">
               Credenciales: {estado.credenciales
-                ? <>guardadas · entra {estado.rutUsuario}, emite {estado.rutEmpresa}
+                ? <>guardadas · entra {estado.rutUsuario}{estado.rutEmpresa && <>, emite {estado.rutEmpresa}</>}
+                    {estado.ciudad && <> · {estado.ciudad}</>}
                     {estado.actualizadoEn && <> · {fechaHora(estado.actualizadoEn)}</>}</>
                 : 'no guardadas'}
             </p>
             {(estado.enCola > 0 || estado.conError > 0) && (
               <p className="text-sm">En cola: {estado.enCola} · con error: {estado.conError}</p>
             )}
-            {/* 0028: lo que falta, en orden. Encender exige los tres. */}
+            {/* 0028: lo que falta, en orden. Encender exige los dos (0037: los datos del emisor los pone el SII). */}
             <ol data-pasos className="text-sm space-y-2 pt-1" aria-label="Para emitir en el SII">
-              <Paso hecho={estado.emisor} titulo="1. Datos del emisor">
-                {estado.emisor ? 'Razón social, giro y dirección listos.'
-                  : <>Faltan: se cargan en <Link href="/configuracion" className="underline">Configuración</Link>.</>}
+              <Paso hecho={estado.credenciales} titulo="1. Credenciales del SII">
+                {estado.credenciales ? 'Guardadas, cifradas.' : 'Faltan: RUT, clave tributaria, clave del certificado y ciudad (abajo).'}
               </Paso>
-              <Paso hecho={estado.credenciales} titulo="2. Credenciales del SII">
-                {estado.credenciales ? 'Guardadas, cifradas.' : 'Faltan: clave tributaria, clave del certificado y RUT de la empresa (abajo).'}
-              </Paso>
-              <Paso hecho={estado.ensayoVigente} titulo="3. Ensayo en el portal, sin firmar">
+              <Paso hecho={estado.ensayoVigente} titulo="2. Ensayo en el portal, sin firmar">
                 {estado.ensayoVigente && estado.ultimoEnsayo
                   ? <>Pasó el {fechaHora(estado.ultimoEnsayo.en)}: el SII reconoció a «{estado.ultimoEnsayo.razonSocialSii}» y
                       calculó el mismo total. No se emitió nada.</>
@@ -109,7 +115,7 @@ export function EmisorSii() {
             </p>
             <div className="grid grid-cols-2 gap-2 pt-1">
               <button onClick={() => void activar(!estado.encendida)}
-                      disabled={!estado.encendida && !(estado.emisor && estado.credenciales && estado.ensayoVigente)}
+                      disabled={!estado.encendida && !(estado.credenciales && estado.ensayoVigente)}
                       className="tap rounded-xl border border-[var(--borde)] text-sm font-semibold disabled:opacity-50">
                 {estado.encendida ? 'Apagar' : 'Encender'}
               </button>
@@ -127,12 +133,11 @@ export function EmisorSii() {
       <section className="tarjeta p-3 space-y-3">
         <h2 className="font-semibold">{estado?.credenciales ? 'Reemplazar credenciales' : 'Credenciales del SII'}</h2>
         <p className="text-xs text-[var(--texto-suave)]">
-          El robot entra al portal de facturación gratuito del SII con la clave tributaria de una persona autorizada, elige
-          la empresa y firma con la clave de su certificado digital. Las claves se cifran en el servidor y no se vuelven a
-          mostrar. Los datos que salen impresos (razón social, giro, dirección) se configuran en{' '}
-          <Link href="/configuracion" className="underline">Configuración</Link>.
+          El robot entra al portal de facturación gratuito del SII con tu RUT y tu clave tributaria, y firma con la clave
+          de tu certificado digital. Razón social, giro y dirección los pone el SII; los del cliente salen de su ficha.
+          Las claves se cifran en el servidor y no se vuelven a mostrar.
         </p>
-        <Campo etiqueta="RUT de quien entra al SII" obligatorio ayuda="La persona, no la empresa">
+        <Campo etiqueta="RUT con que entras al SII" obligatorio ayuda="Con guion y dígito verificador: 12.345.678-5">
           {(p) => <input {...p} value={rutUsuario} onChange={(e) => setRutUsuario(e.target.value)} autoComplete="off" className={c} />}
         </Campo>
         <Campo etiqueta="Clave tributaria (SII)" obligatorio>
@@ -141,9 +146,18 @@ export function EmisorSii() {
         <Campo etiqueta="Clave del certificado digital" obligatorio ayuda="La que se escribe al firmar una factura en el portal">
           {(p) => <input {...p} type="password" value={claveCert} onChange={(e) => setClaveCert(e.target.value)} autoComplete="new-password" className={c} />}
         </Campo>
-        <Campo etiqueta="RUT de la empresa que emite" obligatorio>
-          {(p) => <input {...p} value={rutEmpresa} onChange={(e) => setRutEmpresa(e.target.value)} autoComplete="off" className={c} />}
+        <Campo etiqueta="Ciudad" obligatorio ayuda="La de origen que sale en la factura">
+          {(p) => <input {...p} value={ciudad} onChange={(e) => setCiudad(e.target.value)} maxLength={20} placeholder="Santiago" className={c} />}
         </Campo>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" checked={variasEmpresas} onChange={(e) => setVariasEmpresas(e.target.checked)} className="mt-1" />
+          <span>Con esta clave emito por más de una empresa</span>
+        </label>
+        {variasEmpresas && (
+          <Campo etiqueta="RUT de la empresa que emite" obligatorio ayuda="La que el robot elige en el portal">
+            {(p) => <input {...p} value={rutEmpresa} onChange={(e) => setRutEmpresa(e.target.value)} autoComplete="off" className={c} />}
+          </Campo>
+        )}
         {error && <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
         {aviso && <p role="status" className="text-sm bg-marca-100 text-marca-900 px-3 py-2 rounded-lg">✓ {aviso}</p>}
         <button onClick={() => void guardar()} disabled={guardando}

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   formatCLP, margenNeto, margenNetoPct, formatPct, textoVencimiento, diasEntre, isValidEan, normalizeBarcode, toUserMessage,
-  validarMonto, validarCantidad, cantidadConUnidad, diaLocal, precioConRedondeo, validarCantidadStock
+  validarMonto, validarCantidad, cantidadConUnidad, diaLocal, precioConRedondeo, validarCantidadStock, hayDecimales
 } from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto, type CambioPrecio } from '@/lib/productos';
 import { useFormatoFecha } from '@/lib/formatoFecha';
@@ -156,7 +156,10 @@ export function FormularioProducto({
   // cosmética: `parseCLP` borra todo lo que no sea dígito, así que un stock
   // mínimo de "1.5" kg se convertía en 15. Ver docs/21.
   const vPrecio = validarMonto(precio, { etiqueta: 'precio de venta', permiteCero: false, maximo: 50_000_000 });
-  const vCosto = validarMonto(costo, { etiqueta: 'costo', permiteVacio: true, maximo: 50_000_000 });
+  // El neto unitario de la factura trae centavos (907,58): se acepta y se
+  // guarda al peso, avisando a cuánto quedó.
+  const vCosto = validarMonto(costo, { etiqueta: 'costo', permiteVacio: true, maximo: 50_000_000, redondeaDecimales: true });
+  const costoRedondeado = vCosto.valido && hayDecimales(costo);
   const vStockMinimo = validarCantidad(stockMinimo, { permiteVacio: true, maximo: 1_000_000 });
   const vStockSala = validarCantidadStock(stockSala, unidad, { permiteVacio: true, maximo: 1_000_000 });
   const vDiasAlerta = validarCantidad(diasAlerta, { permiteVacio: true, maximo: 3650 });
@@ -327,239 +330,274 @@ export function FormularioProducto({
                 El código <strong className="num">{codigoInicial}</strong> no estaba en el catálogo: ya quedó puesto abajo.
               </p>
             )}
-            {/* Edición: cuánto hay y quién lo tocó. La cantidad no se cambia acá:
-                cada cambio de stock queda en el kardex con su motivo. Antes el
-                formulario no lo decía y no se entendía dónde se cambiaba. */}
-            {esEdicion && producto && (
-              <div className="rounded-xl bg-[var(--fondo)] p-3 space-y-2">
-                <p className="text-sm">
-                  <span className="text-[var(--texto-suave)]">Stock ahora: </span>
-                  <strong className="num">{cantidadConUnidad(producto.stock, 'unidad')}</strong>
-                  <span className="text-[var(--texto-suave)]"> en bodega</span>
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Link href={`/inventario?ajustar=${producto.id}`}
-                        className="tap inline-flex items-center px-3 rounded-lg border border-[var(--borde)] bg-white text-sm font-medium">
-                    Ajustar stock
-                  </Link>
-                  <Link href="/proveedores/recepcion"
-                        className="tap inline-flex items-center px-3 rounded-lg border border-[var(--borde)] bg-white text-sm font-medium">
-                    Ingresar mercadería
-                  </Link>
-                  {onDuplicar && (
-                    <button type="button" onClick={() => onDuplicar(producto)}
-                            className="tap inline-flex items-center gap-1.5 px-3 rounded-lg border border-[var(--borde)] bg-white text-sm font-medium">
-                      <Icono nombre="copiar" tamano={16} /> Duplicar
-                    </button>
-                  )}
-                </div>
-                <p className="text-xs text-[var(--texto-suave)]">
-                  Última modificación: {producto.actualizadoPor ?? 'sin registro'} · {fechaHora(producto.actualizadoEn)}
-                </p>
-              </div>
-            )}
-            <Campo etiqueta="Nombre" obligatorio>
-              {(p) => (
-                <input
-                  {...p}
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  onBlur={() => void revisarNombre()}
-                  placeholder="Ej: Arroz grado 1 · 1 kg"
-                  className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
-                  autoFocus
-                />
-              )}
-            </Campo>
-
-            {parecido && (
-              <p role="status" className="-mt-2 text-xs text-[var(--color-aviso)] bg-amber-50 px-3 py-2 rounded-lg">⚠ {parecido}</p>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              {/* El error se muestra apenas el campo tiene algo escrito: esperar
-                  a "Guardar" obliga a recorrer el formulario hacia atrás. */}
-              <Campo
-                etiqueta="Precio de venta" obligatorio
-                ayuda={precioBloqueado ? 'Lo cambia el administrador o un supervisor' : undefined}
-                error={precio !== '' ? vPrecio.error : null}
-              >
+            {/* 2026-10-07 · Ordenado en bloques con título, de lo que se llena
+                siempre a lo opcional (Felipe: "mejorar el orden y que sea mejor
+                explicado"). Antes el stock iba arriba, el perecible entre precio y
+                códigos, y el precio por mayor plegado junto al impuesto. */}
+            <Seccion titulo="Producto" ayuda="Cómo se llama y cómo se encuentra en la caja.">
+              <Campo etiqueta="Nombre" obligatorio>
                 {(p) => (
                   <input
                     {...p}
-                    inputMode="numeric" value={precio}
-                    onChange={(e) => setPrecio(e.target.value)}
-                    onBlur={() => { if (vPrecio.valido && vPrecio.valor > 0) setPrecio(vPrecio.valor.toLocaleString('es-CL')); }}
-                    readOnly={precioBloqueado}
-                    placeholder="0"
-                    className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right read-only:bg-[var(--fondo)]"
+                    value={nombre}
+                    onChange={(e) => setNombre(e.target.value)}
+                    onBlur={() => void revisarNombre()}
+                    placeholder="Ej: Arroz grado 1 · 1 kg"
+                    className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
+                    autoFocus
                   />
                 )}
               </Campo>
 
-              {puedeVerCostos && !desdeRecepcion && (
-                <Campo etiqueta="Costo neto" ayuda="Sin IVA, como en la factura del proveedor"
-                       error={costo !== '' ? vCosto.error : null}>
-                  {(p) => (
-                    <input
-                      {...p}
-                      inputMode="numeric" value={costo}
-                      onChange={(e) => setCosto(e.target.value)}
-                      placeholder="0"
-                      className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
-                    />
-                  )}
-                </Campo>
+              {parecido && (
+                <p role="status" className="-mt-2 text-xs text-[var(--color-aviso)] bg-amber-50 px-3 py-2 rounded-lg">⚠ {parecido}</p>
               )}
-            </div>
 
-            {/* RF-M2-21 · un precio que no termina en 0 obliga a redondear en efectivo. */}
-            {vPrecio.valido && precioConRedondeo(precioNum) && (
-              <p className="-mt-2 text-xs text-[var(--color-aviso)]">
-                No termina en 0: al pagar en efectivo habrá que redondear (Ley 20.956).
-              </p>
-            )}
+              {/* Códigos de barras: RF-M2-02 permite varios por producto */}
+              <Campo etiqueta="Códigos de barras">
+                {(p) => (
+                  <>
+                {codigos.length > 0 && (
+                  <ul className="flex flex-wrap gap-2 mb-2">
+                    {codigos.map((c) => (
+                      <li key={c} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--fondo)] text-sm num">
+                        {c}
+                        <button
+                          onClick={() => setCodigos((p) => p.filter((x) => x !== c))}
+                          aria-label={`Quitar código ${c}`}
+                          className="tap -my-1.5 -mr-1.5 text-[var(--color-alerta)] font-bold"
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
-            {margen !== null && (
-              <p className={`text-sm px-3 py-2 rounded-lg ${
-                margen < 0 ? 'bg-red-50 text-red-900' : 'bg-marca-50 text-marca-900'
-              }`}>
-                Margen sin IVA: <strong className="num">{formatCLP(margenNeto(precioNum, costoNum, ivaPct))}</strong>
-                {' '}({formatPct(margen)})
-                {margen < 0 && ' · estás vendiendo bajo el costo'}
-              </p>
-            )}
+                <div className="flex gap-2">
+                  <input
+                    {...p}
+                    inputMode="numeric" value={codigoNuevo}
+                    onChange={(e) => setCodigoNuevo(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void agregarCodigo(codigoNuevo); } }}
+                    placeholder="Escribe o escanea"
+                    className="tap flex-1 px-3 py-2.5 rounded-xl border border-[var(--borde)] num"
+                  />
+                  <button
+                    onClick={() => void agregarCodigo(codigoNuevo)}
+                    className="tap px-4 rounded-xl border border-[var(--borde)] text-sm font-medium"
+                  >
+                    Agregar
+                  </button>
+                  <button
+                    onClick={() => setEscaneando((v) => !v)}
+                    aria-label="Escanear código con la cámara"
+                    className="tap px-4 rounded-xl bg-marca-500 text-white"
+                  >
+                    <Icono nombre="escanear" tamano={20} />
+                  </button>
+                </div>
 
-            {/* Perecible: activa el control por lote y FEFO (ADR-007). Va antes
-                de la cantidad: si es perecible, la fecha se pide junto a ella. */}
-            <div className="rounded-xl border border-[var(--borde)] p-3">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox" checked={perecible}
-                  onChange={(e) => setPerecible(e.target.checked)}
-                  className="mt-0.5 w-5 h-5 accent-[var(--color-marca-500)]"
-                />
-                <span className="text-sm">
-                  <strong className="block">Producto perecible</strong>
-                  <span className="text-[var(--texto-suave)]">
-                    Lleva fecha de vencimiento. El sistema cuenta los días que le quedan
-                    y al vender sale primero lo que vence antes.
-                  </span>
-                </span>
-              </label>
-            </div>
-
-            {/* 0032 · Una sola bodega: antes eran dos casillas, sala y bodega, y
-                había que acordarse de "reponer". */}
-            {!esEdicion && !desdeRecepcion && (
-              <div className="rounded-xl border border-[var(--borde)] p-3 space-y-3">
-                <Campo
-                  etiqueta="¿Cuántos tienes hoy en la bodega?"
-                  ayuda="En unidades. Puede quedar en 0 y entrar después con Recibir mercadería."
-                  error={stockSala !== '' ? vStockSala.error : null}
-                >
-                  {(p) => (
-                    <input
-                      {...p}
-                      inputMode="numeric" value={stockSala}
-                      onChange={(e) => setStockSala(e.target.value)}
-                      className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
-                    />
-                  )}
-                </Campo>
-                {pideVencimiento && (
-                  <div>
-                    <Campo etiqueta="¿Cuándo vence?" obligatorio
-                           ayuda="Si hay fechas distintas, pon la más próxima.">
-                      {(p) => (
-                        <input
-                          {...p}
-                          type="date" value={vencimiento} min={hoy}
-                          onChange={(e) => setVencimiento(e.target.value)}
-                          className={`tap w-full px-3 py-2.5 rounded-xl border bg-white ${vencimiento ? 'border-[var(--borde)]' : 'border-[var(--color-alerta)]'}`}
-                        />
-                      )}
-                    </Campo>
-                    <p role="status" className={`text-xs mt-1 ${diasParaVencer === null ? 'text-[var(--color-alerta)]' : 'text-[var(--texto-suave)]'}`}>
-                      {diasParaVencer === null
-                        ? 'Falta la fecha: sin ella no se puede guardar.'
-                        : `Desde hoy, ${textoVencimiento(diasParaVencer)}.`}
-                    </p>
+                {escaneando && (
+                  <div className="relative mt-2 h-40 rounded-xl overflow-hidden bg-black">
+                    <video ref={videoRef} playsInline muted autoPlay className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 grid place-items-center pointer-events-none">
+                      <div className="w-4/5 h-16 border-2 border-white/80 rounded-lg" />
+                    </div>
                   </div>
                 )}
-              </div>
-            )}
+                {errorCamara && <p className="text-xs text-[var(--color-alerta)] mt-1">{errorCamara}</p>}
+                {avisoCodigo && (
+                  <p role="status" className={`text-xs mt-1.5 ${
+                    avisoCodigo.startsWith('Aviso') ? 'text-[var(--color-aviso)]' : 'text-[var(--color-alerta)]'
+                  }`}>
+                    {avisoCodigo}
+                  </p>
+                )}
+                  </>
+                )}
+              </Campo>
 
-            {/* Códigos de barras: RF-M2-02 permite varios por producto */}
-            <Campo etiqueta="Códigos de barras">
-              {(p) => (
-                <>
-              {codigos.length > 0 && (
-                <ul className="flex flex-wrap gap-2 mb-2">
-                  {codigos.map((c) => (
-                    <li key={c} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--fondo)] text-sm num">
-                      {c}
-                      <button
-                        onClick={() => setCodigos((p) => p.filter((x) => x !== c))}
-                        aria-label={`Quitar código ${c}`}
-                        className="tap -my-1.5 -mr-1.5 text-[var(--color-alerta)] font-bold"
-                      >
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+              {/* Perecible: activa el control por lote y FEFO (ADR-007). Va antes
+                  del stock: si es perecible, la fecha se pide junto a la cantidad. */}
+              <div className="rounded-xl border border-[var(--borde)] p-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox" checked={perecible}
+                    onChange={(e) => setPerecible(e.target.checked)}
+                    className="mt-0.5 w-5 h-5 accent-[var(--color-marca-500)]"
+                  />
+                  <span className="text-sm">
+                    <strong className="block">Producto perecible</strong>
+                    <span className="text-[var(--texto-suave)]">
+                      Lleva fecha de vencimiento. El sistema cuenta los días que le quedan
+                      y al vender sale primero lo que vence antes.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </Seccion>
+
+            <Seccion titulo="Precio" ayuda="El precio de venta incluye IVA. El margen se calcula sin IVA, contra el costo.">
+              <div className="grid grid-cols-2 gap-3">
+                {/* El error se muestra apenas el campo tiene algo escrito: esperar
+                    a "Guardar" obliga a recorrer el formulario hacia atrás. */}
+                <Campo
+                  etiqueta="Precio de venta" obligatorio
+                  ayuda={precioBloqueado ? 'Lo cambia el administrador o un supervisor' : 'Con IVA, lo que paga el cliente'}
+                  error={precio !== '' ? vPrecio.error : null}
+                >
+                  {(p) => (
+                    <input
+                      {...p}
+                      inputMode="numeric" value={precio}
+                      onChange={(e) => setPrecio(e.target.value)}
+                      onBlur={() => { if (vPrecio.valido && vPrecio.valor > 0) setPrecio(vPrecio.valor.toLocaleString('es-CL')); }}
+                      readOnly={precioBloqueado}
+                      placeholder="0"
+                      className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right read-only:bg-[var(--fondo)]"
+                    />
+                  )}
+                </Campo>
+
+                {puedeVerCostos && !desdeRecepcion && (
+                  <Campo etiqueta="Costo neto" ayuda="Sin IVA, como en la factura"
+                         error={costo !== '' ? vCosto.error : null}>
+                    {(p) => (
+                      <input
+                        {...p}
+                        inputMode="decimal" value={costo}
+                        onChange={(e) => setCosto(e.target.value)}
+                        placeholder="0"
+                        className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
+                      />
+                    )}
+                  </Campo>
+                )}
+              </div>
+
+              {costoRedondeado && (
+                <p className="-mt-2 text-xs text-[var(--texto-suave)]">
+                  El costo se guarda redondeado al peso: {formatCLP(costoNum)}.
+                </p>
               )}
 
-              <div className="flex gap-2">
-                <input
-                  {...p}
-                  inputMode="numeric" value={codigoNuevo}
-                  onChange={(e) => setCodigoNuevo(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void agregarCodigo(codigoNuevo); } }}
-                  placeholder="Escribe o escanea"
-                  className="tap flex-1 px-3 py-2.5 rounded-xl border border-[var(--borde)] num"
-                />
-                <button
-                  onClick={() => void agregarCodigo(codigoNuevo)}
-                  className="tap px-4 rounded-xl border border-[var(--borde)] text-sm font-medium"
-                >
-                  Agregar
-                </button>
-                <button
-                  onClick={() => setEscaneando((v) => !v)}
-                  aria-label="Escanear código con la cámara"
-                  className="tap px-4 rounded-xl bg-marca-500 text-white"
-                >
-                  <Icono nombre="escanear" tamano={20} />
-                </button>
-              </div>
+              {/* RF-M2-21 · un precio que no termina en 0 obliga a redondear en efectivo. */}
+              {vPrecio.valido && precioConRedondeo(precioNum) && (
+                <p className="-mt-2 text-xs text-[var(--color-aviso)]">
+                  No termina en 0: al pagar en efectivo habrá que redondear (Ley 20.956).
+                </p>
+              )}
 
-              {escaneando && (
-                <div className="relative mt-2 h-40 rounded-xl overflow-hidden bg-black">
-                  <video ref={videoRef} playsInline muted autoPlay className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 grid place-items-center pointer-events-none">
-                    <div className="w-4/5 h-16 border-2 border-white/80 rounded-lg" />
+              {margen !== null && (
+                <p className={`text-sm px-3 py-2 rounded-lg ${
+                  margen < 0 ? 'bg-red-50 text-red-900' : 'bg-marca-50 text-marca-900'
+                }`}>
+                  Margen sin IVA: <strong className="num">{formatCLP(margenNeto(precioNum, costoNum, ivaPct))}</strong>
+                  {' '}({formatPct(margen)})
+                  {margen < 0 && ' · estás vendiendo bajo el costo'}
+                </p>
+              )}
+
+              {puedeEditarPrecios && (
+                <OfertasEImpuesto
+                  filas={filasOferta}
+                  onFilas={setFilasOferta}
+                  precioLista={precioNum}
+                  impuestos={impuestos}
+                  impuestoId={impuestoId}
+                  onImpuesto={setImpuestoId}
+                  esAdmin={esAdmin}
+                />
+              )}
+            </Seccion>
+
+            <Seccion titulo="Stock" ayuda="Se cuenta por unidad.">
+              {/* Edición: la cantidad no se cambia acá. Cada cambio de stock queda
+                  en el kardex con su motivo y quién lo hizo. */}
+              {esEdicion && producto && (
+                <div className="rounded-xl bg-[var(--fondo)] p-3 space-y-2">
+                  <p className="text-sm">
+                    <span className="text-[var(--texto-suave)]">Hay ahora: </span>
+                    <strong className="num">{cantidadConUnidad(producto.stock, 'unidad')}</strong>
+                  </p>
+                  <p className="text-xs text-[var(--texto-suave)]">
+                    Para cambiarlo: <strong>Ingresar mercadería</strong> si llegó del proveedor, o{' '}
+                    <strong>Ajustar stock</strong> si contaste distinto o hubo una merma. Así queda anotado quién y por qué.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Link href="/proveedores/recepcion"
+                          className="tap inline-flex items-center px-3 rounded-lg border border-[var(--borde)] bg-white text-sm font-medium">
+                      Ingresar mercadería
+                    </Link>
+                    <Link href={`/inventario?ajustar=${producto.id}`}
+                          className="tap inline-flex items-center px-3 rounded-lg border border-[var(--borde)] bg-white text-sm font-medium">
+                      Ajustar stock
+                    </Link>
                   </div>
                 </div>
               )}
-              {errorCamara && <p className="text-xs text-[var(--color-alerta)] mt-1">{errorCamara}</p>}
-              {avisoCodigo && (
-                <p role="status" className={`text-xs mt-1.5 ${
-                  avisoCodigo.startsWith('Aviso') ? 'text-[var(--color-aviso)]' : 'text-[var(--color-alerta)]'
-                }`}>
-                  {avisoCodigo}
-                </p>
+              {/* 0032 · Una sola bodega: antes eran dos casillas, sala y bodega, y
+                  había que acordarse de "reponer". */}
+              {!esEdicion && !desdeRecepcion && (
+                <div className="rounded-xl border border-[var(--borde)] p-3 space-y-3">
+                  <Campo
+                    etiqueta="¿Cuántos tienes hoy en la bodega?"
+                    ayuda="Puede quedar en 0: lo que llegue después entra con Ingresar mercadería."
+                    error={stockSala !== '' ? vStockSala.error : null}
+                  >
+                    {(p) => (
+                      <input
+                        {...p}
+                        inputMode="numeric" value={stockSala}
+                        onChange={(e) => setStockSala(e.target.value)}
+                        className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
+                      />
+                    )}
+                  </Campo>
+                  {pideVencimiento && (
+                    <div>
+                      <Campo etiqueta="¿Cuándo vence?" obligatorio
+                             ayuda="Si hay fechas distintas, pon la más próxima.">
+                        {(p) => (
+                          <input
+                            {...p}
+                            type="date" value={vencimiento} min={hoy}
+                            onChange={(e) => setVencimiento(e.target.value)}
+                            className={`tap w-full px-3 py-2.5 rounded-xl border bg-white ${vencimiento ? 'border-[var(--borde)]' : 'border-[var(--color-alerta)]'}`}
+                          />
+                        )}
+                      </Campo>
+                      <p role="status" className={`text-xs mt-1 ${diasParaVencer === null ? 'text-[var(--color-alerta)]' : 'text-[var(--texto-suave)]'}`}>
+                        {diasParaVencer === null
+                          ? 'Falta la fecha: sin ella no se puede guardar.'
+                          : `Desde hoy, ${textoVencimiento(diasParaVencer)}.`}
+                      </p>
+                    </div>
+                  )}
+                </div>
               )}
-                </>
-              )}
-            </Campo>
+                <Campo
+                  etiqueta="Stock mínimo"
+                  ayuda="Cuando quede menos que esto, el sistema avisa que hay que reponer. Déjalo vacío si no quieres aviso."
+                  error={stockMinimo !== '' ? vStockMinimo.error : null}
+                >
+                  {(p) => (
+                    <input
+                      {...p}
+                      inputMode="decimal" value={stockMinimo}
+                      onChange={(e) => setStockMinimo(e.target.value)}
+                      className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
+                    />
+                  )}
+                </Campo>
+            </Seccion>
 
             {/* Lo opcional, plegado: en el celular el formulario era tan largo que
-                "¿Cuántos tienes hoy?" quedaba al fondo y nadie lo encontraba. */}
+                lo importante quedaba al fondo. */}
             <details className="rounded-xl border border-[var(--borde)] p-3" open={esEdicion && Boolean(descripcion || sku || categoriaId)}>
               <summary className="text-sm font-semibold cursor-pointer min-h-[44px] py-2.5 -my-2.5">
-                Más datos (opcional): descripción, categoría, stock mínimo
+                Más datos (opcional): descripción, código interno y categoría
               </summary>
               <div className="mt-3 space-y-4">
                 <Campo
@@ -609,24 +647,6 @@ export function FormularioProducto({
                     </>
                   )}
                 </Campo>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Campo
-                    etiqueta="Stock mínimo"
-                    ayuda="Con menos que esto, avisa que hay que reponer"
-                    error={stockMinimo !== '' ? vStockMinimo.error : null}
-                  >
-                    {(p) => (
-                      <input
-                        {...p}
-                        inputMode="decimal" value={stockMinimo}
-                        onChange={(e) => setStockMinimo(e.target.value)}
-                        className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num text-right"
-                      />
-                    )}
-                  </Campo>
-                </div>
-
               </div>
             </details>
             {esEdicion && historialPrecios.length > 0 && (
@@ -644,23 +664,19 @@ export function FormularioProducto({
                 </ul>
               </details>
             )}
-            {puedeEditarPrecios && (
-              <details className="rounded-xl border border-[var(--borde)] p-3" open={filasOferta.length > 0 || impuestoId != null}>
-                <summary className="text-sm font-semibold cursor-pointer min-h-[44px] py-2.5 -my-2.5">
-                  Precio por mayor, ofertas e impuesto (opcional)
-                </summary>
-                <div className="mt-3 space-y-4">
-                  <OfertasEImpuesto
-                    filas={filasOferta}
-                    onFilas={setFilasOferta}
-                    precioLista={precioNum}
-                    impuestos={impuestos}
-                    impuestoId={impuestoId}
-                    onImpuesto={setImpuestoId}
-                    esAdmin={esAdmin}
-                  />
-                </div>
-              </details>
+
+            {esEdicion && producto && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-[var(--texto-suave)]">
+                  Última modificación: {producto.actualizadoPor ?? 'sin registro'} · {fechaHora(producto.actualizadoEn)}
+                </p>
+                {onDuplicar && (
+                  <button type="button" onClick={() => onDuplicar(producto)}
+                          className="tap inline-flex items-center gap-1.5 px-3 rounded-lg border border-[var(--borde)] bg-white text-sm font-medium">
+                    <Icono nombre="copiar" tamano={16} /> Duplicar
+                  </button>
+                )}
+              </div>
             )}
 
             {error && (
@@ -696,5 +712,18 @@ export function FormularioProducto({
           </footer>
       </>
     </Modal>
+  );
+}
+
+/** Un bloque del formulario: título, para qué sirve y sus campos. */
+function Seccion({ titulo, ayuda, children }: { titulo: string; ayuda?: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3" aria-label={titulo}>
+      <div className="border-b border-[var(--borde)] pb-1.5">
+        <h3 className="font-semibold">{titulo}</h3>
+        {ayuda && <p className="text-xs text-[var(--texto-suave)]">{ayuda}</p>}
+      </div>
+      {children}
+    </section>
   );
 }

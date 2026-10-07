@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { toUserMessage } from '@rutaahorro/core';
+import { toUserMessage, isValidRut, formatRut, cleanRut, rutDeCorreo } from '@rutaahorro/core';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { repoUsuarios, type Usuario } from '@/lib/datos/usuarios';
 import { NOMBRE_ROL, LEMA_ROL, type Rol } from '@/lib/navegacion';
@@ -41,6 +41,14 @@ function claveTemporal(): string {
 /** Lo que el administrador tiene que decirle a la persona para que entre. */
 interface Credenciales { nombre: string; email: string; clave: string; nueva: boolean }
 
+/** Con qué entra la persona: los números de su RUT, o su correo si entra con correo. */
+function usuarioPara(email: string | null): { etiqueta: string; valor: string } {
+  const rut = rutDeCorreo(email);
+  return rut
+    ? { etiqueta: 'RUT para entrar', valor: cleanRut(rut).slice(0, -1) }
+    : { etiqueta: 'Correo', valor: email ?? '' };
+}
+
 export function UsuariosClient({ miId }: { miId: string }) {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -52,6 +60,11 @@ export function UsuariosClient({ miId }: { miId: string }) {
   const [modo, setModo] = useState<'clave' | 'correo'>('clave');
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
+  // 2026-10-07 · Con contraseña temporal la cuenta entra con RUT, no con correo.
+  const [rut, setRut] = useState('');
+  const [editando, setEditando] = useState<Usuario | null>(null);
+  const [editNombre, setEditNombre] = useState('');
+  const [editRut, setEditRut] = useState('');
   const [rol, setRol] = useState<Rol>('vendedor');
   const [clave, setClave] = useState(claveTemporal);
   const [enviando, setEnviando] = useState(false);
@@ -77,7 +90,7 @@ export function UsuariosClient({ miId }: { miId: string }) {
   useEffect(() => { void cargar(); }, [cargar]);
 
   function mensajeDe(e: unknown): string {
-    if (e instanceof Error && e.message === 'CORREO_YA_REGISTRADO') return 'Ese correo ya tiene un usuario';
+    if (e instanceof Error && e.message === 'CORREO_YA_REGISTRADO') return modo === 'clave' ? 'Ese RUT ya tiene un usuario' : 'Ese correo ya tiene un usuario';
     const detalle = (e as { detalle?: string })?.detalle;
     const msg = toUserMessage(e);
     // Un error del servidor que no tiene traducción trae su propio texto.
@@ -87,22 +100,23 @@ export function UsuariosClient({ miId }: { miId: string }) {
   async function invitar() {
     setError(null);
     if (nombre.trim() === '') { setError('El nombre es obligatorio'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('El correo no es válido'); return; }
+    if (modo === 'clave' && !isValidRut(rut)) { setError('El RUT no es válido: revisa el dígito verificador'); return; }
+    if (modo === 'correo' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('El correo no es válido'); return; }
     if (modo === 'clave' && clave.trim().length < 8) { setError('La contraseña temporal necesita al menos 8 caracteres'); return; }
 
     setEnviando(true);
     try {
       const datos = { nombre: nombre.trim(), email: email.trim().toLowerCase(), rol };
       if (modo === 'clave') {
-        await repoUsuarios().crearConClave({ ...datos, clave: clave.trim() });
-        setCredenciales({ nombre: datos.nombre, email: datos.email, clave: clave.trim(), nueva: true });
+        await repoUsuarios().crearConClave({ nombre: datos.nombre, rut: formatRut(rut), rol, clave: clave.trim() });
+        setCredenciales({ nombre: datos.nombre, email: `${cleanRut(rut).slice(0, -1)}@rut`, clave: clave.trim(), nueva: true });
       } else {
         await repoUsuarios().invitar(datos);
         setExito(`Invitación enviada a ${datos.email}`);
         setTimeout(() => setExito(null), 5000);
       }
       setInvitando(false);
-      setNombre(''); setEmail(''); setRol('vendedor'); setClave(claveTemporal());
+      setNombre(''); setEmail(''); setRut(''); setRol('vendedor'); setClave(claveTemporal());
       await cargar();
     } catch (e) {
       setError(mensajeDe(e));
@@ -119,9 +133,31 @@ export function UsuariosClient({ miId }: { miId: string }) {
     try {
       await repoUsuarios().restablecerClave(restableciendo.id, claveNueva.trim());
       setCredenciales({
-        nombre: restableciendo.nombre, email: restableciendo.email ?? '', clave: claveNueva.trim(), nueva: false,
+        nombre: restableciendo.nombre,
+        email: rutDeCorreo(restableciendo.email) ? `${usuarioPara(restableciendo.email).valor}@rut` : restableciendo.email ?? '',
+        clave: claveNueva.trim(), nueva: false,
       });
       setRestableciendo(null);
+    } catch (e) {
+      setError(mensajeDe(e));
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  async function guardarDatos() {
+    if (!editando) return;
+    setError(null);
+    if (editNombre.trim().length < 2) { setError('Escribe el nombre'); return; }
+    const esRut = rutDeCorreo(editando.email) !== null;
+    if (esRut && !isValidRut(editRut)) { setError('El RUT no es válido: revisa el dígito verificador'); return; }
+    setEnviando(true);
+    try {
+      await repoUsuarios().editarDatos(editando.id, { nombre: editNombre.trim(), ...(esRut ? { rut: formatRut(editRut) } : {}) });
+      setEditando(null);
+      setExito('Datos guardados');
+      setTimeout(() => setExito(null), 4000);
+      await cargar();
     } catch (e) {
       setError(mensajeDe(e));
     } finally {
@@ -164,7 +200,9 @@ export function UsuariosClient({ miId }: { miId: string }) {
             Esta no se vuelve a mostrar.
           </p>
           <dl className="text-sm grid grid-cols-[auto,1fr] gap-x-3 gap-y-1">
-            <dt className="text-[var(--texto-suave)]">Correo</dt><dd className="num break-all">{credenciales.email}</dd>
+            {credenciales.email.endsWith('@rut')
+              ? <><dt className="text-[var(--texto-suave)]">RUT para entrar</dt><dd className="num font-bold tracking-wide">{credenciales.email.split('@')[0]}</dd></>
+              : <><dt className="text-[var(--texto-suave)]">Correo</dt><dd className="num break-all">{credenciales.email}</dd></>}
             <dt className="text-[var(--texto-suave)]">Contraseña</dt><dd className="num font-bold tracking-wide">{credenciales.clave}</dd>
           </dl>
           <button onClick={() => setCredenciales(null)} className="tap mt-2 px-3 rounded-lg border border-[var(--borde)] bg-white text-sm">
@@ -196,7 +234,9 @@ export function UsuariosClient({ miId }: { miId: string }) {
                     {u.nombre}
                     {soyYo && <span className="text-[var(--texto-suave)] font-normal"> · tú</span>}
                   </p>
-                  <p className="text-xs text-[var(--texto-suave)] truncate">{u.email ?? 'sin correo'}</p>
+                  <p className="text-xs text-[var(--texto-suave)] truncate num">
+                    {rutDeCorreo(u.email) ? `RUT ${rutDeCorreo(u.email)}` : u.email ?? 'sin correo'}
+                  </p>
                   <p className="text-xs mt-0.5">
                     {/* Estado con icono + texto, nunca solo color (RNF-46) */}
                     <span className={online ? 'text-marca-700' : 'text-[var(--texto-suave)]'}>
@@ -223,6 +263,12 @@ export function UsuariosClient({ miId }: { miId: string }) {
                 </div>
               </div>
 
+              <button
+                onClick={() => { setError(null); setEditNombre(u.nombre); setEditRut(rutDeCorreo(u.email) ?? ''); setEditando(u); }}
+                className="tap mt-2 mr-2 px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)]"
+              >
+                Editar nombre{rutDeCorreo(u.email) ? ' y RUT' : ''}
+              </button>
               {/* Nadie puede cambiarse el rol ni desactivarse a sí mismo: un
                   admin que se quita el rol deja el local sin administrador. */}
               {!soyYo && (
@@ -295,7 +341,7 @@ export function UsuariosClient({ miId }: { miId: string }) {
         >
           <div className="p-5 space-y-4">
             <div className="flex gap-2" role="radiogroup" aria-label="Cómo entra la persona">
-              {([['clave', 'Con contraseña temporal'], ['correo', 'Invitar por correo']] as const).map(([m, t]) => (
+              {([['clave', 'Entra con RUT'], ['correo', 'Invitar por correo']] as const).map(([m, t]) => (
                 <button key={m} type="button" role="radio" aria-checked={modo === m} onClick={() => setModo(m)}
                   className={`tap flex-1 px-2 rounded-xl text-sm border-2 ${modo === m ? 'border-marca-500 bg-marca-50 font-medium' : 'border-[var(--borde)]'}`}>
                   {t}
@@ -304,7 +350,7 @@ export function UsuariosClient({ miId }: { miId: string }) {
             </div>
             <p className="text-sm text-[var(--texto-suave)]">
               {modo === 'clave'
-                ? 'Entra altiro con la contraseña de abajo, y al primer ingreso elige una suya. No necesita revisar el correo.'
+                ? 'Entra con su RUT y la contraseña de abajo, y al primer ingreso elige una suya. No necesita correo.'
                 : 'Le llegará un correo para que cree su propia contraseña. Si el correo no llega o el enlace no abre, usa la contraseña temporal.'}
             </p>
 
@@ -318,16 +364,30 @@ export function UsuariosClient({ miId }: { miId: string }) {
               )}
             </Campo>
 
-            <Campo etiqueta="Correo" obligatorio>
-              {(p) => (
-                <input
-                  {...p} type="email" inputMode="email" autoCapitalize="none"
-                  value={email} onChange={(e) => setEmail(e.target.value)}
-                  placeholder="jorge@correo.cl"
-                  className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
-                />
-              )}
-            </Campo>
+            {modo === 'clave' ? (
+              <Campo etiqueta="RUT" obligatorio ayuda="Con dígito verificador. Entra con los números antes del guion.">
+                {(p) => (
+                  <input
+                    {...p} value={rut} onChange={(e) => setRut(e.target.value)}
+                    autoCapitalize="characters" autoComplete="off"
+                    onBlur={() => { if (isValidRut(rut)) setRut(formatRut(rut)); }}
+                    placeholder="12.345.678-5"
+                    className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num"
+                  />
+                )}
+              </Campo>
+            ) : (
+              <Campo etiqueta="Correo" obligatorio>
+                {(p) => (
+                  <input
+                    {...p} type="email" inputMode="email" autoCapitalize="none"
+                    value={email} onChange={(e) => setEmail(e.target.value)}
+                    placeholder="jorge@correo.cl"
+                    className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]"
+                  />
+                )}
+              </Campo>
+            )}
 
             {/* Un grupo de radios necesita fieldset/legend: sin eso el lector de
                 pantalla lee las cuatro opciones sueltas, sin decir de qué son. */}
@@ -418,6 +478,29 @@ export function UsuariosClient({ miId }: { miId: string }) {
             <button onClick={() => void restablecer()} disabled={enviando}
               className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-bold disabled:opacity-50">
               {enviando ? 'Guardando…' : 'Poner contraseña temporal'}
+            </button>
+          </div>
+        </Modal>
+      )}
+      {editando && (
+        <Modal titulo={`Datos de ${editando.nombre}`} encabezado="visible" onCerrar={() => setEditando(null)} bloqueado={enviando}>
+          <div className="p-5 space-y-4">
+            <Campo etiqueta="Nombre" obligatorio ayuda="El que sale en las ventas, la caja y la bitácora.">
+              {(p) => <input {...p} value={editNombre} onChange={(e) => setEditNombre(e.target.value)}
+                             className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)]" />}
+            </Campo>
+            {rutDeCorreo(editando.email) ? (
+              <Campo etiqueta="RUT" obligatorio ayuda="Con dígito verificador. Si lo cambias, desde ahora entra con el nuevo.">
+                {(p) => <input {...p} value={editRut} onChange={(e) => setEditRut(e.target.value)}
+                               onBlur={() => { if (isValidRut(editRut)) setEditRut(formatRut(editRut)); }}
+                               autoComplete="off" className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] num" />}
+              </Campo>
+            ) : (
+              <p className="text-xs text-[var(--texto-suave)]">Esta cuenta entra con correo ({editando.email}).</p>
+            )}
+            {error && <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+            <button onClick={() => void guardarDatos()} disabled={enviando} className="btn btn-primario w-full">
+              {enviando ? 'Guardando…' : 'Guardar'}
             </button>
           </div>
         </Modal>

@@ -51,7 +51,7 @@ async function emitirUna(): Promise<'nada' | 'emitida' | 'error'> {
     receptor: { rut: string; razon_social: string; ciudad?: string; correo?: string; contacto?: string };
     emisor: { ciudad?: string | null };
     lineas_sii: LineaParaPortal[];
-    credenciales: { tenant_id: string; rut_usuario: string; clave_sii: string; clave_certificado: string; rut_empresa: string };
+    credenciales: { tenant_id: string; rut_usuario: string; clave_sii: string; clave_certificado: string; rut_empresa: string | null; ciudad?: string | null };
   };
   const tenant = factura.credenciales.tenant_id;
 
@@ -63,7 +63,7 @@ async function emitirUna(): Promise<'nada' | 'emitida' | 'error'> {
         descifrar(factura.credenciales.clave_certificado, env.siiClaveCifrado),
       ]);
       const r = await emitirEnPortal(
-        { receptor: factura.receptor, ciudadEmisor: factura.emisor?.ciudad, formaPago: factura.forma_pago, plan },
+        { receptor: factura.receptor, ciudadEmisor: factura.credenciales.ciudad || factura.emisor?.ciudad, formaPago: factura.forma_pago, plan },
         { rutUsuario: factura.credenciales.rut_usuario, claveSii, claveCertificado, rutEmpresa: factura.credenciales.rut_empresa },
         { chromePath: env.chromePath, alPaso: (t) => log.info('Factura SII', { numero: factura.numero, paso: t }) },
       );

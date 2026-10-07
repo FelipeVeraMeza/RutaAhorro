@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   formatCLP, weightedAverageCost, costVariationPct, netAmount, ivaDeNeto,
-  shouldWarnCostVariation, toUserMessage, diaLocal, sumarDias, diasEntre, textoVencimiento, formatPct, formatCantidad, validarCantidadStock, validarMonto
+  shouldWarnCostVariation, toUserMessage, diaLocal, sumarDias, diasEntre, textoVencimiento, formatPct, formatCantidad, validarCantidadStock, validarMonto, hayDecimales
 } from '@rutaahorro/core';
 import { registrarFacturaProveedor, pagarFacturaProveedor } from '@/lib/datos/porPagar';
 import { repoFacturacion } from '@/lib/datos/facturacion';
@@ -628,13 +628,13 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
                   <div>
                     <span className="block text-[11px] text-[var(--texto-suave)] mb-1" aria-hidden>Costo unitario {costosConIva ? 'con IVA' : 'neto'}</span>
                     <input
-                      inputMode="numeric"
+                      inputMode="decimal"
                       aria-label={`Costo unitario de ${l.nombre}`}
                       value={costoTexto[l.productId] ?? String(l.costoUnitario)}
                       onChange={(e) => {
                         const texto = e.target.value;
                         setCostoTexto((p) => ({ ...p, [l.productId]: texto }));
-                        const v = validarMonto(texto, { etiqueta: 'costo', maximo: 50_000_000 });
+                        const v = validarMonto(texto, { etiqueta: 'costo', maximo: 50_000_000, redondeaDecimales: true });
                         // Inválido queda en −1: no se puede confirmar y se dice por qué.
                         actualizar(l.productId, { costoUnitario: v.valido ? v.valor : -1 });
                       }}
@@ -647,9 +647,13 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
 
                 {(() => {
                   const vc = validarCantidadStock(cantidadTexto[l.productId] ?? String(l.cantidad), l.unidad, { maximo: 1_000_000 });
-                  const vm = validarMonto(costoTexto[l.productId] ?? String(l.costoUnitario), { etiqueta: 'costo', maximo: 50_000_000 });
+                  const vm = validarMonto(costoTexto[l.productId] ?? String(l.costoUnitario), { etiqueta: 'costo', maximo: 50_000_000, redondeaDecimales: true });
                   const msg = !vc.valido ? `Cantidad: ${vc.error}` : vc.valor <= 0 ? 'La cantidad tiene que ser mayor que cero' : !vm.valido ? vm.error : null;
-                  return msg ? <p role="alert" className="text-xs text-[var(--color-alerta)] mt-2">{msg}</p> : null;
+                  if (msg) return <p role="alert" className="text-xs text-[var(--color-alerta)] mt-2">{msg}</p>;
+                  // 907,58 de la factura entra como $908: se dice, para que no sorprenda.
+                  return hayDecimales(costoTexto[l.productId] ?? '')
+                    ? <p className="text-xs text-[var(--texto-suave)] mt-2">El costo se guarda redondeado al peso: {formatCLP(vm.valor)}.</p>
+                    : null;
                 })()}
 
                 {/* M-6: confirmar con costo 0 deja el costo promedio, el margen

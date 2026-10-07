@@ -11,7 +11,7 @@ export default function ErrorGeneral({ error, reset }: { error: Error & { digest
       <body style={{ fontFamily: 'system-ui, sans-serif', padding: 24, textAlign: 'center', color: '#0f172a' }}>
         <h1 style={{ fontSize: 20 }}>RutaAhorro tuvo un problema</h1>
         <p style={{ color: '#5b6577' }}>Lo guardado sigue guardado. Vuelve a intentarlo.</p>
-        <button onClick={reset} style={{ minHeight: 44, padding: '0 20px', borderRadius: 12, border: 0, background: '#157a4c', color: '#fff', fontWeight: 600, fontSize: 16 }}>
+        <button onClick={reset} style={{ minHeight: 44, padding: '0 20px', borderRadius: 12, border: 0, background: '#1b3a5c', color: '#fff', fontWeight: 600, fontSize: 16 }}>
           Intentar de nuevo
         </button>
       </body>

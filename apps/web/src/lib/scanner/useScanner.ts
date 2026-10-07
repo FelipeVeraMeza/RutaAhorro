@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ConfirmadorLecturas } from '@rutaahorro/core';
 
 /**
  * Lector de códigos de barras con la cámara (RF-M5-01 a RF-M5-03).
@@ -15,7 +16,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'];
 
-/** Un código en cuadro se lee ~15 veces por segundo; sin esto el carrito explota. */
+/**
+ * Un código en cuadro se lee ~15 veces por segundo; sin esto el carrito explota.
+ * `ConfirmadorLecturas` ya suma una sola vez por racha; esto ataja además un
+ * reflejo que corte la racha un instante con el producto todavía en cuadro.
+ */
 const DEBOUNCE_MS = 1200;
 
 export type ScannerState = 'inactivo' | 'iniciando' | 'escaneando' | 'error';
@@ -43,6 +48,9 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
   const lastScanRef = useRef<{ code: string; at: number }>({ code: '', at: 0 });
+  // Un código se acepta cuando se lee igual 2 o 3 veces seguidas, no al primer
+  // cuadro: un cuadro movido devolvía otro número (Felipe, 2026-10-06).
+  const confirmadorRef = useRef(new ConfirmadorLecturas());
   const onScanRef = useRef(onScan);
   onScanRef.current = onScan;
 
@@ -74,8 +82,9 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
     } catch { /* audio bloqueado hasta la primera interacción del usuario */ }
   }, []);
 
-  const emit = useCallback((code: string) => {
+  const emit = useCallback((code: string, formato?: string) => {
     const now = Date.now();
+    if (!confirmadorRef.current.registrar(code, now, formato)) return;
     const last = lastScanRef.current;
     if (code === last.code && now - last.at < DEBOUNCE_MS) return;
     lastScanRef.current = { code, at: now };
@@ -85,6 +94,7 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
 
   const stop = useCallback(() => {
     intentoRef.current++;
+    confirmadorRef.current.reiniciar();
     zxingRef.current?.stop();
     zxingRef.current = null;
     if (rafRef.current !== null) {
@@ -133,7 +143,7 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
       await videoRef.current.play();
       if (!vigente()) return;
 
-      const Detector = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => { detect(s: CanvasImageSource): Promise<Array<{ rawValue: string }>> } }).BarcodeDetector;
+      const Detector = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => { detect(s: CanvasImageSource): Promise<Array<{ rawValue: string; format?: string }>> } }).BarcodeDetector;
 
       if (Detector) {
         setEngine('nativo');
@@ -142,7 +152,7 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
           if (!vigente() || !videoRef.current || !streamRef.current) return;
           try {
             const found = await detector.detect(videoRef.current);
-            if (found.length > 0 && found[0].rawValue) emit(found[0].rawValue);
+            if (found.length > 0 && found[0].rawValue) emit(found[0].rawValue, found[0].format);
           } catch { /* un frame ilegible no es un error del sistema */ }
           if (vigente()) rafRef.current = requestAnimationFrame(() => void tick());
         };
@@ -150,13 +160,20 @@ export function useScanner({ onScan, enabled = true }: UseScannerOptions) {
       } else {
         // Safari iOS y Firefox: respaldo con ZXing, cargado solo aquí.
         setEngine('zxing');
-        const { BrowserMultiFormatReader } = await import('@zxing/browser');
+        const [{ BrowserMultiFormatReader }, { BarcodeFormat }] = await Promise.all([
+          import('@zxing/browser'), import('@zxing/library'),
+        ]);
         if (!vigente() || !videoRef.current) return;
-        const reader = new BrowserMultiFormatReader();
+        // Por omisión ZXing espera medio segundo entre intentos: pedir dos
+        // lecturas iguales con ese ritmo se sentía lento.
+        const reader = new BrowserMultiFormatReader(undefined, {
+          delayBetweenScanAttempts: 100,
+          delayBetweenScanSuccess: 100,
+        });
         // Antes no se guardaba el control: `stop` apagaba la cámara pero el
         // lector seguía corriendo, y cada vez que se prendía se sumaba otro.
         const controles = await reader.decodeFromVideoElement(videoRef.current, (result) => {
-          if (result && vigente()) emit(result.getText());
+          if (result && vigente()) emit(result.getText(), BarcodeFormat[result.getBarcodeFormat()]);
         });
         if (!vigente()) { controles.stop(); return; }
         zxingRef.current = controles;

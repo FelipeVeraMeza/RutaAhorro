@@ -11,6 +11,7 @@ import { Icono } from '@/components/Icono';
 import { BotonSalir } from '@/components/BotonSalir';
 import { versionCompleta } from '@/lib/novedades';
 import { BloqueoInactividad } from '@/components/BloqueoInactividad';
+import { LogoMarca } from '@/components/Logo';
 
 /**
  * Estructura de la aplicación.
@@ -78,19 +79,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <EstadoConexion />
 
           {/* Cabecera: solo en celular. En escritorio la identidad vive en la lateral. */}
-          <header className="lg:hidden sticky top-0 z-30 bg-white border-b border-[var(--borde)] px-4 py-2.5 flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="font-semibold text-sm truncate">{user.fullName || 'Sin nombre'}</p>
-              <p className="text-[11px] text-[var(--texto-suave)]">
-                {NOMBRE_ROL[user.role]} · {LEMA_ROL[user.role]}
-              </p>
+          {/* 2026-10-07: en el marino del logo, con la "R" a la izquierda. */}
+          <header className="lg:hidden sticky top-0 z-30 bg-marca-900 text-white px-4 py-2 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <LogoMarca tamano={32} className="shrink-0" />
+              <div className="min-w-0">
+                <p className="font-semibold text-sm truncate">{user.fullName || 'Sin nombre'}</p>
+                <p className="text-[11px] text-[#b8c7d9] truncate">
+                  {NOMBRE_ROL[user.role]} · {LEMA_ROL[user.role]}
+                </p>
+              </div>
             </div>
             <div className="flex items-center shrink-0">
-              <a href="/cuenta" className="tap inline-grid place-items-center text-[var(--texto-suave)]"
+              <a href="/cuenta" className="tap inline-grid place-items-center text-[#b8c7d9]"
                  title="Mi cuenta">
                 <Icono nombre="cuenta" titulo="Mi cuenta" />
               </a>
-              <BotonSalir className="tap inline-flex items-center gap-1.5 px-2 text-sm text-[var(--texto-suave)]">
+              <BotonSalir className="tap inline-flex items-center gap-1.5 px-2 text-sm text-[#b8c7d9]">
                 <Icono nombre="salir" tamano={18} /> Salir
               </BotonSalir>
             </div>

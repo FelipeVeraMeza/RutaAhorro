@@ -1,4 +1,5 @@
 import { getCurrentUser } from '@/lib/supabase/server';
+import { cleanRut, correoDeRut, isValidRut } from '@rutaahorro/core';
 import { clienteAdmin, MINIMO_CLAVE, respuestaError } from '@/lib/supabase/admin';
 
 const ROLES = ['admin', 'supervisor', 'vendedor', 'bodega'] as const;
@@ -23,9 +24,15 @@ export async function POST(request: Request) {
 
   const cuerpo = await request.json().catch(() => ({}));
   const nombre = String(cuerpo.nombre ?? '').trim();
-  const email = String(cuerpo.email ?? '').trim().toLowerCase();
   const rol = String(cuerpo.rol ?? '');
   const clave = String(cuerpo.clave ?? '');
+  // 2026-10-07 · El personal entra con RUT: la cuenta queda con el correo
+  // técnico de su RUT (core/rut.ts). El correo de verdad sigue sirviendo.
+  const rut = String(cuerpo.rut ?? '').trim();
+  if (rut && !isValidRut(rut)) {
+    return respuestaError('RUT_INVALIDO', 'El RUT no es válido: revisa el dígito verificador', 400);
+  }
+  const email = rut ? correoDeRut(cleanRut(rut).slice(0, -1)) : String(cuerpo.email ?? '').trim().toLowerCase();
 
   if (!nombre || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !ROLES.includes(rol as typeof ROLES[number])) {
     return respuestaError('DATOS_INVALIDOS', 'Faltan datos o el rol no es válido', 400);
@@ -56,7 +63,7 @@ export async function POST(request: Request) {
   if (error || !creado?.user) {
     const yaExiste = /already|registered|exists/i.test(error?.message ?? '');
     return yaExiste
-      ? respuestaError('CORREO_YA_REGISTRADO', 'Ese correo ya tiene un usuario', 409)
+      ? respuestaError('CORREO_YA_REGISTRADO', rut ? 'Ese RUT ya tiene un usuario' : 'Ese correo ya tiene un usuario', 409)
       : respuestaError('ERROR_INTERNO', error?.message ?? 'No se pudo crear la cuenta', 500);
   }
 

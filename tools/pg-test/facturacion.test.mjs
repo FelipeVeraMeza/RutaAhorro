@@ -226,13 +226,18 @@ test('las credenciales del SII no se leen con ninguna sesión, y la cola es solo
   assert.ok(!JSON.stringify(e).includes('cifrado'));
 });
 
-test('encender la emisión real exige credenciales y emisor, y solo el administrador', async () => {
+// 0037: los datos del emisor los pone el portal del SII; ya no se exigen. Sí
+// las credenciales (con la ciudad, sin RUT de empresa si la clave maneja una).
+test('encender la emisión real exige credenciales y ensayo, no los datos del emisor, y solo el administrador', async () => {
   const L = await nuevoLocal(banco);
   const adm = await banco.como(L.admin);
   assert.match((await intentar(rpc(adm, 'fn_activar_emision_sii', { p_activa: true }))).error, /FALTAN_CREDENCIALES_SII/);
-  await banco.su.query(`insert into sii_credenciales (tenant_id, rut_usuario, clave_sii, clave_certificado, rut_empresa)
-                        values ($1, '11.111.111-1', 'x', 'x', '76.086.428-5')`, [L.tenant]);
-  assert.match((await intentar(rpc(adm, 'fn_activar_emision_sii', { p_activa: true }))).error, /EMISOR_SIN_CONFIGURAR/);
+  await banco.su.query(`insert into sii_credenciales (tenant_id, rut_usuario, clave_sii, clave_certificado, ciudad)
+                        values ($1, '11.111.111-1', 'x', 'x', 'Santiago')`, [L.tenant]);
+  const e = await rpc(adm, 'fn_estado_emision_sii', {});
+  assert.deepEqual([e.emisor, e.credenciales, e.rut_empresa, e.ciudad], [false, true, null, 'Santiago']);
+  assert.match((await intentar(rpc(adm, 'fn_activar_emision_sii', { p_activa: true }))).error, /FALTA_ENSAYO_SII/,
+    'sin emisor configurado, lo que falta es el ensayo');
   assert.match((await intentar(rpc(await banco.como(L.supervisor), 'fn_activar_emision_sii', { p_activa: true }))).error, /SIN_PERMISO/);
 });
 

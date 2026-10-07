@@ -9,16 +9,31 @@
  */
 
 @theme {
-  --color-marca-50:  #eef7f2;
-  --color-marca-100: #d4ebe0;
-  --color-marca-300: #7fc6a4;
-  /* 500/600/700 oscurecidos el 2026-09-30 (RNF-44): el blanco sobre el verde
-     anterior (#1f9d63) daba 3,46:1 y todos los botones principales quedaban
-     bajo el 4,5:1 de WCAG AA. Ahora 5,36:1. */
-  --color-marca-500: #157a4c;
-  --color-marca-600: #12693f;
-  --color-marca-700: #0f5c37;
-  --color-marca-900: #0a3d26;
+  /*
+   * Colores del logo (2026-10-07): azul marino + naranjo, sobre fondo claro.
+   *
+   * "marca" pasó de verde a azul marino: es el color de los botones y de lo
+   * activo. El naranjo del logo es el ACENTO y no reemplaza a la marca: con
+   * texto blanco da 2,87:1 (bajo el 4,5:1 de RNF-44) y se confundiría con los
+   * avisos, que son ámbar. Va donde destaca sin texto blanco encima: el logo,
+   * la marca de lo activo y "Cobrar" (texto marino: 5,81:1).
+   * Contrastes: blanco sobre 500 11,6:1 · 700 sobre blanco 8,7:1 ·
+   * 900 sobre 50 15:1.
+   */
+  --color-marca-50:  #eef3f8;
+  --color-marca-100: #dce6f0;
+  --color-marca-300: #93aecb;
+  --color-marca-500: #1b3a5c;
+  --color-marca-600: #102a43;
+  --color-marca-700: #1f4e79;
+  --color-marca-900: #0b1f33;
+
+  --color-acento-50:  #fff3ea;
+  --color-acento-100: #ffe2cc;
+  --color-acento-500: #ff6a00;
+  --color-acento-600: #e85d00;
+  /* Para texto naranjo sobre blanco: 5,2:1. */
+  --color-acento-700: #b84a00;
 
   --color-alerta:  #b91c1c;
   --color-aviso:   #b45309;
@@ -28,12 +43,13 @@
 }
 
 :root {
-  --fondo: #f6f7f9;
+  --fondo: #f4f7fa;
   --superficie: #ffffff;
-  --borde: #e3e6ea;
-  --texto: #0f172a;
-  /* #64748b daba 4,44:1 sobre el fondo: bajo AA. */
-  --texto-suave: #5b6577;
+  --borde: #dce3ea;
+  /* El texto es el marino del logo: 15,5:1 sobre el fondo. */
+  --texto: #0b1f33;
+  /* 6:1 sobre el fondo (el gris anterior, #64748b, daba 4,44:1: bajo AA). */
+  --texto-suave: #52606d;
   color-scheme: light;
 }
 
@@ -178,6 +194,9 @@ html[data-letra='grande'] { font-size: 118.75%; }
   .btn-primario:not(:disabled):hover, .btn-primario:not(:disabled):active { background: var(--color-marca-600); }
   .btn-secundario { background: var(--superficie); color: var(--texto); border-color: var(--borde); }
   .btn-secundario:not(:disabled):hover, .btn-secundario:not(:disabled):active { background: var(--fondo); }
+  /* La acción estrella de una pantalla (Cobrar): naranjo con texto marino. */
+  .btn-acento { background: var(--color-acento-500); color: var(--color-marca-900); }
+  .btn-acento:not(:disabled):hover, .btn-acento:not(:disabled):active { background: var(--color-acento-600); }
   .btn-peligro { background: var(--color-alerta); color: #fff; }
   .btn-peligro:not(:disabled):hover { background: #991b1b; }
   .btn-peligro-borde { background: var(--superficie); color: var(--color-alerta); border-color: currentColor; }
@@ -190,7 +209,8 @@ html[data-letra='grande'] { font-size: 118.75%; }
     padding: 0.125rem 0.5rem; border-radius: 999px;
     font-size: 0.75rem; font-weight: 600; line-height: 1.4;
   }
-  .insignia-ok { background: var(--color-marca-50); color: var(--color-marca-700); }
+  /* "Listo" sigue en verde: con la marca en azul, el verde queda solo para lo que salió bien. */
+  .insignia-ok { background: #f0fdf4; color: var(--color-exito); }
   .insignia-aviso { background: #fffbeb; color: var(--color-aviso); }
   .insignia-alerta { background: #fef2f2; color: var(--color-alerta); }
   .insignia-neutra { background: var(--fondo); color: var(--texto-suave); }

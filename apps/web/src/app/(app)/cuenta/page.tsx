@@ -6,6 +6,7 @@ import { NOMBRE_ROL, LEMA_ROL } from '@/lib/navegacion';
 import { versionCompleta } from '@/lib/novedades';
 import { PreferenciasCelular } from './PreferenciasCelular';
 import { PinAutorizacion } from './PinAutorizacion';
+import { MisDatos } from './MisDatos';
 
 export const metadata = { title: 'Mi cuenta' };
 
@@ -22,9 +23,8 @@ export default async function CuentaPage() {
 
       <section className="tarjeta p-4" aria-labelledby="t-datos">
         <h2 id="t-datos" className="font-semibold mb-2">Tus datos</h2>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-          <dt className="text-[var(--texto-suave)]">Nombre</dt><dd>{user.fullName || 'Sin nombre'}</dd>
-          <dt className="text-[var(--texto-suave)]">Correo</dt><dd className="break-all">{user.email ?? '—'}</dd>
+        <MisDatos nombre={user.fullName || ''} email={user.email} />
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm mt-4">
           <dt className="text-[var(--texto-suave)]">Rol</dt>
           <dd>{NOMBRE_ROL[user.role]} <span className="text-[var(--texto-suave)]">· {LEMA_ROL[user.role]}</span></dd>
           {user.maxDiscountPct > 0 && (<>
@@ -32,7 +32,7 @@ export default async function CuentaPage() {
           </>)}
         </dl>
         <p className="text-xs text-[var(--texto-suave)] mt-3">
-          El nombre, el rol y el descuento los cambia el administrador en Usuarios.
+          El rol y el descuento los cambia el administrador en Usuarios.
         </p>
         <Link href="/clave" className="btn btn-secundario mt-3 inline-flex items-center gap-2">
           <Icono nombre="clave" tamano={18} /> Cambiar mi contraseña

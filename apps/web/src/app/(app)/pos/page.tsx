@@ -46,6 +46,7 @@ export default async function PosPage() {
   return (
     <PosClient
       hasOpenSession={Boolean(session)}
+      cajaAbiertaEl={session?.opened_at ?? null}
       local={tenant?.name ?? ''}
       cajero={user.fullName}
       usuarioId={user.id}

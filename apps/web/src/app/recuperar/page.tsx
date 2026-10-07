@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { Logo } from '@/components/Logo';
 
 /**
  * Crear o cambiar la contraseña (RF-M1-05, RF-M1-08, RF-M1-12).
@@ -111,7 +112,7 @@ function Recuperar() {
     <main className="min-h-dvh flex flex-col justify-center px-5 py-10">
       <div className="w-full max-w-sm mx-auto">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-marca-500 text-white text-2xl font-bold mb-4">RA</div>
+          <div className="inline-flex rounded-2xl bg-marca-900 px-5 py-3 mb-4"><Logo tamano={48} /></div>
           <h1 className="text-2xl font-bold">
             {modo === 'crear' ? (esInvitacion ? 'Crea tu contraseña' : 'Nueva contraseña') : 'Recuperar contraseña'}
           </h1>

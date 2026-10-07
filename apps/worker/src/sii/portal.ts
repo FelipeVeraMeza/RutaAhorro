@@ -22,8 +22,11 @@ export interface CredencialesSii {
   rutUsuario: string;
   claveSii: string;
   claveCertificado: string;
-  /** RUT de la EMPRESA a nombre de la cual se emite. */
-  rutEmpresa: string;
+  /**
+   * RUT de la EMPRESA a nombre de la cual se emite. Desde 0037 es opcional:
+   * si la clave maneja una sola empresa, el portal no pregunta o se elige esa.
+   */
+  rutEmpresa?: string | null;
 }
 
 export interface FacturaParaPortal {
@@ -107,8 +110,17 @@ async function dondeQuedo(page: Page): Promise<string> {
   return `El robot quedó en ${d.url} («${d.titulo}»). La página decía: "${d.texto}".`;
 }
 
-async function elegirEmpresa(page: Page, rutEmpresa: string) {
+async function elegirEmpresa(page: Page, rutEmpresa: string | null | undefined) {
   if (!(await page.$('select[name="RUT_EMP"]'))) return; // una sola empresa
+  if (!rutEmpresa) {
+    // 0037: sin RUT de empresa se acepta solo si el desplegable ofrece una.
+    const disponibles = await page.$$eval('select[name="RUT_EMP"] option',
+      (os) => os.filter((o) => /\d/.test(o.value || o.text || '')).map((o) => o.text));
+    if (disponibles.length !== 1) {
+      throw new Error('Esta clave del SII maneja varias empresas: en Facturación → Emisor SII marca '
+        + `"más de una empresa" y escribe el RUT de la que emite. Ofrecía: ${disponibles.join(' | ') || '(nada)'}.`);
+    }
+  }
   // Dentro de page.evaluate no puede haber funciones con nombre (`const f = () =>`):
   // con tsx (npm run dev / job), esbuild las envuelve en `__name(...)`, que en
   // el navegador no existe, y el robot se cae. Lo encontró la prueba del portal simulado.
@@ -116,7 +128,8 @@ async function elegirEmpresa(page: Page, rutEmpresa: string) {
     const sel = document.querySelector<HTMLSelectElement>('select[name="RUT_EMP"]');
     if (!sel) return { estado: 'sin-select', disponibles: [] as string[] };
     const opciones = Array.from(sel.options);
-    const opt = opciones.find((o) => [o.value, o.text].some((v) => {
+    // '*' = la única empresa que ofrece (ya se verificó que hay una sola).
+    const opt = objetivo === '*' ? opciones.find((o) => /\d/.test(o.value || o.text || '')) : opciones.find((o) => [o.value, o.text].some((v) => {
       const m = String(v || '').match(/(\d{1,3}(?:\.\d{3}){1,2}|\d{7,8})\s*-?\s*([\dkK])?(?!\d)/);
       const n = String(v || '').replace(/\D/g, '');
       return (m ? m[1].replace(/\D/g, '') : n.length > 8 ? n.slice(0, -1) : n) === objetivo;
@@ -127,7 +140,7 @@ async function elegirEmpresa(page: Page, rutEmpresa: string) {
     sel.value = opt.value;
     sel.dispatchEvent(new Event('change', { bubbles: true }));
     return { estado: 'listo', disponibles };
-  }, partirRut(rutEmpresa)?.cuerpo ?? '');
+  }, rutEmpresa ? partirRut(rutEmpresa)?.cuerpo ?? '' : '*');
   if (r.estado === 'no-esta') {
     throw new Error(`La empresa ${rutEmpresa} no aparece entre las que puede emitir esta cuenta del SII. `
       + `Ofrecía: ${r.disponibles.join(' | ') || '(nada)'}.`);

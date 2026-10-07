@@ -66,8 +66,8 @@ await modal.getByLabel(/Cuándo vence/).fill(hoyMas(10));
 await p.waitForTimeout(300);
 check((await modal.innerText()).includes('vence en 10 días'), 'dice cuántos días le quedan (10)');
 // Precio por mayor: desde 3 a $800.
-await modal.getByText(/Precio por mayor, ofertas e impuesto/).click();
-await modal.getByRole('button', { name: /Agregar oferta/ }).click();
+// Desde 2026-10-07 el precio por mayor va a la vista, en el bloque Precio.
+await modal.getByRole('button', { name: /Agregar precio por mayor/ }).click();
 await modal.getByLabel('Oferta 1: desde cuántas unidades').fill('3');
 await modal.getByLabel('Oferta 1: precio de cada unidad').fill('800');
 await foto('1-producto');
@@ -94,8 +94,8 @@ if (await p.locator('#inicial').count()) {
 }
 await p.goto(BASE + '/pos', { waitUntil: 'networkidle' });
 await p.waitForTimeout(1500);
-check((await main()).includes('para factura o fiado') && !/precio mayorista/i.test(await main()),
-  'el botón del cliente dice "para factura o fiado"');
+check((await main()).includes('Elegir cliente (para factura)') && !/precio mayorista/i.test(await main()),
+  'el botón del cliente dice "para factura" (el local no fía)');
 await p.fill('input[type=search]', nombre); await p.waitForTimeout(900);
 await p.locator('ul button', { hasText: nombre }).first().click();
 const cant = p.getByLabel(new RegExp(`Cantidad de ${nombre}`));

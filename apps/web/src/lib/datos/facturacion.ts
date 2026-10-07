@@ -132,10 +132,12 @@ export interface EstadoEmisionSii {
   credenciales: boolean;
   rutUsuario: string | null;
   rutEmpresa: string | null;
+  /** 0037: ciudad de origen que el robot escribe en la factura. */
+  ciudad: string | null;
   actualizadoEn: string | null;
   enCola: number;
   conError: number;
-  /** 0028: los datos del emisor en Configuración (salen impresos). */
+  /** 0028: los datos del emisor en Configuración. Desde 0037 no se exigen: el portal los pone. */
   emisor: boolean;
   /** Un ensayo exitoso con las credenciales guardadas hoy: sin él no se enciende. */
   ensayoVigente: boolean;
@@ -158,7 +160,7 @@ export interface RepositorioFacturacion {
   resumen(meses: number): Promise<ResumenMes[]>;
   estadoSii(): Promise<EstadoEmisionSii>;
   activarSii(activa: boolean): Promise<EstadoEmisionSii>;
-  guardarCredenciales(d: { rut_usuario: string; clave_sii: string; clave_certificado: string; rut_empresa: string }): Promise<void>;
+  guardarCredenciales(d: { rut_usuario: string; clave_sii: string; clave_certificado: string; ciudad: string; rut_empresa: string | null }): Promise<void>;
   borrarCredenciales(): Promise<void>;
 }
 
@@ -216,6 +218,7 @@ function aEstado(e: Fila): EstadoEmisionSii {
   return {
     activa: Boolean(e.activa), encendida: Boolean(e.encendida), credenciales: Boolean(e.credenciales),
     rutUsuario: (e.rut_usuario as string) ?? null, rutEmpresa: (e.rut_empresa as string) ?? null,
+    ciudad: (e.ciudad as string) ?? null,
     actualizadoEn: (e.actualizado_en as string) ?? null, enCola: n(e.en_cola), conError: n(e.con_error),
     emisor: Boolean(e.emisor), ensayoVigente: Boolean(e.ensayo_vigente),
     ultimoEnsayo: e.ultimo_ensayo ? (() => {
@@ -378,7 +381,7 @@ const demoRepo: RepositorioFacturacion = {
   },
   async resumen() { return []; },
   async estadoSii() {
-    return { activa: false, encendida: false, credenciales: false, rutUsuario: null, rutEmpresa: null, actualizadoEn: null, enCola: 0, conError: 0,
+    return { activa: false, encendida: false, credenciales: false, rutUsuario: null, rutEmpresa: null, ciudad: null, actualizadoEn: null, enCola: 0, conError: 0,
       emisor: false, ensayoVigente: false, ultimoEnsayo: null };
   },
   async activarSii() { throw new Error('La emisión real necesita la base real'); },

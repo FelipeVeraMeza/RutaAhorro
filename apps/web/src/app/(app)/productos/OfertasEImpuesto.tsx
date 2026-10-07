@@ -96,11 +96,13 @@ export function OfertasEImpuesto({
   return (
     <>
       <section className="rounded-xl border border-[var(--borde)] p-3" aria-labelledby="titulo-ofertas">
-        <h3 id="titulo-ofertas" className="font-semibold text-sm">Precio por mayor y ofertas</h3>
+        <h3 id="titulo-ofertas" className="font-semibold text-sm">Precio por mayor (opcional)</h3>
+        {/* Antes el texto daba un ejemplo fijo ("desde 3 a $1.400") aunque el
+            producto tuviera otra oferta, y se leía como si fuera la suya. */}
         <p className="text-xs text-[var(--texto-suave)] mt-0.5 mb-3">
-          Precio por mayor: desde 3 unidades a $1.400 c/u. Al llevar 3 o más, <strong>todas</strong> las
-          unidades quedan a ese precio; con 2, precio normal. Es del producto, vale para cualquier
-          cliente. Con fechas, es una promoción.
+          Baja el precio cuando el cliente lleva más. Pones desde cuántas unidades y a cuánto queda cada una: al
+          llegar a esa cantidad, <strong>todas</strong> las unidades pasan a ese precio. Vale para cualquier cliente;
+          si le pones fechas, es una promoción.
         </p>
 
         <ul className="space-y-3">
@@ -112,14 +114,17 @@ export function OfertasEImpuesto({
             const cu = vP.valido && vP.valor > 0
               ? precioDelTramo(f.modo === 'pct' ? { desde: 1, descuentoPct: vP.valor } : { desde: 1, precio: vP.valor }, precioLista)
               : null;
+            // Lo que pasa en la caja, con los números de esta fila.
             const ejemplo = vD.valido && vD.valor >= 1 && cu != null && precioLista > cu
-              ? `${f.desde} ${vD.valor === 1 ? 'unidad' : 'unidades'} = ${formatCLP(vD.valor * cu)}${f.modo === 'pct' ? ` (${formatCLP(cu)} c/u)` : ''} · ahorra ${formatCLP(vD.valor * (precioLista - cu))}`
+              ? `Llevando ${vD.valor} o más, cada una a ${formatCLP(cu)}: ${vD.valor} = ${formatCLP(vD.valor * cu)}`
+                + ` (ahorra ${formatCLP(vD.valor * (precioLista - cu))}).`
+                + (vD.valor > 1 ? ` Con menos de ${vD.valor}, ${formatCLP(precioLista)} c/u.` : '')
               : null;
             return (
               <li key={f.clave} className="rounded-lg bg-[var(--fondo)] p-2.5">
                 <div className="flex items-end gap-2">
                   <label className="flex-1 min-w-0">
-                    <span className="block text-xs mb-1">Desde (unidades)</span>
+                    <span className="block text-xs mb-1">Llevando desde (unidades)</span>
                     <input
                       inputMode="numeric" value={f.desde}
                       onChange={(e) => cambiar(f.clave, { desde: e.target.value })}
@@ -128,7 +133,7 @@ export function OfertasEImpuesto({
                     />
                   </label>
                   <label className="flex-1 min-w-0">
-                    <span className="block text-xs mb-1">{f.modo === 'pct' ? '% menos' : 'Precio c/u'}</span>
+                    <span className="block text-xs mb-1">{f.modo === 'pct' ? '% de rebaja' : 'Precio de cada una'}</span>
                     <input
                       inputMode={f.modo === 'pct' ? 'decimal' : 'numeric'} value={f.precio}
                       onChange={(e) => cambiar(f.clave, { precio: e.target.value })}
@@ -195,15 +200,25 @@ export function OfertasEImpuesto({
           }])}
           className="tap w-full mt-3 rounded-lg border border-dashed border-[var(--borde)] text-sm font-medium"
         >
-          + Agregar oferta
+          {filas.length ? '+ Otro precio por mayor' : '+ Agregar precio por mayor'}
         </button>
       </section>
 
       <section className="rounded-xl border border-[var(--borde)] p-3" aria-labelledby="titulo-impuesto">
-        <h3 id="titulo-impuesto" className="font-semibold text-sm">Impuesto adicional</h3>
+        <h3 id="titulo-impuesto" className="font-semibold text-sm">Impuesto adicional (solo bebidas y alcoholes)</h3>
+        {impuestos.length === 0 ? (
+          // Sin impuestos configurados el selector solo ofrecía "Ninguno": se dice en una línea.
+          <p className="text-xs text-[var(--texto-suave)] mt-0.5">
+            Para bebidas azucaradas y alcoholes, que pagan un impuesto además del IVA. Todavía no hay ninguno
+            configurado.{' '}
+            {esAdmin
+              ? <Link href="/configuracion" className="underline">Configurarlos</Link>
+              : 'Pídele al administrador que los configure.'}
+          </p>
+        ) : (<>
         <p className="text-xs text-[var(--texto-suave)] mt-0.5 mb-2">
-          Para bebidas (IABA) y alcoholes (ILA). El precio de venta ya lo incluye: el sistema lo
-          separa en la boleta.
+          Para bebidas azucaradas y alcoholes, que pagan un impuesto además del IVA. El precio de venta ya lo
+          incluye: el sistema lo separa en la boleta. Para todo lo demás, deja "Ninguno".
         </p>
         <select
           value={impuestoId ?? ''}
@@ -218,14 +233,7 @@ export function OfertasEImpuesto({
             </option>
           ))}
         </select>
-        {impuestos.length === 0 && (
-          <p className="text-xs text-[var(--texto-suave)] mt-2">
-            Todavía no hay impuestos configurados.{' '}
-            {esAdmin
-              ? <Link href="/configuracion" className="underline">Configurarlos</Link>
-              : 'Pídele al administrador que los configure.'}
-          </p>
-        )}
+        </>)}
       </section>
     </>
   );

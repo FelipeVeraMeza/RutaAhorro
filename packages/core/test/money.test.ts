@@ -133,6 +133,35 @@ describe('validarMonto no adivina decimales ni miles mal puestos', () => {
   });
 });
 
+describe('validarMonto con redondeaDecimales: el costo de la factura trae centavos', () => {
+  const costo = (t: string) => validarMonto(t, { etiqueta: 'costo', redondeaDecimales: true });
+  it('el caso del local: 907,58 y 907.58 se guardan como 908', () => {
+    expect(costo('907,58')).toEqual({ valido: true, valor: 908, error: null });
+    expect(costo('907.58').valor).toBe(908);
+  });
+  it('redondea al peso más cercano', () => {
+    expect(costo('907,4').valor).toBe(907);
+    expect(costo('907,5').valor).toBe(908);
+    expect(costo('1.672,26').valor).toBe(1672);
+    expect(costo('$ 1.234,5').valor).toBe(1235);
+  });
+  it('el punto con tres dígitos sigue separando miles', () => {
+    expect(costo('1.990').valor).toBe(1990);
+    expect(costo('1.234.567').valor).toBe(1234567);
+    expect(costo('1990').valor).toBe(1990);
+  });
+  it('lo que no se puede leer sin adivinar se rechaza', () => {
+    expect(costo('1,234.56').valido).toBe(false);
+    expect(costo('9,07,58').valido).toBe(false);
+    expect(costo('1.2345').valido).toBe(false);
+    expect(costo('-907,58').error).toMatch(/negativo/);
+  });
+  it('sin la opción, los montos siguen sin decimales', () => {
+    expect(validarMonto('907,58').valido).toBe(false);
+    expect(validarMonto('907.58').valido).toBe(false);
+  });
+});
+
 describe('margen con costo neto', () => {
   it('el ejemplo de docs/26 N° 13: $2.490 con costo neto $1.850 deja 11,6 %, no 25,7 %', () => {
     expect(marginPct(2490, 1850)).toBe(25.7);
