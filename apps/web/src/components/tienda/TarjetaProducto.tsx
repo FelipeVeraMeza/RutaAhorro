@@ -28,8 +28,9 @@ export function TarjetaProducto({ producto }: { producto: ProductoTienda }) {
         <div className="p-3 pb-0 relative">
           <div className={`rounded-xl overflow-hidden ${producto.disponible ? '' : 'opacity-50'}`}><FotoProducto producto={producto} /></div>
           {rebaja > 0 && (
-            <span className="absolute top-5 left-5 rounded-lg bg-acento-500 text-marca-900 text-sm font-extrabold px-2 py-0.5 num">
-              <span className="sr-only">Oferta: hasta </span>-{rebaja}%
+            <span className="absolute top-5 left-5 rounded-md bg-acento-500 text-marca-900 text-sm font-bold px-2 py-0.5 num"
+              title={`Hasta ${rebaja}% menos`}>
+              Oferta<span className="sr-only">: hasta {rebaja}% menos</span>
             </span>
           )}
           {!producto.disponible && (
@@ -38,7 +39,9 @@ export function TarjetaProducto({ producto }: { producto: ProductoTienda }) {
         </div>
         <div className="px-3 pt-3 flex flex-col gap-0.5 flex-1">
           <h2 className="font-semibold leading-snug line-clamp-2 group-hover:underline">{producto.nombre}</h2>
-          {producto.descripcion && <p className="text-sm text-[var(--texto-suave)] line-clamp-1">{producto.descripcion}</p>}
+          {(producto.descripcion ?? producto.formato) && (
+            <p className="text-sm text-[var(--texto-suave)] line-clamp-1">{producto.descripcion ?? producto.formato}</p>
+          )}
           <div className="mt-auto pt-2">
             {producto.precio != null
               ? <p className="text-2xl font-extrabold num">{precioTienda(producto.precio)}</p>

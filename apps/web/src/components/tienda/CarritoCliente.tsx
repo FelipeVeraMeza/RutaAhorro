@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   calcularCarrito, diaLocal, enlaceWhatsApp, formatCLP, mensajePedido, proximaOferta, validarDatosCliente,
 } from '@rutaahorro/core';
-import { cambiarCantidad, sincronizarCarrito, useCarritoListo, vaciarCarrito, type ProductoAlDia } from '@/lib/tienda/carrito';
+import { cambiarCantidad, carritoActualIds, sincronizarCarrito, useCarritoListo, vaciarCarrito, type ProductoAlDia } from '@/lib/tienda/carrito';
 import { anotarPedido, useDatosCliente } from '@/lib/tienda/cliente';
 
 /**
@@ -29,11 +29,24 @@ export function CarritoCliente({ telefono, direccion }: { telefono: string | nul
   useEffect(() => {
     if (!listo || sincronizado.current || !lineas.length) return;
     sincronizado.current = true;
-    fetch(`/api/tienda/productos?ids=${lineas.map((l) => l.id).join(',')}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { productos: ProductoAlDia[] } | null) => { if (d) setAvisos(sincronizarCarrito(d.productos)); })
-      .catch(() => { /* sin red: queda lo guardado, y el local confirma */ });
-  }, [listo, lineas]);
+    const ponerAlDia = () => {
+      const ids = carritoActualIds();
+      if (!ids.length) return;
+      fetch(`/api/tienda/productos?ids=${ids.join(',')}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { productos: ProductoAlDia[] } | null) => { if (d) setAvisos(sincronizarCarrito(d.productos)); })
+        .catch(() => { /* sin red: queda lo guardado, y el local confirma */ });
+    };
+    ponerAlDia();
+    // RF-T39 · quien deja el carrito abierto y vuelve horas después, antes
+    // de enviar el pedido: se pone al día otra vez al volver a la pestaña.
+    let ultima = Date.now();
+    const alVolver = () => {
+      if (document.visibilityState === 'visible' && Date.now() - ultima > 30_000) { ultima = Date.now(); ponerAlDia(); }
+    };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => document.removeEventListener('visibilitychange', alVolver);
+  }, [listo, lineas.length]);
 
   // Hasta leer el navegador no se sabe si hay algo: sin esto, un carrito
   // lleno decía "vacío" por un instante al abrirlo.

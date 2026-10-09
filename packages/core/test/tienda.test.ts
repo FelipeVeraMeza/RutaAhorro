@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   filtrarCatalogo, categoriasDelCatalogo, ofertasVisibles, enlaceWhatsApp, normalizarBusqueda, precioTienda,
   calcularCarrito, mensajePedido, validarDatosCliente, destacadosDelDia, POR_PAGINA_TIENDA,
-  rubroPorNombre, descripcionPublica, rebajaMaximaPct, proximaOferta, relacionados, type ProductoTienda, type LineaCarritoTienda,
+  rubroPorNombre, descripcionPublica, marcaPorNombre, marcasDelCatalogo, formatoPorNombre, crearLimitador, rebajaMaximaPct, proximaOferta, relacionados, type ProductoTienda, type LineaCarritoTienda,
 } from '../src/tienda.js';
 
 const prod = (id: string, nombre: string, extra: Partial<ProductoTienda> = {}): ProductoTienda => ({
-  id, nombre, descripcion: null, categoria: null, precio: 1000, imagen: null, disponible: true, ofertas: [], tramos: [], ...extra,
+  id, nombre, descripcion: null, categoria: null, precio: 1000, imagen: null, disponible: true, ofertas: [], tramos: [], marca: null, formato: null, ...extra,
   grupo: extra.grupo !== undefined ? extra.grupo : extra.categoria ?? null,
 });
 
@@ -142,6 +142,43 @@ describe('orden', () => {
   });
 });
 
+describe('filtros de la barra lateral', () => {
+  const cat = [
+    prod('1', 'Manjar Nestlé 1 kg', { precio: 3000, marca: 'Nestlé' }),
+    prod('2', 'Yogurt Soprole', { precio: 500, marca: 'Soprole' }),
+    prod('3', 'Leche Nestlé', { precio: 1200, marca: 'Nestlé', ofertas: ['Desde 2: $1.000 c/u'] }),
+    prod('4', 'Pan amasado', { precio: null }),
+  ];
+  it('rango de precio: deja fuera los sin precio', () => {
+    expect(filtrarCatalogo(cat, { precioMin: 600, precioMax: 3000 }).productos.map((p) => p.id).sort()).toEqual(['1', '3']);
+    expect(filtrarCatalogo(cat, { precioMax: 600 }).productos.map((p) => p.id)).toEqual(['2']);
+  });
+  it('marca: cualquiera de las elegidas', () => {
+    expect(filtrarCatalogo(cat, { marcas: ['Nestlé'] }).productos.map((p) => p.id).sort()).toEqual(['1', '3']);
+    expect(filtrarCatalogo(cat, { marcas: ['Nestlé', 'Soprole'] }).total).toBe(3);
+  });
+  it('"Más relevantes": con oferta primero, sin precio al final', () => {
+    expect(filtrarCatalogo(cat, {}).productos.map((p) => p.id)).toEqual(['3', '1', '2', '4']);
+  });
+  it('marcas del catálogo, las con más productos primero', () => {
+    expect(marcasDelCatalogo(cat)).toEqual([{ marca: 'Nestlé', cuantos: 2 }, { marca: 'Soprole', cuantos: 1 }]);
+  });
+});
+
+describe('marcaPorNombre', () => {
+  it.each([
+    ['MANJAR NESTLE 1 KG', 'Nestlé'],
+    ['Yogurt fold nuez granberies 165 gr soprole', 'Soprole'],
+    ['WATTS MARACUYÁ LIGHT 1500', 'Watts'],
+    ['Galleta bon o bon original 95g', 'Arcor'],
+    ['mckay alteza sabor frutilla 140 grs', 'McKay'],
+    ['CACHANTUN 600cc C/G', 'CCU'],
+    ['Pan amasado', null],
+  ])('%s → %s', (nombre, marca) => {
+    expect(marcaPorNombre(nombre)).toBe(marca);
+  });
+});
+
 describe('rubroPorNombre', () => {
   it.each([
     ['ACEITE MARAVILLA PARRAL 5L', 'Abarrotes'],
@@ -218,5 +255,33 @@ describe('enlaceWhatsApp', () => {
 describe('normalizarBusqueda', () => {
   it('igual que el POS', () => {
     expect(normalizarBusqueda('  ÑANDÚ Azúcar ')).toBe('nandu azucar');
+  });
+});
+
+describe('formatoPorNombre', () => {
+  it.each([
+    ['ACEITE 10 LTS MAXIWOK', '10 L'],
+    ['Galleta bon o bon original 95g', '95 g'],
+    ['MANJAR NESTLE 1 KG', '1 kg'],
+    ['AGUA BENEDICTINO GASIFICADA 500ML', '500 ml'],
+    ['CACHANTUN 600cc C/G', '600 ml'],
+    ['VALENTE TORRE 28 UNIDADES', '28 unidades'],
+    ['Primavera 1k G/F', '1 kg'],
+    ['Leche 1,5 L', '1,5 L'],
+    ['7UP PET3000', null],
+    ['Pan amasado', null],
+  ])('%s → %s', (nombre, formato) => {
+    expect(formatoPorNombre(nombre)).toBe(formato);
+  });
+});
+
+describe('crearLimitador', () => {
+  it('deja pasar hasta el máximo en la ventana y vuelve a dejar pasar después', () => {
+    let t = 0;
+    const l = crearLimitador(3, 60_000, () => t);
+    expect([l.permitir('ip'), l.permitir('ip'), l.permitir('ip'), l.permitir('ip')]).toEqual([true, true, true, false]);
+    expect(l.permitir('otra-ip')).toBe(true);
+    t = 60_001;
+    expect(l.permitir('ip')).toBe(true);
   });
 });

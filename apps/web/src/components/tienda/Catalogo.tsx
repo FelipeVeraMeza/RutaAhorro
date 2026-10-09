@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { Suspense } from 'react';
 import type { PaginaTienda, ProductoTienda } from '@rutaahorro/core';
 import { Icono } from '@/components/Icono';
 import { iconoProducto } from '@/lib/tienda/iconos';
@@ -58,9 +57,10 @@ export function Grilla({ productos }: { productos: ProductoTienda[] }) {
 }
 
 /** La lista con su conteo y sus páginas. `enlace(n)` arma la dirección de la página n. */
-export function Resultados({ r, q, vacio, enlace, conOrden = false, sugeridos = [] }: {
+export function Resultados({ r, q, vacio, enlace, orden, sugeridos = [] }: {
   r: PaginaTienda; q?: string; vacio: string; enlace: (pagina: number) => string;
-  conOrden?: boolean;
+  /** "Ordenar por": la ruta, el orden actual y los demás filtros de la dirección. */
+  orden?: { ruta: string; actual: string; ocultos: Array<[string, string]> };
   /** Qué mostrar si no hay resultados, para que la página no quede vacía. */
   sugeridos?: ProductoTienda[];
 }) {
@@ -72,7 +72,7 @@ export function Resultados({ r, q, vacio, enlace, conOrden = false, sugeridos = 
             ? q ? `No encontramos "${q}".` : vacio
             : `${r.total.toLocaleString('es-CL')} ${r.total === 1 ? 'producto' : 'productos'}${q ? ` para "${q}"` : ''}`}
         </p>
-        {conOrden && r.total > 1 && <Suspense><SelectorOrden /></Suspense>}
+        {orden && r.total > 1 && <SelectorOrden {...orden} />}
       </div>
       {r.total === 0 && q && (
         <div className="tarjeta p-4 flex flex-col gap-2">

@@ -34,3 +34,4 @@ export * from './facturacion.js';
 export * from './cifrado.js';
 export * from './clave.js';
 export * from './tienda.js';
+export * from './fichaPorCodigo.js';

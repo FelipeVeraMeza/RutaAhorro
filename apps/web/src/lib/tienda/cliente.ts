@@ -2,6 +2,7 @@
 
 import type { DatosCliente, LineaCarritoTienda } from '@rutaahorro/core';
 import { crearAlmacen } from './almacen';
+import { vaciarCarrito } from './carrito';
 
 /**
  * "Mi cuenta" de la tienda, sin cuenta: los datos del cliente y sus pedidos
@@ -42,7 +43,9 @@ export function anotarPedido(p: PedidoEnviado) {
   pedidos.guardar([p, ...pedidos.leer()].slice(0, TOPE_PEDIDOS));
 }
 
+/** Todo lo que la tienda guarda en este navegador (RNF-T24): datos, pedidos y carrito. */
 export function borrarMisDatos() {
   datos.guardar(SIN_DATOS);
   pedidos.guardar(SIN_PEDIDOS);
+  vaciarCarrito();
 }

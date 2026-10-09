@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { LogoMarca } from '@/components/Logo';
 import { BotonCarrito } from '@/components/tienda/BotonCarrito';
 import { PestanasAbajo, PestanasArriba } from '@/components/tienda/NavTienda';
+import { IndicadorCarga } from '@/components/tienda/IndicadorCarga';
+import { Suspense } from 'react';
 import { datosTienda } from '@/lib/tienda/catalogo';
 
 /**
@@ -27,8 +29,9 @@ export default async function TiendaLayout({ children }: { children: React.React
   const tienda = await datosTienda().catch(() => null);
   return (
     <div className="min-h-dvh flex flex-col">
+      <Suspense><IndicadorCarga /></Suspense>
       <header className="bg-marca-900 text-white sticky top-0 z-30">
-        <div className="max-w-6xl mx-auto px-4 h-16 md:h-[72px] flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-4 h-16 md:h-[72px] flex items-center gap-4">
           <Link href="/tienda" className="flex items-center gap-2 min-w-0 tap">
             <LogoMarca tamano={40} />
             <span className="font-extrabold text-xl md:text-2xl tracking-tight truncate">{tienda?.nombre ?? 'Tienda'}</span>
@@ -38,15 +41,23 @@ export default async function TiendaLayout({ children }: { children: React.React
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-6">{children}</main>
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-6">{children}</main>
 
       {/* pb-20 en el celular: la barra de pestañas de abajo no tapa el pie. */}
       <footer className="border-t border-[var(--borde)] bg-[var(--superficie)] pb-20 md:pb-0">
-        <div className="max-w-6xl mx-auto px-4 py-5 text-sm text-[var(--texto-suave)] flex flex-col gap-1">
+        <div className="max-w-7xl mx-auto px-4 py-5 text-sm text-[var(--texto-suave)] flex flex-col gap-1">
           <p className="font-semibold text-[var(--texto)]">{tienda?.nombre ?? 'Tienda'}</p>
           {tienda?.direccion && <p>{tienda.direccion}</p>}
           {tienda?.telefono && <p>Teléfono: {tienda.telefono}</p>}
           <p>Precios con IVA incluido. Pueden cambiar sin aviso y rigen los del local.</p>
+          <p><Link href="/tienda/privacidad" className="underline">Privacidad y datos personales</Link></p>
+          {tienda?.fotosDeOpenFoodFacts && (
+            <p className="text-xs">
+              Algunas fotos de productos son de{' '}
+              <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer" className="underline">Open Food Facts</a>
+              {' '}(<a href="https://creativecommons.org/licenses/by-sa/3.0/deed.es" target="_blank" rel="noopener noreferrer" className="underline">CC BY-SA</a>).
+            </p>
+          )}
         </div>
       </footer>
 

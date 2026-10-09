@@ -23,6 +23,10 @@ export interface ProductoTienda {
    * tiene ninguna categoría (2026-10-09) y sin esto no había cómo recorrerlo.
    */
   grupo: string | null;
+  /** La marca, si el nombre trae una conocida (`marcaPorNombre`). Para el filtro "Marca". */
+  marca: string | null;
+  /** El tamaño, si el nombre lo trae: "1 kg", "500 ml", "6 unidades" (`formatoPorNombre`). */
+  formato: string | null;
   /**
    * Precio de lista, IVA incluido. Null = el producto no tiene precio todavía
    * (136 de 801 en el local real, 2026-10-09): se muestra igual, con
@@ -46,11 +50,17 @@ export interface FiltroTienda {
   /** Solo los que tienen alguna oferta hoy (la sección "Ofertas"). */
   soloOfertas?: boolean;
   orden?: OrdenTienda | null;
+  /** Rango de precio, en pesos. Con un rango, los sin precio no salen. */
+  precioMin?: number | null;
+  precioMax?: number | null;
+  /** Cualquiera de estas marcas. Vacío = todas. */
+  marcas?: readonly string[] | null;
   pagina?: number | null;
 }
 
-export type OrdenTienda = 'nombre' | 'menor-precio' | 'mayor-precio';
+export type OrdenTienda = 'relevantes' | 'nombre' | 'menor-precio' | 'mayor-precio';
 export const ORDENES_TIENDA: Array<{ valor: OrdenTienda; texto: string }> = [
+  { valor: 'relevantes', texto: 'Más relevantes' },
   { valor: 'nombre', texto: 'Nombre (A–Z)' },
   { valor: 'menor-precio', texto: 'Menor precio' },
   { valor: 'mayor-precio', texto: 'Mayor precio' },
@@ -62,6 +72,13 @@ export interface PaginaTienda {
   pagina: number;
   paginas: number;
 }
+
+/**
+ * Comparador de textos en español, creado una vez. `localeCompare` arma uno
+ * nuevo en cada llamada: ordenar 801 productos en cada visita lo hacía el
+ * paso más caro bajo carga (prueba del 2026-10-09).
+ */
+const COMPARAR = new Intl.Collator('es').compare;
 
 /** De a cuántos productos se muestra el catálogo. Múltiplo de 2, 3 y 4 columnas. */
 export const POR_PAGINA_TIENDA = 48;
@@ -89,6 +106,12 @@ export function filtrarCatalogo(catalogo: readonly ProductoTienda[], filtro: Fil
   const encontrados = catalogo.filter((p) => {
     if (categoria && p.grupo !== categoria) return false;
     if (filtro.soloOfertas && !p.ofertas.length) return false;
+    if (filtro.precioMin != null || filtro.precioMax != null) {
+      if (p.precio == null) return false;
+      if (filtro.precioMin != null && p.precio < filtro.precioMin) return false;
+      if (filtro.precioMax != null && p.precio > filtro.precioMax) return false;
+    }
+    if (filtro.marcas?.length && (!p.marca || !filtro.marcas.includes(p.marca))) return false;
     if (!palabras.length) return true;
     const texto = normalizarBusqueda(`${p.nombre} ${p.descripcion ?? ''} ${p.grupo ?? ''}`);
     return palabras.every((w) => texto.includes(w));
@@ -98,10 +121,14 @@ export function filtrarCatalogo(catalogo: readonly ProductoTienda[], filtro: Fil
   // precio" no es ni lo más barato ni lo más caro.
   const signo = filtro.orden === 'mayor-precio' ? -1 : 1;
   const porPrecio = filtro.orden === 'menor-precio' || filtro.orden === 'mayor-precio';
+  // "Más relevantes" (el orden por omisión): lo que se puede comprar ya
+  // primero, y entre eso, lo que está en oferta.
+  const relevantes = !filtro.orden || filtro.orden === 'relevantes';
   encontrados.sort((a, b) =>
     Number(b.disponible) - Number(a.disponible)
+    || (relevantes ? Number(b.precio != null) - Number(a.precio != null) || Number(b.ofertas.length > 0) - Number(a.ofertas.length > 0) : 0)
     || (porPrecio ? Number(a.precio == null) - Number(b.precio == null) || signo * ((a.precio ?? 0) - (b.precio ?? 0)) : 0)
-    || a.nombre.localeCompare(b.nombre, 'es'));
+    || COMPARAR(a.nombre, b.nombre));
 
   const total = encontrados.length;
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA_TIENDA));
@@ -115,7 +142,7 @@ export function filtrarCatalogo(catalogo: readonly ProductoTienda[], filtro: Fil
 export function categoriasDelCatalogo(catalogo: readonly ProductoTienda[]): string[] {
   const cuantos = new Map<string, number>();
   for (const p of catalogo) if (p.grupo) cuantos.set(p.grupo, (cuantos.get(p.grupo) ?? 0) + 1);
-  return [...cuantos].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'es')).map(([g]) => g);
+  return [...cuantos].sort((a, b) => b[1] - a[1] || COMPARAR(a[0], b[0])).map(([g]) => g);
 }
 
 /**
@@ -134,6 +161,74 @@ export const RUBROS: ReadonlyArray<{ rubro: string; re: RegExp }> = [
   { rubro: 'Frutas y verduras', re: /fruta|verdura|platano|manzana|tomate| papa |cebolla|palta|limon|frutilla/ },
   { rubro: 'Abarrotes', re: /abarrote|despensa|arroz|fideo|aceite|azucar|harina| sal | te |cafe|conserva|atun|salsa|mayo|ketchup|legumbre|poroto|lenteja|sopa|vinagre|mostaza/ },
 ];
+
+/**
+ * Marcas que se reconocen en el nombre. Los productos no tienen una columna
+ * de marca, así que es por palabras, como los rubros: una marca que no está
+ * en la lista simplemente no aparece en el filtro.
+ */
+export const MARCAS: ReadonlyArray<{ marca: string; re: RegExp }> = [
+  { marca: 'Soprole', re: / soprole / },
+  { marca: 'Nestlé', re: / nestle | nesquik | milo | sahne nuss | trencito | super 8 / },
+  { marca: 'Colún', re: / colun / },
+  { marca: 'Watts', re: / watt ?s / },
+  { marca: 'Arcor', re: / arcor | bon o bon | rocklets | menthoplus / },
+  { marca: 'Costa', re: / costa | chocman | frac | vizzio / },
+  { marca: 'McKay', re: / mc ?kay | alteza | triton / },
+  { marca: 'Carozzi', re: / carozzi | ambrosoli | costanera / },
+  { marca: 'Lucchetti', re: / lucchetti / },
+  { marca: 'Tucapel', re: / tucapel / },
+  { marca: 'Kellogg’s', re: / kellogg| zucaritas | choco krispis | froot loops / },
+  { marca: 'Coca-Cola', re: / coca cola | coca | fanta | sprite / },
+  { marca: 'CCU', re: / cachantun | bilz | pap | kem | cristal | escudo | nectar andina / },
+  { marca: 'Evercrisp', re: / evercrisp | ramitas | gajitos / },
+  { marca: 'Marco Polo', re: / marco polo / },
+  { marca: 'Hellmann’s', re: / hellmann/ },
+  { marca: 'Heinz', re: / heinz / },
+  { marca: 'Surlat', re: / surlat / },
+  { marca: 'Savory', re: / savory / },
+  { marca: 'Gatorade', re: / gatorade / },
+  { marca: 'Monster', re: / monster / },
+  { marca: 'Oreo', re: / oreo / },
+  { marca: 'Mi Sol', re: / mi sol / },
+];
+
+export function marcaPorNombre(nombre: string): string | null {
+  const t = ` ${normalizarBusqueda(nombre).replace(/[^a-z0-9]+/g, ' ')} `;
+  return MARCAS.find((m) => m.re.test(t))?.marca ?? null;
+}
+
+/** Las marcas que aparecen en el catálogo, las con más productos primero. */
+export function marcasDelCatalogo(catalogo: readonly ProductoTienda[]): Array<{ marca: string; cuantos: number }> {
+  const cuantos = new Map<string, number>();
+  for (const p of catalogo) if (p.marca) cuantos.set(p.marca, (cuantos.get(p.marca) ?? 0) + 1);
+  return [...cuantos].map(([marca, n]) => ({ marca, cuantos: n }))
+    .sort((a, b) => b.cuantos - a.cuantos || COMPARAR(a.marca, b.marca));
+}
+
+/**
+ * El tamaño del producto, sacado de su nombre ("ACEITE 10 LTS" → "10 L",
+ * "Galleta 95g" → "95 g", "VALENTE TORRE 28 UNIDADES" → "28 unidades").
+ * Null si el nombre no lo dice. Para mostrarlo bajo el nombre, como la maqueta.
+ */
+const UNIDADES: Array<[RegExp, string]> = [
+  [/^(kg|kgs|kilo|kilos|k)$/, 'kg'],
+  [/^(g|gr|grs|gramos?)$/, 'g'],
+  [/^(ml|cc)$/, 'ml'],
+  [/^(l|lt|lts|litros?)$/, 'L'],
+  [/^(un|und|unid|unidades?|u)$/, 'unidades'],
+];
+
+export function formatoPorNombre(nombre: string): string | null {
+  const t = normalizarBusqueda(nombre);
+  const m = t.match(/(\d+(?:[.,]\d+)?)\s*(kgs?|kilos?|k|grs?|gramos?|g|ml|cc|lts?|litros?|l|unidades|unidad|unid|und|un)(?![a-z])/);
+  if (!m) return null;
+  const unidad = UNIDADES.find(([re]) => re.test(m[2]))?.[1];
+  if (!unidad) return null;
+  const cantidad = m[1].replace('.', ',');
+  if (unidad === 'unidades') return `${cantidad} ${cantidad === '1' ? 'unidad' : 'unidades'}`;
+  return `${cantidad} ${unidad}`;
+}
 
 export function rubroPorNombre(nombre: string): string | null {
   const t = ` ${normalizarBusqueda(nombre).replace(/[^a-z0-9]+/g, ' ')} `;
@@ -320,4 +415,32 @@ export function enlaceWhatsApp(telefono: string | null | undefined, mensaje: str
   if (d.length === 9) d = `56${d}`;
   if (!/^56\d{9}$/.test(d)) return null;
   return `https://wa.me/${d}?text=${encodeURIComponent(mensaje)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Límite de solicitudes (RNF-T18)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ventana deslizante en memoria: cuántas solicitudes por clave (IP o usuario)
+ * en los últimos `ventanaMs`. Vive en el proceso del servidor: con un solo
+ * servicio en Railway alcanza; con varios, cada uno cuenta lo suyo.
+ */
+export function crearLimitador(maximo: number, ventanaMs: number, ahora: () => number = Date.now) {
+  const golpes = new Map<string, number[]>();
+  return {
+    /** true = se deja pasar (y se cuenta); false = pasó el límite. */
+    permitir(clave: string): boolean {
+      const t = ahora();
+      const recientes = (golpes.get(clave) ?? []).filter((x) => t - x < ventanaMs);
+      if (recientes.length >= maximo) { golpes.set(clave, recientes); return false; }
+      recientes.push(t);
+      golpes.set(clave, recientes);
+      // Que el mapa no crezca sin fin con IPs que no vuelven.
+      if (golpes.size > 10_000) {
+        for (const [k, v] of golpes) if (!v.some((x) => t - x < ventanaMs)) golpes.delete(k);
+      }
+      return true;
+    },
+  };
 }

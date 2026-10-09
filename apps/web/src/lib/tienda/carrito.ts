@@ -66,6 +66,11 @@ export function sincronizarCarrito(frescos: ProductoAlDia[]): string[] {
   return avisos;
 }
 
+/** Los productos del carrito ahora mismo (para ponerlo al día sin depender del render). */
+export function carritoActualIds(): string[] {
+  return almacen.leer().map((l) => l.id);
+}
+
 export function vaciarCarrito() {
   almacen.guardar(VACIO);
 }

@@ -109,6 +109,12 @@ html[data-letra='grande'] { font-size: 118.75%; }
   100% { background-color: transparent; }
 }
 
+/* Barrita de carga de la tienda (IndicadorCarga). */
+@keyframes carga {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
 @utility flash-ok {
   animation: pulso-ok 600ms ease-out;
 }

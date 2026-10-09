@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   formatCLP, margenNeto, margenNetoPct, formatPct, textoVencimiento, diasEntre, isValidEan, normalizeBarcode, toUserMessage,
-  validarMonto, validarCantidad, cantidadConUnidad, diaLocal, precioConRedondeo, validarCantidadStock, hayDecimales
+  validarMonto, validarCantidad, cantidadConUnidad, diaLocal, precioConRedondeo, validarCantidadStock, hayDecimales,
+  type FichaPorCodigo,
 } from '@rutaahorro/core';
 import { repoProductos, type Categoria, type Producto, type CambioPrecio } from '@/lib/productos';
 import { useFormatoFecha } from '@/lib/formatoFecha';
@@ -15,6 +16,10 @@ import { Campo } from '@/components/Campo';
 import { repoPrecios, type ImpuestoAdicional } from '@/lib/datos/precios';
 import { useConfiguracion } from '@/lib/datos/configuracion';
 import { OfertasEImpuesto, filasDesdeTramos, tramosDesdeFilas, type FilaOferta } from './OfertasEImpuesto';
+import {
+  achicarFoto, buscarFichaPorCodigo, copiarFotoProducto, quitarFotoProducto, subirFotoProducto,
+} from '@/lib/productos/fotosCliente';
+
 
 
 interface Props {
@@ -93,6 +98,60 @@ export function FormularioProducto({
   // Los códigos de barra no se copian: cada uno es de un solo producto.
   const [codigos, setCodigos] = useState<string[]>(producto?.codigos ?? (codigoInicial ? [codigoInicial] : []));
   const [codigoNuevo, setCodigoNuevo] = useState('');
+
+  // Foto (RT-50) y ficha por código de barras (docs/30). La foto se sube
+  // DESPUÉS de guardar el producto: subirla antes cambia `updated_at`, y el
+  // guardado chocaría con la comprobación de edición simultánea (0020).
+  const [fotoNueva, setFotoNueva] = useState<{ blob: Blob; vista: string } | null>(null);
+  const [fotoDeCodigo, setFotoDeCodigo] = useState<string | null>(null);
+  const [quitarFoto, setQuitarFoto] = useState(false);
+  const [ficha, setFicha] = useState<{ datos: FichaPorCodigo; antes: { nombre: string; descripcion: string } } | null>(null);
+  const [buscandoFicha, setBuscandoFicha] = useState(false);
+  const [sinFicha, setSinFicha] = useState(false);
+  const fotoActual = quitarFoto ? null : (producto?.imagen ?? null);
+  const vistaFoto = fotoNueva?.vista ?? fotoDeCodigo ?? fotoActual;
+  // Una foto que no carga (la sacaron de internet, sin señal): se dice, no se ve un ícono roto.
+  const [fotoRota, setFotoRota] = useState<string | null>(null);
+  const codigosEan = codigos.filter((c) => /^\d{8,14}$/.test(c));
+
+  /**
+   * Busca el código en Open Food Facts. En un alta llena el nombre y la
+   * descripción si están vacíos (nunca pisa lo escrito) y deja su foto lista
+   * para guardar. `soloFoto`: desde la sección Foto de un producto existente.
+   */
+  async function buscarFicha(code: string, soloFoto = false) {
+    if (!/^\d{8,14}$/.test(code)) return;
+    setBuscandoFicha(true);
+    setSinFicha(false);
+    const datos = await buscarFichaPorCodigo(code);
+    setBuscandoFicha(false);
+    if (!datos || (soloFoto && !datos.imagen)) { setSinFicha(true); return; }
+    if (!soloFoto) {
+      setFicha({ datos, antes: { nombre, descripcion } });
+      if (!nombre.trim()) setNombre(datos.nombre);
+      if (!descripcion.trim()) setDescripcion(datos.descripcion);
+    }
+    if (datos.imagen && !fotoNueva) { setFotoDeCodigo(datos.imagen); setQuitarFoto(false); }
+  }
+
+  // Alta desde un código escaneado que no estaba: se busca solo.
+  useEffect(() => {
+    if (!esEdicion && codigoInicial) void buscarFicha(codigoInicial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- una vez, al abrir
+  }, []);
+
+  async function elegirFoto(archivo: File | undefined) {
+    if (!archivo) return;
+    try {
+      const blob = await achicarFoto(archivo);
+      if (fotoNueva) URL.revokeObjectURL(fotoNueva.vista);
+      setFotoNueva({ blob, vista: URL.createObjectURL(blob) });
+      setFotoDeCodigo(null);
+      setQuitarFoto(false);
+    } catch {
+      setError('No se pudo leer la foto. Prueba con otra.');
+    }
+  }
 
   // Ofertas e impuesto (0018). Se cargan aparte porque no son del producto.
   const [filasOferta, setFilasOferta] = useState<FilaOferta[]>([]);
@@ -194,6 +253,8 @@ export function FormularioProducto({
     }
     setCodigos((prev) => [...prev, code]);
     setCodigoNuevo('');
+    // Primer código de un alta sin nombre todavía: se busca qué es.
+    if (!esEdicion && !ficha && !nombre.trim()) void buscarFicha(code);
   }
 
   async function guardar() {
@@ -291,6 +352,17 @@ export function FormularioProducto({
           return;
         }
       }
+      // La foto, ya con el producto guardado (ver arriba por qué después).
+      if (idGuardado && (fotoNueva || fotoDeCodigo || (quitarFoto && producto?.imagen))) {
+        try {
+          if (fotoNueva) await subirFotoProducto(idGuardado, fotoNueva.blob);
+          else if (fotoDeCodigo) await copiarFotoProducto(idGuardado, fotoDeCodigo);
+          else await quitarFotoProducto(idGuardado);
+        } catch (e) {
+          setError(`El producto quedó guardado, pero no la foto: ${e instanceof Error ? e.message : toUserMessage(e)}`);
+          return;
+        }
+      }
       onGuardado({
         id: idGuardado!, nombre: base.nombre, nuevo: !esEdicion,
         sala: vStockSala.valor, bodega: 0, unidad, perecible,
@@ -329,6 +401,26 @@ export function FormularioProducto({
               <p className="text-sm bg-marca-50 text-marca-900 px-3 py-2 rounded-lg">
                 El código <strong className="num">{codigoInicial}</strong> no estaba en el catálogo: ya quedó puesto abajo.
               </p>
+            )}
+            {buscandoFicha && !ficha && !esEdicion && (
+              <p role="status" className="text-sm text-[var(--texto-suave)] px-1">Buscando el código en internet…</p>
+            )}
+            {ficha && (
+              <div role="status" className="text-sm bg-acento-50 border border-acento-100 px-3 py-2 rounded-lg flex gap-3 items-start">
+                <p className="flex-1">
+                  Encontramos <strong>{ficha.datos.nombre}</strong> en Open Food Facts y llenamos lo que estaba
+                  vacío{ficha.datos.imagen ? ', con su foto' : ''}. Revisa que esté bien.
+                </p>
+                <button type="button" className="tap px-2 -my-2 text-sm font-semibold text-marca-700"
+                  onClick={() => {
+                    setNombre(ficha.antes.nombre);
+                    setDescripcion(ficha.antes.descripcion);
+                    setFotoDeCodigo(null);
+                    setFicha(null);
+                  }}>
+                  Deshacer
+                </button>
+              </div>
             )}
             {/* 2026-10-07 · Ordenado en bloques con título, de lo que se llena
                 siempre a lo opcional (Felipe: "mejorar el orden y que sea mejor
@@ -437,6 +529,52 @@ export function FormularioProducto({
                 </label>
               </div>
             </Seccion>
+
+            {(
+              <Seccion titulo="Foto" ayuda="La muestra la tienda online. Opcional.">
+                <div className="flex gap-3 items-start">
+                  <div className="w-28 h-28 shrink-0 rounded-xl border border-[var(--borde)] bg-white overflow-hidden grid place-items-center">
+                    {vistaFoto && fotoRota !== vistaFoto
+                      // eslint-disable-next-line @next/next/no-img-element -- vista previa local o de Storage
+                      ? <img src={vistaFoto} alt="Foto del producto" className="w-full h-full object-contain" onError={() => setFotoRota(vistaFoto)} />
+                      : <span className="text-xs text-[var(--texto-suave)] text-center px-2">{vistaFoto ? 'No se pudo cargar la foto' : 'Sin foto'}</span>}
+                  </div>
+                  <div className="flex flex-col gap-2 flex-1 min-w-0">
+                    <label className="tap inline-flex items-center justify-center gap-2 px-3 rounded-xl border border-[var(--borde)] text-sm font-medium cursor-pointer focus-within:outline-2 focus-within:outline-marca-500">
+                      {vistaFoto ? 'Cambiar foto' : 'Sacar o elegir foto'}
+                      <input type="file" accept="image/*" className="sr-only"
+                        onChange={(e) => { void elegirFoto(e.target.files?.[0]); e.target.value = ''; }} />
+                    </label>
+                    {!vistaFoto && codigosEan.length > 0 && (
+                      <button type="button" disabled={buscandoFicha} onClick={() => void buscarFicha(codigosEan[0], true)}
+                        className="tap px-3 rounded-xl border border-[var(--borde)] text-sm font-medium disabled:opacity-50">
+                        {buscandoFicha ? 'Buscando…' : 'Buscar foto por el código'}
+                      </button>
+                    )}
+                    {vistaFoto && (
+                      <button type="button" className="tap px-3 rounded-xl text-sm font-medium text-[var(--color-alerta)]"
+                        onClick={() => {
+                          if (fotoNueva) URL.revokeObjectURL(fotoNueva.vista);
+                          setFotoNueva(null);
+                          setFotoDeCodigo(null);
+                          setQuitarFoto(Boolean(producto?.imagen));
+                        }}>
+                        Quitar foto
+                      </button>
+                    )}
+                    {fotoDeCodigo && <p className="text-xs text-[var(--texto-suave)]">Foto de Open Food Facts (CC BY-SA).</p>}
+                    {(fotoNueva || fotoDeCodigo || quitarFoto) && (
+                      <p className="text-xs text-[var(--texto-suave)]">
+                        Se guarda al tocar “{esEdicion ? 'Guardar cambios' : desdeRecepcion ? 'Crear y agregar' : 'Crear producto'}”.
+                      </p>
+                    )}
+                    {sinFicha && !vistaFoto && (
+                      <p className="text-xs text-[var(--texto-suave)]">No encontramos este código en internet: saca la foto con el celular.</p>
+                    )}
+                  </div>
+                </div>
+              </Seccion>
+            )}
 
             <Seccion titulo="Precio" ayuda="El precio de venta incluye IVA. El margen se calcula sin IVA, contra el costo.">
               <div className="grid grid-cols-2 gap-3">

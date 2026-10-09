@@ -1,0 +1,41 @@
+# Integración continua (RNF-T53, docs/31).
+#
+# Corre en cada push y pull request a main: pruebas de core, tipos, sintaxis
+# SQL y el build de producción, lo mismo que hace Railway. Para que un error
+# BLOQUEE la publicación: Railway → servicio web → Settings → "Wait for CI"
+# (Check Suites) activado. Así Railway espera este check antes de desplegar.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci --include=dev
+      - name: Pruebas de core
+        run: npm test -w @rutaahorro/core
+      - name: Compilar core
+        run: npm run build -w @rutaahorro/core
+      - name: Tipos
+        run: npm run typecheck
+      - name: Sintaxis SQL de las migraciones
+        run: npm run db:check
+      - name: Build de producción (como Railway)
+        run: npm run build -w @rutaahorro/web
+        env:
+          NEXT_PUBLIC_DEMO: 'false'
+          # El build no consulta la base: las páginas de la tienda son dinámicas.
+          NEXT_PUBLIC_SUPABASE_URL: https://ejemplo.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci
+          NEXT_PUBLIC_APP_URL: https://ejemplo.cl

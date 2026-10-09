@@ -29,6 +29,7 @@
     "db:limpiar": "node tools/limpiar-base.mjs",
     "db:limpiar-movimientos": "node tools/limpiar-movimientos.mjs",
     "db:e2e": "node tools/venta-real.mjs",
+    "db:fotos": "node tools/fotos-desde-codigos.mjs",
     "build:web": "npm run build -w @rutaahorro/core && npm run build -w @rutaahorro/web"
   },
   "devDependencies": {

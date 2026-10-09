@@ -81,6 +81,12 @@ export default async function ProductoPage({ params }: { params: Params }) {
             <Compartir titulo={producto.nombre} />
           </div>
           {producto.descripcion && <p className="text-[var(--texto-suave)]">{producto.descripcion}</p>}
+          {(producto.marca || producto.formato) && (
+            <dl className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+              {producto.marca && <div className="flex gap-1.5"><dt className="text-[var(--texto-suave)]">Marca</dt><dd className="font-semibold">{producto.marca}</dd></div>}
+              {producto.formato && <div className="flex gap-1.5"><dt className="text-[var(--texto-suave)]">Formato</dt><dd className="font-semibold">{producto.formato}</dd></div>}
+            </dl>
+          )}
 
           {producto.precio != null
             ? <p className="text-4xl font-extrabold num">{precioTienda(producto.precio)}</p>

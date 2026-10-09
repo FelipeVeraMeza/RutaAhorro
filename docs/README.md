@@ -60,6 +60,7 @@ todo lo demás es tu contrato de implementación.
 | [24 — Matriz de requerimientos](24-matriz-requerimientos.md) | **Qué está hecho con evidencia**: cada RF y RNF contra la prueba que lo demuestra. Se regenera con `node tools/matriz.mjs` |
 | [25 — Cincuenta requerimientos nuevos](25-requerimientos-nuevos.md) | Los 50 requerimientos que faltaban (40 RF + 10 RNF), con motivo, criterios de aceptación, prioridad y evidencia. Salen de usar el sistema como dueño, QA y vendedor |
 | [30 — Tienda online](30-tienda-online.md) | Venta online por etapas (catálogo, carrito, pago, envíos): requerimientos RT, dominio en Railway y costos para cotizar |
+| [31 — Tienda: 120 requerimientos](31-tienda-requerimientos.md) | 60 funcionales y 60 no funcionales de la tienda, cada uno con su estado real, evidencia y mediciones (velocidad, carga, sin JavaScript) |
 
 ---
 

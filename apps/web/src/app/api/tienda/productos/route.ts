@@ -1,4 +1,5 @@
 import { datosTienda } from '@/lib/tienda/catalogo';
+import { ipDe, limitar } from '@/lib/limites';
 
 /**
  * GET /api/tienda/productos?ids=a,b,c — los productos del carrito como están
@@ -11,6 +12,8 @@ import { datosTienda } from '@/lib/tienda/catalogo';
 const MAX_IDS = 100;
 
 export async function GET(request: Request) {
+  const limite = limitar('tienda', ipDe(request));
+  if (limite) return limite;
   const ids = (new URL(request.url).searchParams.get('ids') ?? '')
     .split(',').map((s) => s.trim()).filter(Boolean).slice(0, MAX_IDS);
   const tienda = await datosTienda().catch(() => null);

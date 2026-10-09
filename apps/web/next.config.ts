@@ -53,6 +53,12 @@ function commitActual(): string {
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // NEXT_DIST_DIR=.next-prueba permite compilar y medir la versión de
+  // producción sin pisar la carpeta del `npm run dev` que está corriendo (que
+  // quedaba sin estilos, 2026-10-09). Railway no la define: usa .next.
+  // Ojo: al compilar así, Next agrega la carpeta a tsconfig.json y a
+  // next-env.d.ts. Esos dos cambios no se comitean (git checkout -- ambos).
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   env: { NEXT_PUBLIC_COMMIT: commitActual() },
   // Quita el botón flotante "N" de Next.js en desarrollo. Solo aparecía en
   // modo dev (nunca en producción), pero tapaba la barra de navegación.

@@ -1,5 +1,5 @@
 import { unstable_cache } from 'next/cache';
-import { descripcionPublica, diaLocal, ofertasVisibles, rubroPorNombre, tramosVigentes, type ProductoTienda, type TramoPrecio } from '@rutaahorro/core';
+import { descripcionPublica, diaLocal, formatoPorNombre, marcaPorNombre, ofertasVisibles, rubroPorNombre, tramosVigentes, type ProductoTienda, type TramoPrecio } from '@rutaahorro/core';
 import { clienteAdmin } from '@/lib/supabase/admin';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { DEMO_PRODUCTOS } from '@/lib/demo/data';
@@ -22,6 +22,8 @@ export interface DatosTienda {
   direccion: string | null;
   telefono: string | null;
   catalogo: ProductoTienda[];
+  /** Alguna foto vino de Open Food Facts (`-off-` en el archivo): hay que citar la fuente (CC BY-SA). */
+  fotosDeOpenFoodFacts: boolean;
 }
 
 /** Cada cuánto se vuelve a leer la base. Un precio nuevo tarda a lo más esto en verse. */
@@ -85,6 +87,7 @@ async function leerTienda(tenantId: string): Promise<DatosTienda | null> {
     nombre: local.name || sucursal?.name || 'Tienda',
     direccion: sucursal?.address ?? null,
     telefono: sucursal?.phone ?? null,
+    fotosDeOpenFoodFacts: filas.some((f) => f.image_url?.includes('-off-')),
     catalogo: filas.map((f) => {
       const tramos: TramoPrecio[] = (f.product_price_tiers ?? []).map((t) => ({
         desde: Number(t.desde), precio: t.precio, descuentoPct: t.descuento_pct == null ? null : Number(t.descuento_pct),
@@ -97,6 +100,8 @@ async function leerTienda(tenantId: string): Promise<DatosTienda | null> {
         descripcion: descripcionPublica(f.description),
         categoria: f.categories?.name ?? null,
         grupo: f.categories?.name ?? rubroPorNombre(f.name),
+        marca: marcaPorNombre(f.name),
+        formato: formatoPorNombre(f.name),
         precio: f.sale_price > 0 ? f.sale_price : null,
         imagen: f.image_url,
         disponible: venderSinStock || stock > 0,
@@ -120,12 +125,15 @@ function tiendaDemo(): DatosTienda {
     nombre: 'Almacén de ejemplo',
     direccion: 'Av. Siempre Viva 742, Santiago',
     telefono: '+56 9 1234 5678',
+    fotosDeOpenFoodFacts: false,
     catalogo: DEMO_PRODUCTOS.map((p) => ({
       id: p.id,
       nombre: p.name,
       descripcion: descripcionPublica(p.description),
       categoria: p.categoria,
       grupo: p.categoria,
+      marca: marcaPorNombre(p.name),
+      formato: formatoPorNombre(p.name),
       precio: p.sale_price,
       imagen: null,
       disponible: p.stock > 0,
@@ -137,10 +145,23 @@ function tiendaDemo(): DatosTienda {
   };
 }
 
+/**
+ * Copia en memoria del proceso por 60 s, encima de `unstable_cache`: esa
+ * caché devuelve el catálogo deserializado de nuevo en cada visita (801
+ * productos). Con 100 visitas simultáneas era la mitad del tiempo de cada
+ * página (prueba de carga del 2026-10-09).
+ */
+let enMemoria: { tenantId: string; hasta: number; datos: Promise<DatosTienda | null> } | null = null;
+
 /** Null = no hay tienda: falta `TIENDA_TENANT_ID` o el local no está activo. */
 export async function datosTienda(): Promise<DatosTienda | null> {
   if (DEMO_ACTIVO) return tiendaDemo();
   const tenantId = process.env.TIENDA_TENANT_ID?.trim();
   if (!tenantId) return null;
-  return leerTiendaGuardada(tenantId);
+  if (enMemoria && enMemoria.tenantId === tenantId && enMemoria.hasta > Date.now()) return enMemoria.datos;
+  const datos = leerTiendaGuardada(tenantId);
+  enMemoria = { tenantId, hasta: Date.now() + REFRESCO_S * 1000, datos };
+  // Un error no queda guardado: la próxima visita vuelve a intentar.
+  datos.catch(() => { if (enMemoria?.datos === datos) enMemoria = null; });
+  return datos;
 }

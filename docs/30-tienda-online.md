@@ -94,6 +94,16 @@ Numeración propia: **RT-** (requerimiento de tienda).
 | Carrito | Se pone al día al abrirlo con `/api/tienda/productos` (precio nuevo, agotado o retirado: avisa y corrige), "Lleva 1 más y paga $500 c/u" (un toque lo aplica), "Ahorras $X con ofertas", "Quitar" por producto, "Vaciar" pregunta antes |
 | Google | `robots.txt` (en el dominio del sistema solo `/tienda`; el resto del sistema no se indexa) y `sitemap.xml` con todas las fichas (RT-53) |
 
+### Segunda maqueta: catálogo con barra lateral (2026-10-09) ✅
+
+Inicio y Productos comparten `VistaCatalogo`: titular y buscador en una fila, franja de categorías con ícono, barra lateral con **Categorías**, **Precio** (mín./máx.) y **Marca**, y el panel "N productos encontrados" con "Ordenar por: Más relevantes" (lo que se puede comprar primero y, entre eso, lo en oferta). En el celular la barra va detrás del botón "Filtros". Todos los filtros viven en la dirección (`?categoria=&min=&max=&marca=&marca=`).
+
+La **marca** no existe como columna: `marcaPorNombre` reconoce una lista de marcas en el nombre (Soprole 42, Nestlé 20, McKay 18, Watts 17… en el catálogo real). Una marca fuera de la lista no aparece en el filtro.
+
+### Código de barras → ficha automática (evaluado, sin hacer)
+
+Prueba del 2026-10-09 con 38 códigos del catálogo real contra **Open Food Facts** (base pública y gratuita): encontró **6 de 38 (16 %)**, los 6 con nombre, marca, tamaño y foto. Faltan casi todos los productos chilenos o de nicho (Watts, McKay, Gatorade, Oreo de acá). Extrapolado: ~90 de 568 productos con código. Las fotos de Open Food Facts son CC BY-SA: usarlas exige citar la fuente.
+
 ### Etapa 3 — Pago online
 
 | N° | Requerimiento |
@@ -130,6 +140,73 @@ Numeración propia: **RT-** (requerimiento de tienda).
 | RT-54 | Ícono, nombre y colores propios de la tienda al compartir el enlace |
 
 ---
+
+## 3 bis. Requerimientos de la tienda: estado al 2026-10-09
+
+> **Superado por [31 — 120 requerimientos y su estado](31-tienda-requerimientos.md)**, que numera RF-T01…RF-T60 y RNF-T01…RNF-T60 con su evidencia. Esta tabla queda como historia de la primera revisión.
+
+Resumen consolidado de todo lo anterior. ✅ hecho y probado · ◐ parcial · ⏳ por hacer.
+
+### Funcionales (RT)
+
+| N° | Requerimiento | Estado |
+|---|---|---|
+| **Catálogo** | | |
+| RT-01 | Ver el catálogo sin cuenta ni sesión | ✅ |
+| RT-02 | Mostrar todos los productos activos; los sin precio dicen "Consultar precio" | ✅ |
+| RT-03 | No mostrar costo, margen ni cantidad exacta en stock | ✅ |
+| RT-04 | Disponible / Agotado (si el local vende sin stock, nada sale agotado) | ✅ |
+| RT-05 | Ofertas del día en palabras y etiqueta "Oferta" | ✅ |
+| RT-06 | Búsqueda sin tildes y por palabras en cualquier orden | ✅ |
+| RT-07 | Categorías; sin categorías cargadas, rubros automáticos por el nombre | ✅ |
+| RT-08 | Páginas de 48 productos | ✅ |
+| RT-55 | Filtros de precio (mín./máx.) y marca; ordenar por relevancia, nombre o precio | ✅ |
+| RT-56 | Búsqueda sin resultados: consejo y productos sugeridos | ✅ |
+| RT-09 | Ficha de cada producto con dirección propia para compartir | ✅ |
+| RT-57 | Ficha: ofertas explicadas (cuánto se ahorra), "Compartir", productos relacionados | ✅ |
+| RT-10 | "Consultar por WhatsApp" desde la ficha | ◐ listo, pero la sucursal no tiene celular anotado |
+| RT-11 | Un cambio de precio se ve en la tienda en menos de 1 minuto | ✅ |
+| RT-58 | Pestañas Inicio · Productos · Ofertas · Mi cuenta · Carrito (abajo en el celular) | ✅ |
+| RT-12 | La tienda no instala el modo sin conexión del POS ni sus avisos | ✅ |
+| RT-13 | En el dominio propio de la tienda no se llega al sistema | ✅ (sin dominio todavía) |
+| **Carrito y pedido** | | |
+| RT-20 | Carrito que sobrevive a cerrar la pestaña | ✅ |
+| RT-21 | El carrito aplica las mismas ofertas por cantidad que la caja | ✅ |
+| RT-59 | Carrito al día con los precios de ahora; "Lleva N más y paga $X"; "Ahorras $X"; quitar y vaciar | ✅ |
+| RT-21b | Enviar el pedido por WhatsApp con detalle, total y datos del cliente | ◐ listo, falta el celular de la sucursal |
+| RT-21d | "Mi cuenta" sin clave: datos del cliente y "Mis pedidos" en su navegador, "Volver a pedir" | ✅ |
+| RT-22 a RT-29 | Checkout con datos, pedido guardado en el sistema, pantalla "Pedidos web", pasar a venta, correos, límite anti-abuso | ⏳ etapa 2 |
+| RT-30 a RT-38 | Pago con tarjeta y transferencia (pasarela), confirmación por aviso firmado, reservas | ⏳ etapa 3 |
+| RT-40 a RT-45 | Envíos: retiro o despacho, tarifas por comuna, estados | ⏳ etapa 4 (opcional) |
+| **Fotos y contenido** | | |
+| RT-50 | Sacar o elegir la foto del producto desde Productos → Foto | ✅ |
+| RT-60 | Al crear un producto escaneado, buscar su nombre, marca, tamaño y foto por el código (Open Food Facts) | ✅ |
+| RT-61 | Completar de una vez las fotos que existan por código (`npm run db:fotos`) | ✅ |
+| RT-62 | Descripciones sin datos internos ("Código anterior: …") | ✅ |
+| RT-51 | Elegir qué productos se publican (alcohol, cigarrillos) | ⏳ |
+| RT-52 | Boleta electrónica del pedido online | ⏳ con la etapa 2 |
+| RT-53 | Google: robots.txt, sitemap.xml, datos del producto, vista previa al compartir | ✅ |
+| RT-54 | Ícono y nombre propios de la tienda al instalarla o compartirla | ⏳ |
+
+### No funcionales (RNT)
+
+| N° | Requerimiento | Estado |
+|---|---|---|
+| RNT-01 | **Seguridad:** el visitante no toca la base. El servidor lee con la llave de servicio y elige columnas y local; `anon` no ejecuta ninguna función (`seguridad.test.mjs`) | ✅ |
+| RNT-02 | **Precios:** el precio que se cobra lo decide el servidor, nunca el navegador. Hoy el carrito es una estimación que se pone al día al abrirlo; el recálculo al confirmar llega con el pedido (RT-23) | ◐ |
+| RNT-03 | **Privacidad (Ley 19.628 / 21.719):** los datos del cliente quedan en su navegador y no salen hasta que él envía el pedido; "Borrar mis datos" | ✅ |
+| RNT-04 | **Escritura de fotos y fichas:** solo admin, supervisor y bodega, y siempre en su propio local (sale de la sesión) | ✅ |
+| RNT-05 | **Rendimiento:** catálogo en caché de 60 s en el servidor; ~1,1–1,6 s por página en desarrollo local; ~132 kB de JavaScript por página. Falta medirlo en Railway | ◐ |
+| RNT-06 | **Móvil primero:** sin scroll horizontal a 390 px, botones de 44 px o más, barra de pestañas abajo, foto achicada a 800 px antes de subir | ✅ |
+| RNT-07 | **Accesibilidad:** etiquetas y estados para lector de pantalla, la pestaña activa marcada, estados con texto y no solo color. Falta una auditoría formal | ◐ |
+| RNT-08 | **Funciona sin JavaScript** para mirar: buscar, filtrar, ordenar por dirección y paginar son enlaces y formularios. El carrito sí requiere JavaScript | ✅ |
+| RNT-09 | **Disponibilidad:** la tienda corre en el mismo servicio que el POS. Ventaja: un solo despliegue. Riesgo: mucho tráfico en la tienda puede hacer más lento el mostrador. Revisar si crece | ◐ |
+| RNT-10 | **Fotos:** JPG, PNG o WebP, máximo 5 MB, en el bucket público `productos`; solo el servidor escribe | ✅ |
+| RNT-11 | **Licencias:** las fotos de Open Food Facts son CC BY-SA; la tienda cita la fuente al pie | ✅ |
+| RNT-12 | **Servicios externos:** Open Food Facts permite ~100 consultas por minuto. La herramienta espera 900 ms y reintenta con 429; si no responde, el alta sigue a mano | ✅ |
+| RNT-13 | **Formato:** español de Chile, pesos sin decimales, IVA incluido | ✅ |
+| RNT-14 | **Errores:** la tienda tiene su página de error y de "no encontrado"; los errores llegan al buzón del sistema (`/api/errores`) | ✅ |
+| RNT-15 | **Mantenibilidad:** la lógica vive en `packages/core` con pruebas (tienda 47, ficha por código 6); las pantallas solo la usan | ✅ |
 
 ## 4. Cómo está hecho (etapa 1)
 

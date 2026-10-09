@@ -50,6 +50,11 @@ export interface Producto {
   actualizadoEn: string;
   /** Quién lo modificó por última vez (RF-M10-11, 0020). */
   actualizadoPor?: string | null;
+  /**
+   * Foto del producto (RT-50, docs/30): la muestra la tienda online. Se
+   * cambia con /api/productos/foto, no con `actualizar`.
+   */
+  imagen?: string | null;
 }
 
 /** Un cambio de precio (`price_history`), para el formulario del producto. */

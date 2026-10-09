@@ -50,7 +50,7 @@ export function CuentaCliente() {
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-marca-900">Mi cuenta</h1>
           <p className="text-[var(--texto-suave)]">
             Tus datos quedan guardados en este celular o computador, para no escribirlos en cada pedido.
-            No necesitas clave.
+            No necesitas clave. <Link href="/tienda/privacidad" className="font-semibold text-marca-700 hover:underline">Cómo usamos tus datos</Link>
           </p>
         </div>
         <form onSubmit={guardar} className="flex flex-col gap-3" noValidate>
@@ -75,7 +75,7 @@ export function CuentaCliente() {
         )}
         {(pedidos.length > 0 || datos.nombre) && (
           <button type="button" className="btn btn-fantasma btn-chico self-start"
-            onClick={() => { if (confirm('¿Borrar tus datos y tus pedidos de este celular?')) { borrarMisDatos(); setForm({ nombre: '', celular: '', correo: '' }); } }}>
+            onClick={() => { if (confirm('¿Borrar tus datos, tus pedidos y el carrito de este celular?')) { borrarMisDatos(); setForm({ nombre: '', celular: '', correo: '' }); } }}>
             Borrar mis datos de este celular
           </button>
         )}

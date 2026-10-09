@@ -27,7 +27,8 @@ export default async function OfertasPage({ searchParams }: { searchParams: Para
         </p>
       </div>
       <Buscador accion="/tienda/ofertas" q={q} ocultos={{ orden }} />
-      <Resultados r={r} q={q} vacio="No hay ofertas por ahora." conOrden sugeridos={sugeridos}
+      <Resultados r={r} q={q} vacio="No hay ofertas por ahora." sugeridos={sugeridos}
+        orden={{ ruta: '/tienda/ofertas', actual: orden ?? 'relevantes', ocultos: q ? [['q', q]] : [] }}
         enlace={(n) => conParametros('/tienda/ofertas', { q, orden, pagina: n })} />
     </div>
   );
