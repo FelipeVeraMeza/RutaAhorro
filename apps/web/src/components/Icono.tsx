@@ -41,6 +41,16 @@ const TRAZOS = {
   cuenta: 'c12,8,4|M4 21a8 8 0 0 1 16 0',
   candado: 'r5,11,14,10,2|M8 11V7a4 4 0 0 1 8 0v4',
   fiado: 'M5 3h12a2 2 0 0 1 2 2v16H7a2 2 0 0 1-2-2z|M9 8h6|M9 12h6|M9 16h3|M5 17a2 2 0 0 1 2-2h12',
+  // Tienda online (docs/30): la búsqueda y el ícono de cada categoría,
+  // mientras los productos no tengan foto.
+  buscar: 'c11,11,7|m20 20-4.3-4.3',
+  botella: 'M10 2h4|M10.5 2v3.5L8 9v11a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V9l-2.5-3.5V2|M8 13h8',
+  leche: 'M8 2h8v3l2 3v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V8l2-3z|M6 8h12|M12 8v14',
+  snack: 'M6 3h12l-1.5 3L18 9v9l-1.5 3h-9L6 18V9l1.5-3z|M9 12h6|M9 15h4',
+  canasta: 'M3 10h18l-2 10H5z|m7.5 10 4.5-6 4.5 6|M9 14v3|M12 14v3|M15 14v3',
+  limpieza: 'M8 9h6v12a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1z|M9 9V5h4l3-2|M16.5 6h2|M17 9h2',
+  pan: 'M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4c0 1.2-.8 2-2 2v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-7c-1.2 0-2-.8-2-2z|M10 11v4|M14 11v4',
+  fruta: 'c12,14,7|M12 7c0-2 1-3.5 3-4',
 } as const;
 
 export type NombreIcono = keyof typeof TRAZOS;

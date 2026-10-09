@@ -16,6 +16,12 @@ export function RegistrarSW() {
   const [hayNueva, setHayNueva] = useState(false);
 
   useEffect(() => {
+    // La tienda online (docs/30) no es el sistema: sin la pantalla "Sin
+    // conexión… Ir a Vender" del service worker y sin el aviso de versión.
+    const dominio = process.env.NEXT_PUBLIC_TIENDA_HOST?.trim().toLowerCase();
+    const host = location.hostname.toLowerCase();
+    if (location.pathname.startsWith('/tienda') || (dominio && (host === dominio || host === `www.${dominio}`))) return;
+
     if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
     }

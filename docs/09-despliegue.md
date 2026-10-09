@@ -159,6 +159,8 @@ archivo funciona con cualquiera, y además con nvm/fnm en local.
 | `NEXT_PUBLIC_APP_ENV` | `production` | |
 | `NEXT_PUBLIC_APP_URL` | `https://<dominio>` | Se carga después de generar el dominio (§3.3) |
 | `TZ` | `America/Santiago` | |
+| `TIENDA_TENANT_ID` | id del local | Tienda online ([30](30-tienda-online.md)). Vacía = no hay tienda |
+| `NEXT_PUBLIC_TIENDA_HOST` | `tutienda.cl` | Dominio propio de la tienda; en él no se llega al sistema. Se hornea al compilar. Pasos del dominio en [30 §5](30-tienda-online.md) |
 | `SII_CLAVE_CIFRADO` | 32 bytes en base64 | **Secreta.** Solo servidor. Cifra las claves del SII que el administrador guarda en Facturación → Emisor SII. La **misma** llave va en el worker (§3.4). Sin ella, guardar las credenciales responde 500 `SIN_CONFIGURAR`; el resto de Facturación funciona |
 
 **Sobre `SUPABASE_SECRET_KEY` donde corre el frontend.** ADR-003 y la versión

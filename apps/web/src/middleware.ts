@@ -8,6 +8,9 @@ import { NextResponse, type NextRequest } from 'next/server';
  * turnos sin volver a escribir su clave (RF-M1-06, US-02).
  */
 export async function middleware(request: NextRequest) {
+  const tienda = rutaTienda(request);
+  if (tienda) return tienda;
+
   // MODO DEMO: la "sesión" es la cookie de la cuenta de ejemplo con que se
   // entró en /login. Antes no había ingreso: se abría directo como
   // administrador y no había cómo probar entrar con un vendedor. Dev-only.
@@ -83,6 +86,36 @@ export async function middleware(request: NextRequest) {
   }
 
   return response;
+}
+
+/**
+ * La tienda online (docs/30) es pública: no pasa por la sesión.
+ *
+ * En su dominio propio (`NEXT_PUBLIC_TIENDA_HOST`, ej. `tutienda.cl`) TODO es
+ * tienda: `/` muestra el catálogo y `/login`, `/pos` o cualquier otra ruta del
+ * sistema dan el "no encontrado" de la tienda, nunca la pantalla de ingreso.
+ * El sistema queda en su propio dominio (`sistema.tutienda.cl`). `/api/` sigue
+ * pasando: ahí llegarán los avisos de pago de la pasarela (etapa 3).
+ */
+function rutaTienda(request: NextRequest): NextResponse | null {
+  const path = request.nextUrl.pathname;
+  const dominio = process.env.NEXT_PUBLIC_TIENDA_HOST?.trim().toLowerCase();
+  const host = (request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? '')
+    .split(',')[0].trim().toLowerCase().replace(/:\d+$/, '');
+  const esDominioTienda = Boolean(dominio) && (host === dominio || host === `www.${dominio}`);
+
+  // robots.txt y sitemap.xml se sirven tal cual: los arma app/robots.ts y
+  // app/sitemap.ts mirando el dominio.
+  const deBuscadores = path === '/robots.txt' || path === '/sitemap.xml';
+  if (esDominioTienda && !path.startsWith('/tienda') && !path.startsWith('/api/') && !deBuscadores) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/tienda${path === '/' ? '' : path}`;
+    return NextResponse.rewrite(url);
+  }
+  if (path === '/tienda' || path.startsWith('/tienda/') || path.startsWith('/api/tienda/') || deBuscadores) {
+    return NextResponse.next();
+  }
+  return null;
 }
 
 export const config = {
