@@ -8,7 +8,7 @@ import {
   type ClienteConPrecios,
   aplicarCombos, lineSubtotal, type Combo,
   formatCLP, formatCantidad, validarCantidadVenta, admiteDecimales, toUserMessage, construirComprobante,
-  cantidadAtipica,
+  cantidadAtipica, totalConFactura,
   type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta, type RegistroDte, coincide
 } from '@rutaahorro/core';
 import { findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO, ultimaActualizacionCatalogo } from '@/lib/offline/catalog';
@@ -848,6 +848,9 @@ export function PosClient({
       {cobrando && (
         <Cobro
           total={totals.total}
+          totalFactura={totalConFactura(lines.map((l) => ({
+            subtotal: lineSubtotal(l), tasaAdicional: l.tasaAdicional ?? 0, nombreAdicional: l.nombreAdicional ?? null,
+          })), config.ivaPct).total}
           tarjetaEmiteDocumento={config.tarjetaEmiteDocumento}
           redondear={config.redondeoEfectivo}
           cliente={cliente}

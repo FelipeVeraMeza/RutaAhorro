@@ -186,6 +186,43 @@ test('una venta de la cola vieja, sin correo, igual se registra', async () => {
     documento: { tipo: 'factura', rut: RUT_OK, razon_social: 'Los Andes' } }));
   assert.equal(document_type, 'factura');
 });
+// 0039 · "opción 1": con factura se cobra lo que calcula el SII (IVA sobre el neto).
+async function ventaPanYogurt(pagado, extra = {}) {
+  const { L, caj, adm } = await mostrador();
+  const pan = await L.producto({ nombre: 'Pan de molde', precio: 2190 });
+  const yog = await L.producto({ nombre: 'Yogurt', precio: 590 });
+  for (const p of [pan, yog]) {
+    await rpc(adm, 'fn_adjust_stock', { p_product_id: p, p_new_quantity: 10,
+      p_movement_type: 'inventario_inicial', p_reason: 'carga', p_ubicacion: 'sala' });
+  }
+  return intentar(rpc(caj, 'fn_register_sale', {
+    p_client_uuid: crypto.randomUUID(),
+    p_items: [{ product_id: pan, quantity: 2, unit_price: 2190, discount_amount: 0 },
+              { product_id: yog, quantity: 1, unit_price: 590, discount_amount: 0 }],
+    p_payments: [{ method: extra.metodo ?? 'debito', amount: pagado, ...(extra.recibido ? { received_amount: extra.recibido } : {}) }],
+    p_document: { tipo: 'factura', rut: RUT_OK, correo: 'a@b.cl' },
+  }));
+}
+
+test('factura: $4.970 con IVA se cobra $4.969, como lo calcula el SII', async () => {
+  const r = await ventaPanYogurt(4969);
+  assert.equal(r.error, undefined, r.error);
+  const { rows: [s] } = await banco.su.query(
+    'select total, neto, tax_amount, ajuste_factura from sales where id = $1', [r.valor.sale_id]);
+  assert.deepEqual(s, { total: 4969, neto: 4176, tax_amount: 793, ajuste_factura: -1 });
+});
+
+test('factura de la cola vieja, cobrada con IVA incluido ($4.970), igual se registra', async () => {
+  const r = await ventaPanYogurt(4970);
+  assert.equal(r.error, undefined, r.error);
+  const { rows: [s] } = await banco.su.query('select total, ajuste_factura from sales where id = $1', [r.valor.sale_id]);
+  assert.deepEqual(s, { total: 4970, ajuste_factura: 0 });
+});
+
+test('factura cobrada con otro monto no cuadra', async () => {
+  const r = await ventaPanYogurt(4971);
+  assert.match(r.error ?? '', /PAGO_NO_CUADRA/);
+});
 test('la venta rechazada por el documento no deja stock movido ni folio usado', async () => {
   const { L, p, caj } = await mostrador();
   const antes = await L.stock(p);

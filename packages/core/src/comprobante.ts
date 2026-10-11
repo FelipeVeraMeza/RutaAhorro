@@ -22,6 +22,7 @@ import type { CartLine } from './cart.js';
 import { lineSubtotal, descuentoDeLinea } from './cart.js';
 import { desglosarImpuestos, type ImpuestoAdicionalDesglosado } from './impuestos.js';
 import { NOMBRE_DTE, type RegistroDte, type TipoDte } from './dte.js';
+import { totalConFactura } from './facturacion.js';
 
 export interface LineaComprobante {
   nombre: string;
@@ -146,7 +147,7 @@ export function construirComprobante(datos: DatosComprobante): Comprobante {
   const bruto = datos.lineas.reduce((s, l) => s + clp(l.unitPrice * l.quantity), 0);
   const descuentoLineas = datos.lineas.reduce((s, l) => s + descuentoDeLinea(l), 0);
   const descuento = clp(descuentoLineas + (datos.descuentoGlobal ?? 0));
-  const total = Math.max(clp(bruto) - descuento, 0);
+  let total = Math.max(clp(bruto) - descuento, 0);
 
   // Se calcula el IVA y el neto sale por diferencia, nunca al revés. Si los
   // dos se redondearan por separado, su suma podría quedar a un peso del
@@ -154,20 +155,27 @@ export function construirComprobante(datos: DatosComprobante): Comprobante {
   // observación, no un detalle.
   // Con impuestos adicionales el neto se despeja por grupo (0018); sin ellos
   // es exactamente `taxIncluded` sobre el total, como antes.
-  const desglose = desglosarImpuestos(
-    datos.lineas.map((l) => ({
-      subtotal: lineSubtotal(l),
-      tasaAdicional: l.tasaAdicional ?? 0,
-      nombreAdicional: l.nombreAdicional ?? null,
-    })),
-    ivaPct,
-    datos.descuentoGlobal ?? 0,
-  );
-  const iva = desglose.adicionales.length ? desglose.iva : taxIncluded(total, ivaPct);
-  const neto = desglose.adicionales.length ? desglose.neto : total - iva;
+  const conImpuesto = datos.lineas.map((l) => ({
+    subtotal: lineSubtotal(l),
+    tasaAdicional: l.tasaAdicional ?? 0,
+    nombreAdicional: l.nombreAdicional ?? null,
+  }));
+  const desglose = desglosarImpuestos(conImpuesto, ivaPct, datos.descuentoGlobal ?? 0);
+  let iva = desglose.adicionales.length ? desglose.iva : taxIncluded(total, ivaPct);
+  let neto = desglose.adicionales.length ? desglose.neto : total - iva;
 
   const documento: DocumentoVenta =
     datos.documento ?? { tipo: documentoPorOmision(datos.pagos, datos.opcionesDocumento) };
+
+  // 0039 · Con factura, los montos son los que calcula el SII (IVA sobre el
+  // neto): el total puede quedar a $1 del de los precios con IVA, y eso es lo
+  // que se cobró.
+  if (documento.tipo === 'factura') {
+    const f = totalConFactura(conImpuesto, ivaPct, datos.descuentoGlobal ?? 0);
+    neto = f.neto;
+    iva = f.iva;
+    total = f.total;
+  }
 
   // RF-M5-28 · Pagado todo en efectivo, lo cobrado puede diferir del total
   // por el redondeo a la decena. Se deduce de los pagos (que son lo que la

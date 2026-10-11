@@ -43,9 +43,15 @@ function sugerencias(total: number): number[] {
 }
 
 export function Cobro({
-  total, tarjetaEmiteDocumento = true, redondear = false, cliente = null, onCancel, onConfirm, error = null,
+  total: totalBoleta, totalFactura, tarjetaEmiteDocumento = true, redondear = false, cliente = null, onCancel, onConfirm, error = null,
 }: {
   total: number;
+  /**
+   * 0039 · "Opción 1" (Felipe, 2026-10-11): con factura se cobra lo que dirá
+   * la factura. El SII calcula el IVA sobre el neto y puede quedar a $1 del
+   * total con IVA incluido (`totalConFactura` de core).
+   */
+  totalFactura?: number;
   /** Por qué no se registró la venta (stock, rechazo de la base). Se muestra acá adentro. */
   error?: string | null;
   /** RF-M5-28 · `tenants.settings.redondeo_efectivo` (lo pone 0029). */
@@ -74,6 +80,7 @@ export function Cobro({
   const disponibles = useMemo(
     () => documentosDisponibles(pagos, opciones), [pagos, opciones]);
   const [tipo, setTipo] = useState<TipoDocumento>(disponibles[0]);
+  const total = tipo === 'factura' && totalFactura != null ? totalFactura : totalBoleta;
 
   // RF-M5-30 · La cuenta del cliente elegido: si tiene tope, se le puede fiar
   // hasta lo que le queda. Se lee al abrir el cobro (necesita conexión).
@@ -168,6 +175,10 @@ export function Cobro({
         {ajuste !== 0 ? (
           <p className="text-center text-xs text-[var(--texto-suave)] mb-4" data-redondeo>
             Total {formatCLP(total)} · redondeo del efectivo {ajuste > 0 ? '+' : '−'}{formatCLP(Math.abs(ajuste))} (Ley 20.956)
+          </p>
+        ) : total !== totalBoleta ? (
+          <p className="text-center text-xs text-[var(--texto-suave)] mb-4" data-ajuste-factura>
+            Con factura: el SII calcula el IVA sobre el neto ({formatCLP(totalBoleta)} con IVA incluido)
           </p>
         ) : <div className="mb-4" />}
 

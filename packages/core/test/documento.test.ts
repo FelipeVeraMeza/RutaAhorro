@@ -128,6 +128,19 @@ describe('el documento en el comprobante', () => {
     expect(texto).toContain('Correo: compras@losandes.cl');
   });
 
+  // 0039 · "opción 1": con factura se cobra lo que calcula el SII (IVA sobre el neto).
+  it('con factura, el total es el del SII: $4.970 con IVA queda en $4.969', () => {
+    const dos: CartLine[] = [
+      { productId: 'p', name: 'Pan de molde', unitPrice: 2190, quantity: 2 },
+      { productId: 'y', name: 'Yogurt', unitPrice: 590, quantity: 1 },
+    ];
+    const boleta = construirComprobante({ lineas: dos, pagos: efectivo });
+    expect(boleta.total).toBe(4970);
+    const documento: DocumentoVenta = { tipo: 'factura', receptor };
+    const f = construirComprobante({ lineas: dos, pagos: [{ metodo: 'debito', monto: 4969 }], documento });
+    expect([f.neto, f.iva, f.total]).toEqual([4176, 793, 4969]);
+  });
+
   it('un cliente nuevo, sin razón social todavía, sale con su RUT', () => {
     const documento: DocumentoVenta = { tipo: 'factura', receptor: { rut: '76.086.428-5', correo: 'a@b.cl' } };
     const texto = comprobanteATexto(construirComprobante({ lineas, pagos: efectivo, documento }));

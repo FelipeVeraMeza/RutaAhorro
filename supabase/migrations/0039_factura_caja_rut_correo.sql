@@ -10,11 +10,18 @@
 -- cliente ya registrado. Por eso fn_register_sale deja de exigir la razón
 -- social (RAZON_SOCIAL_REQUERIDA) y guarda el correo y la forma de pago.
 --
+-- Y, "opción 1" del mismo día: con factura se cobra lo que dirá la factura.
+-- El SII calcula el IVA sobre el neto y $4.970 con IVA queda en $4.969; el
+-- total de la venta pasa a ser ese, para que factura y cajón cuadren.
+--
 -- Igual que 0036 salvo lo marcado con "0039".
 -- =============================================================================
 
 alter table sales add column if not exists receptor_correo text;
 alter table sales add column if not exists receptor_forma_pago text;
+-- Con factura, total = neto + IVA sobre el neto (lo que calcula el SII). La
+-- diferencia con el total con IVA incluido (−1, 0, +1) queda acá.
+alter table sales add column if not exists ajuste_factura integer not null default 0;
 do $$ begin
   alter table sales add constraint sales_receptor_forma_pago_check
     check (receptor_forma_pago in ('contado', 'credito', 'sin_costo'));
@@ -104,6 +111,7 @@ declare
   -- 0039
   v_correo           text;
   v_forma            text;
+  v_ajuste_factura   integer := 0;
 begin
   if v_tenant is null or not is_active_user() then
     raise exception 'NO_AUTENTICADO' using errcode = '28000';
@@ -400,6 +408,27 @@ begin
                      - (v_pay->>'amount')::integer, 0));
   end loop;
 
+  -- 0039 · Con factura se cobra lo que calcula el SII: neto + IVA sobre el
+  -- neto (redondeado), que puede quedar a $1 del total con IVA incluido. Es lo
+  -- mismo que totalConFactura de core. Una venta de la cola sin conexión hecha
+  -- con la versión anterior trae el total con IVA incluido: se acepta tal cual.
+  select coalesce((settings->>'iva_pct')::numeric, 19) into v_iva
+    from tenants where id = v_tenant;
+  v_des := fn_desglose_impuestos(v_sale, v_iva, coalesce(p_discount_total, 0));
+  if v_doc = 'factura' then
+    v_ajuste_factura := (v_des->>'neto')::integer + round((v_des->>'neto')::numeric * v_iva / 100)::integer
+                        + (v_des->>'adicionales')::integer - v_sum;
+    -- El redondeo de la decena vale solo si todo se pagó en efectivo (0029).
+    if v_ajuste_factura <> 0
+       and v_paid <> v_sum + v_ajuste_factura
+       and not (jsonb_array_length(p_payments) > 0
+                and not exists (select 1 from jsonb_array_elements(p_payments) x where x->>'method' <> 'efectivo')
+                and v_paid = fn_redondeo_efectivo(v_sum + v_ajuste_factura)) then
+      v_ajuste_factura := 0;
+    end if;
+    v_sum := v_sum + v_ajuste_factura;
+  end if;
+
   -- 0029 · RF-M5-28 · Ley 20.956: pagado todo en efectivo, se cobra el total
   -- redondeado a la decena. El total de la venta (y de la boleta) sigue
   -- siendo el exacto; la diferencia queda en `ajuste_redondeo` y el pago en
@@ -416,14 +445,12 @@ begin
     end if;
   end if;
 
-  select coalesce((settings->>'iva_pct')::numeric, 19) into v_iva
-    from tenants where id = v_tenant;
   select coalesce(sum(greatest(coalesce(received_amount,0) - amount, 0)), 0)
     into v_change from sale_payments where sale_id = v_sale;
 
-  -- 0018 · IVA e impuestos adicionales. Sin adicionales da lo mismo que la
-  -- fórmula de antes, round(total - total / 1,19).
-  v_des := fn_desglose_impuestos(v_sale, v_iva, coalesce(p_discount_total, 0));
+  -- 0018 · IVA e impuestos adicionales: v_des se calculó arriba (0039). Con
+  -- factura, el IVA es el del SII: el ajuste va todo al IVA.
+  v_des := jsonb_set(v_des, '{iva}', to_jsonb((v_des->>'iva')::integer + v_ajuste_factura));
 
   update sales
      set subtotal   = v_bruto,
@@ -436,7 +463,8 @@ begin
          -- Lo que se ahorró en combos, nunca más que lo que se descontó.
          descuento_combos      = least(v_desc_combos, v_desc),
          combos_aplicados      = case when v_desc > 0 then v_combos->'aplicados' else '[]'::jsonb end,
-         ajuste_redondeo       = v_redondeo
+         ajuste_redondeo       = v_redondeo,
+         ajuste_factura        = v_ajuste_factura
    where id = v_sale;
 
   -- 0029 · Lo fiado entra a la cuenta del cliente, en la misma transacción.
@@ -458,6 +486,6 @@ begin
     'document_type', v_doc,
     'neto', (v_des->>'neto')::integer, 'iva', (v_des->>'iva')::integer,
     'impuestos_adicionales', (v_des->>'adicionales')::integer,
-    'ajuste_redondeo', v_redondeo, 'cobrado', v_paid,
+    'ajuste_redondeo', v_redondeo, 'ajuste_factura', v_ajuste_factura, 'cobrado', v_paid,
     'dte', v_dte);
 end $$;
