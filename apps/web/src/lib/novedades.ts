@@ -16,6 +16,18 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.7.0',
+    fecha: '2026-10-11',
+    titulo: 'Pedidos en la tienda online',
+    cambios: [
+      { para: 'admin', texto: 'Configuración → Tienda online: enciende los pedidos en la tienda, anota el WhatsApp, el horario de atención, un aviso para los clientes y el pedido mínimo.' },
+      { para: 'vendedor', texto: 'Nueva pantalla "Pedidos web": los pedidos de la tienda llegan solos, con sonido. Prepáralos, avisa al cliente por WhatsApp con un toque y márcalos entregados al retirar.' },
+      { para: 'supervisor', texto: 'Los pedidos web se cancelan con un motivo, y el Inicio avisa cuando hay pedidos nuevos.' },
+      { para: 'bodega', texto: 'En la ficha de cada producto: "Se muestra en la tienda online", para ocultar lo que no quieres que se pida.' },
+      { para: 'todos', texto: 'La tienda busca en plural, sugiere "¿Quisiste decir…?", tiene favoritos, precio por kilo o litro, horario del local y una página de seguimiento para cada pedido.' },
+    ],
+  },
+  {
     version: '0.6.4',
     fecha: '2026-10-11',
     titulo: 'Revisión antes del primer día: ventas sin conexión, caja y recepción',

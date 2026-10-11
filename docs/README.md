@@ -62,6 +62,7 @@ todo lo demás es tu contrato de implementación.
 | [30 — Tienda online](30-tienda-online.md) | Venta online por etapas (catálogo, carrito, pago, envíos): requerimientos RT, dominio en Railway y costos para cotizar |
 | [31 — Tienda: 120 requerimientos](31-tienda-requerimientos.md) | 60 funcionales y 60 no funcionales de la tienda, cada uno con su estado real, evidencia y mediciones (velocidad, carga, sin JavaScript) |
 | [32 — Revisión: 150 errores y 150 mejoras](32-revision-150-errores-150-mejoras.md) | Revisión del 2026-10-11 antes del primer día: 150 errores (147 corregidos) y 150 mejoras (25 hechas, 125 propuestas), con cómo se verificó cada uno y lo que hay que hacer antes de publicar |
+| [33 — Tienda: 150 actualizaciones](33-tienda-150-actualizaciones.md) | Pedidos en la tienda con seguimiento y la pantalla "Pedidos web", búsqueda, filtros, favoritos, horario, SEO, accesibilidad y seguridad: 30 RF y 9 RNF nuevos, cada uno con cómo se verificó |
 
 ---
 

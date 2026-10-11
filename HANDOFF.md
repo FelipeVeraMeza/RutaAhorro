@@ -8,6 +8,34 @@
 
 ---
 
+## CÓMO SEGUIR — corte 2026-10-11 (tienda: 150 actualizaciones, pedidos web), léelo antes que todo
+
+**Rama `ccr-2f68b3d1-6i818v`, no `main`.** Detalle en
+[docs/33](docs/33-tienda-150-actualizaciones.md): 150 actualizaciones de la
+tienda (81 RF, 69 RNF), 30 RF y 9 RNF nuevos (RF-T61 a T90, RNF-T61 a T69) y
+docs/31 al día (funcionales 55 ✅ / 4 ◐ / 1 ⏳).
+
+**Lo grande: pedidos en la tienda (0040).** El cliente confirma el pedido en
+el carrito (retiro en el local, paga al retirar), queda en `pedidos_web` con
+número y código, lo sigue en `/tienda/pedido/<código>`, y el personal lo
+mueve en `/pedidos-web` (admin, supervisor, vendedor). Precios los pone la
+base (`fn_crear_pedido_web`, solo llave de servicio). Apagado por omisión:
+se enciende en Configuración → Tienda online (también WhatsApp, horario,
+aviso, mínimo). `products.publicado_tienda` + `fn_publicar_en_tienda` para
+ocultar productos. Worker: `pedidos-web-privacidad` (mensual) anonimiza a
+los 12 meses; el resumen diario trae los pedidos.
+
+**Antes de mezclar a `main`:** aplicar 0039 y 0040 (en ese orden) con
+`npm run db:instalar` y `npm run db:aplicar -- --aplicar`; después deben
+salir 2 funciones expuestas más (`fn_cambiar_estado_pedido_web`,
+`fn_publicar_en_tienda`, ya en `tools/rpc-permitidas.mjs`). El código
+funciona sin 0040 (sin "Hacer pedido"). Ver la lista completa en docs/33.
+
+**Pruebas nuevas:** `tools/pg-test/pedidos-web.test.mjs` (9),
+`packages/core/test/tienda-150.test.ts` (21), `tools/ui/tienda-150.mjs`
+(65 comprobaciones; necesita la maqueta recién levantada: los pedidos de la
+maqueta viven en la memoria del servidor).
+
 ## CÓMO SEGUIR — corte 2026-10-11 (revisión de 150 errores y 150 mejoras), léelo antes que todo
 
 **Todo está en la rama `ccr-2f68b3d1-6i818v`, no en `main`** (Railway publica
