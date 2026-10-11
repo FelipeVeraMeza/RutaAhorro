@@ -1,5 +1,6 @@
 'use client';
 
+import { esErrorDeRed } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import { db, type QueuedSale } from './db';
@@ -87,18 +88,6 @@ export interface SyncResult {
 /** El envío en curso: quien llama mientras corre espera a que termine. */
 let enCurso: Promise<SyncResult> | null = null;
 
-/**
- * ¿El error es de la red y no un rechazo de la base? Supabase entrega el
- * corte como un error con "Failed to fetch" / "NetworkError" / "Load failed"
- * (Safari), sin código de PostgreSQL. Marcarlo como rechazo ponía la venta en
- * la barra roja de "rechazadas" cuando solo faltaba señal.
- */
-export function esErrorDeRed(e: { message?: string; code?: string } | null | undefined): boolean {
-  if (!e) return false;
-  if (e.code && /^[0-9A-Z]{5}$/.test(e.code)) return false;
-  return /failed to fetch|networkerror|load failed|network request failed|fetch failed|timeout|aborted/i
-    .test(e.message ?? '');
-}
 
 /**
  * Lo que respondió la base por cada venta enviada en esta sesión: el folio y

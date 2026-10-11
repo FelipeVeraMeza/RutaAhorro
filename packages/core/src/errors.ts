@@ -226,6 +226,21 @@ export function toUserMessage(error: unknown): string {
   return ERROR_MESSAGES.ERROR_INTERNO;
 }
 
+/**
+ * ¿El error es de la red y no un rechazo de la base? Un corte llega sin
+ * código de PostgreSQL y con el texto del navegador ("Failed to fetch",
+ * "Load failed", "NetworkError…") o de un tiempo agotado. La cola de ventas lo
+ * usa para no marcar como rechazada una venta que solo esperaba señal.
+ */
+export function esErrorDeRed(error: unknown): boolean {
+  if (!error) return false;
+  const e = error as { message?: string; code?: string };
+  // Un código de PostgreSQL (P0001, 23505, 42501…) es una respuesta de la base.
+  if (typeof e.code === 'string' && /^[0-9A-Z]{5}$/.test(e.code)) return false;
+  const raw = typeof error === 'string' ? error : (e.message ?? '');
+  return /failed to fetch|load failed|networkerror|network request failed|fetch failed|timed? ?out|aborted/i.test(raw);
+}
+
 export function errorCode(error: unknown): string | null {
   const raw = typeof error === 'string' ? error : ((error as { message?: string })?.message ?? '');
   const match = raw.match(/([A-Z][A-Z0-9_]{3,})/);

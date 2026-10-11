@@ -34,6 +34,9 @@ export function isValidRut(rut: string): boolean {
   // Un RUT de menos de 7 dígitos no existe en la práctica; rechazarlo evita
   // aceptar un número de teléfono mal pegado como si fuera un RUT válido.
   if (body.length < 7) return false;
+  // "00.000.000-0" cuadraba el dígito y pasaba: con ceros a la izquierda el
+  // largo engañaba. Un RUT es un número de al menos un millón.
+  if (Number(body) < 1_000_000) return false;
 
   return computeDv(body) === dv;
 }

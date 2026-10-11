@@ -98,3 +98,11 @@ describe('validarCantidad', () => {
     expect(validarCantidad('5000', { maximo: 1000 }).valido).toBe(false);
   });
 });
+
+describe('validarMonto: tope de la base (revisión 2026-10-11)', () => {
+  it('sin máximo propio no pasa del integer de PostgreSQL', () => {
+    expect(validarMonto('99999999999999999999').valido).toBe(false);
+    expect(validarMonto('2.147.483.647').valido).toBe(true);
+    expect(validarMonto('2.147.483.648').valido).toBe(false);
+  });
+});

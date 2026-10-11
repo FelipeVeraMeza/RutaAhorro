@@ -66,9 +66,13 @@ export function EmisorSii() {
   }
 
   async function borrar() {
+    // Borrar apaga la emisión real y obliga a escribir de nuevo las dos claves
+    // y repetir el ensayo: un toque de más no puede hacerlo (RNF-19).
+    if (!window.confirm('¿Borrar las claves del SII? La emisión real se apaga y habrá que escribirlas y ensayar de nuevo.')) return;
     setError(null); setAviso(null);
     try { await repoFacturacion().borrarCredenciales(); setAviso('Credenciales borradas: la emisión real queda apagada.'); await cargar(); }
-    catch (e) { setError(e instanceof Error ? e.message : toUserMessage(e)); }
+    // La ruta del servidor ya responde en palabras del local; un corte de red no.
+    catch (e) { setError(e instanceof Error && !/fetch|network/i.test(e.message) ? e.message : toUserMessage(e)); }
   }
 
   const c = 'tap w-full px-3 rounded-xl border border-[var(--borde)] bg-white';
