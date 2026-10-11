@@ -15,6 +15,9 @@ import { inicioPara, type Rol } from '@/lib/navegacion';
 const CORREO_RECORDADO = 'ra:correo';
 const RUT_RECORDADO = 'ra:rut';
 const INTENTOS_ANTES_DE_ESPERAR = 5;
+// Los intentos fallidos viven en la pestaña: recargar la página los ponía en
+// cero y se podía seguir probando sin la espera (igual que el bloqueo).
+const FALLOS_LOGIN = 'ra:fallos-login';
 
 function LoginForm() {
   const router = useRouter();
@@ -44,6 +47,11 @@ function LoginForm() {
 
   useEffect(() => {
     try {
+      const f = JSON.parse(sessionStorage.getItem(FALLOS_LOGIN) ?? 'null') as { n?: number; hasta?: number } | null;
+      if (f?.n) setFallos(f.n);
+      if (f?.hasta && f.hasta > Date.now()) { setEsperarHasta(f.hasta); setAhora(Date.now()); }
+    } catch { /* sin almacenamiento */ }
+    try {
       const rutGuardado = localStorage.getItem(RUT_RECORDADO);
       if (rutGuardado) setRut(rutGuardado);
       const guardado = localStorage.getItem(CORREO_RECORDADO);
@@ -72,9 +80,14 @@ function LoginForm() {
   function fallo(mensaje: string) {
     const n = fallos + 1;
     setFallos(n);
+    let hasta = 0;
     if (n >= INTENTOS_ANTES_DE_ESPERAR) {
       const seg = 30 * 2 ** (n - INTENTOS_ANTES_DE_ESPERAR);
-      setEsperarHasta(Date.now() + Math.min(seg, 300) * 1000);
+      hasta = Date.now() + Math.min(seg, 300) * 1000;
+    }
+    try { sessionStorage.setItem(FALLOS_LOGIN, JSON.stringify({ n, hasta })); } catch { /* sin almacenamiento */ }
+    if (hasta) {
+      setEsperarHasta(hasta);
       setAhora(Date.now());
       setError(`${mensaje}. Demasiados intentos: espera un momento antes de probar de nuevo.`);
     } else {
@@ -92,6 +105,7 @@ function LoginForm() {
    * al POS, bodega incluida.
    */
   function entrar(rol: Rol | null) {
+    try { sessionStorage.removeItem(FALLOS_LOGIN); } catch { /* sin almacenamiento */ }
     const next = params.get('next');
     router.push(next ? destinoSeguro(next) : rol ? inicioPara(rol) : '/');
     router.refresh();
@@ -154,11 +168,22 @@ function LoginForm() {
     }
 
     if (authError) {
-      // Nunca revelar si el RUT o el correo existe: eso permite enumerar usuarios.
-      fallo(modo === 'rut' ? 'RUT o contraseña incorrectos' : 'Correo o contraseña incorrectos');
+      // Solo un 400 es "no coinciden". Un 429 (límite de Supabase) o un 5xx
+      // (servicio caído) se mostraban como contraseña incorrecta y además
+      // sumaban intentos: la persona terminaba esperando por un error ajeno.
+      const estado = (authError as { status?: number }).status ?? 0;
+      if (estado === 429) {
+        setError('Demasiados intentos de ingreso desde esta conexión. Espera unos minutos y vuelve a probar.');
+      } else if (estado >= 500 || estado === 0) {
+        setError('El servidor de ingreso no responde. Vuelve a intentar en un momento.');
+      } else {
+        // Nunca revelar si el RUT o el correo existe: eso permite enumerar usuarios.
+        fallo(modo === 'rut' ? 'RUT o contraseña incorrectos' : 'Correo o contraseña incorrectos');
+      }
       setLoading(false);
       return;
     }
+    try { sessionStorage.removeItem(FALLOS_LOGIN); } catch { /* sin almacenamiento */ }
     recordarCorreo(cuerpoRut ?? email.trim());
 
     // 2026-10-07 · Quien puede trabajar en más de un rol elige el del turno.

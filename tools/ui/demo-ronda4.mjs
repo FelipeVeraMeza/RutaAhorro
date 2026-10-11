@@ -200,7 +200,9 @@ await p.getByPlaceholder(/Buscar|nombre o código/i).first().fill('Leche');
 await p.waitForTimeout(700);
 await p.locator('main li button', { hasText: 'Leche' }).first().click();
 await p.waitForTimeout(400);
-const venceLote = p.locator('input[type=date]').nth(1);
+// El último campo de fecha es el vencimiento del lote (antes van la fecha de
+// la factura y su vencimiento).
+const venceLote = p.locator('input[type=date]').last();
 if (await venceLote.count()) await venceLote.fill(en(15));
 await p.getByRole('button', { name: /Confirmar/ }).last().click();
 await p.waitForURL(/\/proveedores\?/, { timeout: 15000 }).catch(() => {});
