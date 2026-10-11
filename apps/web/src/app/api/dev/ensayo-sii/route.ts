@@ -43,10 +43,13 @@ export async function POST(request: Request) {
   const args = [tsx, '--env-file=../../.env.local', 'src/ensayo-sii.ts', '--desde-env', '--ver', '--pausa=90',
     `--receptor=${formatRut(rut)}`, `--forma-pago=${forma}`, `--lineas=${texto}`, `--capturas=${carpeta}`];
   if (esCorreoValido(b?.receptor?.correo)) args.push(`--contacto=${b!.receptor!.correo}`);
-  if (process.env.SII_TELEFONO) args.push(`--telefono=${process.env.SII_TELEFONO}`);
 
+  // Next carga .env.local UNA vez, al arrancar `npm run dev`, y --env-file no
+  // pisa lo que ya viene: el robot usaba la empresa vieja aunque el archivo ya
+  // dijera otra (2026-10-11). Sin las SII_* heredadas, las lee frescas.
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('SII_')));
   const log = fs.openSync(path.join(carpeta, 'robot.log'), 'w');
-  const hijo = spawn(process.execPath, args, { cwd: worker, stdio: ['ignore', log, log], detached: true, windowsHide: false });
+  const hijo = spawn(process.execPath, args, { cwd: worker, env, stdio: ['ignore', log, log], detached: true, windowsHide: false });
   hijo.unref();
   return Response.json({ ok: true, carpeta });
 }
