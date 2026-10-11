@@ -4,9 +4,50 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-10-01.**
+> **Corte: 2026-10-11.**
 
 ---
+
+## CÓMO SEGUIR — corte 2026-10-11 (revisión de 150 errores y 150 mejoras), léelo antes que todo
+
+**Todo está en la rama `ccr-2f68b3d1-6i818v`, no en `main`** (Railway publica
+`main`). El detalle está en [docs/32](docs/32-revision-150-errores-150-mejoras.md):
+150 errores (147 corregidos, 3 pendientes) y 150 mejoras (25 hechas, 125
+propuestas con prioridad).
+
+**Antes de mezclar a `main`:**
+1. **Aplicar 0039** en Supabase: `npm run db:instalar` y
+   `npm run db:aplicar -- --aplicar` (diagnostica primero y aplica lo que
+   falte). 0039 no crea funciones expuestas nuevas: todas son
+   `create or replace` con la misma firma, más `fn_venta_sin_futuro` (disparador,
+   sin permiso para nadie). Puede ir antes que el código.
+2. **`WORKER_SHARED_SECRET` en el worker de Railway.** Sin ella, desde ahora el
+   worker rechaza `POST /jobs/...` en producción (antes los aceptaba de
+   cualquiera). El cron no depende de esto.
+
+**Qué cambió en la base (0039):** caja con cuenta activa, montos en rango y
+bodega sin caja; ajuste y toma enteros, no negativos, solo productos del local
+y descontando lotes (FEFO); venta con hora futura queda con la del servidor;
+vencimientos con el día del local (`v_expiring_lots`, `fn_confirm_receipt`);
+`fn_void_sale`, `fn_void_receipt` y `fn_update_product` exigen cuenta activa.
+Pruebas: `tools/pg-test/revision-150.test.mjs` (7, vistas fallar antes).
+
+**Pendiente (con motivo en docs/32):** T-45 (vendedor lee costos: rehacer RLS
+con calma), ajuste o toma HACIA ARRIBA de un perecible queda sin lote (falta
+pedir la fecha), y el error #418 intermitente del Inicio del supervisor
+(1 de 184 pantallas en `demo-roles`, no se pudo repetir a voluntad).
+
+**Cómo correr todo:**
+- `npm run typecheck` y `npm test` (core 545; worker 6 con `CHROME_PATH=/opt/pw-browsers/chromium`, sin él se omiten).
+- `npm run db:check` y `npm run db:test` — el Postgres embebido **no corre como
+  root**: `su probador -c "cd $PWD && npm run db:test"`.
+- Recorridos: compilar la maqueta (`NEXT_PUBLIC_DEMO=true
+  NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=demo npx next build` en `apps/web`), levantarla
+  con `next start -p 3005` y correr
+  `RA_BASE=http://localhost:3005 CHROME_PATH=/opt/pw-browsers/chromium node tools/ui/demo-flujo.mjs`
+  (y ronda2 a ronda6, devolucion, roles, descuento, bodega-unidad, datos, sin-red).
+- `next dev` con `NEXT_DIST_DIR` reescribe `apps/web/tsconfig.json`: no lo subas.
 
 ## CÓMO SEGUIR — corte 2026-10-01 (noche, sesión local: 0032 a 0036), léelo antes que todo
 

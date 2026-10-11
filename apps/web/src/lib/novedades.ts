@@ -29,6 +29,10 @@ export const NOVEDADES: Novedad[] = [
       { para: 'admin', texto: 'Usuarios: "Turnos" decide qué roles puede elegir cada persona al entrar (por ejemplo, vender o bodega).' },
       { para: 'admin', texto: 'Reportes e impuestos ya no se cortan en 1.000 filas, y el celular baja todos los códigos de barra aunque sean más de 1.000.' },
       { para: 'todos', texto: 'Al salir se borra del celular el catálogo y la venta a medio armar (las ventas por enviar se quedan hasta enviarse).' },
+      { para: 'bodega', texto: 'Recibir con factura pide la fecha de la factura: va al libro de compras del mes que dice el papel, no del día en que llegó.' },
+      { para: 'admin', texto: 'Productos: el catálogo exportado se puede cambiar en Excel y volver a importar tal cual; actualiza los productos en vez de duplicarlos.' },
+      { para: 'admin', texto: 'Ofertas y stock mínimo van por unidad: "1.000" son mil y no se aceptan medias unidades.' },
+      { para: 'todos', texto: 'Ingreso: la espera después de 5 intentos fallidos ya no se salta recargando la página. Si el servidor no responde lo dice, en vez de culpar a la contraseña.' },
     ],
   },
   {
