@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { datosTienda } from '@/lib/tienda/catalogo';
+import { sitioTienda } from '@/lib/tienda/sitio';
 import { Buscador, TiendaCerrada } from '@/components/tienda/Catalogo';
 import { VistaCatalogo, leerFiltros, type ParamsCatalogo } from '@/components/tienda/VistaCatalogo';
 
@@ -9,7 +10,15 @@ type Params = Promise<ParamsCatalogo>;
 
 export async function generateMetadata({ searchParams }: { searchParams: Params }): Promise<Metadata> {
   const f = leerFiltros(await searchParams);
-  return { title: f.q ? `Buscar "${f.q}"` : f.categoria || 'Productos' };
+  const { base } = await sitioTienda();
+  const canonica = f.categoria ? `${base}/productos?categoria=${encodeURIComponent(f.categoria)}` : `${base}/productos`;
+  return {
+    title: f.q ? `Buscar "${f.q}"` : f.categoria || 'Productos',
+    description: f.categoria ? `${f.categoria}: precios y ofertas de la tienda.` : 'Todos los productos de la tienda, con precios y ofertas.',
+    // RNF-T62 · Una dirección por categoría; las búsquedas y los filtros no se indexan.
+    alternates: { canonical: canonica },
+    ...(f.q || f.min != null || f.max != null || f.marcas.length || f.pagina > 1 ? { robots: { index: false, follow: true } } : {}),
+  };
 }
 
 /** Productos: el catálogo completo con su barra de filtros, sin la portada. */

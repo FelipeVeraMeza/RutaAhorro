@@ -3,7 +3,10 @@ import { destacadosDelDia, diaLocal, filtrarCatalogo, ORDENES_TIENDA, type Orden
 import { datosTienda } from '@/lib/tienda/catalogo';
 import { Buscador, Resultados, TiendaCerrada, conParametros } from '@/components/tienda/Catalogo';
 
-export const metadata: Metadata = { title: 'Ofertas' };
+export async function generateMetadata(): Promise<Metadata> {
+  const { base } = await import('@/lib/tienda/sitio').then((m) => m.sitioTienda());
+  return { title: 'Ofertas', description: 'Precios por cantidad y promociones de hoy.', alternates: { canonical: `${base}/ofertas` } };
+}
 export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ q?: string; orden?: string; pagina?: string }>;

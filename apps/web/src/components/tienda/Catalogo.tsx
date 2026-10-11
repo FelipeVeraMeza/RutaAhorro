@@ -3,6 +3,7 @@ import type { PaginaTienda, ProductoTienda } from '@rutaahorro/core';
 import { Icono } from '@/components/Icono';
 import { iconoProducto } from '@/lib/tienda/iconos';
 import { Grilla } from './Grilla';
+import { Paginas } from './Paginas';
 import { SelectorOrden } from './SelectorOrden';
 
 /** Piezas que comparten Inicio, Productos y Ofertas. */
@@ -80,18 +81,8 @@ export function Resultados({ r, q, vacio, enlace, orden, sugeridos = [] }: {
           <Grilla productos={sugeridos} />
         </section>
       )}
-      {r.productos.length > 0 && <Grilla productos={r.productos} />}
-      {r.paginas > 1 && (
-        <nav aria-label="Páginas" className="flex items-center justify-center gap-3 py-2">
-          {r.pagina > 1
-            ? <Link className="btn btn-secundario" href={enlace(r.pagina - 1)}>Anterior</Link>
-            : <span className="btn btn-secundario opacity-45" aria-disabled>Anterior</span>}
-          <span className="text-sm num">Página {r.pagina} de {r.paginas}</span>
-          {r.pagina < r.paginas
-            ? <Link className="btn btn-secundario" href={enlace(r.pagina + 1)}>Siguiente</Link>
-            : <span className="btn btn-secundario opacity-45" aria-disabled>Siguiente</span>}
-        </nav>
-      )}
+      {r.productos.length > 0 && <Grilla productos={r.productos} prioridad={4} />}
+      <Paginas actual={r.pagina} total={r.paginas} enlace={enlace} />
     </>
   );
 }
