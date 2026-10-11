@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   // Next carga .env.local UNA vez, al arrancar `npm run dev`, y --env-file no
   // pisa lo que ya viene: el robot usaba la empresa vieja aunque el archivo ya
   // dijera otra (2026-10-11). Sin las SII_* heredadas, las lee frescas.
-  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('SII_')));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('SII_'))) as NodeJS.ProcessEnv;
   const log = fs.openSync(path.join(carpeta, 'robot.log'), 'w');
   const hijo = spawn(process.execPath, args, { cwd: worker, env, stdio: ['ignore', log, log], detached: true, windowsHide: false });
   hijo.unref();
