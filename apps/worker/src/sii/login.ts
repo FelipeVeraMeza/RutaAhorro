@@ -28,7 +28,22 @@ const PANTALLAS = [
 ];
 
 /** Lo que el SII escribe cuando la credencial está mal: reintentar no lo arregla. */
-const RECHAZO = /clave incorrecta|rut no v[aá]lido|contribuyente no encontrado|debes obtener clave|bloquead|suspendid/i;
+const RECHAZO = /clave incorrecta|rut no v[aá]lido|contribuyente no encontrado|debes obtener clave|bloquead|suspendid|c[oó]digo provisorio ingresado no es correcto|clave ingresada no es correcta/i;
+
+/**
+ * La pantalla antigua no avisa bajo el formulario: navega a una página de
+ * error (zeusr.sii.cl/cgi_AUT2000/CAutInicio.cgi) que dice, por ejemplo, "El
+ * código provisorio ingresado no es correcto" (2026-10-11, con la clave real).
+ * Ahí el formulario ya no está, y sin esto el robot creía haber entrado.
+ */
+async function paginaDeRechazo(page: Page): Promise<string | null> {
+  const texto = await page.evaluate(() => (document.body?.innerText || '').replace(/\s+/g, ' ')).catch(() => '');
+  const m = RECHAZO.exec(texto);
+  if (!m) return null;
+  // La frase entera donde apareció, para el mensaje.
+  const frase = texto.split(/(?<=[.!])\s/).find((f) => RECHAZO.test(f));
+  return (frase ?? m[0]).trim().slice(0, 200);
+}
 
 /** ¿Está a la vista un formulario de login del SII? */
 export async function hayLogin(page: Page): Promise<boolean> {
@@ -87,7 +102,11 @@ export async function entrarAlSii(page: Page, rut: string, clave: string): Promi
   // El login nuevo puede responder sin navegar (avisa en la misma página):
   // se espera a que el formulario se vaya o aparezca un aviso.
   for (let i = 0; i < 20; i++) {
-    if (!(await hayLogin(page))) return;
+    if (!(await hayLogin(page))) {
+      const rechazo = await paginaDeRechazo(page);
+      if (rechazo) throw new ErrorClaveSii(`El SII rechazó la entrada de ${conGuion}: «${rechazo}». No se reintenta.`);
+      return;
+    }
     const avisos = await avisosVisibles(page);
     const rechazo = avisos.find((a) => RECHAZO.test(a));
     if (rechazo) throw new ErrorClaveSii(`El SII rechazó la entrada de ${conGuion}: «${rechazo}». No se reintenta.`);

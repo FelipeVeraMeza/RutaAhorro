@@ -106,7 +106,7 @@ let resultado;
 try {
   resultado = await ensayarEnPortal(
     { receptor: { rut: formatRut(receptor), razon_social: '', ciudad: arg('ciudad-receptor') ?? ciudad, contacto: arg('contacto') },
-      ciudadEmisor: ciudad, formaPago, plan },
+      ciudadEmisor: ciudad, telefonoEmisor: arg('telefono') ?? process.env.SII_TELEFONO, formaPago, plan },
     cred,
     { chromePath: chrome, headless: !ver, hastaFirma, capturas, alPaso: (t) => console.log(`  · ${t}`) },
   );
