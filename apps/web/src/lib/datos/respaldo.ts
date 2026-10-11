@@ -42,11 +42,21 @@ export async function armarRespaldo(onProgreso?: (hechas: number, total: number)
     return r;
   }
   const PAGINA = 1000;
+  // Sin orden, PostgreSQL no promete que las páginas sigan el mismo: con más
+  // de 1.000 filas el respaldo podía repetir unas y saltarse otras sin avisar.
+  // Se ordena por la llave de cada tabla.
+  const LLAVE: Record<string, string[]> = {
+    product_suppliers: ['product_id', 'supplier_id'],
+    stock_levels: ['store_id', 'product_id'],
+    stock_ubicaciones: ['store_id', 'product_id', 'ubicacion'],
+  };
   for (const [i, tabla] of TABLAS.entries()) {
     const filas: unknown[] = [];
     try {
       for (let desde = 0; ; desde += PAGINA) {
-        const { data, error } = await supabase().from(tabla).select('*').range(desde, desde + PAGINA - 1);
+        let q = supabase().from(tabla).select('*');
+        for (const columna of LLAVE[tabla] ?? ['id']) q = q.order(columna);
+        const { data, error } = await q.range(desde, desde + PAGINA - 1);
         if (error) throw error;
         filas.push(...(data ?? []));
         if ((data ?? []).length < PAGINA) break;

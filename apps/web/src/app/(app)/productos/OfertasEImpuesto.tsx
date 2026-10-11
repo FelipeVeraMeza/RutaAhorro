@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import {
-  formatCLP, validarMonto, validarCantidad, validarTramos, etiquetaAdicional, precioDelTramo,
+  formatCLP, validarMonto, validarCantidad, validarCantidadStock, validarTramos, etiquetaAdicional, precioDelTramo,
   type TramoPrecio,
 } from '@rutaahorro/core';
 import type { ImpuestoAdicional } from '@/lib/datos/precios';
@@ -54,7 +54,9 @@ export function tramosDesdeFilas(
   const tramos: TramoPrecio[] = [];
   for (const [i, f] of filas.entries()) {
     const n = `Oferta ${i + 1}: `;
-    const vDesde = validarCantidad(f.desde, { maximo: 1_000_000 });
+    // Todo se vende por unidad (0032): "2,5" no es un "desde" posible y
+    // "1.000" son mil, no uno.
+    const vDesde = validarCantidadStock(f.desde, 'unidad', { maximo: 1_000_000 });
     if (!vDesde.valido) return { tramos: [], error: n + vDesde.error };
     let monto: Pick<TramoPrecio, 'precio' | 'descuentoPct'>;
     if (f.modo === 'pct') {
@@ -107,7 +109,7 @@ export function OfertasEImpuesto({
 
         <ul className="space-y-3">
           {filas.map((f, i) => {
-            const vD = validarCantidad(f.desde, { maximo: 1_000_000 });
+            const vD = validarCantidadStock(f.desde, 'unidad', { maximo: 1_000_000 });
             const vP = f.modo === 'pct'
               ? validarCantidad(f.precio, { maximo: 99.99 })
               : validarMonto(f.precio, { permiteCero: false, maximo: 50_000_000 });

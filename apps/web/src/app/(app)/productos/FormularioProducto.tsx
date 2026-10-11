@@ -219,7 +219,8 @@ export function FormularioProducto({
   // guarda al peso, avisando a cuánto quedó.
   const vCosto = validarMonto(costo, { etiqueta: 'costo', permiteVacio: true, maximo: 50_000_000, redondeaDecimales: true });
   const costoRedondeado = vCosto.valido && hayDecimales(costo);
-  const vStockMinimo = validarCantidad(stockMinimo, { permiteVacio: true, maximo: 1_000_000 });
+  // Como el stock: "1.000" son mil y por unidad no hay medias.
+  const vStockMinimo = validarCantidadStock(stockMinimo, unidad, { permiteVacio: true, maximo: 1_000_000 });
   const vStockSala = validarCantidadStock(stockSala, unidad, { permiteVacio: true, maximo: 1_000_000 });
   const vDiasAlerta = validarCantidad(diasAlerta, { permiteVacio: true, maximo: 3650 });
 
