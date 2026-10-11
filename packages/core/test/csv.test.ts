@@ -108,3 +108,25 @@ describe('nombreArchivoReporte', () => {
     expect(nombreArchivoReporte('  ¿Margen?  ')).toBe('margen.csv');
   });
 });
+
+describe('celdaCSV: fórmulas (revisión 2026-10-11)', () => {
+  it('un texto que empieza como fórmula no se ejecuta al abrirlo en Excel', () => {
+    // Un motivo de merma o un nombre escrito "=HYPERLINK(...)" se ejecutaba
+    // en el computador del dueño al abrir el reporte.
+    expect(celdaCSV('=1+1')).toBe("'=1+1");
+    expect(celdaCSV('+56 9 1234 5678')).toBe("'+56 9 1234 5678");
+    expect(celdaCSV('@SUMA(A1)')).toBe("'@SUMA(A1)");
+    expect(celdaCSV('-roto')).toBe("'-roto");
+  });
+
+  it('los números siguen siendo números, también los negativos', () => {
+    expect(celdaCSV(-3)).toBe('-3');
+    expect(celdaCSV(-1.5)).toBe('-1,5');
+  });
+});
+
+describe('partirLinea: el apóstrofo anti-fórmula', () => {
+  it('se quita al volver a importar', () => {
+    expect(partirLinea(`${celdaCSV('-roto')};${celdaCSV("O'Higgins")}`, ';')).toEqual(['-roto', "O'Higgins"]);
+  });
+});

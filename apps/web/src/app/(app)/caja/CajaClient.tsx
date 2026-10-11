@@ -533,7 +533,7 @@ export function CajaClient({
                 <input
                   {...p}
                   type="text"
-                  value={movMotivo}
+                  value={movMotivo} maxLength={300}
                   onChange={(e) => setMovMotivo(e.target.value)}
                   placeholder={vistaMovimiento === 'egreso' ? 'Ej: compra de bolsas' : 'Ej: vuelto del día anterior'}
                   className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)]"

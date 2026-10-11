@@ -225,6 +225,8 @@ function EditarImpuesto({ inicial, onCerrar, onGuardado }: {
     if (!nombre.trim()) { setError('El impuesto necesita un nombre'); return; }
     if (!vTasa.valido || vTasa.valor <= 0) { setError('La tasa tiene que ser un porcentaje mayor que 0'); return; }
     if (!vCodigo.valido) { setError(vCodigo.error); return; }
+    // "27,1" se redondeaba a 27 sin avisar: el código que va en la boleta es entero.
+    if (codigo.trim() && !Number.isInteger(vCodigo.valor)) { setError('El código SII es un número entero (ej.: 27 o 271)'); return; }
     setGuardando(true);
     try {
       await repoPrecios().guardarImpuesto({

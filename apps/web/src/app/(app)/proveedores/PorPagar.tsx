@@ -186,7 +186,8 @@ function NuevaFactura({ proveedores, hoy, onCerrar, onListo }: {
   // Escrita a mano, la fecha podía quedar antes de la emisión ("min" solo
   // limita el calendario): la factura nacía vencida.
   const venceAntes = !!vence && !!emitida && vence < emitida;
-  const listo = proveedorId && numero.trim() && v.valido && v.valor > 0 && vence && !emitidaFutura && !venceAntes;
+  // Y sin fecha de emisión (borrada a mano) llegaba vacía a la base.
+  const listo = proveedorId && numero.trim() && v.valido && v.valor > 0 && emitida && vence && !emitidaFutura && !venceAntes;
 
   async function guardar() {
     if (!listo || enviando) return;

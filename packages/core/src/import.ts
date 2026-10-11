@@ -78,7 +78,9 @@ export function partirLinea(linea: string, separador: string): string[] {
     }
   }
   campos.push(actual);
-  return campos.map((c) => c.trim());
+  // El apóstrofo que pone csv.ts delante de un texto que parece fórmula no es
+  // parte del dato: un reporte exportado y vuelto a importar queda igual.
+  return campos.map((c) => c.trim().replace(/^'(?=[=+\-@])/, ''));
 }
 
 /** Detecta si el archivo usa coma o punto y coma como separador. */

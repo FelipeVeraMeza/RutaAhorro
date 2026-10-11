@@ -47,7 +47,13 @@ export function celdaCSV(valor: CeldaCSV): string {
     ? (Number.isInteger(valor) ? String(valor) : String(valor).replace('.', ','))
     : valor;
 
-  return /[;"\r\n]/.test(texto) ? `"${texto.replace(/"/g, '""')}"` : texto;
+  // Un texto que empieza con = + - @ Excel lo ejecuta como fórmula: un motivo
+  // escrito "=HYPERLINK(...)" corría en el computador de quien abre el reporte
+  // (inyección de fórmulas). El apóstrofo lo deja como texto y Excel no lo
+  // muestra; al importar se quita (import.ts).
+  const seguro = typeof valor === 'string' && /^[=+\-@\t\r]/.test(texto) ? `'${texto}` : texto;
+
+  return /[;"\r\n]/.test(seguro) ? `"${seguro.replace(/"/g, '""')}"` : seguro;
 }
 
 /** Arma el contenido completo de un archivo CSV, listo para descargar. */
