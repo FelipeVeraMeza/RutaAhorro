@@ -62,6 +62,8 @@ export const ACCIONES: Record<string, string> = {
   roles_del_turno: 'Turnos de una persona',
   datos_usuario: 'Datos de una cuenta',
   clave_restablecida: 'Contraseña temporal puesta por el administrador',
+  pedido_web_estado: 'Pedido web cambió de estado',
+  publicar_tienda: 'Productos mostrados u ocultos en la tienda',
   credenciales_sii: 'Claves del SII guardadas',
   credenciales_sii_borradas: 'Claves del SII borradas',
 };
@@ -86,6 +88,8 @@ function detalle(accion: string, entidad: string | null, antes: Record<string, u
     case 'user_create': return `${d.email ?? ''} (${d.role ?? ''})`;
     case 'rol_del_turno': return `${a.rol ?? '?'} → ${d.rol ?? '?'}`;
     case 'roles_del_turno': return Array.isArray(d.roles) && d.roles.length > 1 ? `elige entre ${(d.roles as string[]).join(', ')}` : 'entra siempre con su rol';
+    case 'pedido_web_estado': return `N° ${d.numero ?? '—'}: ${String(a?.estado ?? '')} → ${String(d.estado ?? '')}${d.motivo ? ` (${String(d.motivo)})` : ''}`;
+    case 'publicar_tienda': return `${d.publicado ? 'Mostrados' : 'Ocultos'}: ${String(d.productos ?? 0)}`;
     case 'datos_usuario': return [d.nombre, d.rut ? `RUT ${d.rut}` : ''].filter(Boolean).join(' · ');
     case 'credenciales_sii': return d.rut_usuario ? `RUT ${d.rut_usuario}` : '';
   }

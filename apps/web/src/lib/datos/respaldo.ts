@@ -20,7 +20,7 @@ const TABLAS = [
   'combos', 'combo_items', 'sales', 'sale_items', 'sale_item_lots', 'sale_payments', 'sale_returns',
   'sale_return_items', 'cash_sessions', 'cash_movements', 'inventory_movements', 'stock_counts',
   'stock_count_items', 'dte_documentos', 'facturas', 'factura_lineas', 'factura_notas_credito',
-  'facturas_recibidas', 'audit_log',
+  'facturas_recibidas', 'pedidos_web', 'pedido_web_items', 'pedido_web_historial', 'audit_log',
 ];
 
 export interface Respaldo {

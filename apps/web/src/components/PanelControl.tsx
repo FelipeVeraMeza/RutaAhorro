@@ -7,6 +7,7 @@ import { avisosSinLeer, marcarAvisosLeidos, cajasOlvidadas, type Aviso, type Caj
 import { repoReportes, hoyLocal } from '@/lib/datos/reportes';
 import { useConfiguracion } from '@/lib/datos/configuracion';
 import { porVencer, type FacturaProveedor } from '@/lib/datos/porPagar';
+import { contarPedidosNuevos } from '@/lib/datos/pedidosWeb';
 import { Icono } from './Icono';
 
 /**
@@ -26,11 +27,14 @@ export function PanelControl({ usuarioId, verCostos, verPorPagar = false }: {
   const [merma, setMerma] = useState<{ perdida: number; movimientos: number } | null>(null);
   const [marcando, setMarcando] = useState(false);
   const [facturas, setFacturas] = useState<Array<FacturaProveedor & { dias: number }>>([]);
+  // docs/33 · Pedidos de la tienda que nadie ha mirado.
+  const [pedidosWeb, setPedidosWeb] = useState(0);
 
   useEffect(() => {
     void avisosSinLeer().then(setAvisos).catch(() => setAvisos([]));
     void cajasOlvidadas(horasAvisoCaja).then(setCajas).catch(() => {});
     if (verPorPagar) void porVencer(zonaHoraria, 7).then(setFacturas).catch(() => {});
+    void contarPedidosNuevos().then((n) => setPedidosWeb(n ?? 0)).catch(() => {});
     if (verCostos) {
       const hoy = hoyLocal(zonaHoraria);
       void repoReportes().ajustes({ desde: `${hoy.slice(0, 8)}01`, hasta: hoy }).then((a) => setMerma({
@@ -48,7 +52,7 @@ export function PanelControl({ usuarioId, verCostos, verPorPagar = false }: {
     finally { setMarcando(false); }
   }
 
-  const hayAlgo = (avisos?.length ?? 0) > 0 || cajas.length > 0 || (merma && merma.perdida > 0) || facturas.length > 0;
+  const hayAlgo = (avisos?.length ?? 0) > 0 || cajas.length > 0 || (merma && merma.perdida > 0) || facturas.length > 0 || pedidosWeb > 0;
   if (!hayAlgo) return null;
 
   return (
@@ -56,6 +60,13 @@ export function PanelControl({ usuarioId, verCostos, verPorPagar = false }: {
       <h2 id="t-control" className="font-semibold text-sm flex items-center gap-2">
         <Icono nombre="alerta" tamano={18} className="text-[var(--color-aviso)]" /> Para revisar
       </h2>
+
+      {pedidosWeb > 0 && (
+        <p className="text-sm flex justify-between gap-2" data-pedidos-web>
+          <span><span className="insignia bg-acento-500 text-marca-900 num">{pedidosWeb}</span> {pedidosWeb === 1 ? 'pedido web nuevo' : 'pedidos web nuevos'} de la tienda</span>
+          <Link href="/pedidos-web" prefetch={false} className="tap -my-2 inline-flex items-center text-xs text-marca-700 underline">Verlos</Link>
+        </p>
+      )}
 
       {cajas.length > 0 && (
         <div>

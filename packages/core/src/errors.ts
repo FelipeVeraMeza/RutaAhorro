@@ -13,6 +13,11 @@ export const ERROR_MESSAGES: Record<string, string> = {
   SIN_PERMISO_AJUSTAR: 'No tienes permiso para ajustar el stock',
   SIN_PERMISO_CREAR_PRODUCTO: 'No tienes permiso para crear productos',
   SIN_PERMISO_PRECIO: 'Bodega no cambia precios: pídeselo al administrador o al supervisor',
+  // 0040 · Pedidos web
+  PEDIDO_NO_ENCONTRADO: 'No se encontró ese pedido',
+  CAMBIO_DE_ESTADO_INVALIDO: 'El pedido ya cambió de estado: actualiza la lista',
+  ESTADO_INVALIDO: 'Ese estado no existe',
+  MOTIVO_LARGO: 'El motivo tiene hasta 300 letras',
   // 0026 · Facturación
   SIN_PERMISO_FACTURAR: 'Solo el administrador o un supervisor pueden facturar',
   FALTA_IDENTIFICADOR: 'No se pudo identificar la factura. Vuelve a intentarlo',

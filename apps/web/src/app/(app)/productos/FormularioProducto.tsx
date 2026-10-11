@@ -1,5 +1,6 @@
 'use client';
 import { Icono } from '@/components/Icono';
+import { PublicarEnTienda } from '@/components/PublicarEnTienda';
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -811,6 +812,7 @@ export function FormularioProducto({
                 </Campo>
               </div>
             </details>
+            {esEdicion && producto && <PublicarEnTienda productoId={producto.id} />}
             {esEdicion && historialPrecios.length > 0 && (
               <details className="rounded-xl border border-[var(--borde)] p-3">
                 <summary className="text-sm font-semibold cursor-pointer min-h-[44px] py-2.5 -my-2.5">

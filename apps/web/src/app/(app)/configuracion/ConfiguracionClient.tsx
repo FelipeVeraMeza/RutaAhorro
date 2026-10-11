@@ -17,6 +17,7 @@ import { leerEmisor, guardarEmisor, type Emisor } from '@/lib/datos/emisor';
 import { Encabezado } from '@/components/Encabezado';
 import { Icono, type NombreIcono } from '@/components/Icono';
 import { armarRespaldo, descargarJson } from '@/lib/datos/respaldo';
+import { TiendaOnline } from './TiendaOnline';
 
 /**
  * Configuración del local (T-18) e impuestos adicionales (0018).
@@ -26,9 +27,10 @@ import { armarRespaldo, descargarJson } from '@/lib/datos/respaldo';
  * tasa se cambia en un solo lugar y vale para todos los productos que tienen
  * ese impuesto, y se asigna de a muchos productos a la vez.
  */
-type IdPestana = 'caja' | 'impuestos' | 'documentos' | 'respaldo';
+type IdPestana = 'caja' | 'tienda' | 'impuestos' | 'documentos' | 'respaldo';
 const PESTANAS: Array<{ id: IdPestana; titulo: string; icono: NombreIcono; ayuda: string }> = [
   { id: 'caja', titulo: 'Caja y ventas', icono: 'caja', ayuda: 'Efectivo inicial, avisos, ofertas y el texto del comprobante.' },
+  { id: 'tienda', titulo: 'Tienda online', icono: 'compra', ayuda: 'Pedidos en la tienda, WhatsApp, horario de atención y aviso.' },
   { id: 'impuestos', titulo: 'Impuestos', icono: 'productos', ayuda: 'Impuestos de bebidas y alcoholes (IABA, ILA), además del IVA.' },
   { id: 'documentos', titulo: 'Boletas y facturas', icono: 'facturacion', ayuda: 'Los datos del local que salen en cada documento.' },
   { id: 'respaldo', titulo: 'Respaldo', icono: 'configuracion', ayuda: 'Descarga una copia de todo lo del local.' },
@@ -108,6 +110,14 @@ export function ConfiguracionClient() {
 
       {pestana === 'caja' && config && (
         <OperacionDelLocal
+          config={config}
+          onGuardado={(c, texto) => { setConfig(c); setAviso({ tipo: 'ok', texto }); }}
+          onError={(texto) => setAviso({ tipo: 'error', texto })}
+        />
+      )}
+
+      {pestana === 'tienda' && config && (
+        <TiendaOnline
           config={config}
           onGuardado={(c, texto) => { setConfig(c); setAviso({ tipo: 'ok', texto }); }}
           onError={(texto) => setAviso({ tipo: 'error', texto })}
