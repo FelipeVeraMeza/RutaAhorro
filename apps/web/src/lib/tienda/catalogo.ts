@@ -22,13 +22,13 @@ export interface DatosTienda {
   direccion: string | null;
   /**
    * El número para WhatsApp: el que se anotó en Configuración → Tienda online
-   * o, si no, el teléfono de la sucursal (0040).
+   * o, si no, el teléfono de la sucursal (0041).
    */
   telefono: string | null;
   catalogo: ProductoTienda[];
   /** Alguna foto vino de Open Food Facts (`-off-` en el archivo): hay que citar la fuente (CC BY-SA). */
   fotosDeOpenFoodFacts: boolean;
-  /** RF-T45 · El local recibe pedidos en la tienda (Configuración → Tienda online, 0040). */
+  /** RF-T45 · El local recibe pedidos en la tienda (Configuración → Tienda online, 0041). */
   pedidosActivos: boolean;
   /** Pedido mínimo en pesos, 0 = sin mínimo. */
   pedidoMinimo: number;
@@ -80,8 +80,8 @@ async function leerTienda(tenantId: string): Promise<DatosTienda | null> {
   const venderSinStock = ajustes.vender_sin_stock === true;
 
   // Supabase entrega hasta 1.000 filas por consulta: se pide por páginas.
-  // RF-T57 · Solo los publicados (0040). Si la base todavía no tiene la
-  // columna (0040 sin aplicar), se piden todos, como antes, en vez de dejar
+  // RF-T57 · Solo los publicados (0041). Si la base todavía no tiene la
+  // columna (0041 sin aplicar), se piden todos, como antes, en vez de dejar
   // la tienda caída.
   const leerPaginas = async (soloPublicados: boolean) => {
     const filas: FilaProducto[] = [];

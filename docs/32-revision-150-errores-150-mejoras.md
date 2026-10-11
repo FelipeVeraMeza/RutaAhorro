@@ -18,7 +18,7 @@ M-1 a M-150): no sigue la de [docs/26](26-revision-por-rol-50-errores.md) y
 
 ## Antes de publicar en `main` (obligatorio)
 
-1. **Aplicar la migración 0039 en Supabase** (`npm run db:instalar` y después
+1. **Aplicar la migración 0040 en Supabase** (antes, la 0039 de `main` si no está) (`npm run db:instalar` y después
    `npm run db:aplicar -- --aplicar`, que diagnostica y aplica lo que falte). Es idempotente y no cambia
    ninguna firma: puede ir antes que el código. Sin ella siguen abiertos los errores de la base
    (caja con montos negativos, ajustes sin lotes, cuentas desactivadas que anulan, vencimientos
@@ -169,7 +169,7 @@ que la prueba se escribió primero y falló contra el código de antes (regla 16
 | E-115 | Pruebas · demo-ronda3 | — | Baja | Creaba la cuenta con correo (hoy RUT). | Corregido | recorrido |
 | E-116 | Pruebas · demo-ronda4 | — | Media | Probaba Fiado, que salió del sistema: ahora prueba que no quede ninguna puerta abierta. | Corregido | recorrido |
 | E-117 | Pruebas · demo-ronda6 | — | Baja | Igual con "Dar crédito". | Corregido | recorrido |
-| E-118 | Pruebas · seguridad | — | Baja | Una prueba usaba a bodega como cajero: con 0039 bodega no abre caja. | Corregido | pg-test seguridad |
+| E-118 | Pruebas · seguridad | — | Baja | Una prueba usaba a bodega como cajero: con 0040 bodega no abre caja. | Corregido | pg-test seguridad |
 | E-119 | Vencimientos | Bodega | Media | v_expiring_lots calculaba "días para vencer" con el día de UTC: desde las 21:00 de Chile lo que vence hoy salía como vencido. | Corregido | pg-test: revision-150.test.mjs |
 | E-120 | Recibir mercadería | Bodega | Media | fn_confirm_receipt rechazaba con LOTE_YA_VENCIDO un lote que vence HOY si se recibía de noche (comparaba con el día de UTC). | Corregido | pg-test: revision-150.test.mjs |
 | E-121 | Servidor · foto | Jefe | Media | Subir foto por enlace seguía redirecciones: un enlace público podía rebotar a una dirección interna (SSRF). | Corregido | typecheck (sin prueba propia) |
@@ -235,7 +235,7 @@ que la prueba se escribió primero y falló contra el código de antes (regla 16
 | M-18 | Código compartido | Media | `esErrorDeRed` en core, con pruebas: una sola regla para decidir "sin señal" o "rechazada". | core: validaciones.test.ts |
 | M-19 | Código compartido | Media | `todasLasFilas`: un solo ayudante para leer más de 1.000 filas, usado en catálogo, reportes, precios y clientes. | typecheck |
 | M-20 | Código compartido | Baja | `perfilActual()`: el perfil desde la sesión sin `user!.id`. | typecheck |
-| M-21 | Base de datos | Alta | 0039 con 7 pruebas propias (pg-test/revision-150) vistas fallar antes de corregir. | npm run db:test |
+| M-21 | Base de datos | Alta | 0040 con 7 pruebas propias (pg-test/revision-150) vistas fallar antes de corregir. | npm run db:test |
 | M-22 | Pruebas | Media | Recorridos de la maqueta al día con el ingreso por RUT, sin fiado y con la fecha de la factura. | 12 recorridos verdes |
 | M-23 | Novedades | Baja | Entrada 0.6.4 en Novedades con lo que cambia para quien usa el sistema. | revisión de texto |
 | M-24 | Carga masiva | Alta | El catálogo exportado se puede editar en Excel y volver a importar tal cual. | core: import.test.ts |
@@ -255,7 +255,7 @@ Ordenadas por prioridad. *Alta*: conviene antes de crecer en uso. *Media*: ahorr
 | M-30 | Seguridad | Alta | Content-Security-Policy en next.config (los demás encabezados de seguridad ya están: X-Frame-Options, HSTS, nosniff, Referrer y Permissions-Policy). |
 | M-31 | Respaldo | Alta | Activar el respaldo automático diario del worker (BACKUP_BUCKET) y probar una restauración completa. |
 | M-32 | Pruebas | Alta | Correr typecheck, pruebas de core, db:test y los recorridos en cada push (GitHub Actions) antes de Railway. |
-| M-33 | Operación | Alta | Aplicar 0039 en Supabase (`npm run db:aplicar`) ANTES de publicar este código en main. (ver HANDOFF) |
+| M-33 | Operación | Alta | Aplicar 0040 en Supabase (`npm run db:aplicar`) ANTES de publicar este código en main. (ver HANDOFF) |
 | M-34 | Operación | Alta | Configurar WORKER_SHARED_SECRET en Railway (sin ella el worker ahora rechaza todo en producción). (ver HANDOFF) |
 | M-35 | Vender | Media | Atajo de teclado para "Cobrar" (F2) y para quitar la última línea (Supr), para la caja con computador. |
 | M-36 | Vender | Media | Pausar una venta (cliente que fue a buscar algo) y atender a otro sin perder el carrito. |

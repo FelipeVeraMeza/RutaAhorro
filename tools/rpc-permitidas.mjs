@@ -37,6 +37,6 @@ export const RPC_PERMITIDAS = [
   'fn_devolver_a_proveedor',
   // 0036 · descuento autorizado con PIN
   'fn_autorizadores', 'fn_autorizar_descuento', 'fn_guardar_pin',
-  // 0040 · pedidos de la tienda online y qué productos se publican
+  // 0041 · pedidos de la tienda online y qué productos se publican
   'fn_cambiar_estado_pedido_web', 'fn_publicar_en_tienda',
 ].sort();

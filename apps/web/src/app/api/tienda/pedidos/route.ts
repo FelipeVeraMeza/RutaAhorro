@@ -12,7 +12,7 @@ import { deOtroSitio, ipDe, limitar } from '@/lib/limites';
  * RF-T48, docs/33). Público como la tienda, con límite por IP.
  *
  * El navegador manda qué productos y cuántos, y los datos de contacto. Los
- * precios NO: los calcula la base (`fn_crear_pedido_web`, 0040) con los de ese
+ * precios NO: los calcula la base (`fn_crear_pedido_web`, 0041) con los de ese
  * momento y sus ofertas. Si el total cambió desde que el cliente lo vio, la
  * respuesta lo dice (`cambio`) para mostrarlo (RNF-T49).
  */
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     },
   });
   if (error) {
-    // La base todavía sin 0040: la tienda no se cae, solo no recibe pedidos.
+    // La base todavía sin 0041: la tienda no se cae, solo no recibe pedidos.
     if (error.code === 'PGRST202' || error.code === '42883') {
       return respuestaError('PEDIDOS_WEB_APAGADOS', 'Por ahora el local no está recibiendo pedidos en línea.', 409);
     }

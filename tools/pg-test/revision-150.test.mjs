@@ -1,5 +1,5 @@
 /**
- * 0039 · Revisión del 2026-10-11 (docs/32): caja, ajustes, toma y lotes.
+ * 0040 · Revisión del 2026-10-11 (docs/32): caja, ajustes, toma y lotes.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';

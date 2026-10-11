@@ -17,6 +17,8 @@ export interface ClienteConPrecios {
   rut?: string | null;
   giro?: string | null;
   direccion?: string | null;
+  /** Para la factura desde la caja: ahí le llega (2026-10-11). */
+  correo?: string | null;
   /** Rebaja general, en % (8 = 8 % menos). 0 si no tiene. */
   descuentoPct: number;
   /** Precio especial de cada unidad, por id de producto. */

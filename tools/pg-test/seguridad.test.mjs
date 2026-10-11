@@ -123,7 +123,7 @@ test('Un cajero no puede inventar ventas ni pagos fuera de fn_register_sale', as
 
 test('Un supervisor no puede editar el total de una venta ni anularla sin devolver stock', async () => {
   const p = await A.producto({ stock: 10 });
-  // Vende el administrador: desde 0039 bodega no abre caja (no ve dinero, doc 02).
+  // Vende el administrador: desde 0040 bodega no abre caja (no ve dinero, doc 02).
   const { c: vende } = await sesionAbierta(A, A.admin);
   const { sale_id } = await rpc(vende, 'fn_register_sale', venta(p, 2, 1000));
   const s = await banco.como(A.supervisor);

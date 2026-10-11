@@ -13,7 +13,7 @@ import { anotarPedido, useDatosCliente } from '@/lib/tienda/cliente';
 import { ConfirmarPedido } from './ConfirmarPedido';
 
 /**
- * El carrito (RT-20, RT-21). Con los pedidos en línea encendidos (0040,
+ * El carrito (RT-20, RT-21). Con los pedidos en línea encendidos (0041,
  * docs/33) se confirma acá y queda en el sistema; si no, se envía por
  * WhatsApp con el detalle, el total y los datos de "Mi cuenta".
  *

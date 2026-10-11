@@ -79,7 +79,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex flex-1 min-h-0">
         <Sidebar rol={user.role} nombre={user.fullName} version={versionCompleta()} />
 
-        <div className="flex-1 flex flex-col min-w-0">
+        {/* lg:pl-60: el ancho de la barra lateral, que es fija (Sidebar.tsx). */}
+        <div className="flex-1 flex flex-col min-w-0 lg:pl-60">
           <EstadoConexion />
 
           {/* Cabecera: solo en celular. En escritorio la identidad vive en la lateral. */}

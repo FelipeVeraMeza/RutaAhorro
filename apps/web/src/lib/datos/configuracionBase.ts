@@ -44,7 +44,7 @@ export interface ConfiguracionLocal {
    * migración 0029: antes de aplicarla, cobrar redondeado sería rechazado.
    */
   redondeoEfectivo: boolean;
-  /** docs/33 · La tienda online (0040): pedidos, WhatsApp, horario, aviso y pedido mínimo. */
+  /** docs/33 · La tienda online (0041): pedidos, WhatsApp, horario, aviso y pedido mínimo. */
   tienda: {
     pedidos: boolean;
     whatsapp: string;

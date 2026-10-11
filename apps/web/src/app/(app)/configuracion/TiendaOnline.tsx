@@ -9,7 +9,7 @@ import { guardarConfiguracion, type ConfiguracionLocal } from '@/lib/datos/confi
 import { Campo } from '@/components/Campo';
 
 /**
- * Configuración → Tienda online (docs/33, 0040): recibir pedidos, el WhatsApp
+ * Configuración → Tienda online (docs/33, 0041): recibir pedidos, el WhatsApp
  * de la tienda, el horario de atención, un aviso y el pedido mínimo.
  */
 export function TiendaOnline({ config, onGuardado, onError }: {

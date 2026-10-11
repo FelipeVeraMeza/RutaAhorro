@@ -5,7 +5,7 @@ import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 
 /**
- * Pedidos web (0040, docs/33): los que los clientes hacen en la tienda. El
+ * Pedidos web (0041, docs/33): los que los clientes hacen en la tienda. El
  * personal los lee por RLS (admin, supervisor, vendedor) y los mueve con
  * `fn_cambiar_estado_pedido_web`.
  */
@@ -70,7 +70,7 @@ export async function cambiarEstadoPedidoWeb(id: string, estado: EstadoPedidoWeb
   if (error) throw error;
 }
 
-/** Cuántos pedidos esperan que alguien los mire (recibidos). Null si no se pudo saber (sin 0040, sin red). */
+/** Cuántos pedidos esperan que alguien los mire (recibidos). Null si no se pudo saber (sin 0041, sin red). */
 export async function contarPedidosNuevos(): Promise<number | null> {
   if (DEMO_ACTIVO) {
     try { return (await listarPedidosWeb()).filter((p) => p.estado === 'recibido').length; } catch { return null; }

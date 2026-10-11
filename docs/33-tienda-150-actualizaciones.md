@@ -18,9 +18,9 @@ pedido.
 
 ## Antes de publicar en `main`
 
-1. **Aplicar 0039 y 0040 en Supabase**, en ese orden: `npm run db:instalar` y después
-   `npm run db:aplicar -- --aplicar`. Las dos son idempotentes y no cambian firmas. El código funciona
-   igual sin 0040 (la tienda no muestra "Hacer pedido"), pero los pedidos necesitan 0040.
+1. **Aplicar 0039 (la de la factura en la caja, que ya estaba en `main`), 0040 y 0041 en Supabase**, en ese orden: `npm run db:instalar` y después
+   `npm run db:aplicar -- --aplicar`. 0040 y 0041 son idempotentes y no cambian firmas. El código funciona
+   igual sin 0041 (la tienda no muestra "Hacer pedido"), pero los pedidos necesitan 0041.
 2. **Encender los pedidos** en Configuración → Tienda online, y en esa misma pantalla anotar el
    WhatsApp de la tienda y el horario. Están apagados por omisión: que el local los encienda cuando
    alguien vaya a mirar "Pedidos web" durante el día.
@@ -87,7 +87,7 @@ maqueta, en el navegador.
 | RNF-T66 | Seguir mostrando la última copia buena | ✅ |
 | RNF-T67 | Pedidos protegidos contra abuso (límite, trampa, origen, tamaño) | ✅ |
 | RNF-T68 | Chequeo de salud para monitorear | ✅ |
-| RNF-T69 | Funciona con o sin la migración 0040 | ✅ |
+| RNF-T69 | Funciona con o sin la migración 0041 | ✅ |
 
 ## Lo que cambia en docs/31
 
@@ -102,7 +102,7 @@ maqueta, en el navegador.
 | RF-T49 | ⏳ | ✅ | Pantalla "Pedidos web". |
 | RF-T50 | ⏳ | ◐ | Estados con historial y aviso por WhatsApp con un toque. Falta el aviso automático por correo (cuenta de Resend). |
 | RF-T56 | ◐ | ✅ | El WhatsApp de la tienda se configura en Configuración → Tienda online. |
-| RF-T57 | ⏳ | ✅ | "Se muestra en la tienda online" en la ficha de cada producto (0040). |
+| RF-T57 | ⏳ | ✅ | "Se muestra en la tienda online" en la ficha de cada producto (0041). |
 | RNF-T22 | — | ✅ | Los pedidos son de cada local (RLS), probado en pedidos-web.test.mjs. |
 | RNF-T26 | ◐ | ✅ | Los datos de contacto de pedidos cerrados se borran a los 12 meses (worker mensual). |
 | RNF-T41 | 🔍 | ◐ | `/api/tienda/salud` listo. Falta crear el monitor (UptimeRobot) en una cuenta del local. |
@@ -133,7 +133,7 @@ maqueta, en el navegador.
 | U-18 | Pedido en línea | RNF | RNF-T26 | Trabajo mensual del worker que anonimiza a los 12 meses (el plazo de la página de privacidad). | typecheck (sin prueba propia) |
 | U-19 | Pedido en línea | RNF | RNF-T12, T17 | Crear pedidos, seguir uno y anonimizar solo con la llave de servicio: ni anon ni el personal pueden llamarlas. | pg-test: pedidos-web.test.mjs |
 | U-20 | Pedido en línea | RNF | RNF-T59 | Pedidos apagados por omisión: un local no recibe pedidos hasta encenderlos en Configuración. | pg-test: pedidos-web.test.mjs |
-| U-21 | Pedido en línea | RNF | RNF-T69 (nuevo) | Sin 0040 aplicada la tienda no se cae: no muestra "Hacer pedido" y la API responde "no está recibiendo pedidos". | typecheck (sin prueba propia) |
+| U-21 | Pedido en línea | RNF | RNF-T69 (nuevo) | Sin 0041 aplicada la tienda no se cae: no muestra "Hacer pedido" y la API responde "no está recibiendo pedidos". | typecheck (sin prueba propia) |
 | U-22 | Pedido en línea | RF | RF-T57 | `products.publicado_tienda` y `fn_publicar_en_tienda`: elegir qué productos se muestran. | pg-test: pedidos-web.test.mjs |
 | U-23 | Pedido en línea | RNF | RNF-T69 (nuevo) | El catálogo filtra lo no publicado, y si la base todavía no tiene la columna lee todo como antes. | typecheck (sin prueba propia) |
 | U-24 | Pedido en línea | RF | RF-T89 (nuevo) | `fn_guardar_configuracion` acepta la configuración de la tienda (pedidos, WhatsApp, horario, aviso, mínimo) con sus límites. | pg-test: pedidos-web.test.mjs |
@@ -223,7 +223,7 @@ maqueta, en el navegador.
 | U-108 | Pedidos web (personal) | RF | RF-T81 | Imprimir los pedidos de la pestaña para armarlos en papel. | typecheck (sin prueba propia) |
 | U-109 | Pedidos web (personal) | RF | RF-T86 (nuevo) | Buscar un pedido por número, nombre o celular. | recorrido tienda-150 |
 | U-110 | Pedidos web (personal) | RF | RF-T86 (nuevo) | Resumen del día: cuántos se entregaron y por cuánto. | typecheck (sin prueba propia) |
-| U-111 | Pedidos web (personal) | RNF | RNF-T35 | Si la base no tiene 0040, la pantalla lo dice en vez de un error; si no llegan, enlaza a Configuración. | typecheck (sin prueba propia) |
+| U-111 | Pedidos web (personal) | RNF | RNF-T35 | Si la base no tiene 0041, la pantalla lo dice en vez de un error; si no llegan, enlaza a Configuración. | typecheck (sin prueba propia) |
 | U-112 | Pedidos web (personal) | RNF | RNF-T12 | Entran admin, supervisor y vendedor; bodega no (los pedidos traen el celular del cliente). | recorrido tienda-150 |
 | U-113 | Pedidos web (personal) | RNF | RNF-T34 | "Pedidos web" en el menú, y el menú lateral compactado para que siga cabiendo en 800 px. | recorrido demo-ronda2 |
 | U-114 | Pedidos web (personal) | RF | RF-T49 | El Inicio del jefe avisa los pedidos web nuevos con enlace. | recorrido tienda-150 |

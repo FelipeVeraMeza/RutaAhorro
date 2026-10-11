@@ -23,7 +23,7 @@ export interface PedidoEnviado {
   fecha: string;
   lineas: LineaCarritoTienda[];
   total: number;
-  /** 0040 · Pedido hecho en la tienda (no por WhatsApp): su número y código de seguimiento. */
+  /** 0041 · Pedido hecho en la tienda (no por WhatsApp): su número y código de seguimiento. */
   numero?: number;
   codigo?: string;
 }

@@ -127,7 +127,7 @@ export interface CambiosConfiguracion {
   cost_variation_alert_pct?: number;
   /** RF-M9-13 · 0029. */
   comprobante_pie?: string;
-  /** docs/33 · 0040. */
+  /** docs/33 · 0041. */
   tienda_pedidos?: boolean;
   tienda_whatsapp?: string;
   tienda_horario?: Record<string, string>;

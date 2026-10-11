@@ -8,7 +8,7 @@ import {
   type ClienteConPrecios,
   aplicarCombos, lineSubtotal, type Combo,
   formatCLP, formatCantidad, validarCantidadVenta, admiteDecimales, toUserMessage, construirComprobante,
-  cantidadAtipica,
+  cantidadAtipica, totalConFactura,
   type CartLine, type Comprobante as DatosComprobante, type DocumentoVenta, type RegistroDte, coincide
 } from '@rutaahorro/core';
 import { findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO, ultimaActualizacionCatalogo } from '@/lib/offline/catalog';
@@ -498,6 +498,23 @@ export function PosClient({
       registrada = respuestaDe(clientUuid) as typeof registrada;
     }
 
+    // Solo en `npm run dev`: la factura abre el robot del SII hasta la vista
+    // previa, sin firmar, para ver qué haría (api/dev/ensayo-sii).
+    if (process.env.NODE_ENV === 'development' && documento.tipo === 'factura' && documento.receptor) {
+      void fetch('/api/dev/ensayo-sii', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receptor: documento.receptor,
+          lineas: lines.map((l) => ({
+            nombre: l.name,
+            cantidad: l.quantity,
+            precio: (l.unitPrice * l.quantity - (l.discountAmount ?? 0) - (l.descuentoCombo ?? 0)) / l.quantity,
+          })),
+        }),
+      }).catch(() => {});
+    }
+
     // El comprobante se arma con las líneas ANTES de vaciar el carrito
     // (RF-M5-14). El folio queda en null a propósito: lo asigna la base al
     // sincronizar, nunca el dispositivo. Dos cajeros sin señal inventarían
@@ -851,6 +868,9 @@ export function PosClient({
       {cobrando && (
         <Cobro
           total={totals.total}
+          totalFactura={totalConFactura(lines.map((l) => ({
+            subtotal: lineSubtotal(l), tasaAdicional: l.tasaAdicional ?? 0, nombreAdicional: l.nombreAdicional ?? null,
+          })), config.ivaPct).total}
           tarjetaEmiteDocumento={config.tarjetaEmiteDocumento}
           redondear={config.redondeoEfectivo}
           cliente={cliente}

@@ -26,7 +26,7 @@ Lo que falta se concentra en cuatro bloques, cada uno con lo que necesita:
 
 | Bloque | Requerimientos | Qué se necesita |
 |---|---|---|
-| ~~Pedido guardado en el sistema (etapa 2)~~ | Hecho el 2026-10-11 ([33](33-tienda-150-actualizaciones.md)); quedan el despacho (RF-T47) y el correo automático (RF-T50) | Aplicar 0040 en Supabase antes del push |
+| ~~Pedido guardado en el sistema (etapa 2)~~ | Hecho el 2026-10-11 ([33](33-tienda-150-actualizaciones.md)); quedan el despacho (RF-T47) y el correo automático (RF-T50) | Aplicar 0041 en Supabase antes del push |
 | Pago y documentos (etapa 3) | RF-T60 | Cuenta de pasarela a nombre del local (Flow recomendado) y la boleta del pedido |
 | Respaldo y continuidad | RNF-T41, T43 a T46 | Desplegar el worker de respaldo o pasar a Supabase Pro; un monitor de disponibilidad |
 | Ambientes | RNF-T55 | Un proyecto Supabase aparte para desarrollo (pregunta P-14 de [15](15-preguntas-abiertas.md)) |
@@ -120,7 +120,7 @@ Lo que falta se concentra en cuatro bloques, cada uno con lo que necesita:
 | RF-T54 | Completar datos desde fuentes externas | Should | ✅ | Alta escaneada: nombre, descripción y foto, con "Deshacer". Lote: `npm run db:fotos` |
 | RF-T55 | Conservar la atribución de fotos externas | Must | ✅ | Pie de la tienda y nota en el formulario (CC BY-SA) |
 | RF-T56 | Consultar o enviar el pedido por WhatsApp | Should | ✅ | Listo; aparece cuando la sucursal tenga celular anotado (hoy no) **2026-10-11:** El WhatsApp de la tienda se configura en Configuración → Tienda online. ([33](33-tienda-150-actualizaciones.md)) |
-| RF-T57 | Elegir qué productos se publican | Should | ✅ | Necesita una columna nueva (migración) **2026-10-11:** "Se muestra en la tienda online" en la ficha de cada producto (0040). ([33](33-tienda-150-actualizaciones.md)) |
+| RF-T57 | Elegir qué productos se publican | Should | ✅ | Necesita una columna nueva (migración) **2026-10-11:** "Se muestra en la tienda online" en la ficha de cada producto (0041). ([33](33-tienda-150-actualizaciones.md)) |
 | RF-T58 | Sitemap | Should | ✅ | `/sitemap.xml` con todas las fichas |
 | RF-T59 | Metadatos y vista previa al compartir | Should | ✅ | Título, descripción, Open Graph, datos schema.org |
 | RF-T60 | Integrar pago, documentos y correo | Could | ⏳ | Etapa 3; cuentas externas |

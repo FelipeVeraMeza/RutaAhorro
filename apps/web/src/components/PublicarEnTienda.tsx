@@ -7,8 +7,8 @@ import { DEMO_ACTIVO } from '@/lib/demo';
 
 /**
  * RF-T57 · "Se muestra en la tienda online" en la ficha de un producto
- * (0040, `fn_publicar_en_tienda`). Se guarda al tocarlo, aparte del resto del
- * formulario. Sin 0040 en la base no aparece.
+ * (0041, `fn_publicar_en_tienda`). Se guarda al tocarlo, aparte del resto del
+ * formulario. Sin 0041 en la base no aparece.
  */
 export function PublicarEnTienda({ productoId }: { productoId: string }) {
   const [publicado, setPublicado] = useState<boolean | null>(DEMO_ACTIVO ? true : null);

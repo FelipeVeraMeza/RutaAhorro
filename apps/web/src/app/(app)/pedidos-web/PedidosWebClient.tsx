@@ -52,7 +52,7 @@ export function PedidosWebClient({ local, direccion }: { local: string; direccio
     } catch (e) {
       const m = toUserMessage(e);
       setError(/pedidos_web|does not exist|relation/i.test(String((e as { message?: string })?.message))
-        ? 'Los pedidos web todavía no están activos en la base (falta aplicar la migración 0040).'
+        ? 'Los pedidos web todavía no están activos en la base (falta aplicar la migración 0041).'
         : m);
       setPedidos((x) => x ?? []);
     }
@@ -92,10 +92,12 @@ export function PedidosWebClient({ local, direccion }: { local: string; direccio
 
   // Buscar por número, nombre o celular (el cliente llega y dice "soy Ana").
   const q = busqueda.trim().toLowerCase();
+  const digitos = q.replace(/\D/g, '');
   const lista = (porVista.get(vista) ?? []).filter((p) => !q
     || String(p.numero) === q.replace(/^n°?\s*/, '')
     || p.nombre.toLowerCase().includes(q)
-    || p.celular.replace(/\D/g, '').includes(q.replace(/\D/g, '') || '§'));
+    // Por celular, desde 3 dígitos: con menos calzaría casi cualquiera.
+    || (digitos.length >= 3 && p.celular.replace(/\D/g, '').includes(digitos)));
   // Lo entregado hoy, para saber cuánto vendió la tienda.
   const hoy = new Date().toDateString();
   const entregadosHoy = (pedidos ?? []).filter((p) => p.estado === 'entregado' && new Date(p.actualizado).toDateString() === hoy);

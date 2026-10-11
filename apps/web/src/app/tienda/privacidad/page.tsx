@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
  *
  * Dice lo que el código hace hoy, ni más ni menos: los datos del cliente
  * quedan en su navegador y solo salen cuando él hace un pedido (en la tienda,
- * 0040, o por WhatsApp). Lo de los pedidos en la tienda aparece solo cuando el
+ * 0041, o por WhatsApp). Lo de los pedidos en la tienda aparece solo cuando el
  * local los tiene encendidos.
  * ⚠ Borrador técnico: el local debe revisarlo (idealmente con un abogado)
  * antes de publicar la tienda, y completar su RUT y correo de contacto.

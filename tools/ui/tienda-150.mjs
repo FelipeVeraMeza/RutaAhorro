@@ -203,9 +203,12 @@ ok('U-12', /Cancelado: Sin stock/.test(await texto(a)), 'queda cancelado con el 
 ok('U-142', await sinDesborde(a), 'Pedidos web sin desborde');
 await a.getByRole('button', { name: /^Listos/ }).click();
 await a.getByLabel('Buscar un pedido').fill('ana');
+await a.waitForTimeout(300);
 const conAna = /N° 1 · Ana Pérez/.test(await texto(a));
 await a.getByLabel('Buscar un pedido').fill('rodrigo');
-ok('U-109', conAna && !/N° 1 · Ana Pérez/.test(await texto(a)), 'Pedidos web busca por nombre');
+await a.waitForTimeout(300);
+const sinAna = !/N° 1 · Ana Pérez/.test(await texto(a));
+ok('U-109', conAna && sinAna, 'Pedidos web busca por nombre', `con "ana": ${conAna}, con "rodrigo" se oculta: ${sinAna}`);
 await a.getByLabel('Buscar un pedido').fill('');
 
 await ir(c, `/tienda/pedido/${codigo}`);

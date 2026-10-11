@@ -103,7 +103,9 @@ function formulario(rut: string, dv: string, o: OpcionesPortal) {
       document.querySelector('[name=EFXP_IVA]').value = miles(iva);
       document.querySelector('[name=EFXP_MNT_TOTAL]').value = miles(neto + iva + ${o.totalDistinto ? 1 : 0});
       document.querySelector('[name=btnSign]').disabled = false;
-    }`;
+    }
+    // Como el SII real: los totales se recalculan al salir de cada campo, no solo al validar.
+    document.getElementById('f').addEventListener('change', calcular);`;
   return pagina('Emisión de Factura Electrónica', `
     <form id="f" method="POST" action="/firmar">
       <input id="EFXP_RUT_RECEP" name="EFXP_RUT_RECEP" value="${rut}">

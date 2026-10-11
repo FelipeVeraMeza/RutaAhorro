@@ -4,7 +4,7 @@
  * seguimiento, y el personal lo mueve por sus estados en "Pedidos web".
  *
  * Lo de este archivo es puro y lo comparten la tienda, la pantalla del
- * personal y las pruebas. La base (0040) aplica las mismas reglas: lo de acá
+ * personal y las pruebas. La base (0041) aplica las mismas reglas: lo de acá
  * es para avisar antes, no para confiar en el navegador.
  */
 import { formatCLP } from './money.js';

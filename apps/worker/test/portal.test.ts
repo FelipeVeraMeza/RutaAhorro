@@ -130,6 +130,14 @@ test('ensayo: recorre todo, compara el total y NO firma', { skip: sinNavegador, 
   assert.equal(p.salidas, 1, 'cerró la sesión');
 });
 
+test('ensayo hasta la firma: abre el cuadro del certificado, no escribe la clave ni firma, y sale', { skip: sinNavegador, timeout: 180_000 }, async () => {
+  const p = await portal();
+  const r = await ensayarEnPortal({ ...factura(), formaPago: 'sin_costo' }, CRED, { ...opciones(p), hastaFirma: true });
+  assert.ok(r.ensayo);
+  assert.equal(p.firmas.length, 0, 'no se confirmó la firma');
+  assert.equal(p.salidas, 1, 'cerró la sesión');
+});
+
 test('si el SII no reconoce el RUT del receptor, no firma', { skip: sinNavegador, timeout: 180_000 }, async () => {
   const p = await portal({ rutDesconocido: true });
   await assert.rejects(emitir(p), (e: Error) => {

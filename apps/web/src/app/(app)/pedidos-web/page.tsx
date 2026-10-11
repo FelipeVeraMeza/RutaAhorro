@@ -8,7 +8,7 @@ export const metadata = { title: 'Pedidos web' };
 /**
  * RF-T49 · Los pedidos de la tienda online (docs/33). Los ven y los mueven
  * los que atienden: admin, supervisor y vendedor (los mismos de la RLS de
- * 0040). Bodega no: traen el celular del cliente.
+ * 0041). Bodega no: traen el celular del cliente.
  */
 export default async function PedidosWebPage() {
   await exigirRol(['admin', 'supervisor', 'vendedor']);

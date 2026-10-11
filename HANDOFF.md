@@ -15,7 +15,7 @@
 tienda (81 RF, 69 RNF), 30 RF y 9 RNF nuevos (RF-T61 a T90, RNF-T61 a T69) y
 docs/31 al día (funcionales 55 ✅ / 4 ◐ / 1 ⏳).
 
-**Lo grande: pedidos en la tienda (0040).** El cliente confirma el pedido en
+**Lo grande: pedidos en la tienda (0041).** El cliente confirma el pedido en
 el carrito (retiro en el local, paga al retirar), queda en `pedidos_web` con
 número y código, lo sigue en `/tienda/pedido/<código>`, y el personal lo
 mueve en `/pedidos-web` (admin, supervisor, vendedor). Precios los pone la
@@ -25,11 +25,11 @@ aviso, mínimo). `products.publicado_tienda` + `fn_publicar_en_tienda` para
 ocultar productos. Worker: `pedidos-web-privacidad` (mensual) anonimiza a
 los 12 meses; el resumen diario trae los pedidos.
 
-**Antes de mezclar a `main`:** aplicar 0039 y 0040 (en ese orden) con
+**Antes de mezclar a `main`:** aplicar 0039 (factura en la caja, de `main`, si no está), 0040 y 0041, en ese orden, con
 `npm run db:instalar` y `npm run db:aplicar -- --aplicar`; después deben
 salir 2 funciones expuestas más (`fn_cambiar_estado_pedido_web`,
 `fn_publicar_en_tienda`, ya en `tools/rpc-permitidas.mjs`). El código
-funciona sin 0040 (sin "Hacer pedido"). Ver la lista completa en docs/33.
+funciona sin 0041 (sin "Hacer pedido"). Ver la lista completa en docs/33.
 
 **Pruebas nuevas:** `tools/pg-test/pedidos-web.test.mjs` (9),
 `packages/core/test/tienda-150.test.ts` (21), `tools/ui/tienda-150.mjs`
@@ -44,16 +44,16 @@ maqueta viven en la memoria del servidor).
 propuestas con prioridad).
 
 **Antes de mezclar a `main`:**
-1. **Aplicar 0039** en Supabase: `npm run db:instalar` y
+1. **Aplicar 0040** en Supabase: `npm run db:instalar` y
    `npm run db:aplicar -- --aplicar` (diagnostica primero y aplica lo que
-   falte). 0039 no crea funciones expuestas nuevas: todas son
+   falte). 0040 no crea funciones expuestas nuevas: todas son
    `create or replace` con la misma firma, más `fn_venta_sin_futuro` (disparador,
    sin permiso para nadie). Puede ir antes que el código.
 2. **`WORKER_SHARED_SECRET` en el worker de Railway.** Sin ella, desde ahora el
    worker rechaza `POST /jobs/...` en producción (antes los aceptaba de
    cualquiera). El cron no depende de esto.
 
-**Qué cambió en la base (0039):** caja con cuenta activa, montos en rango y
+**Qué cambió en la base (0040):** caja con cuenta activa, montos en rango y
 bodega sin caja; ajuste y toma enteros, no negativos, solo productos del local
 y descontando lotes (FEFO); venta con hora futura queda con la del servidor;
 vencimientos con el día del local (`v_expiring_lots`, `fn_confirm_receipt`);

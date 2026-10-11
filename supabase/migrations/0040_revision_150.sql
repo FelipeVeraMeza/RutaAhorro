@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0039 · Revisión del 2026-10-11 (docs/32): caja, ajustes, toma y lotes
+-- 0040 · Revisión del 2026-10-11 (docs/32): caja, ajustes, toma y lotes
 -- =============================================================================
 -- Todas con la MISMA firma que ya tenían (create or replace): la pantalla no
 -- cambia y se puede aplicar antes o después de publicar el código. Idempotente.
@@ -74,7 +74,7 @@ declare
   v_session uuid;
   v_id     uuid;
 begin
-  -- 0039 · Sin esto, una cuenta desactivada con la sesión abierta seguía
+  -- 0040 · Sin esto, una cuenta desactivada con la sesión abierta seguía
   -- registrando ingresos y egresos.
   if v_tenant is null or not is_active_user() then
     raise exception 'NO_AUTENTICADO' using errcode = '28000';
@@ -214,7 +214,7 @@ begin
   perform fn_post_movement(v_tenant, v_store, p_product_id, p_movement_type,
                            v_delta, v_cost, 'adjustment', null, p_reason, v_user);
 
-  -- 0039 · Lo que sale de un perecible sale de sus lotes, del que vence antes.
+  -- 0040 · Lo que sale de un perecible sale de sus lotes, del que vence antes.
   if v_lotes and v_delta < 0 then
     perform fn_consume_lots(v_tenant, v_store, p_product_id, -v_delta, null);
   end if;
@@ -506,7 +506,7 @@ declare
   v_sale   sales%rowtype;
   v_item   sale_items%rowtype;
 begin
-  -- 0039 · Una cuenta desactivada con la sesión abierta no sigue operando.
+  -- 0040 · Una cuenta desactivada con la sesión abierta no sigue operando.
   if not is_active_user() then
     raise exception 'NO_AUTENTICADO' using errcode = '28000';
   end if;
@@ -580,7 +580,7 @@ declare
   v_resto  numeric(14,3);
   v_pagada boolean := false;
 begin
-  -- 0039 · Una cuenta desactivada con la sesión abierta no sigue operando.
+  -- 0040 · Una cuenta desactivada con la sesión abierta no sigue operando.
   if not is_active_user() then
     raise exception 'NO_AUTENTICADO' using errcode = '28000';
   end if;
@@ -680,7 +680,7 @@ declare
   v_actual   products%rowtype;
   v_quien    text;
 begin
-  -- 0039 · Una cuenta desactivada con la sesión abierta no sigue operando.
+  -- 0040 · Una cuenta desactivada con la sesión abierta no sigue operando.
   if not is_active_user() then
     raise exception 'NO_AUTENTICADO' using errcode = '28000';
   end if;

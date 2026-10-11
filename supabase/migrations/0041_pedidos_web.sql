@@ -1,8 +1,8 @@
 -- =============================================================================
--- 0040 · Pedidos de la tienda online (docs/33; docs/30 etapa 2)
+-- 0041 · Pedidos de la tienda online (docs/33; docs/30 etapa 2)
 -- =============================================================================
 -- Hasta acá el carrito de la tienda solo se podía mandar por WhatsApp, y sin
--- celular anotado en la sucursal no había cómo pedir nada. Desde 0040:
+-- celular anotado en la sucursal no había cómo pedir nada. Desde 0041:
 --
 --   1. `products.publicado_tienda`: qué productos se muestran en la tienda
 --      (RF-T57). Por omisión todos, como hasta ahora.
@@ -24,7 +24,7 @@
 --      pedido mínimo. Misma firma que 0029.
 --
 -- Idempotente y sin cambiar firmas existentes: se puede aplicar antes que el
--- código. El código, a su vez, sigue funcionando sin 0040 (la tienda no
+-- código. El código, a su vez, sigue funcionando sin 0041 (la tienda no
 -- muestra "Hacer pedido" y no filtra por `publicado_tienda`).
 -- =============================================================================
 
@@ -441,19 +441,19 @@ begin
           raise exception 'CONFIGURACION_INVALIDA: %', v_clave using errcode = 'P0001';
         end if;
         v_valor := to_jsonb(trim(v_valor #>> '{}'));
-      -- 0040 · El aviso de la tienda (cerrado por feriado, horario especial).
+      -- 0041 · El aviso de la tienda (cerrado por feriado, horario especial).
       when 'tienda_mensaje' then
         if jsonb_typeof(v_valor) <> 'string' or length(v_valor #>> '{}') > 200 then
           raise exception 'CONFIGURACION_INVALIDA: %', v_clave using errcode = 'P0001';
         end if;
         v_valor := to_jsonb(trim(v_valor #>> '{}'));
-      -- 0040 · El WhatsApp de la tienda, si no es el teléfono de la sucursal.
+      -- 0041 · El WhatsApp de la tienda, si no es el teléfono de la sucursal.
       when 'tienda_whatsapp' then
         if jsonb_typeof(v_valor) <> 'string' or (v_valor #>> '{}') !~ '^[0-9 +()-]{0,20}$' then
           raise exception 'CONFIGURACION_INVALIDA: %', v_clave using errcode = 'P0001';
         end if;
         v_valor := to_jsonb(trim(v_valor #>> '{}'));
-      -- 0040 · Horario: un texto corto por día (core/horario.ts lo interpreta).
+      -- 0041 · Horario: un texto corto por día (core/horario.ts lo interpreta).
       when 'tienda_horario' then
         if jsonb_typeof(v_valor) <> 'object' then
           raise exception 'CONFIGURACION_INVALIDA: %', v_clave using errcode = 'P0001';

@@ -12,20 +12,27 @@ import { Logo } from './Logo';
  *
  * Oculta bajo 1024 px: en celular manda la navegación inferior, porque el
  * pulgar no llega al borde superior de la pantalla (RNF-17).
+ *
+ * 2026-10-11 (Felipe): fondo blanco con letras oscuras, "más corporativo". El
+ * azul marino queda para el texto y el ítem activo; el naranjo, solo en el
+ * logo. Y fija a todo el alto: con `sticky` se iba con la página al bajar y el
+ * menú quedaba cortado y con su propia barra ("no debería bajar"). El
+ * contenido le deja su ancho con lg:pl-60 (layout).
  */
 export function Sidebar({ rol, nombre, version }: { rol: Rol; nombre: string; version: string }) {
   const pathname = usePathname();
   const items = navPara(rol);
 
   return (
-    // 2026-10-07: en el marino del logo, que es donde el naranjo luce.
-    <aside className="hidden lg:flex lg:flex-col w-60 shrink-0 bg-marca-900 text-white h-dvh sticky top-0">
-      <div className="px-4 py-4 border-b border-white/10">
-        <Logo tamano={38} />
+    <aside className="hidden lg:flex lg:flex-col w-60 fixed inset-y-0 left-0 z-20
+                      bg-[var(--superficie)] text-[var(--texto)] border-r border-[var(--borde)]">
+      <div className="px-4 py-4 [@media(max-height:820px)]:py-2.5 border-b border-[var(--borde)]">
+        <Logo sobre="claro" tamano={38} />
       </div>
 
-      <nav className="flex-1 px-2 py-3 overflow-y-auto" aria-label="Navegación principal">
-        <ul className="space-y-px">
+      {/* En pantallas bajas (o con zoom) los ítems se aprietan para que entren todos sin barra. */}
+      <nav className="flex-1 px-2 py-3 [@media(max-height:820px)]:py-1.5 overflow-y-auto" aria-label="Navegación principal">
+        <ul className="space-y-0.5 [@media(max-height:820px)]:space-y-0">
           {items.map((item) => {
             const activo =
               item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
@@ -35,16 +42,17 @@ export function Sidebar({ rol, nombre, version }: { rol: Rol; nombre: string; ve
                   href={item.href}
                   prefetch={false}
                   aria-current={activo ? 'page' : undefined}
-                  className={`flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-sm transition-colors ${
+                  className={`relative flex items-center gap-2.5 px-3 py-2 [@media(max-height:820px)]:py-1.5 [@media(max-height:700px)]:py-1
+                    rounded-lg text-sm transition-colors ${
                     activo
-                      ? 'bg-white/10 text-white font-semibold'
-                      : 'text-[#c9d6e3] hover:bg-white/5 hover:text-white'
+                      ? 'bg-marca-50 text-marca-700 font-semibold'
+                      : 'text-[var(--texto-suave)] hover:bg-[var(--fondo)] hover:text-[var(--texto)]'
                   }`}
                 >
-                  <Icono nombre={item.icono} tamano={19} className={activo ? 'text-acento-500' : 'text-[#93aecb]'} />
+                  {/* El estado activo no se comunica solo por color (RNF-46): barra y negrita */}
+                  {activo && <span aria-hidden className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full bg-marca-700" />}
+                  <Icono nombre={item.icono} tamano={19} className={activo ? 'text-marca-700' : 'text-[var(--texto-suave)]'} />
                   <span className="flex-1">{item.label}</span>
-                  {/* El estado activo no se comunica solo por color (RNF-46) */}
-                  {activo && <span aria-hidden className="w-1 h-4 rounded-full bg-acento-500" />}
                 </Link>
               </li>
             );
@@ -52,23 +60,23 @@ export function Sidebar({ rol, nombre, version }: { rol: Rol; nombre: string; ve
         </ul>
       </nav>
 
-      <div className="px-3 py-2.5 border-t border-white/10">
+      <div className="px-3 py-2.5 border-t border-[var(--borde)]">
         <div className="flex items-center gap-1">
           <div className="min-w-0 flex-1 px-1">
-            <p className="text-sm font-medium truncate">{nombre}</p>
-            <p className="text-[11px] text-[#b8c7d9] truncate">
+            <p className="text-sm font-semibold truncate">{nombre}</p>
+            <p className="text-[11px] text-[var(--texto-suave)] truncate">
               {NOMBRE_ROL[rol]} · {LEMA_ROL[rol]}
             </p>
           </div>
           <a href="/cuenta" title="Mi cuenta"
-             className="tap grid place-items-center rounded-lg text-[#b8c7d9] hover:bg-white/10 hover:text-white">
+             className="tap grid place-items-center rounded-lg text-[var(--texto-suave)] hover:bg-[var(--fondo)] hover:text-[var(--texto)]">
             <Icono nombre="cuenta" tamano={18} titulo="Mi cuenta" />
           </a>
-          <BotonSalir className="tap grid place-items-center rounded-lg text-[#b8c7d9] hover:bg-white/10 hover:text-white">
+          <BotonSalir className="tap grid place-items-center rounded-lg text-[var(--texto-suave)] hover:bg-[var(--fondo)] hover:text-[var(--texto)]">
             <Icono nombre="salir" tamano={18} titulo="Cerrar sesión" />
           </BotonSalir>
         </div>
-        <a href="/novedades" className="block px-1 pt-1 text-[11px] text-[#b8c7d9] hover:underline">Versión {version}</a>
+        <a href="/novedades" className="block px-1 pt-1 text-[11px] text-[var(--texto-suave)] hover:underline">Versión {version}</a>
       </div>
     </aside>
   );

@@ -18,7 +18,7 @@
  * debajo o por encima de la suma de las líneas, y la pantalla lo dice (`ajuste`).
  */
 import { clp } from './money.js';
-import { desglosarImpuestos, type Desglose } from './impuestos.js';
+import { desglosarImpuestos, type Desglose, type LineaConImpuesto } from './impuestos.js';
 
 export interface LineaFactura {
   /** Null o ausente: línea libre (flete, servicio), no mueve stock. */
@@ -69,6 +69,25 @@ export function resumenFactura(lineas: readonly LineaFactura[], ivaPct = 19): Re
   const total = d.neto + iva + d.totalAdicionales;
   if (lineas.length > 0 && total <= 0) errores.push('La factura no puede quedar en $0');
   return { ...d, iva, total, ajuste: total - d.total, errores };
+}
+
+/**
+ * Lo que se cobra por una venta de la caja con factura (Felipe, 2026-10-11,
+ * "opción 1"). Los precios de la caja incluyen IVA, pero el SII parte del neto
+ * y calcula el IVA como neto × 19 % redondeado: $4.970 da neto $4.176 + IVA
+ * $793 = $4.969, y ningún neto da $4.970 exacto. Se cobra lo que dirá la
+ * factura, para que la factura y el cajón cuadren. `ajuste` es la diferencia
+ * con el total con IVA incluido (−1, 0 o +1 en la práctica).
+ *
+ * La base hace la misma cuenta en fn_register_sale (0039).
+ */
+export function totalConFactura(
+  lineas: readonly LineaConImpuesto[], ivaPct = 19, descuentoGlobal = 0,
+): { neto: number; iva: number; totalAdicionales: number; total: number; ajuste: number } {
+  const d = desglosarImpuestos(lineas, ivaPct, descuentoGlobal);
+  const iva = ivaDeNeto(d.neto, ivaPct);
+  const total = d.neto + iva + d.totalAdicionales;
+  return { neto: d.neto, iva, totalAdicionales: d.totalAdicionales, total, ajuste: total - d.total };
 }
 
 /** Un precio neto llevado a precio con IVA (y adicional), en pesos enteros. */

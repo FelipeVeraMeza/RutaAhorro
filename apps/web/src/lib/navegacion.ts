@@ -86,7 +86,7 @@ export const NAVEGACION: ItemNav[] = [
     },
   },
   {
-    // docs/33 · Los pedidos de la tienda online (0040). Los atiende quien
+    // docs/33 · Los pedidos de la tienda online (0041). Los atiende quien
     // está en el mostrador; bodega no (traen el celular del cliente).
     href: '/pedidos-web', label: 'Pedidos web', labelCorto: 'Pedidos', icono: 'compra',
     ayuda: 'Los pedidos de la tienda online: prepararlos, avisar al cliente y entregarlos',

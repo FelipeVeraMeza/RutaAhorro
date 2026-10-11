@@ -74,7 +74,7 @@ export async function runDailySummary() {
     const valueAtRisk = (expiring ?? []).reduce((s, l) => s + (l.value_at_risk ?? 0), 0);
 
     // docs/33 · Pedidos de la tienda online: los de hoy y los que siguen sin
-    // entregar. Sin 0040 la tabla no existe y la sección no sale.
+    // entregar. Sin 0041 la tabla no existe y la sección no sale.
     const { data: pedidosHoy } = await admin
       .from('pedidos_web').select('estado, total')
       .eq('tenant_id', tenant.id).gte('created_at', dia.desde).lt('created_at', dia.hasta);
