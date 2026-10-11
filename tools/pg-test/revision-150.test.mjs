@@ -121,3 +121,33 @@ test('E · los vencimientos usan el día del local, no el de UTC', async () => {
   }));
   assert.equal(r.ok, true, r.error);
 });
+
+test('E · una cuenta desactivada no anula ventas, recepciones ni edita productos', async () => {
+  const L = await nuevoLocal(banco);
+  const pan = await L.producto({ nombre: 'Pan', precio: 1000, stock: 10 });
+  const caj = await banco.como(L.cajero1);
+  await rpc(caj, 'fn_open_cash_session', { p_opening_amount: 0 });
+  const v = await rpc(caj, 'fn_register_sale', {
+    p_client_uuid: crypto.randomUUID(),
+    p_items: [{ product_id: pan, quantity: 1, unit_price: 1000, discount_amount: 0 }],
+    // Con débito: sin boleta nuestra, se puede anular (0019).
+    p_payments: [{ method: 'debito', amount: 1000 }],
+  });
+  const adm = await banco.como(L.admin);
+  const rec = await rpc(adm, 'fn_confirm_receipt', {
+    p_supplier_id: null, p_document_type: 'sin_documento', p_document_number: null, p_received_at: new Date().toISOString(),
+    p_items: [{ product_id: pan, quantity: 2, unit_cost: 300 }],
+  });
+
+  await banco.su.query('update profiles set is_active = false where id = $1', [L.admin.id]);
+  assert.match((await intentar(rpc(adm, 'fn_void_sale', { p_sale_id: v.sale_id, p_reason: 'x' }))).error, /NO_AUTENTICADO/);
+  assert.match((await intentar(rpc(adm, 'fn_void_receipt', { p_receipt_id: rec.receipt_id, p_reason: 'x' }))).error, /NO_AUTENTICADO/);
+  assert.match((await intentar(rpc(adm, 'fn_update_product', {
+    p_product_id: pan, p_name: 'Pan gratis', p_sku: null, p_description: null, p_category_id: null, p_unit: 'unidad',
+    p_sale_price: 1, p_avg_cost: 0, p_min_stock: 0, p_tracks_expiry: false, p_expiry_alert_days: 0, p_barcodes: '{}',
+  }))).error, /NO_AUTENTICADO/);
+  const { rows: [s] } = await banco.su.query('select status from sales where id = $1', [v.sale_id]);
+  assert.equal(s.status, 'completada');
+  const { rows: [p] } = await banco.su.query('select sale_price from products where id = $1', [pan]);
+  assert.equal(p.sale_price, 1000);
+});

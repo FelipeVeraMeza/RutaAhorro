@@ -17,6 +17,8 @@
 --      futuro) queda con la hora del servidor: salía en los reportes de mañana.
 --   5. Vencimientos con el día del local, no el de UTC (v_expiring_lots y el
 --      "ya vencido" al recibir).
+--   6. Anular una venta, anular una recepción y editar un producto también
+--      exigen una cuenta activa (eran las únicas escrituras que no lo hacían).
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -487,4 +489,324 @@ begin
 
   return jsonb_build_object('receipt_id', v_receipt, 'total_amount', v_total,
                             'items', v_result);
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 6 · Cuenta activa para anular y editar
+-- ---------------------------------------------------------------------------
+-- Copia de 0019_documentos_tributarios.sql con la cuenta activa exigida al empezar.
+create or replace function public.fn_void_sale(p_sale_id uuid, p_reason text)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_tenant uuid := current_tenant_id();
+  v_user   uuid := auth.uid();
+  v_role   user_role := current_user_role();
+  v_sale   sales%rowtype;
+  v_item   sale_items%rowtype;
+begin
+  -- 0039 · Una cuenta desactivada con la sesión abierta no sigue operando.
+  if not is_active_user() then
+    raise exception 'NO_AUTENTICADO' using errcode = '28000';
+  end if;
+  if coalesce(trim(p_reason),'') = '' then
+    raise exception 'MOTIVO_REQUERIDO' using errcode = 'P0001';
+  end if;
+
+  select * into v_sale from sales where id = p_sale_id and tenant_id = v_tenant for update;
+  if not found then raise exception 'VENTA_NO_ENCONTRADA' using errcode = 'P0001'; end if;
+  if v_sale.status = 'anulada' then
+    raise exception 'VENTA_YA_ANULADA' using errcode = 'P0001';
+  end if;
+  -- 0019 · Una venta con boleta o factura emitida no se anula: el documento
+  -- no se puede borrar, se corrige con nota de crédito (fn_devolver_venta).
+  -- Y una venta con devoluciones tampoco: anularla devolvería el stock dos
+  -- veces.
+  if exists (select 1 from dte_documentos where sale_id = p_sale_id) then
+    raise exception 'VENTA_CON_DOCUMENTO_USAR_DEVOLUCION' using errcode = 'P0001';
+  end if;
+  if exists (select 1 from sale_returns where sale_id = p_sale_id) then
+    raise exception 'VENTA_CON_DEVOLUCIONES' using errcode = 'P0001';
+  end if;
+  if coalesce(v_role::text, '') not in ('admin','supervisor') then
+    raise exception 'SIN_PERMISO_ANULAR' using errcode = '42501';
+  end if;
+  -- "Del día" es el día del local, en los dos lados de la comparación.
+  if v_role = 'supervisor'
+     and (v_sale.sold_at at time zone fn_tenant_timezone(v_tenant))::date
+      <> (now()           at time zone fn_tenant_timezone(v_tenant))::date then
+    raise exception 'SIN_PERMISO_ANULAR' using errcode = '42501';
+  end if;
+
+  perform fn_lock_stock(v_tenant, v_sale.store_id, array(
+    select product_id from sale_items where sale_id = p_sale_id));
+
+  for v_item in select * from sale_items where sale_id = p_sale_id loop
+    update product_lots pl
+       set quantity = pl.quantity + sil.quantity
+      from sale_item_lots sil
+     where sil.sale_item_id = v_item.id and pl.id = sil.lot_id;
+
+    perform fn_post_movement(v_tenant, v_sale.store_id, v_item.product_id,
+                             'anulacion_venta', v_item.quantity, v_item.unit_cost,
+                             'sale_void', p_sale_id, p_reason, v_user);
+  end loop;
+
+  update sales set status = 'anulada', voided_by = v_user,
+                   voided_at = now(), void_reason = p_reason
+   where id = p_sale_id;
+
+  insert into audit_log (tenant_id, user_id, action, entity_type, entity_id, old_values, new_values)
+  values (v_tenant, v_user, 'sale_void', 'sales', p_sale_id,
+          jsonb_build_object('status','completada','total',v_sale.total),
+          jsonb_build_object('status','anulada','reason',p_reason));
+
+  return jsonb_build_object('sale_id', p_sale_id, 'status', 'anulada');
+end $$;
+
+-- Copia de 0031_anular_recepcion_completa.sql con la cuenta activa exigida al empezar.
+create or replace function public.fn_void_receipt(p_receipt_id uuid, p_reason text)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_tenant uuid := current_tenant_id();
+  v_user   uuid := auth.uid();
+  v_rec    purchase_receipts%rowtype;
+  v_item   purchase_receipt_items%rowtype;
+  v_prod   products%rowtype;
+  v_stock  numeric(14,3);
+  v_resto  numeric(14,3);
+  v_pagada boolean := false;
+begin
+  -- 0039 · Una cuenta desactivada con la sesión abierta no sigue operando.
+  if not is_active_user() then
+    raise exception 'NO_AUTENTICADO' using errcode = '28000';
+  end if;
+  if coalesce(current_user_role()::text, '') <> 'admin' then
+    raise exception 'SIN_PERMISO' using errcode = '42501';
+  end if;
+  if coalesce(trim(p_reason),'') = '' then
+    raise exception 'MOTIVO_REQUERIDO' using errcode = 'P0001';
+  end if;
+
+  select * into v_rec from purchase_receipts
+   where id = p_receipt_id and tenant_id = v_tenant for update;
+  if not found then raise exception 'NO_ENCONTRADO' using errcode = 'P0001'; end if;
+  if v_rec.status = 'anulada' then
+    raise exception 'RECEPCION_YA_ANULADA' using errcode = 'P0001';
+  end if;
+
+  perform fn_lock_stock(v_tenant, v_rec.store_id, array(
+    select product_id from purchase_receipt_items where receipt_id = p_receipt_id));
+
+  for v_item in select * from purchase_receipt_items where receipt_id = p_receipt_id loop
+    select * into v_prod from products where id = v_item.product_id for update;
+    select coalesce(sum(quantity), 0) into v_stock from stock_levels
+     where tenant_id = v_tenant and product_id = v_item.product_id;
+
+    -- El promedio sin esta entrada: lo inverso de lo que hizo la recepción.
+    -- Si no queda stock (o el cálculo da negativo), se deja el que había.
+    v_resto := v_stock - v_item.quantity;
+    if v_resto > 0 then
+      update products
+         set avg_cost = greatest(round((v_prod.avg_cost * v_stock - v_item.quantity * v_item.unit_cost) / v_resto)::integer, 0),
+             updated_at = now()
+       where id = v_prod.id
+         and (v_prod.avg_cost * v_stock - v_item.quantity * v_item.unit_cost) >= 0;
+    end if;
+
+    -- El lote: se le resta lo que entró, sin bajar de cero (lo que ya se
+    -- vendió de él no vuelve).
+    if v_prod.tracks_expiry and v_item.expiry_date is not null then
+      update product_lots
+         set quantity = greatest(quantity - v_item.quantity, 0)
+       where tenant_id = v_tenant and store_id = v_rec.store_id and product_id = v_item.product_id
+         and lot_code is not distinct from v_item.lot_code and expiry_date = v_item.expiry_date;
+    end if;
+
+    perform fn_post_movement(v_tenant, v_rec.store_id, v_item.product_id,
+                             'anulacion_recepcion', -v_item.quantity, v_item.unit_cost,
+                             'receipt_void', p_receipt_id, p_reason, v_user);
+  end loop;
+
+  update purchase_receipts
+     set status = 'anulada', voided_by = v_user, voided_at = now(), void_reason = p_reason
+   where id = p_receipt_id;
+
+  -- La factura por pagar de esta recepción: si no está pagada, se anula con
+  -- ella. Si ya se pagó, se deja (la plata salió) y se avisa en la respuesta.
+  select exists (select 1 from facturas_proveedor where receipt_id = p_receipt_id
+                  and anulada_en is null and pagada_en is not null) into v_pagada;
+  update facturas_proveedor
+     set anulada_en = now(), anulada_motivo = 'Recepción anulada: ' || trim(p_reason)
+   where receipt_id = p_receipt_id and anulada_en is null and pagada_en is null;
+
+  insert into audit_log (tenant_id, user_id, action, entity_type, entity_id, new_values)
+  values (v_tenant, v_user, 'receipt_void', 'purchase_receipts', p_receipt_id,
+          jsonb_build_object('reason', p_reason));
+
+  return jsonb_build_object('receipt_id', p_receipt_id, 'status', 'anulada', 'factura_ya_pagada', v_pagada);
+end $$;
+
+-- Copia de 0020_producto_quien_y_cuando.sql con la cuenta activa exigida al empezar.
+create or replace function public.fn_update_product(
+  p_product_id        uuid,
+  p_name              text,
+  p_sku               text,
+  p_description       text,
+  p_category_id       uuid,
+  p_unit              text,
+  p_sale_price        integer,
+  p_avg_cost          integer,
+  p_min_stock         numeric,
+  p_tracks_expiry     boolean,
+  p_expiry_alert_days integer,
+  p_barcodes          text[],
+  -- 0020 · el `updated_at` que tenía el producto cuando se abrió el
+  -- formulario. Null = no comprobar (la carga masiva).
+  p_expected_updated_at timestamptz default null
+) returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_tenant   uuid := current_tenant_id();
+  v_code     text;
+  v_dueno    text;
+  v_codigos  text[] := '{}';
+  v_quitados integer := 0;
+  v_i        integer := 0;
+  v_actual   products%rowtype;
+  v_quien    text;
+begin
+  -- 0039 · Una cuenta desactivada con la sesión abierta no sigue operando.
+  if not is_active_user() then
+    raise exception 'NO_AUTENTICADO' using errcode = '28000';
+  end if;
+  if coalesce(current_user_role()::text, '') not in ('admin','supervisor','bodega') then
+    raise exception 'SIN_PERMISO_CREAR_PRODUCTO' using errcode = '42501';
+  end if;
+
+  -- La función es `security definer`: corre sin RLS. Sin esta comprobación,
+  -- cualquier usuario podría editar el producto de otro local pasando su id.
+  -- El `for update` además bloquea la fila: dos ediciones simultáneas del
+  -- mismo producto se ordenan en vez de pisarse a medias.
+  select * into v_actual from products
+   where id = p_product_id and tenant_id = v_tenant
+   for update;
+  if not found then
+    raise exception 'PRODUCTO_NO_ENCONTRADO' using errcode = 'P0001';
+  end if;
+
+  -- 0020 · RF-M10-03 / CP-06. Si alguien lo guardó mientras este formulario
+  -- estaba abierto, no se pisa: se avisa quién, y la pantalla muestra lo
+  -- actual. Antes el segundo en guardar borraba el cambio del primero sin que
+  -- nadie se enterara (P-24, opción a).
+  if p_expected_updated_at is not null and v_actual.updated_at <> p_expected_updated_at then
+    select coalesce(nullif(full_name, ''), email, 'otra persona') into v_quien
+      from profiles where id = v_actual.updated_by;
+    raise exception 'PRODUCTO_CAMBIO_MIENTRAS_EDITABAS: %', coalesce(v_quien, 'otra persona')
+      using errcode = 'P0001';
+  end if;
+
+  if coalesce(trim(p_name),'') = '' then
+    raise exception 'NOMBRE_REQUERIDO' using errcode = 'P0001';
+  end if;
+
+  if coalesce(p_sale_price, 0) < 0 or coalesce(p_avg_cost, 0) < 0 then
+    raise exception 'MONTO_NEGATIVO' using errcode = 'P0001';
+  end if;
+
+  if coalesce(p_min_stock, 0) < 0 then
+    raise exception 'CANTIDAD_NEGATIVA' using errcode = 'P0001';
+  end if;
+
+  if coalesce(p_tracks_expiry, false) and coalesce(p_expiry_alert_days, 0) <= 0 then
+    raise exception 'DIAS_ALERTA_REQUERIDOS' using errcode = 'P0001';
+  end if;
+
+  -- Los códigos se validan ANTES de escribir nada, para poder nombrar el
+  -- código repetido y el producto que lo tiene. Dejárselo a la restricción
+  -- unique daría el nombre de un índice como mensaje de error.
+  if p_barcodes is not null then
+    foreach v_code in array p_barcodes loop
+      v_code := trim(v_code);
+      continue when v_code = '';
+
+      if v_code = any(v_codigos) then
+        raise exception 'CODIGO_EN_USO:%:%', v_code, trim(p_name) using errcode = 'P0001';
+      end if;
+      v_codigos := v_codigos || v_code;
+
+      select p.name into v_dueno
+        from product_barcodes b
+        join products p on p.id = b.product_id
+       where b.tenant_id = v_tenant
+         and b.barcode = v_code
+         and b.product_id <> p_product_id
+       limit 1;
+
+      if v_dueno is not null then
+        raise exception 'CODIGO_EN_USO:%:%', v_code, v_dueno using errcode = 'P0001';
+      end if;
+    end loop;
+  end if;
+
+  update products set
+    name              = trim(p_name),
+    sku               = nullif(trim(coalesce(p_sku,'')), ''),
+    -- Nulo = no tocar, igual que el costo y los códigos. La cadena vacía sí
+    -- la borra, porque es lo que pide quien vacía el campo en el formulario.
+    description       = case when p_description is null then description
+                             else nullif(trim(p_description), '') end,
+    category_id       = p_category_id,
+    unit              = coalesce(nullif(trim(coalesce(p_unit,'')), ''), 'unidad'),
+    sale_price        = coalesce(p_sale_price, sale_price),
+    -- El costo promedio lo mantiene fn_confirm_receipt con el promedio
+    -- ponderado. Solo se pisa si quien edita lo mandó explícitamente: con el
+    -- campo en blanco viajaba 0 y editar el nombre dejaba el costo —y con él
+    -- el margen y el inventario valorizado— en cero.
+    avg_cost          = coalesce(p_avg_cost, avg_cost),
+    min_stock         = coalesce(p_min_stock, min_stock),
+    tracks_expiry     = coalesce(p_tracks_expiry, tracks_expiry),
+    expiry_alert_days = coalesce(p_expiry_alert_days, expiry_alert_days)
+  where id = p_product_id and tenant_id = v_tenant;
+
+  if p_barcodes is not null then
+    -- Sobran: los que están en la base y no en la lista nueva.
+    with borrados as (
+      delete from product_barcodes
+       where tenant_id = v_tenant
+         and product_id = p_product_id
+         and not (barcode = any(v_codigos))
+      returning 1
+    )
+    select count(*) into v_quitados from borrados;
+
+    -- Faltan: los de la lista nueva que todavía no están. El primero de la
+    -- lista es el principal.
+    --
+    -- Deliberadamente sin `on conflict do nothing`: si entre la validación de
+    -- más arriba y esta línea otro usuario registró ese mismo código, la
+    -- restricción unique tiene que reventar y tumbar la transacción completa.
+    -- Tragarse el conflicto dejaría a quien edita creyendo que guardó un
+    -- código que quedó en otro producto.
+    foreach v_code in array v_codigos loop
+      v_i := v_i + 1;
+      update product_barcodes set is_primary = (v_i = 1)
+       where tenant_id = v_tenant and product_id = p_product_id and barcode = v_code;
+      if not found then
+        insert into product_barcodes (tenant_id, product_id, barcode, is_primary)
+        values (v_tenant, p_product_id, v_code, v_i = 1);
+      end if;
+    end loop;
+  end if;
+
+  return jsonb_build_object(
+    'product_id', p_product_id,
+    'barcodes',   v_i,
+    'removed',    v_quitados,
+    'touched',    p_barcodes is not null
+  );
 end $$;
