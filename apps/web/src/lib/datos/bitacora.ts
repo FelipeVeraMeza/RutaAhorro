@@ -61,6 +61,7 @@ export const ACCIONES: Record<string, string> = {
   rol_del_turno: 'Rol del turno elegido',
   roles_del_turno: 'Turnos de una persona',
   datos_usuario: 'Datos de una cuenta',
+  clave_restablecida: 'Contraseña temporal puesta por el administrador',
   credenciales_sii: 'Claves del SII guardadas',
   credenciales_sii_borradas: 'Claves del SII borradas',
 };

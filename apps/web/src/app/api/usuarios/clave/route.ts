@@ -48,5 +48,11 @@ export async function POST(request: Request) {
       ? respuestaError('CLAVE_DEBIL', 'Esa contraseña es muy fácil de adivinar. Usa una más larga o con números', 400)
       : respuestaError('ERROR_INTERNO', 'No se pudo poner la contraseña temporal. Vuelve a intentarlo', 500);
   }
+  // Con la clave temporal el administrador puede entrar como esa persona
+  // hasta que la cambie: tiene que quedar a la vista (la trazabilidad, docs/02).
+  // La clave no se guarda, solo que se cambió.
+  await admin.from('audit_log').insert({
+    tenant_id: actor.tenantId, user_id: actor.id, action: 'clave_restablecida', entity_type: 'profiles', entity_id: id,
+  });
   return Response.json({ ok: true });
 }

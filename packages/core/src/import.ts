@@ -168,7 +168,17 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
     return { ok: false, filas: [], errores: [{ fila: 0, columna: '', mensaje: 'El archivo está vacío', valor: '' }], avisos: [], totalFilas: 0 };
   }
 
-  const encabezado = matriz[primera].map((c) => c.toLowerCase().trim().replace(/\s+/g, '_'));
+  // Los nombres que usa la exportación de Productos (RF-M2-19): exportar,
+  // cambiar precios en Excel y volver a importar es lo natural, y sin esto el
+  // SKU y los códigos no se reconocían y cada fila creaba un duplicado.
+  const ALIAS: Record<string, string> = {
+    codigo_interno: 'sku', codigos_de_barra: 'codigo_barras', costo_promedio: 'costo',
+  };
+  const variosCodigos = matriz[primera].some((c) => c.toLowerCase().trim().replace(/\s+/g, '_') === 'codigos_de_barra');
+  const encabezado = matriz[primera].map((c) => {
+    const col = c.toLowerCase().trim().replace(/\s+/g, '_');
+    return ALIAS[col] ?? col;
+  });
 
   for (const obligatoria of COLUMNAS_OBLIGATORIAS) {
     if (!encabezado.includes(obligatoria)) {
@@ -247,7 +257,10 @@ export function parsearFilas(matriz: string[][]): ResultadoImportacion {
       }
     }
 
-    const codigoBruto = campo(cols, 'codigo_barras');
+    // La exportación trae todos los códigos separados por espacio: el primero
+    // basta para reconocer el producto (los demás ya los tiene). En la
+    // plantilla es uno solo y se respeta como viene.
+    const codigoBruto = variosCodigos ? campo(cols, 'codigo_barras').split(/\s+/)[0] : campo(cols, 'codigo_barras');
     let codigo: string | null = null;
     if (codigoBruto) {
       codigo = normalizeBarcode(codigoBruto);
