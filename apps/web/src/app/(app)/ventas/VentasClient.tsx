@@ -119,12 +119,12 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
     setCargando(true);
     setError(null);
     try {
-      const n = Number(folio.trim());
-      const porFolio = folio.trim() !== '' && Number.isFinite(n);
+      const numFolio = Number(folio.trim());
+      const porFolio = folio.trim() !== '' && Number.isFinite(numFolio);
       const [lista, res] = await Promise.all([
         repoVentas().listar({
           desde, hasta, incluirAnuladas, limite,
-          ...(porFolio ? { folio: n } : {}),
+          ...(porFolio ? { folio: numFolio } : {}),
         }),
         porFolio ? Promise.resolve(null) : repoVentas().resumen(desde, hasta),
       ]);

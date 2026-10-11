@@ -97,3 +97,27 @@ test('E · una venta con la hora del celular adelantada queda con la del servido
     `select extract(epoch from (now() - sold_at))::int as atras from sales where id = $1`, [r.sale_id]);
   assert.ok(v.atras >= 0 && v.atras < 120, `quedó con la hora del servidor (atrás ${v.atras} s)`);
 });
+
+test('E · los vencimientos usan el día del local, no el de UTC', async () => {
+  const L = await nuevoLocal(banco);
+  // Una zona donde HOY el día local es distinto del de UTC, para que la
+  // prueba no pase por casualidad según la hora a la que corre.
+  const zona = new Date().getUTCHours() < 11 ? 'Pacific/Pago_Pago' : 'Pacific/Kiritimati';
+  await banco.su.query(`update tenants set settings = coalesce(settings, '{}'::jsonb) || jsonb_build_object('timezone', $2::text) where id = $1`, [L.tenant, zona]);
+  const hoyLocal = new Date().toLocaleDateString('en-CA', { timeZone: zona });
+  const leche = await L.producto({ nombre: 'Leche', stock: 4, perecible: true });
+  await L.lote(leche, 4, hoyLocal);
+  const adm = await banco.como(L.admin);
+  const { rows: [l] } = await adm.query(
+    `select days_to_expiry, expiry_status from v_expiring_lots where product_id = $1`, [leche]);
+  assert.equal(l.days_to_expiry, 0, `vence hoy en ${zona} (${hoyLocal})`);
+  assert.notEqual(l.expiry_status, 'vencido', 'lo que vence hoy no está vencido');
+
+  // Recibir algo que vence hoy (del local) no es "ya vencido".
+  const yogur = await L.producto({ nombre: 'Yogur', perecible: true });
+  const r = await intentar(rpc(adm, 'fn_confirm_receipt', {
+    p_supplier_id: null, p_document_type: 'sin_documento', p_document_number: null, p_received_at: new Date().toISOString(),
+    p_items: [{ product_id: yogur, quantity: 2, unit_cost: 300, expiry_date: hoyLocal }],
+  }));
+  assert.equal(r.ok, true, r.error);
+});

@@ -46,7 +46,7 @@ export function ClientesClient() {
       <Encabezado
         titulo="Clientes"
         icono="clientes"
-        descripcion="Los datos para la factura y el fiado. El cajero los elige en Vender. El precio por mayor se pone en cada producto."
+        descripcion="Los datos para la factura. El cajero los elige en Vender. El precio por mayor se pone en cada producto."
         acciones={
           <button onClick={() => setEditando('nuevo')} className="btn btn-primario btn-chico">
             <Icono nombre="agregar" tamano={16} /> Nuevo cliente

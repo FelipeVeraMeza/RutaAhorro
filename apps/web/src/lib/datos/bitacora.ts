@@ -56,6 +56,13 @@ export const ACCIONES: Record<string, string> = {
   'anular:facturas_recibidas': 'Factura recibida anulada',
   'editar:dte_emisor': 'Datos del emisor',
   emision_sii: 'Emisión ante el SII',
+  // Las que escriben las rutas del servidor: salían con el código crudo
+  // ("rol_del_turno") en la bitácora.
+  rol_del_turno: 'Rol del turno elegido',
+  roles_del_turno: 'Turnos de una persona',
+  datos_usuario: 'Datos de una cuenta',
+  credenciales_sii: 'Claves del SII guardadas',
+  credenciales_sii_borradas: 'Claves del SII borradas',
 };
 
 /** El nombre de una entrada, por acción y entidad. */
@@ -76,6 +83,10 @@ function detalle(accion: string, entidad: string | null, antes: Record<string, u
     case 'cash_force_close': return String(d.notes ?? '');
     case 'role_change': return `${a.role ?? '?'} → ${d.role ?? '?'}`;
     case 'user_create': return `${d.email ?? ''} (${d.role ?? ''})`;
+    case 'rol_del_turno': return `${a.rol ?? '?'} → ${d.rol ?? '?'}`;
+    case 'roles_del_turno': return Array.isArray(d.roles) && d.roles.length > 1 ? `elige entre ${(d.roles as string[]).join(', ')}` : 'entra siempre con su rol';
+    case 'datos_usuario': return [d.nombre, d.rut ? `RUT ${d.rut}` : ''].filter(Boolean).join(' · ');
+    case 'credenciales_sii': return d.rut_usuario ? `RUT ${d.rut_usuario}` : '';
   }
   if (entidad === 'cliente_credito') return `tope ${formatCLP(Number(a.credito_tope ?? 0))} → ${formatCLP(Number(d.credito_tope ?? 0))}`;
   if (entidad === 'factura_proveedor') {

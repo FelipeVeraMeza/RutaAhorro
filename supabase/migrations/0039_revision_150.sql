@@ -15,6 +15,8 @@
 --      mostrando mercadería que ya se había botado o que no estaba.
 --   4. Una venta con la hora del celular adelantada (más de 5 minutos en el
 --      futuro) queda con la hora del servidor: salía en los reportes de mañana.
+--   5. Vencimientos con el día del local, no el de UTC (v_expiring_lots y el
+--      "ya vencido" al recibir).
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -339,3 +341,150 @@ create trigger trg_venta_sin_futuro
   for each row execute function public.fn_venta_sin_futuro();
 
 revoke execute on function public.fn_venta_sin_futuro() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 5 · El "hoy" de los vencimientos es el del local, no el de UTC (regla 17)
+-- ---------------------------------------------------------------------------
+-- Supabase corre en UTC: desde las 20:00 o 21:00 de Chile `current_date` ya es
+-- mañana. Un lote que vence hoy salía "vencido" toda la noche (Inicio,
+-- Inventario → Lotes, el aviso de Vender) y recibir un producto que vence hoy
+-- se rechazaba con LOTE_YA_VENCIDO. Mismas columnas que 0010 (regla 22).
+create or replace view v_expiring_lots
+with (security_invoker = true) as
+select
+  pl.tenant_id, pl.id as lot_id, pl.product_id, p.name as product_name,
+  pl.lot_code, pl.expiry_date, pl.quantity, pl.unit_cost,
+  round(pl.quantity * pl.unit_cost)::integer as value_at_risk,
+  (pl.expiry_date - (now() at time zone fn_tenant_timezone(pl.tenant_id))::date) as days_to_expiry,
+  case
+    when pl.expiry_date < (now() at time zone fn_tenant_timezone(pl.tenant_id))::date then 'vencido'
+    when pl.expiry_date <= (now() at time zone fn_tenant_timezone(pl.tenant_id))::date + p.expiry_alert_days then 'por_vencer'
+    else 'vigente'
+  end as expiry_status,
+  p.unit
+from product_lots pl
+join products p on p.id = pl.product_id
+where pl.is_active and pl.quantity > 0;
+
+-- fn_confirm_receipt de 0012, con la misma firma; solo cambia el "hoy" del
+-- LOTE_YA_VENCIDO.
+create or replace function public.fn_confirm_receipt(
+  p_supplier_id     uuid,
+  p_items           jsonb,
+  p_document_type   text default 'guia',
+  p_document_number text default null,
+  p_received_at     timestamptz default now(),
+  p_notes           text default null
+) returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_tenant  uuid := current_tenant_id();
+  v_user    uuid := auth.uid();
+  v_store   uuid := current_store_id();
+  v_receipt uuid;
+  v_item    jsonb;
+  v_prod    products%rowtype;
+  v_qty     numeric(14,3);
+  v_cost    integer;
+  v_stock   numeric(14,3);
+  v_new_avg integer;
+  v_total   integer := 0;
+  v_expiry  date;
+  v_lotcode text;
+  v_lot_id  uuid;
+  v_ids     uuid[];
+  v_result  jsonb := '[]'::jsonb;
+begin
+  if coalesce(current_user_role()::text, '') not in ('admin','supervisor','bodega') then
+    raise exception 'SIN_PERMISO' using errcode = '42501';
+  end if;
+  if v_store is null then
+    select id into v_store from stores where tenant_id = v_tenant and is_active limit 1;
+  end if;
+
+  -- El promedio ponderado lee costo y stock y escribe un costo nuevo. Si otra
+  -- recepción del mismo producto está en curso, hay que esperarla: si no, las
+  -- dos promedian contra el mismo punto de partida y la segunda pisa a la
+  -- primera. Productos primero y stock después, siempre en ese orden.
+  v_ids := array(select (x->>'product_id')::uuid from jsonb_array_elements(p_items) x);
+  perform 1 from products where id = any(v_ids) and tenant_id = v_tenant order by id for update;
+  perform fn_lock_stock(v_tenant, v_store, v_ids);
+
+  insert into purchase_receipts (tenant_id, store_id, supplier_id, document_type,
+                                 document_number, received_at, notes, created_by)
+  values (v_tenant, v_store, p_supplier_id, p_document_type,
+          p_document_number, coalesce(p_received_at, now()), p_notes, v_user)
+  returning id into v_receipt;
+
+  for v_item in select * from jsonb_array_elements(p_items) loop
+    select * into v_prod from products
+     where id = (v_item->>'product_id')::uuid and tenant_id = v_tenant;
+    if not found then
+      raise exception 'PRODUCTO_NO_ENCONTRADO' using errcode = 'P0001';
+    end if;
+
+    v_qty     := (v_item->>'quantity')::numeric;
+    v_cost    := (v_item->>'unit_cost')::integer;
+    v_expiry  := nullif(v_item->>'expiry_date','')::date;
+    v_lotcode := nullif(v_item->>'lot_code','');
+    v_total   := v_total + round(v_qty * v_cost)::integer;
+
+    if v_prod.tracks_expiry and v_expiry is null then
+      raise exception 'VENCIMIENTO_REQUERIDO: %', v_prod.name using errcode = 'P0001';
+    end if;
+    if v_expiry is not null and v_expiry < (now() at time zone fn_tenant_timezone(v_tenant))::date then
+      raise exception 'LOTE_YA_VENCIDO: %', v_prod.name using errcode = 'P0001';
+    end if;
+
+    select coalesce(quantity,0) into v_stock from stock_levels
+     where tenant_id = v_tenant and store_id = v_store and product_id = v_prod.id;
+    v_stock := coalesce(v_stock, 0);
+
+    if v_stock <= 0 then
+      v_new_avg := v_cost;
+    else
+      v_new_avg := round(((v_stock * v_prod.avg_cost) + (v_qty * v_cost))
+                         / (v_stock + v_qty))::integer;
+    end if;
+
+    insert into purchase_receipt_items (receipt_id, tenant_id, product_id,
+                                        quantity, unit_cost, subtotal,
+                                        lot_code, expiry_date)
+    values (v_receipt, v_tenant, v_prod.id, v_qty, v_cost,
+            round(v_qty * v_cost)::integer, v_lotcode, v_expiry);
+
+    v_lot_id := null;
+    if v_prod.tracks_expiry then
+      insert into product_lots (tenant_id, store_id, product_id, lot_code,
+                                expiry_date, quantity, unit_cost, receipt_id)
+      values (v_tenant, v_store, v_prod.id, v_lotcode, v_expiry, v_qty, v_cost, v_receipt)
+      on conflict (tenant_id, store_id, product_id, lot_code, expiry_date)
+        do update set quantity = product_lots.quantity + excluded.quantity,
+                      unit_cost = excluded.unit_cost
+      returning id into v_lot_id;
+    end if;
+
+    update products set avg_cost = v_new_avg, last_cost = v_cost, updated_at = now()
+     where id = v_prod.id;
+
+    perform fn_post_movement(v_tenant, v_store, v_prod.id, 'recepcion',
+                             v_qty, v_cost, 'purchase_receipt', v_receipt, null, v_user);
+
+    if v_lot_id is not null then
+      update inventory_movements set lot_id = v_lot_id
+       where reference_type = 'purchase_receipt' and reference_id = v_receipt
+         and product_id = v_prod.id and lot_id is null;
+    end if;
+
+    v_result := v_result || jsonb_build_object(
+      'product_id', v_prod.id, 'product_name', v_prod.name,
+      'old_avg_cost', v_prod.avg_cost, 'new_avg_cost', v_new_avg,
+      'lot_id', v_lot_id, 'expiry_date', v_expiry);
+  end loop;
+
+  update purchase_receipts set total_amount = v_total where id = v_receipt;
+
+  return jsonb_build_object('receipt_id', v_receipt, 'total_amount', v_total,
+                            'items', v_result);
+end $$;

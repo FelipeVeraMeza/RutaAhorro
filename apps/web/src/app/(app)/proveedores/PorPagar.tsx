@@ -183,7 +183,10 @@ function NuevaFactura({ proveedores, hoy, onCerrar, onListo }: {
   // Como en Facturas recibidas: una factura no puede venir emitida mañana
   // (un año mal tecleado la dejaba "por vencer" en otra fecha).
   const emitidaFutura = !!emitida && emitida > hoy;
-  const listo = proveedorId && numero.trim() && v.valido && v.valor > 0 && vence && !emitidaFutura;
+  // Escrita a mano, la fecha podía quedar antes de la emisión ("min" solo
+  // limita el calendario): la factura nacía vencida.
+  const venceAntes = !!vence && !!emitida && vence < emitida;
+  const listo = proveedorId && numero.trim() && v.valido && v.valor > 0 && vence && !emitidaFutura && !venceAntes;
 
   async function guardar() {
     if (!listo || enviando) return;
@@ -224,7 +227,7 @@ function NuevaFactura({ proveedores, hoy, onCerrar, onListo }: {
             {(p) => <input {...p} type="date" value={emitida} max={hoy} onChange={(e) => setEmitida(e.target.value)}
                            className="tap w-full px-2 rounded-lg border border-[var(--borde)]" />}
           </Campo>
-          <Campo etiqueta="Vence el" obligatorio>
+          <Campo etiqueta="Vence el" obligatorio error={venceAntes ? 'No puede vencer antes de emitirse' : null}>
             {(p) => <input {...p} type="date" value={vence} min={emitida || undefined} onChange={(e) => setVence(e.target.value)}
                            className="tap w-full px-2 rounded-lg border border-[var(--borde)]" />}
           </Campo>

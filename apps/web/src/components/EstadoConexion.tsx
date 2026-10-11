@@ -93,7 +93,7 @@ export function EstadoConexion() {
     return (
       <>
         <button type="button" onClick={() => setViendoErrores(true)}
-          className="w-full px-4 py-2 text-xs font-medium flex items-center justify-center gap-2 bg-red-50 text-red-900">
+          className="w-full px-4 py-2 min-h-11 text-xs font-medium flex items-center justify-center gap-2 bg-red-50 text-red-900">
           <span aria-hidden>⚠️</span>
           <span className="num">{conError.length} {conError.length === 1 ? 'venta no se pudo registrar' : 'ventas no se pudieron registrar'}</span>
           <span className="underline">ver por qué</span>
@@ -114,7 +114,7 @@ export function EstadoConexion() {
       type="button"
       onClick={forceSync}
       disabled={!online || syncing}
-      className={`w-full px-4 py-2 text-xs font-medium flex items-center justify-center gap-2 ${
+      className={`w-full px-4 py-2 min-h-11 text-xs font-medium flex items-center justify-center gap-2 ${
         offlineStyle ? 'bg-amber-100 text-amber-900' : 'bg-blue-50 text-blue-900'
       }`}
     >

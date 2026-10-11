@@ -381,15 +381,20 @@ export async function ultimoProveedorPorProducto(): Promise<Map<string, { id: st
     }
     return mapa;
   }
-  const { data, error } = await supabase().from('purchase_receipt_items')
-    .select('product_id, recepcion:purchase_receipts!inner(received_at, status, supplier_id, proveedor:suppliers(name))')
-    .eq('recepcion.status', 'confirmada')
-    .limit(5000);
+  // Las recepciones más nuevas primero, y de ahí sus productos. Antes se
+  // pedían 5.000 líneas sin orden: con más que eso, el proveedor que salía
+  // podía ser el de una compra vieja y el pedido se armaba al que no era.
+  const { data, error } = await supabase().from('purchase_receipts')
+    .select('received_at, supplier_id, proveedor:suppliers(name), purchase_receipt_items(product_id)')
+    .eq('status', 'confirmada')
+    .order('received_at', { ascending: false })
+    .limit(1000);
   if (error) throw error;
-  const filas = (data ?? []).map((f) => {
-    const r = f.recepcion as unknown as { received_at: string; supplier_id: string | null; proveedor: { name: string } | null };
-    return { productId: f.product_id as string, fecha: r.received_at, id: r.supplier_id, nombre: r.proveedor?.name ?? null };
-  }).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const filas = (data ?? []).flatMap((r) => {
+    const items = (r.purchase_receipt_items as unknown as Array<{ product_id: string }> | null) ?? [];
+    const nombre = (r.proveedor as unknown as { name: string } | null)?.name ?? null;
+    return items.map((i) => ({ productId: i.product_id, fecha: r.received_at as string, id: r.supplier_id as string | null, nombre }));
+  });
   for (const f of filas) {
     if (!mapa.has(f.productId) && f.id && f.nombre) mapa.set(f.productId, { id: f.id, nombre: f.nombre });
   }

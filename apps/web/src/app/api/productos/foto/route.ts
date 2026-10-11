@@ -55,11 +55,16 @@ export async function POST(request: Request) {
     if (!productoId || !ID.test(productoId) || !origen || !fotoCopiable(origen)) {
       return respuestaError('DATOS_INVALIDOS', 'Esa foto no se puede copiar', 400);
     }
-    const r = await fetch(origen, { signal: AbortSignal.timeout(10_000) });
+    // Sin seguir redirecciones: fotoCopiable revisa la dirección pedida, y una
+    // redirección podía llevar el servidor a cualquier otra (incluso interna).
+    const r = await fetch(origen, { signal: AbortSignal.timeout(10_000), redirect: 'error' });
     if (!r.ok) return respuestaError('FOTO_NO_DISPONIBLE', 'No se pudo descargar la foto', 502);
     const largo = Number(r.headers.get('content-length') ?? 0);
     if (largo > MAX_BYTES_FOTO) return respuestaError('FOTO_PESADA', 'La foto pesa más de 5 MB', 400);
-    const url = await guardarFotoProducto(db, user.tenantId, productoId, await r.arrayBuffer(), 'off');
+    // Sin content-length se leía la respuesta entera a memoria antes de medirla.
+    const bytes = await leerConTope(r, MAX_BYTES_FOTO);
+    if (!bytes) return respuestaError('FOTO_PESADA', 'La foto pesa más de 5 MB', 400);
+    const url = await guardarFotoProducto(db, user.tenantId, productoId, bytes, 'off');
     return Response.json({ url });
   } catch (e) {
     return falla(e);
@@ -77,4 +82,23 @@ export async function DELETE(request: Request) {
   } catch (e) {
     return falla(e);
   }
+}
+
+/** Lee el cuerpo hasta `tope` bytes; null si es más grande. */
+async function leerConTope(r: Response, tope: number): Promise<ArrayBuffer | null> {
+  if (!r.body) return r.arrayBuffer();
+  const lector = r.body.getReader();
+  const partes: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await lector.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > tope) { await lector.cancel().catch(() => {}); return null; }
+    partes.push(value);
+  }
+  const salida = new Uint8Array(total);
+  let i = 0;
+  for (const p of partes) { salida.set(p, i); i += p.byteLength; }
+  return salida.buffer;
 }

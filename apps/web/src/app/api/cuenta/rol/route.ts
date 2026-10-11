@@ -24,6 +24,16 @@ export async function POST(request: Request) {
   const admin = clienteAdmin();
   if (!admin) return respuestaError('SERVIDOR_SIN_LLAVE', 'Falta SUPABASE_SECRET_KEY en el servidor', 500);
 
+  // Bodega no ve la Caja: pasar a Bodega con la caja abierta la dejaba abierta
+  // y escondida, y el cierre del día no cuadraba.
+  if (rol === 'bodega') {
+    const { data: caja } = await admin.from('cash_sessions').select('id')
+      .eq('user_id', yo.id).eq('status', 'abierta').maybeSingle();
+    if (caja) {
+      return respuestaError('CAJA_ABIERTA', 'Tienes la caja abierta: ciérrala en Caja antes de pasar a Bodega', 409);
+    }
+  }
+
   const { error } = await admin.from('profiles')
     .update({ role: rol, max_discount_pct: maxDiscountFor(rol as UserRole) })
     .eq('id', yo.id).eq('tenant_id', yo.tenantId);

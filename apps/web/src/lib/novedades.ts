@@ -16,6 +16,22 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.6.4',
+    fecha: '2026-10-11',
+    titulo: 'Revisión antes del primer día: ventas sin conexión, caja y recepción',
+    cambios: [
+      { para: 'vendedor', texto: 'Una venta que se cortó a mitad de envío ya no se pierde: vuelve sola a la cola y se envía cuando hay señal. Sin señal ya no aparece como "rechazada".' },
+      { para: 'vendedor', texto: 'Al cerrar la caja avisa si quedan ventas de este celular sin enviar, con un botón para enviarlas antes de contar.' },
+      { para: 'vendedor', texto: 'Cobrar: Enter confirma el pago. Escape en una cantidad deja la que estaba. Un descuento nunca queda mayor que la línea.' },
+      { para: 'vendedor', texto: 'Si una venta sin conexión fue rechazada y ya la resolviste, "Ya la resolví: quitarla" la saca de la barra roja.' },
+      { para: 'bodega', texto: 'Recibir mercadería: "1.000" son mil (antes se leía 1). Escanear dos veces el mismo producto suma uno. Con costos "con IVA" el costo anterior aparece con IVA.' },
+      { para: 'bodega', texto: 'Ajustes y toma de inventario descuentan los lotes del que vence antes: Vencimientos ya no muestra lo que se botó.' },
+      { para: 'admin', texto: 'Usuarios: "Turnos" decide qué roles puede elegir cada persona al entrar (por ejemplo, vender o bodega).' },
+      { para: 'admin', texto: 'Reportes e impuestos ya no se cortan en 1.000 filas, y el celular baja todos los códigos de barra aunque sean más de 1.000.' },
+      { para: 'todos', texto: 'Al salir se borra del celular el catálogo y la venta a medio armar (las ventas por enviar se quedan hasta enviarse).' },
+    ],
+  },
+  {
     version: '0.6.3',
     fecha: '2026-10-07',
     titulo: 'Colores nuevos, formularios más claros y escáner más seguro',

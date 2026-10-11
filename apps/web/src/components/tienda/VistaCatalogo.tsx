@@ -38,14 +38,19 @@ const pesos = (v: string) => {
 export function leerFiltros(p: ParamsCatalogo): Filtros {
   const orden = uno(p.orden);
   const marcas = p.marca == null ? [] : Array.isArray(p.marca) ? p.marca : [p.marca];
+  // "Mín. 5.000 / Máx. 1.000" no mostraba nada y no decía por qué: se dan vuelta.
+  let min = pesos(uno(p.min));
+  let max = pesos(uno(p.max));
+  if (min != null && max != null && min > max) [min, max] = [max, min];
   return {
-    q: uno(p.q),
+    q: uno(p.q).slice(0, 100),
     categoria: uno(p.categoria),
     orden: ORDENES_TIENDA.some((o) => o.valor === orden) ? (orden as OrdenTienda) : undefined,
-    min: pesos(uno(p.min)),
-    max: pesos(uno(p.max)),
+    min,
+    max,
     marcas: marcas.filter(Boolean),
-    pagina: Number(uno(p.pagina)) || 1,
+    // ?pagina=-3 o 2.5 se tomaban tal cual.
+    pagina: Math.max(1, Math.floor(Number(uno(p.pagina)) || 1)),
   };
 }
 
