@@ -24,6 +24,8 @@
  *   --capturas=dir  guarda captura y campos de cada pantalla.
  *   --forma-pago=contado|credito|sin_costo   (por omisión, crédito)
  *   --contacto=...  contacto del receptor.
+ *   --lineas="Pan amasado:3:1500;Bebida:2:1990"   productos: nombre:cantidad:precio con IVA.
+ *   --pausa=60      deja la vista previa del documento a la vista 60 s antes de salir (con --ver).
  *
  * Confirma lo que ninguna prueba local puede: que el portal tiene el botón
  * para la segunda línea y los campos de totales donde el robot los busca
@@ -91,8 +93,19 @@ const registrar = async (ok: boolean, detalle: Record<string, unknown>) =>
 const receptor = arg('receptor') ?? cred.rutEmpresa ?? cred.rutUsuario;
 if (!isValidRut(receptor)) morir(`El RUT del receptor no es válido: ${receptor}`);
 
-// Dos líneas: la segunda es justamente lo que VSV nunca hizo.
-const lineas = [
+// --lineas="Pan amasado:3:1500;Bebida 1,5 L:2:1990" → nombre:cantidad:precio CON IVA (como en el POS).
+// Sin --lineas, dos líneas de ensayo: la segunda es justamente lo que VSV nunca hizo.
+function leerLineas(texto: string) {
+  return texto.split(';').map((t) => t.trim()).filter(Boolean).map((t) => {
+    const partes = t.split(':');
+    const precio = Number(partes.pop()?.replace(/[^\d]/g, ''));
+    const cantidad = Number(partes.pop()?.replace(',', '.'));
+    const nombre = partes.join(':').trim();
+    if (!nombre || !(cantidad > 0) || !(precio > 0)) morir(`Línea mal escrita: "${t}". Formato: nombre:cantidad:precio`);
+    return { nombre, cantidad, precio };
+  });
+}
+const lineas = arg('lineas') ? leerLineas(arg('lineas')!) : [
   { nombre: 'ENSAYO RutaAhorro - no se emite', cantidad: 1, precio: 1190 },
   { nombre: 'ENSAYO segunda linea', cantidad: 2, precio: 595 },
 ];
@@ -108,7 +121,8 @@ try {
     { receptor: { rut: formatRut(receptor), razon_social: '', ciudad: arg('ciudad-receptor') ?? ciudad, contacto: arg('contacto') },
       ciudadEmisor: ciudad, telefonoEmisor: arg('telefono') ?? process.env.SII_TELEFONO, formaPago, plan },
     cred,
-    { chromePath: chrome, headless: !ver, hastaFirma, capturas, alPaso: (t) => console.log(`  · ${t}`) },
+    { chromePath: chrome, headless: !ver, hastaFirma, capturas, alPaso: (t) => console.log(`  · ${t}`),
+      pausaVistaPreviaMs: Number(arg('pausa') ?? 0) * 1000 },
   );
 } catch (e) {
   const mensaje = e instanceof Error ? e.message : String(e);

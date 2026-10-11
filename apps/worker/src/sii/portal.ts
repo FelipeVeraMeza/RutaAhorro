@@ -69,6 +69,8 @@ type Opciones = {
   hastaFirma?: boolean;
   /** Carpeta donde guardar capturas y los campos de cada pantalla (para reconocer el portal real). */
   capturas?: string;
+  /** Solo ensayo: deja la vista previa a la vista este tiempo antes de salir, para revisarla. */
+  pausaVistaPreviaMs?: number;
 };
 
 /**
@@ -453,6 +455,10 @@ async function recorrer(
     await volcar('vista-previa');
     if (!(await p.$('input[name="btnSign"]'))) {
       throw new Error(`"Validar y visualizar" no llevó a la vista previa con el botón Firmar. ${await dondeQuedo(p)}`);
+    }
+    if (ensayo && opciones.pausaVistaPreviaMs) {
+      paso(`Vista previa a la vista por ${Math.round(opciones.pausaVistaPreviaMs / 1000)} s (no se firma)`);
+      await espera(opciones.pausaVistaPreviaMs);
     }
     if (ensayo && opciones.hastaFirma) {
       // "Firmar" solo abre el cuadro de la clave del certificado: el documento
