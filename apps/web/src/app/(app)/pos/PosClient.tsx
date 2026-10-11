@@ -145,6 +145,7 @@ export function PosClient({
   }, [cambiarCarro]);
   const [scannerOn, setScannerOn] = useState(false);
   const [query, setQuery] = useState('');
+  const buscador = useRef<HTMLInputElement>(null);
   const [results, setResults] = useState<LocalProduct[]>([]);
   const [aviso, setAviso] = useState<Aviso>(null);
   const [cobrando, setCobrando] = useState(false);
@@ -620,6 +621,7 @@ export function PosClient({
       {/* Búsqueda manual: salida de emergencia si la cámara falla (R-05) */}
       <div className="px-3 pt-3">
         <input
+          ref={buscador}
           type="search"
           inputMode="search"
           value={query}
@@ -908,7 +910,15 @@ export function PosClient({
       )}
 
       {comprobante && (
-        <Comprobante datos={comprobante} onCerrar={() => setComprobante(null)} />
+        <Comprobante datos={comprobante} onCerrar={() => {
+          setComprobante(null);
+          // Lista para el siguiente cliente: el lector de códigos escribe en
+          // el buscador, y el foco quedaba en ninguna parte. Solo con mouse o
+          // teclado: en el celular abriría el teclado encima de la cámara.
+          if (window.matchMedia?.('(pointer: fine)').matches) {
+            window.setTimeout(() => buscador.current?.focus(), 0);
+          }
+        }} />
       )}
     </div>
   );

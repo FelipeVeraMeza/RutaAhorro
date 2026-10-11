@@ -92,6 +92,9 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
   const [documento, setDocumento] = useState('');
   // RF-M3-13 · con factura a crédito, cuándo vence.
   const [vence, setVence] = useState('');
+  // La fecha que dice la factura: el libro de compras la ordena por mes, y una
+  // factura del 30 recibida el 1 quedaba en el mes que no era.
+  const [emitida, setEmitida] = useState('');
   const [pago, setPago] = useState<Pago>('transferencia');
   /**
    * Los costos se guardan NETOS (docs/26 N° 13, decidido el 2026-10-01). La
@@ -372,7 +375,7 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
           try {
             await repoFacturacion().registrarRecibida({
               supplierId: prov.id, rutEmisor: prov.rut, razonSocial: prov.nombre, tipo: 33, folio,
-              fechaEmision: hoy(), neto: totalNeto, exento: 0, iva: totalIva, otrosImpuestos: 0,
+              fechaEmision: emitida && emitida <= hoy() ? emitida : hoy(), neto: totalNeto, exento: 0, iva: totalIva, otrosImpuestos: 0,
               notas: 'Desde Recibir mercadería', receiptId: r.id,
             });
             hecho.push('Quedó en el libro de compras.');
@@ -385,8 +388,13 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
       }
 
       const texto = [...hecho, ...pendiente].join(' ');
-      router.push(`/proveedores?recibido=${r.id}&aviso=${pendiente.length ? 'recibida_pendiente' : 'recibida'}`
-        + `&detalle=${encodeURIComponent(texto)}`);
+      // El resultado viaja en la pestaña y no en la dirección: con
+      // "&detalle=…" cualquiera podía armar un enlace que mostraba un mensaje
+      // verde inventado dentro del sistema, y recargar lo repetía.
+      try {
+        sessionStorage.setItem('compras:aviso', JSON.stringify({ tipo: pendiente.length ? 'error' : 'ok', texto }));
+      } catch { /* sin almacenamiento, se ve la lista sin el aviso */ }
+      router.push('/proveedores?vista=recepciones');
       router.refresh();
     } catch (e) {
       setError(toUserMessage(e));
@@ -446,6 +454,15 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
             />
           </div>
         </div>
+
+        {tipoDoc === 'factura' && puedePagar && (
+          <div>
+            <label htmlFor="emitida" className="block text-sm font-medium mb-1.5">Fecha de la factura</label>
+            <input id="emitida" type="date" value={emitida || hoy()} max={hoy()} onChange={(e) => setEmitida(e.target.value)}
+                   className="tap px-3 py-2 rounded-xl border border-[var(--borde)]" />
+            <p className="text-xs text-[var(--texto-suave)] mt-1">Va al libro de compras del mes que dice la factura.</p>
+          </div>
+        )}
 
         {/* Cómo se paga. "Efectivo de la caja" deja el egreso en la caja abierta
             (antes el arqueo salía con faltante); "A crédito" queda en Por pagar. */}

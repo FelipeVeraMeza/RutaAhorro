@@ -393,7 +393,10 @@ export function ProductosClient({
                 )}
                 <div className="flex items-center justify-between gap-2 mt-1.5">
                   <p className={`text-xs num ${est.clase}`}>
-                    {est.icono} {est.texto} · {cantidadConUnidad(p.stock, 'unidad')} en bodega
+                    {/* "−3 unidades en bodega" no se entiende: es lo vendido sin stock registrado. */}
+                    {est.icono} {est.texto} · {p.stock < 0
+                      ? `${cantidadConUnidad(-p.stock, 'unidad')} vendidas sin stock registrado`
+                      : `${cantidadConUnidad(p.stock, 'unidad')} en bodega`}
                     {p.stockMinimo > 0 && ` (mín. ${formatCantidad(p.stockMinimo)})`}
                   </p>
 

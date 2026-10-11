@@ -280,6 +280,10 @@ export function Cobro({
               inputMode="numeric"
               value={recibido}
               onChange={(e) => setRecibido(e.target.value)}
+              // Enter confirma: con el teclado numérico del celular o el del
+              // computador no había que buscar el botón.
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void confirmar(); } }}
+              enterKeyHint="done"
               placeholder="0"
               className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] text-xl num text-right"
             />

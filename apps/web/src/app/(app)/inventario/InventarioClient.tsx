@@ -44,6 +44,21 @@ export function InventarioClient({
   const [exito, setExito] = useState<string | null>(null);
 
   const [lotes, setLotes] = useState<Lote[]>([]);
+  // El historial traía los últimos 80 y no había cómo ver más atrás.
+  const [limiteKardex, setLimiteKardex] = useState(80);
+  const [cargandoKardex, setCargandoKardex] = useState(false);
+  async function verMasKardex() {
+    const n = limiteKardex + 80;
+    setCargandoKardex(true);
+    try {
+      setMovimientos(await repoInventario().kardex(null, n));
+      setLimiteKardex(n);
+    } catch (e) {
+      setError(toUserMessage(e));
+    } finally {
+      setCargandoKardex(false);
+    }
+  }
   const [dandoDeBaja, setDandoDeBaja] = useState<Lote | null>(null);
   const [motivoBaja, setMotivoBaja] = useState('');
   const [bajaEnCurso, setBajaEnCurso] = useState(false);
@@ -67,7 +82,7 @@ export function InventarioClient({
       // consultas por cada letra.
       const [ps, ms, ls] = await Promise.all([
         repoProductos().listar({ busqueda }, verCostos),
-        soloProductos ? null : repoInventario().kardex(null, 80),
+        soloProductos ? null : repoInventario().kardex(null, limiteKardex),
         soloProductos ? null : repoInventario().lotes(),
       ]);
       if (n !== pedido.current) return;
@@ -79,6 +94,7 @@ export function InventarioClient({
     } finally {
       if (n === pedido.current) setCargando(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- el límite lo maneja "Ver más"
   }, [busqueda, verCostos]);
 
   const primeraCarga = useRef(true);
@@ -235,7 +251,9 @@ export function InventarioClient({
                         : 'text-[var(--texto-suave)]'
                       }`}>
                         {agotado ? '🔴 Agotado' : bajo ? '🟠 Bajo' : '🟢 Normal'}
-                        {' · '}En bodega {formatCantidad(p.stock)}
+                        {' · '}{p.stock < 0
+                          ? `${formatCantidad(-p.stock)} vendidas sin stock registrado`
+                          : `En bodega ${formatCantidad(p.stock)}`}
                         {p.stockMinimo > 0 && ` (mín. ${formatCantidad(p.stockMinimo)})`}
                         {verCostos && typeof p.costoPromedio === 'number' &&
                           ` · ${formatCLP(Math.round(p.stock * p.costoPromedio))}`}
@@ -383,6 +401,12 @@ export function InventarioClient({
                 </li>
               ))}
             </ul>
+          )}
+          {movimientos.length >= limiteKardex && (
+            <button onClick={() => void verMasKardex()} disabled={cargandoKardex}
+              className="tap w-full mt-3 py-3 rounded-xl border border-[var(--borde)] text-sm font-medium disabled:opacity-50">
+              {cargandoKardex ? 'Cargando…' : 'Ver 80 movimientos más antiguos'}
+            </button>
           )}
         </>
       )}

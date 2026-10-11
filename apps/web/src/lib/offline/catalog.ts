@@ -26,7 +26,44 @@ const UN_DIA_MS = 24 * 3600 * 1000;
 export const EVENTO_CATALOGO = 'catalogo-actualizado';
 const PAGE = 1000;
 
-export async function syncCatalog(force = false): Promise<{ products: number; barcodes: number }> {
+/**
+ * La bajada en curso. Al entrar a Vender se pedían dos o tres a la vez (la
+ * pantalla, la sincronización de cada 10 minutos y la que sigue a una venta):
+ * el triple de consultas y dos escrituras del catálogo cruzándose. Ahora quien
+ * llama mientras otra corre la espera y usa su resultado; una forzada espera y
+ * baja de nuevo.
+ */
+type Bajada = Promise<{ products: number; barcodes: number }>;
+let bajadaEnCurso: Bajada | null = null;
+/** La que sigue a la que está corriendo: todos los que llegan mientras tanto la comparten. */
+let siguiente: { bajada: Bajada; force: boolean } | null = null;
+
+export function syncCatalog(force = false): Bajada {
+  if (!bajadaEnCurso) return arrancar(force);
+  // Lo que cambió después de que empezó la que corre (una venta, un precio)
+  // no viene en ella: se baja una vez más al terminar, una sola vez para todos.
+  if (siguiente) {
+    if (force) siguiente.force = true;
+    return siguiente.bajada;
+  }
+  const s = { force, bajada: null as unknown as Bajada };
+  s.bajada = bajadaEnCurso.catch(() => undefined).then(() => {
+    siguiente = null;
+    return arrancar(s.force);
+  });
+  siguiente = s;
+  return s.bajada;
+}
+
+function arrancar(force: boolean): Bajada {
+  const esta = bajarCatalogo(force).finally(() => {
+    if (bajadaEnCurso === esta) bajadaEnCurso = null;
+  });
+  bajadaEnCurso = esta;
+  return esta;
+}
+
+async function bajarCatalogo(force: boolean): Promise<{ products: number; barcodes: number }> {
   const client = supabase();
 
   // El catálogo local tiene que ser de este local y de nadie más. Si el

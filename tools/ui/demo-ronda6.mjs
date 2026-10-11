@@ -91,9 +91,9 @@ await p.waitForTimeout(300);
 ok('QA-75', /Revisa el correo/.test(await p.getByRole('dialog').innerText()), 'un correo sin @ no se guarda');
 await p.keyboard.press('Escape');
 
-// 73 · fiado
+// 73 · fiado: la pantalla salió el 2026-10-07 (el local no fía); /fiado ya no abre.
 await ir(p, '/fiado');
-ok('QA-73', !(await p.getByRole('button', { name: 'Dar crédito a un cliente' }).isDisabled()), '"Dar crédito" no queda desactivado sin explicación');
+ok('QA-73', new URL(p.url()).pathname !== '/fiado', '/fiado ya no abre (el local no fía)');
 
 // 84 · bitácora
 await ir(p, '/bitacora');

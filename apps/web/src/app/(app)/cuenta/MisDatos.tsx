@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatRut, isValidRut, rutDeCorreo, toUserMessage } from '@rutaahorro/core';
+import { cleanRut, formatRut, isValidRut, rutDeCorreo, toUserMessage } from '@rutaahorro/core';
 import { Campo } from '@/components/Campo';
 import { repoUsuarios } from '@/lib/datos/usuarios';
 
@@ -29,6 +29,13 @@ export function MisDatos({ nombre: nombreInicial, email }: { nombre: string; ema
     try {
       await repoUsuarios().editarDatos(null, { nombre: nombre.trim(), ...(rutInicial ? { rut: formatRut(rut) } : {}) });
       const rutCambio = rutInicial !== null && formatRut(rut) !== rutInicial;
+      // El ingreso recordaba el RUT viejo: al volver a entrar fallaba sin que
+      // se entendiera por qué.
+      if (rutCambio) {
+        try {
+          if (localStorage.getItem('ra:rut')) localStorage.setItem('ra:rut', cleanRut(rut).slice(0, -1));
+        } catch { /* sin almacenamiento */ }
+      }
       setAviso({ ok: true, texto: rutCambio ? 'Guardado. Desde ahora entras con tu RUT nuevo.' : 'Guardado.' });
       router.refresh();
     } catch (e) {

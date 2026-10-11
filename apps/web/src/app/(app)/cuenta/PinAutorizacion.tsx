@@ -19,6 +19,11 @@ export function PinAutorizacion({ yo }: { yo: { id: string; nombre: string; tope
     setEstado(null);
     if (!/^\d{4,6}$/.test(pin)) { setEstado({ tipo: 'error', texto: 'El PIN son 4 a 6 números' }); return; }
     if (pin !== otra) { setEstado({ tipo: 'error', texto: 'Los dos PIN no coinciden' }); return; }
+    // 0000, 1111, 1234 o 4321 son lo primero que prueba cualquiera.
+    if (/^(\d)\1+$/.test(pin) || '0123456789'.includes(pin) || '9876543210'.includes(pin)) {
+      setEstado({ tipo: 'error', texto: 'Ese PIN es muy fácil de adivinar: evita números repetidos o seguidos' });
+      return;
+    }
     setGuardando(true);
     try {
       await repoAutorizaciones().guardarPin(pin, yo);

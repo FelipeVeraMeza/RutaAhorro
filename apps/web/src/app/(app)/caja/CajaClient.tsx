@@ -162,6 +162,15 @@ export function CajaClient({
           )}
         </Campo>
 
+        {/* La diferencia se ve antes de confirmar, igual que en el cierre propio. */}
+        {contadoAjeno.trim() !== '' && contAjeno.valido && typeof forzando.expected_amount === 'number' && (
+          <p className={`text-sm num px-3 py-2 rounded-lg ${contAjeno.valor === forzando.expected_amount ? 'bg-marca-50' : 'bg-amber-50'}`}>
+            {contAjeno.valor === forzando.expected_amount
+              ? 'Cuadra'
+              : `${contAjeno.valor < forzando.expected_amount ? 'Faltante' : 'Sobrante'} de ${formatCLP(Math.abs(contAjeno.valor - forzando.expected_amount))}`}
+          </p>
+        )}
+
         <Campo etiqueta="Por qué la cierras tú" ayuda="Queda en el cierre.">
           {(props) => (
             <input

@@ -272,6 +272,9 @@ export function UsuariosClient({ miId }: { miId: string }) {
                   <span className="inline-block px-2.5 py-1 rounded-full bg-[var(--fondo)] text-xs font-medium">
                     {NOMBRE_ROL[u.rol]}
                   </span>
+                  {u.rol !== 'admin' && u.descuentoMax > 0 && (
+                    <span className="block text-[11px] text-[var(--texto-suave)] mt-1 num">descuento hasta {u.descuentoMax} %</span>
+                  )}
                   {!u.activo && (
                     <span className="block text-[11px] text-[var(--color-alerta)] mt-1">desactivado</span>
                   )}

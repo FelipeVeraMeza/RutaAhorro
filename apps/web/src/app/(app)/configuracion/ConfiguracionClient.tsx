@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatCLP, toUserMessage, validarMonto, validarCantidad, etiquetaAdicional,
-  IMPUESTOS_ADICIONALES_CHILE, coincide, diaLocal
+  IMPUESTOS_ADICIONALES_CHILE, coincide, diaLocal, isValidRut, formatRut,
 } from '@rutaahorro/core';
 import { repoPrecios, type ImpuestoAdicional } from '@/lib/datos/precios';
 import {
@@ -537,9 +537,11 @@ function DatosEmisor({ onGuardado, onError }: {
   );
 
   async function guardar() {
+    // Un RUT mal escrito iba a cada boleta y factura sin aviso.
+    if (e.rut.trim() && !isValidRut(e.rut)) { onError('El RUT del emisor no es válido: revisa el dígito verificador'); return; }
     setGuardando(true);
     try {
-      await guardarEmisor(e);
+      await guardarEmisor({ ...e, rut: e.rut.trim() ? formatRut(e.rut) : e.rut });
       onGuardado('Datos del emisor guardados: van en las boletas y facturas desde ahora');
     } catch (err) {
       onError(toUserMessage(err));

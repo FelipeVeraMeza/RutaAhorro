@@ -20,6 +20,9 @@ export function CarritoCliente({ telefono, direccion }: { telefono: string | nul
   const { valor: lineas, listo } = useCarritoListo();
   const { valor: cliente } = useDatosCliente();
   const [avisos, setAvisos] = useState<string[]>([]);
+  // Después de mandar el pedido el carrito seguía lleno: volver a la tienda
+  // mostraba lo mismo y era fácil mandarlo dos veces.
+  const [enviado, setEnviado] = useState(false);
   const sincronizado = useRef(false);
   const dia = diaLocal(new Date(), 'America/Santiago');
   const carrito = calcularCarrito(lineas, dia);
@@ -138,13 +141,21 @@ export function CarritoCliente({ telefono, direccion }: { telefono: string | nul
 
         {whatsapp ? (
           <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="btn btn-acento btn-grande"
-            onClick={() => anotarPedido({ fecha: new Date().toISOString(), lineas, total: carrito.total })}>
+            onClick={() => { anotarPedido({ fecha: new Date().toISOString(), lineas, total: carrito.total }); setEnviado(true); }}>
             Enviar pedido por WhatsApp
           </a>
         ) : (
           <p className="text-sm rounded-xl bg-acento-50 p-3">
             Pronto podrás pagar en línea. Por ahora, compra estos productos en el local{direccion ? `: ${direccion}` : ''}.
           </p>
+        )}
+        {enviado && (
+          <div role="status" className="text-sm rounded-xl bg-[var(--fondo)] p-3 flex flex-col gap-2">
+            <p>¿Ya enviaste el mensaje? El pedido quedó en Mi cuenta → Mis pedidos.</p>
+            <button type="button" className="btn btn-secundario btn-chico" onClick={() => { vaciarCarrito(); setEnviado(false); }}>
+              Sí, vaciar el carrito
+            </button>
+          </div>
         )}
         <p className="text-xs text-[var(--texto-suave)]">
           Total estimado con IVA incluido. El local confirma precios y disponibilidad.

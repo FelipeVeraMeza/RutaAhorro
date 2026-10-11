@@ -62,6 +62,20 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
 
   useEffect(() => { void cargar(); }, [cargar]);
 
+  // El resultado de la recepción recién confirmada, una sola vez.
+  const [avisoRecepcion, setAvisoRecepcion] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
+  useEffect(() => {
+    try {
+      const crudo = sessionStorage.getItem('compras:aviso');
+      if (crudo) {
+        sessionStorage.removeItem('compras:aviso');
+        const a = JSON.parse(crudo) as { tipo?: string; texto?: string };
+        if (typeof a.texto === 'string') setAvisoRecepcion({ tipo: a.tipo === 'error' ? 'error' : 'ok', texto: a.texto.slice(0, 600) });
+      }
+    } catch { /* nada que mostrar */ }
+  }, []);
+  const avisoArriba = avisoRecepcion ?? avisoInicial;
+
   async function anular() {
     if (!anulando || motivo.trim() === '' || anulacionEnCurso) return;
     // Anular devuelve stock. Sin este candado, dos toques seguidos en un
@@ -125,10 +139,10 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
         ))}
       </div>
 
-      {avisoInicial && (
-        <p role={avisoInicial.tipo === 'error' ? 'alert' : 'status'}
-           className={`text-sm px-3 py-2 rounded-lg mb-3 ${avisoInicial.tipo === 'error' ? 'bg-red-50 text-red-900' : 'bg-marca-100 text-marca-900'}`}>
-          {avisoInicial.texto}
+      {avisoArriba && (
+        <p role={avisoArriba.tipo === 'error' ? 'alert' : 'status'}
+           className={`text-sm px-3 py-2 rounded-lg mb-3 ${avisoArriba.tipo === 'error' ? 'bg-red-50 text-red-900' : 'bg-marca-100 text-marca-900'}`}>
+          {avisoArriba.texto}
         </p>
       )}
 

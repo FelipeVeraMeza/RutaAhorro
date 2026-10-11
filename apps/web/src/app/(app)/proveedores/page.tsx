@@ -6,20 +6,19 @@ import { ProveedoresClient } from './ProveedoresClient';
 export const metadata = { title: 'Compras' };
 
 export default async function ProveedoresPage({ searchParams }: {
-  searchParams: Promise<{ vista?: string; aviso?: string; detalle?: string }>;
+  searchParams: Promise<{ vista?: string; aviso?: string }>;
 }) {
   // El vendedor no participa en compras (matriz del doc 02)
   const user = await exigirRol(['admin', 'supervisor', 'bodega']);
-  const { vista, aviso, detalle } = await searchParams;
+  const { vista, aviso } = await searchParams;
   // Lo que pasó con la factura de la recepción recién confirmada (RF-M3-13).
-  const avisoRecepcion = (aviso === 'recibida' || aviso === 'recibida_pendiente') && detalle
-    // Lo que pasó al recibir (pago, por pagar, libro de compras), armado por
-    // Recibir mercadería. Con algo pendiente, en color de aviso.
-    ? { tipo: aviso === 'recibida' ? 'ok' as const : 'error' as const, texto: detalle.slice(0, 600) }
-    : aviso === 'factura_por_pagar'
+  // Lo que pasó al recibir lo deja Recibir mercadería en la pestaña
+  // (ProveedoresClient), no en la dirección: un texto de la dirección no se
+  // muestra como mensaje del sistema.
+  const avisoRecepcion = aviso === 'factura_por_pagar'
     ? { tipo: 'ok' as const, texto: 'Mercadería recibida. La factura quedó en Por pagar con su vencimiento.' }
     : aviso === 'factura_no_registrada'
-      ? { tipo: 'error' as const, texto: `La mercadería quedó recibida, pero la factura no se registró por pagar${detalle ? `: ${detalle.slice(0, 160)}` : ''}. Regístrala en Por pagar.` }
+      ? { tipo: 'error' as const, texto: 'La mercadería quedó recibida, pero la factura no se registró por pagar. Regístrala en Por pagar.' }
       : null;
 
   // El nombre del local encabeza el pedido que se manda al proveedor.

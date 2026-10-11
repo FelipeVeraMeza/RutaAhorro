@@ -127,71 +127,23 @@ ok('RF-M5-28', /Total cobrado \$1\.460/.test(copia), 'la copia (RF-M5-23) tambi�
 ok('RF-M9-13', copia.includes(pie), 'y el pie del local');
 await p.keyboard.press('Escape');
 
-// ---- RF-M5-30 · fiado
+// ---- RF-M5-30 · Fiado salió (Felipe, 2026-10-07: "el local no fía").
+// Antes esta sección probaba dar crédito, fiar y abonar; ahora prueba que no
+// quede ninguna puerta abierta: ni la pantalla ni el medio de pago al cobrar.
 await ir(p, '/fiado');
-ok('RF-M5-30', /Fiado/.test(await texto(p)), 'el administrador entra a Fiado');
-await p.getByRole('button', { name: 'Dar crédito a un cliente' }).click();
-await p.getByRole('dialog').getByRole('button', { name: 'Doña Rosa' }).click();
-await p.getByLabel('Hasta cuánto se le fía').fill('5000');
-await p.getByRole('button', { name: 'Guardar tope' }).click();
-await p.waitForTimeout(600);
-ok('RF-M5-30', /Doña Rosa puede comprar fiado hasta \$5\.000/.test(await texto(p)), 'el administrador le da $5.000 de crédito');
-
+ok('RF-M5-30', new URL(p.url()).pathname !== '/fiado', '/fiado ya no abre (el local no fía)');
 await ir(p, '/pos');
 await p.waitForTimeout(1200);
-await agregar(p, 'Redondeo QA');
 await agregar(p, 'Aceite');
 await p.getByRole('button', { name: /Elegir cliente/ }).click();
 await p.getByRole('dialog').getByRole('button', { name: /Doña Rosa/ }).click();
 await p.getByRole('button', { name: 'Cobrar' }).click();
 await p.waitForTimeout(800);
-const fiadoBtn = p.getByRole('button', { name: /Fiado/ });
-ok('RF-M5-30', await fiadoBtn.count() === 1, 'con un cliente con crédito aparece "Fiado"');
-await fiadoBtn.click();
-await p.waitForTimeout(300);
-// $1.463 + $2.490 = $3.953 (el Aceite a precio normal: sin precio de cliente desde 0032)
-const enFiado = plano(await p.getByRole('dialog').innerText());
-ok('RF-M5-30', /debe \$0 de un tope de \$5\.000/.test(enFiado) && /Queda debiendo \$3\.953/.test(enFiado),
-  'dice cuánto debe y cuánto quedará debiendo', enFiado.slice(0, 200));
-await p.getByRole('button', { name: 'Confirmar venta' }).click();
-await p.locator('#ticket').waitFor({ timeout: 15000 });
-ok('RF-M5-30', /Fiado \(a cuenta\)/.test(await p.locator('#ticket').innerText()), 'el comprobante dice que fue fiado');
-await p.getByRole('button', { name: 'Nueva venta' }).click();
-
-// Otra vez: ya no alcanza el tope.
-await agregar(p, 'Aceite');
-await p.getByRole('button', { name: /Elegir cliente/ }).click();
-await p.getByRole('dialog').getByRole('button', { name: /Doña Rosa/ }).click();
-await p.getByRole('button', { name: 'Cobrar' }).click();
-await p.waitForTimeout(800);
-await p.getByRole('button', { name: /Fiado/ }).click();
-await p.waitForTimeout(300);
-const sinCupo = plano(await p.getByRole('dialog').innerText());
-ok('RF-M5-30', /Le quedan \$1\.047 de crédito: no alcanza/.test(sinCupo) && await p.getByRole('button', { name: 'Confirmar venta' }).isDisabled(),
-  'pasado el tope no deja fiar', sinCupo.slice(0, 160));
+ok('RF-M5-30', await p.getByRole('dialog').getByRole('button', { name: /^📒?\s*Fiado/ }).count() === 0,
+  'al cobrar con un cliente no aparece "Fiado"');
 await p.keyboard.press('Escape');
-
-await ir(p, '/caja');
-const caja2 = plano(await texto(p));
-ok('RF-M5-30', /Fiado: \$3\.953 vendidos a cuenta\. No está en el cajón/.test(caja2) && /Debería haber \$21\.460/.test(caja2),
-  'lo fiado no suma al efectivo esperado');
-
-await ir(p, '/fiado');
-ok('RF-M5-30', /\$3\.953/.test(await texto(p)), 'Fiado muestra lo que debe Doña Rosa');
-await p.getByRole('button', { name: 'Abonar a la cuenta de Doña Rosa' }).click();
-await p.getByLabel('Monto que paga').fill('2000');
-await p.getByRole('button', { name: 'Registrar abono' }).click();
-await p.waitForTimeout(700);
-ok('RF-M5-30', /queda debiendo \$1\.953/.test(await texto(p)), 'un abono de $2.000 deja $1.953');
-await p.getByRole('button', { name: 'Ver movimientos de Doña Rosa' }).click();
-await p.waitForTimeout(500);
-const movs = plano(await p.getByRole('dialog').innerText());
-ok('RF-M5-30', /Compra fiada/.test(movs) && /Abono · Efectivo/.test(movs), 'la cuenta lista compras y abonos');
-await p.keyboard.press('Escape');
-await ir(p, '/caja');
-const caja3 = plano(await texto(p));
-ok('RF-M5-30', /Abonos de fiado en efectivo \$2\.000/.test(caja3) && /Debería haber \$23\.460/.test(caja3),
-  'el abono en efectivo sí entra a la caja');
+await p.getByRole('button', { name: 'Vaciar' }).click();
+await p.getByRole('button', { name: 'Sí, vaciar' }).click();
 
 // ---- RF-M3-13 · cuentas por pagar
 const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
@@ -233,7 +185,7 @@ await p.waitForTimeout(700);
 ok('RF-M3-13', /salió como egreso de tu caja/.test(await texto(p)) && /Por pagar \$116\.500/.test(plano(await texto(p))),
   'pagada con efectivo de la caja, sale de lo adeudado');
 await ir(p, '/caja');
-ok('RF-M3-13', /Pago factura N° 5/.test(await texto(p)) && /Debería haber \$11\.460/.test(plano(await texto(p))),
+ok('RF-M3-13', /Pago factura N° 5/.test(await texto(p)) && /Debería haber \$9\.460/.test(plano(await texto(p))),
   'y queda como egreso de la caja');
 
 // Recepción con factura a crédito
@@ -314,27 +266,22 @@ await p.context().close();
 
 // ===================================================== permisos y pantallas
 p = await pagina('vendedor');
-await ir(p, '/fiado');
-ok('RF-M5-30', new URL(p.url()).pathname === '/fiado' && await p.getByRole('button', { name: 'Dar crédito a un cliente' }).count() === 0,
-  'el vendedor entra a Fiado (recibe abonos) pero no da crédito');
 await ir(p, '/proveedores?vista=pagar');
 ok('RF-M3-13', new URL(p.url()).pathname !== '/proveedores', 'el vendedor no ve las cuentas por pagar');
 await p.context().close();
 p = await pagina('bodega');
 await ir(p, '/proveedores?vista=pagar');
 ok('RF-M3-13', await p.getByRole('tab', { name: /Por pagar/ }).count() === 0, 'bodega no ve la pestaña Por pagar');
-await ir(p, '/fiado');
-ok('RF-M5-30', new URL(p.url()).pathname !== '/fiado', 'bodega no entra a Fiado');
 await p.context().close();
 
 // RNF-16 · las pantallas nuevas a 360 px
 p = await pagina('admin');
 const sinDesborde = [];
-for (const r of ['/fiado', '/proveedores?vista=pagar', '/configuracion']) {
+for (const r of ['/proveedores?vista=pagar', '/configuracion']) {
   await ir(p, r);
   if (!(await desborda(p))) sinDesborde.push(r);
 }
-ok('RNF-16', sinDesborde.length === 3, `a 360 px las pantallas nuevas no se salen (${sinDesborde.join(', ')})`);
+ok('RNF-16', sinDesborde.length === 2, `a 360 px las pantallas nuevas no se salen (${sinDesborde.join(', ')})`);
 await p.context().close();
 
 ok('RNF-40', errores.length === 0, `sin errores de JavaScript en las pantallas (${errores.length})`, errores.slice(0, 3).join(' | '));

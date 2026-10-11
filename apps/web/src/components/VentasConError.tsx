@@ -9,11 +9,16 @@ import type { QueuedSale } from '@/lib/offline/db';
  * Las ventas hechas sin internet que la base rechazó al sincronizar, con el
  * motivo (QA-29, docs/26). Antes seguían contadas como "por sincronizar".
  */
-export function VentasConError({ ventas, reintentando, onReintentar, onCerrar }: {
+export function VentasConError({ ventas, reintentando, onReintentar, onCerrar, onDescartar }: {
   ventas: QueuedSale[];
   reintentando: boolean;
   onReintentar: () => void;
   onCerrar: () => void;
+  /**
+   * Quitar una venta rechazada que ya se resolvió a mano (se volvió a cobrar,
+   * se anotó como ingreso). Sin esto la barra roja quedaba para siempre.
+   */
+  onDescartar?: (clientUuid: string) => void;
 }) {
   // Día y hora del local: una venta rechazada puede ser de ayer, y solo con la
   // hora (y en la zona del celular) no se sabía cuál era.
@@ -34,6 +39,16 @@ export function VentasConError({ ventas, reintentando, onReintentar, onCerrar }:
               </p>
               <p className="text-xs text-[var(--texto-suave)]">{v.items.map((i) => i.name).join(', ')}</p>
               <p className="text-xs text-red-900 mt-1">{toUserMessage(v.lastError ?? '')}</p>
+              {onDescartar && (
+                <button type="button" className="tap mt-1 text-xs underline text-[var(--texto-suave)]"
+                  onClick={() => {
+                    if (window.confirm('¿Ya la resolviste (la volviste a cobrar o la anotaste en Caja)? Se quita de esta lista y no se puede recuperar.')) {
+                      onDescartar(v.clientUuid);
+                    }
+                  }}>
+                  Ya la resolví: quitarla
+                </button>
+              )}
             </li>
           ))}
         </ul>
