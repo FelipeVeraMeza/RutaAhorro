@@ -34,6 +34,12 @@ export async function POST(request: Request) {
   if (rut && !isValidRut(rut)) {
     return respuestaError('RUT_INVALIDO', 'El RUT no es válido: revisa el dígito verificador', 400);
   }
+  // Se entra escribiendo 7 u 8 dígitos (core: rutParaEntrar). Un dígito de
+  // más que por azar cuadraba el verificador dejaba una cuenta que no podía
+  // entrar nunca.
+  if (rut && cleanRut(rut).length > 9) {
+    return respuestaError('RUT_INVALIDO', 'El RUT tiene un dígito de más', 400);
+  }
 
   const admin = clienteAdmin();
   if (!admin) return respuestaError('SERVIDOR_SIN_LLAVE', 'Falta SUPABASE_SECRET_KEY en el servidor', 500);
