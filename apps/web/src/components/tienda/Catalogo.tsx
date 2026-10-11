@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { PaginaTienda, ProductoTienda } from '@rutaahorro/core';
 import { Icono } from '@/components/Icono';
 import { iconoProducto } from '@/lib/tienda/iconos';
-import { TarjetaProducto } from './TarjetaProducto';
+import { Grilla } from './Grilla';
 import { SelectorOrden } from './SelectorOrden';
 
 /** Piezas que comparten Inicio, Productos y Ofertas. */
@@ -48,13 +48,7 @@ export function Categorias({ categorias, activa, conTodo = false }: { categorias
   );
 }
 
-export function Grilla({ productos }: { productos: ProductoTienda[] }) {
-  return (
-    <ul className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-      {productos.map((p) => <li key={p.id} className="flex"><TarjetaProducto producto={p} /></li>)}
-    </ul>
-  );
-}
+export { Grilla } from './Grilla';
 
 /** La lista con su conteo y sus páginas. `enlace(n)` arma la dirección de la página n. */
 export function Resultados({ r, q, vacio, enlace, orden, sugeridos = [] }: {

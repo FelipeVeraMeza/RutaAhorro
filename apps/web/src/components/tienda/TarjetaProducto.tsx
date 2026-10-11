@@ -1,17 +1,25 @@
 import Link from 'next/link';
-import { precioTienda, rebajaMaximaPct, type ProductoTienda } from '@rutaahorro/core';
+import { precioPorMedida, precioTienda, rebajaMaximaPct, type ProductoTienda } from '@rutaahorro/core';
 import { Icono } from '@/components/Icono';
 import { iconoProducto } from '@/lib/tienda/iconos';
 import { AgregarAlCarrito } from './AgregarAlCarrito';
+import { BotonFavorito } from './BotonFavorito';
 
 /**
  * La foto del producto o, mientras no tenga (`image_url` todavía no se carga
  * desde Productos, RT-50), el ícono de su categoría sobre un fondo suave.
+ *
+ * RNF-T61 · Con ancho y alto declarados la página no salta al llegar la foto,
+ * y la de la ficha (la primera que se ve) se pide antes que el resto.
  */
-export function FotoProducto({ producto, grande = false }: { producto: ProductoTienda; grande?: boolean }) {
+export function FotoProducto({ producto, grande = false, prioridad = false }: { producto: ProductoTienda; grande?: boolean; prioridad?: boolean }) {
   if (producto.imagen) {
-    // eslint-disable-next-line @next/next/no-img-element -- fotos de Supabase Storage, sin dominios fijos aún
-    return <img src={producto.imagen} alt="" loading="lazy" className="w-full aspect-square object-contain bg-white p-3" />;
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- fotos de Supabase Storage, sin dominios fijos aún
+      <img src={producto.imagen} alt={grande ? producto.nombre : ''} width={800} height={800}
+        loading={prioridad ? 'eager' : 'lazy'} decoding="async" fetchPriority={prioridad ? 'high' : 'auto'}
+        className="w-full aspect-square object-contain bg-white p-3" />
+    );
   }
   return (
     <div aria-hidden className="w-full aspect-square grid place-items-center bg-marca-50 text-marca-300">
@@ -20,17 +28,18 @@ export function FotoProducto({ producto, grande = false }: { producto: ProductoT
   );
 }
 
-export function TarjetaProducto({ producto }: { producto: ProductoTienda }) {
+export function TarjetaProducto({ producto, prioridad = false }: { producto: ProductoTienda; prioridad?: boolean }) {
   const rebaja = producto.disponible ? rebajaMaximaPct(producto.precio, producto.tramos) : 0;
+  const porMedida = precioPorMedida(producto.precio, producto.formato);
   return (
-    <article className="tarjeta overflow-hidden flex flex-col w-full">
+    <article className="tarjeta overflow-hidden flex flex-col w-full relative">
       <Link href={`/tienda/p/${producto.id}`} className="flex flex-col flex-1 focus-visible:outline-2 focus-visible:outline-marca-500 group">
         <div className="p-3 pb-0 relative">
-          <div className={`rounded-xl overflow-hidden ${producto.disponible ? '' : 'opacity-50'}`}><FotoProducto producto={producto} /></div>
+          <div className={`rounded-xl overflow-hidden ${producto.disponible ? '' : 'opacity-50'}`}><FotoProducto producto={producto} prioridad={prioridad} /></div>
           {rebaja > 0 && (
             <span className="absolute top-5 left-5 rounded-md bg-acento-500 text-marca-900 text-sm font-bold px-2 py-0.5 num"
               title={`Hasta ${rebaja}% menos`}>
-              Oferta<span className="sr-only">: hasta {rebaja}% menos</span>
+              −{rebaja}%<span className="sr-only"> de descuento</span>
             </span>
           )}
           {!producto.disponible && (
@@ -46,10 +55,12 @@ export function TarjetaProducto({ producto }: { producto: ProductoTienda }) {
             {producto.precio != null
               ? <p className="text-2xl font-extrabold num">{precioTienda(producto.precio)}</p>
               : <p className="text-base font-bold text-marca-700 py-1">{precioTienda(null)}</p>}
+            {porMedida && <p className="text-xs text-[var(--texto-suave)] num">{porMedida}</p>}
             {producto.ofertas[0] && <p className="text-sm font-semibold text-acento-700">{producto.ofertas[0]}</p>}
           </div>
         </div>
       </Link>
+      <div className="absolute top-4 right-4"><BotonFavorito id={producto.id} nombre={producto.nombre} /></div>
       <div className="p-3">
         <AgregarAlCarrito producto={producto} />
       </div>

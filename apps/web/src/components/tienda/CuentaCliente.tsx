@@ -2,9 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { formatCLP, validarDatosCliente, type DatosCliente } from '@rutaahorro/core';
+import { NOMBRE_ESTADO_PEDIDO, formatCLP, validarDatosCliente, type DatosCliente, type EstadoPedidoWeb } from '@rutaahorro/core';
 import { agregarAlCarrito } from '@/lib/tienda/carrito';
 import { borrarMisDatos, guardarDatosCliente, useDatosCliente, usePedidos, type PedidoEnviado } from '@/lib/tienda/cliente';
+import { borrarFavoritosYVistos } from '@/lib/tienda/favoritos';
+import { ProductosGuardados } from './ProductosGuardados';
+
+type Estados = Record<string, { estado: EstadoPedidoWeb; numero: number }>;
 
 const CAMPO = 'w-full h-12 px-3 rounded-xl border border-[var(--borde)] bg-[var(--superficie)] focus:outline-2 focus:outline-marca-500';
 
@@ -21,6 +25,21 @@ export function CuentaCliente() {
 
   // Cuando termina de leer el navegador, el formulario parte con lo guardado.
   useEffect(() => { if (listo) setForm(datos); }, [listo, datos]);
+
+  // RF-T43 · En qué va cada pedido hecho en la tienda (los con código).
+  const [estados, setEstados] = useState<Estados>({});
+  const codigos = pedidos.map((p) => p.codigo).filter(Boolean).join(',');
+  useEffect(() => {
+    if (!codigos) return;
+    let vivo = true;
+    fetch(`/api/tienda/pedidos/estado?codigos=${codigos}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { pedidos: [] }))
+      .then((d: { pedidos: Array<{ codigo: string; estado: EstadoPedidoWeb; numero: number }> }) => {
+        if (vivo) setEstados(Object.fromEntries(d.pedidos.map((p) => [p.codigo, { estado: p.estado, numero: p.numero }])));
+      })
+      .catch(() => { /* sin red: se ven sin estado */ });
+    return () => { vivo = false; };
+  }, [codigos]);
 
   function guardar(e: React.FormEvent) {
     e.preventDefault();
@@ -70,21 +89,26 @@ export function CuentaCliente() {
           </div>
         ) : (
           <ul className="flex flex-col gap-3">
-            {pedidos.map((p) => <Pedido key={p.fecha} pedido={p} />)}
+            {pedidos.map((p) => <Pedido key={p.codigo ?? p.fecha} pedido={p} estado={p.codigo ? estados[p.codigo]?.estado : undefined} />)}
           </ul>
         )}
         {(pedidos.length > 0 || datos.nombre) && (
           <button type="button" className="btn btn-fantasma btn-chico self-start"
-            onClick={() => { if (confirm('¿Borrar tus datos, tus pedidos y el carrito de este celular?')) { borrarMisDatos(); setForm({ nombre: '', celular: '', correo: '' }); } }}>
+            onClick={() => { if (confirm('¿Borrar tus datos, tus pedidos, tus favoritos y el carrito de este celular?')) { borrarMisDatos(); borrarFavoritosYVistos(); setForm({ nombre: '', celular: '', correo: '' }); } }}>
             Borrar mis datos de este celular
           </button>
         )}
       </section>
+
+      <div className="lg:col-span-2">
+        <ProductosGuardados cual="favoritos" titulo="Mis favoritos" id="favoritos"
+          vacio={<>Todavía no guardas favoritos. Toca el corazón de un producto para tenerlo a mano. <Link href="/tienda/productos" className="font-semibold text-marca-700 hover:underline">Ver productos</Link></>} />
+      </div>
     </div>
   );
 }
 
-function Pedido({ pedido }: { pedido: PedidoEnviado }) {
+function Pedido({ pedido, estado }: { pedido: PedidoEnviado; estado?: EstadoPedidoWeb }) {
   const [repetido, setRepetido] = useState(false);
   const unidades = pedido.lineas.reduce((s, l) => s + l.cantidad, 0);
   const fecha = new Date(pedido.fecha).toLocaleString('es-CL', {
@@ -93,16 +117,27 @@ function Pedido({ pedido }: { pedido: PedidoEnviado }) {
   return (
     <li className="tarjeta p-4 flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="font-semibold">{fecha}</span>
+        <span className="font-semibold">{pedido.numero ? `N° ${pedido.numero} · ` : ''}{fecha}</span>
         <span className="text-lg font-extrabold num">{formatCLP(pedido.total)}</span>
       </div>
-      <p className="text-sm text-[var(--texto-suave)] line-clamp-2">
-        {unidades} {unidades === 1 ? 'producto' : 'productos'}: {pedido.lineas.map((l) => `${l.cantidad} × ${l.nombre}`).join(', ')}
-      </p>
-      <button type="button" className="btn btn-secundario btn-chico self-start"
-        onClick={() => { pedido.lineas.forEach((l) => agregarAlCarrito(l, l.cantidad)); setRepetido(true); }}>
-        {repetido ? 'Agregado al carrito ✓' : 'Volver a pedir'}
-      </button>
+      {pedido.codigo && (
+        <p className="flex items-center gap-2 flex-wrap text-sm">
+          {estado && <span className={`insignia ${estado === 'cancelado' ? 'insignia-alerta' : estado === 'listo' ? 'insignia-ok' : 'insignia-neutra'}`}>{NOMBRE_ESTADO_PEDIDO[estado]}</span>}
+          <Link href={`/tienda/pedido/${pedido.codigo}`} className="font-semibold text-marca-700 hover:underline min-h-11 inline-flex items-center">Ver cómo va →</Link>
+        </p>
+      )}
+      {!pedido.codigo && <p className="text-xs text-[var(--texto-suave)]">Enviado por WhatsApp</p>}
+      {unidades > 0 && (
+        <p className="text-sm text-[var(--texto-suave)] line-clamp-2">
+          {unidades} {unidades === 1 ? 'producto' : 'productos'}: {pedido.lineas.map((l) => `${l.cantidad} × ${l.nombre}`).join(', ')}
+        </p>
+      )}
+      {pedido.lineas.length > 0 && (
+        <button type="button" className="btn btn-secundario btn-chico self-start"
+          onClick={() => { pedido.lineas.forEach((l) => agregarAlCarrito(l, l.cantidad)); setRepetido(true); }}>
+          {repetido ? 'Agregado al carrito ✓' : 'Volver a pedir'}
+        </button>
+      )}
     </li>
   );
 }

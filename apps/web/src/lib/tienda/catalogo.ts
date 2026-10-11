@@ -1,5 +1,5 @@
 import { unstable_cache } from 'next/cache';
-import { descripcionPublica, diaLocal, formatoPorNombre, marcaPorNombre, ofertasVisibles, rubroPorNombre, tramosVigentes, type ProductoTienda, type TramoPrecio } from '@rutaahorro/core';
+import { descripcionPublica, diaLocal, type HorarioSemana, formatoPorNombre, marcaPorNombre, ofertasVisibles, rubroPorNombre, tramosVigentes, type ProductoTienda, type TramoPrecio } from '@rutaahorro/core';
 import { clienteAdmin } from '@/lib/supabase/admin';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { DEMO_PRODUCTOS } from '@/lib/demo/data';
@@ -20,10 +20,24 @@ import { DEMO_PRODUCTOS } from '@/lib/demo/data';
 export interface DatosTienda {
   nombre: string;
   direccion: string | null;
+  /**
+   * El número para WhatsApp: el que se anotó en Configuración → Tienda online
+   * o, si no, el teléfono de la sucursal (0040).
+   */
   telefono: string | null;
   catalogo: ProductoTienda[];
   /** Alguna foto vino de Open Food Facts (`-off-` en el archivo): hay que citar la fuente (CC BY-SA). */
   fotosDeOpenFoodFacts: boolean;
+  /** RF-T45 · El local recibe pedidos en la tienda (Configuración → Tienda online, 0040). */
+  pedidosActivos: boolean;
+  /** Pedido mínimo en pesos, 0 = sin mínimo. */
+  pedidoMinimo: number;
+  /** RF-T71 · Horario de atención por día ("09:00-21:00"), para "Abierto · cierra a las…". */
+  horario: HorarioSemana;
+  /** Un aviso corto arriba de la tienda ("Cerrado el 18 por feriado"). */
+  mensaje: string | null;
+  /** La zona horaria del local (regla 17). */
+  zona: string;
 }
 
 /** Cada cuánto se vuelve a leer la base. Un precio nuevo tarda a lo más esto en verse. */
@@ -66,28 +80,46 @@ async function leerTienda(tenantId: string): Promise<DatosTienda | null> {
   const venderSinStock = ajustes.vender_sin_stock === true;
 
   // Supabase entrega hasta 1.000 filas por consulta: se pide por páginas.
-  const filas: FilaProducto[] = [];
-  const PAGINA = 1000;
-  for (let desde = 0; ; desde += PAGINA) {
-    const { data, error } = await db.from('products')
-      .select('id, name, description, sale_price, image_url, categories(name), stock_levels(quantity), ' +
-        'product_price_tiers(desde, precio, descuento_pct, vigente_desde, vigente_hasta)')
-      // Todos los activos, también los sin precio (Felipe, 2026-10-09): salen
-      // con "Consultar precio".
-      .eq('tenant_id', tenantId).eq('is_active', true)
-      .order('name').order('id').range(desde, desde + PAGINA - 1);
-    if (error) throw error;
-    filas.push(...((data ?? []) as unknown as FilaProducto[]));
-    if (!data || data.length < PAGINA) break;
-  }
+  // RF-T57 · Solo los publicados (0040). Si la base todavía no tiene la
+  // columna (0040 sin aplicar), se piden todos, como antes, en vez de dejar
+  // la tienda caída.
+  const leerPaginas = async (soloPublicados: boolean) => {
+    const filas: FilaProducto[] = [];
+    const PAGINA = 1000;
+    for (let desde = 0; ; desde += PAGINA) {
+      let q = db.from('products')
+        .select('id, name, description, sale_price, image_url, categories(name), stock_levels(quantity), ' +
+          'product_price_tiers(desde, precio, descuento_pct, vigente_desde, vigente_hasta)')
+        // Todos los activos, también los sin precio (Felipe, 2026-10-09): salen
+        // con "Consultar precio".
+        .eq('tenant_id', tenantId).eq('is_active', true);
+      if (soloPublicados) q = q.eq('publicado_tienda', true);
+      const { data, error } = await q.order('name').order('id').range(desde, desde + PAGINA - 1);
+      if (error) throw error;
+      filas.push(...((data ?? []) as unknown as FilaProducto[]));
+      if (!data || data.length < PAGINA) break;
+    }
+    return filas;
+  };
+  const filas = await leerPaginas(true).catch((e: { code?: string }) => {
+    if (e?.code === '42703') return leerPaginas(false);
+    throw e;
+  });
+  const horario = (ajustes.tienda_horario && typeof ajustes.tienda_horario === 'object' ? ajustes.tienda_horario : {}) as HorarioSemana;
+  const whatsapp = typeof ajustes.tienda_whatsapp === 'string' && ajustes.tienda_whatsapp.trim() ? ajustes.tienda_whatsapp.trim() : null;
 
   return {
     // El nombre del negocio, no el de la sucursal ("Local principal" no le
     // dice nada a un cliente).
     nombre: local.name || sucursal?.name || 'Tienda',
     direccion: sucursal?.address ?? null,
-    telefono: sucursal?.phone ?? null,
+    telefono: whatsapp ?? sucursal?.phone ?? null,
     fotosDeOpenFoodFacts: filas.some((f) => f.image_url?.includes('-off-')),
+    pedidosActivos: ajustes.tienda_pedidos === true,
+    pedidoMinimo: Math.max(0, Number(ajustes.tienda_pedido_minimo) || 0),
+    horario,
+    mensaje: typeof ajustes.tienda_mensaje === 'string' && ajustes.tienda_mensaje.trim() ? ajustes.tienda_mensaje.trim() : null,
+    zona: String(ajustes.timezone ?? 'America/Santiago'),
     catalogo: filas.map((f) => {
       const tramos: TramoPrecio[] = (f.product_price_tiers ?? []).map((t) => ({
         desde: Number(t.desde), precio: t.precio, descuentoPct: t.descuento_pct == null ? null : Number(t.descuento_pct),
@@ -126,6 +158,11 @@ function tiendaDemo(): DatosTienda {
     direccion: 'Av. Siempre Viva 742, Santiago',
     telefono: '+56 9 1234 5678',
     fotosDeOpenFoodFacts: false,
+    pedidosActivos: true,
+    pedidoMinimo: 0,
+    horario: { lun: '09:00-21:00', mar: '09:00-21:00', mie: '09:00-21:00', jue: '09:00-21:00', vie: '09:00-21:00', sab: '10:00-14:00', dom: '' },
+    mensaje: null,
+    zona: 'America/Santiago',
     catalogo: DEMO_PRODUCTOS.map((p) => ({
       id: p.id,
       nombre: p.name,
@@ -153,15 +190,36 @@ function tiendaDemo(): DatosTienda {
  */
 let enMemoria: { tenantId: string; hasta: number; datos: Promise<DatosTienda | null> } | null = null;
 
+/**
+ * RNF-T47 · La última lectura buena, por si la base no responde: la tienda
+ * sigue mostrando el catálogo de hace un rato (hasta 6 horas) en vez de una
+ * página de error. Los precios igual los confirma la base al hacer el pedido.
+ */
+let ultimaBuena: { tenantId: string; en: number; datos: DatosTienda } | null = null;
+const VIGENCIA_COPIA_MS = 6 * 3600_000;
+
 /** Null = no hay tienda: falta `TIENDA_TENANT_ID` o el local no está activo. */
 export async function datosTienda(): Promise<DatosTienda | null> {
   if (DEMO_ACTIVO) return tiendaDemo();
-  const tenantId = process.env.TIENDA_TENANT_ID?.trim();
+  const tenantId = tenantTienda();
   if (!tenantId) return null;
   if (enMemoria && enMemoria.tenantId === tenantId && enMemoria.hasta > Date.now()) return enMemoria.datos;
-  const datos = leerTiendaGuardada(tenantId);
+  const datos = leerTiendaGuardada(tenantId)
+    .then((d) => { if (d) ultimaBuena = { tenantId, en: Date.now(), datos: d }; return d; })
+    .catch((e) => {
+      if (ultimaBuena?.tenantId === tenantId && Date.now() - ultimaBuena.en < VIGENCIA_COPIA_MS) {
+        console.error('[tienda] la base no respondió; se muestra la última copia', e instanceof Error ? e.message : e);
+        return ultimaBuena.datos;
+      }
+      throw e;
+    });
   enMemoria = { tenantId, hasta: Date.now() + REFRESCO_S * 1000, datos };
   // Un error no queda guardado: la próxima visita vuelve a intentar.
   datos.catch(() => { if (enMemoria?.datos === datos) enMemoria = null; });
   return datos;
+}
+
+/** El local de la tienda (`TIENDA_TENANT_ID`), o null si no hay tienda. */
+export function tenantTienda(): string | null {
+  return process.env.TIENDA_TENANT_ID?.trim() || null;
 }
