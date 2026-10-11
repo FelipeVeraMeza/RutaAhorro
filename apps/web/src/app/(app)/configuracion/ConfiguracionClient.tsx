@@ -63,7 +63,8 @@ export function ConfiguracionClient() {
   function elegir(id: IdPestana) {
     setPestana(id);
     setAviso(null);
-    history.replaceState(null, '', `#${{id}}`.replace('{{id}}', id));
+    // Antes quedaba "#[object Object]": el enlace directo a una pestaña no servía.
+    history.replaceState(null, '', `#${id}`);
   }
 
   const faltantes = IMPUESTOS_ADICIONALES_CHILE.filter(
@@ -610,8 +611,8 @@ function MisDatos() {
       <h2 id="t-mis-datos" className="font-semibold">Mis datos</h2>
       <p className="text-sm text-[var(--texto-suave)]">
         Descarga todo lo del local (productos, ventas, caja, inventario, clientes y proveedores) en un
-        archivo JSON. Guárdalo como respaldo propio: se abre sin este sistema. Los respaldos diarios
-        de la base siguen corriendo aparte.
+        archivo JSON. Guárdalo como respaldo propio: se abre sin este sistema. Mientras el respaldo
+        automático diario no esté activado en el servidor, descárgalo al cerrar cada día.
       </p>
       <button onClick={() => void descargar()} disabled={progreso !== null} className="btn btn-secundario w-full sm:w-auto">
         <Icono nombre="descargar" tamano={18} /> {progreso ?? 'Descargar mis datos'}

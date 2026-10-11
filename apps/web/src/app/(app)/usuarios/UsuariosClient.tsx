@@ -75,6 +75,28 @@ export function UsuariosClient({ miId }: { miId: string }) {
   // permisos de administrador.
   const [confirmando, setConfirmando] = useState<{ titulo: string; texto: string; boton: string; hacer: () => Promise<void> } | null>(null);
   const [claveNueva, setClaveNueva] = useState('');
+  // Los roles que la persona puede elegir al iniciar el turno (/turno).
+  const [turnosDe, setTurnosDe] = useState<Usuario | null>(null);
+  const [turnos, setTurnos] = useState<string[]>([]);
+
+  async function guardarTurnos() {
+    if (!turnosDe) return;
+    setError(null);
+    setEnviando(true);
+    try {
+      await repoUsuarios().guardarTurnos(turnosDe.id, turnos);
+      setExito(turnos.length > 1
+        ? `${turnosDe.nombre} elegirá al entrar: ${turnos.map((r) => NOMBRE_ROL[r as Rol]).join(' o ')}`
+        : `${turnosDe.nombre} entra siempre como ${NOMBRE_ROL[turnosDe.rol]}`);
+      setTimeout(() => setExito(null), 5000);
+      setTurnosDe(null);
+      await cargar();
+    } catch (e) {
+      setError(mensajeDe(e));
+    } finally {
+      setEnviando(false);
+    }
+  }
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -292,6 +314,19 @@ export function UsuariosClient({ miId }: { miId: string }) {
                     ))}
                   </select>
 
+                  {u.activo && u.rol !== 'admin' && (
+                    <button
+                      onClick={() => {
+                        setError(null);
+                        setTurnos(u.rolesTurno?.length ? u.rolesTurno : [u.rol]);
+                        setTurnosDe(u);
+                      }}
+                      className="tap px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)]"
+                    >
+                      Turnos{u.rolesTurno && u.rolesTurno.length > 1 ? ` (${u.rolesTurno.length})` : ''}
+                    </button>
+                  )}
+
                   {u.activo && (
                     <button
                       onClick={() => { setError(null); setClaveNueva(claveTemporal()); setRestableciendo(u); }}
@@ -502,6 +537,36 @@ export function UsuariosClient({ miId }: { miId: string }) {
             <button onClick={() => void guardarDatos()} disabled={enviando} className="btn btn-primario w-full">
               {enviando ? 'Guardando…' : 'Guardar'}
             </button>
+          </div>
+        </Modal>
+      )}
+      {turnosDe && (
+        <Modal titulo={`Turnos de ${turnosDe.nombre}`} encabezado="visible" onCerrar={() => setTurnosDe(null)} bloqueado={enviando}>
+          <div className="p-5 space-y-4">
+            <p className="text-sm text-[var(--texto-suave)]">
+              Si marcas dos o más, al entrar elige con cuál trabaja ese día (por ejemplo, vender o bodega).
+              Con uno solo, entra siempre con ese y no se le pregunta.
+            </p>
+            <fieldset className="space-y-2">
+              <legend className="sr-only">Roles que puede elegir al entrar</legend>
+              {(['vendedor', 'bodega', 'supervisor'] as const).map((r) => (
+                <label key={r} className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer ${
+                  turnos.includes(r) ? 'border-marca-500 bg-marca-50' : 'border-[var(--borde)]'}`}>
+                  <input type="checkbox" checked={turnos.includes(r)}
+                    onChange={(e) => setTurnos((t) => (e.target.checked ? [...t, r] : t.filter((x) => x !== r)))}
+                    className="mt-0.5 w-5 h-5 accent-[var(--color-marca-500)]" />
+                  <span className="text-sm">
+                    <strong className="block">{NOMBRE_ROL[r]}</strong>
+                    <span className="text-[var(--texto-suave)]">{LEMA_ROL[r]}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            {error && <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+            <button onClick={() => void guardarTurnos()} disabled={enviando} className="btn btn-primario w-full">
+              {enviando ? 'Guardando…' : turnos.length > 1 ? `Guardar: elige entre ${turnos.length} al entrar` : 'Guardar: entra siempre con su rol'}
+            </button>
+            <p className="text-xs text-[var(--texto-suave)]">Rige desde la próxima vez que entre.</p>
           </div>
         </Modal>
       )}

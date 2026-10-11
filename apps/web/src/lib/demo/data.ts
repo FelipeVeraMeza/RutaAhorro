@@ -117,11 +117,15 @@ export const DEMO_VENTAS_HOY = {
 
 export const DEMO_CAJA = {
   id: 'caja-demo',
-  opened_at: (() => {
-    const d = new Date();
-    d.setHours(9, 15, 0, 0);
-    return d.toISOString();
-  })(),
+  // Abierta hace un rato, calculado al pedirla (regla 17). Antes eran las
+  // 9:15 del día del SERVIDOR (UTC) fijadas al arrancar: pasada la medianoche
+  // de Chile la caja de la maqueta salía "de otro día", e incluso en el futuro.
+  get opened_at() {
+    const [h, m] = new Date().toLocaleTimeString('en-GB', { timeZone: 'America/Santiago', hour12: false })
+      .split(':').map(Number);
+    const desdeMedianoche = (h * 60 + m) * 60_000;
+    return new Date(Date.now() - Math.min(3 * 3600_000, Math.max(0, desdeMedianoche - 60_000))).toISOString();
+  },
   opening_amount: 30_000,
   cash_sales: 121_300,
   cash_in: 0,

@@ -2,7 +2,7 @@
 import { Icono } from '@/components/Icono';
 import { Encabezado } from '@/components/Encabezado';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   formatCLP, weightedAverageCost, costVariationPct, netAmount, ivaDeNeto,
@@ -149,12 +149,30 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
     if (restaurado) guardarBorrador({ usuario: usuarioId, proveedorId, tipoDoc, documento, vence, pago, costosConIva, totalDoc, lineas });
   }, [restaurado, usuarioId, proveedorId, tipoDoc, documento, vence, pago, costosConIva, totalDoc, lineas]);
 
+  // El costo anterior está guardado NETO. Con "costos con IVA" (la boleta, que
+  // viene marcada así por omisión) la línea partía con el neto en un campo que
+  // se lee como con IVA: quien no lo reescribía bajaba el costo un 16 %.
+  const costosConIvaRef = useRef(costosConIva);
+  costosConIvaRef.current = costosConIva;
+  const comoSeEscribe = useCallback(
+    (neto: number) => (costosConIvaRef.current && neto > 0 ? neto + ivaDeNeto(neto, ivaPct) : neto),
+    [ivaPct],
+  );
+
   const agregar = useCallback((p: {
     productId: string; nombre: string; perecible: boolean;
     costoAnterior: number; stock: number; unidad?: string;
-  }) => {
+  }, sumarSiEsta = false) => {
     setLineas((prev) => {
-      if (prev.some((l) => l.productId === p.productId)) {
+      const ya = prev.find((l) => l.productId === p.productId);
+      if (ya) {
+        // Escanear dos veces el mismo producto es contar dos: con el lector
+        // se cuenta así, y antes solo avisaba "ya está en la lista".
+        if (sumarSiEsta) {
+          setAviso(`${p.nombre}: ${formatCantidad(ya.cantidad + 1)}`);
+          setCantidadTexto((t) => ({ ...t, [p.productId]: String(ya.cantidad + 1) }));
+          return prev.map((l) => (l.productId === p.productId ? { ...l, cantidad: l.cantidad + 1 } : l));
+        }
         setAviso(`${p.nombre} ya está en la lista`);
         return prev;
       }
@@ -162,7 +180,7 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
         productId: p.productId,
         nombre: p.nombre,
         cantidad: 1,
-        costoUnitario: p.costoAnterior,
+        costoUnitario: comoSeEscribe(p.costoAnterior),
         costoAnterior: p.costoAnterior,
         stock: p.stock,
         perecible: p.perecible,
@@ -172,7 +190,7 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
       }];
     });
     setBusqueda(''); setResultados([]);
-  }, []);
+  }, [comoSeEscribe]);
 
   const { videoRef, start, stop, error: errorCamara } = useScanner({
     enabled: escaneando,
@@ -191,7 +209,7 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
       agregar(datos ?? {
         productId: prod.id, nombre: prod.name,
         perecible: prod.tracksExpiry, costoAnterior: 0, stock: 0,
-      });
+      }, true);
     },
   });
 
@@ -224,6 +242,20 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
     return () => clearTimeout(t);
   }, [aviso]);
 
+  /**
+   * Cambiar entre neto y con IVA rehace el costo de las líneas que nadie tocó
+   * (las que siguen con el costo anterior): si no, el mismo número pasaba de
+   * neto a "con IVA" y el costo guardado cambiaba un 16 % sin que nadie lo viera.
+   */
+  function cambiarModoCosto(conIva: boolean) {
+    if (conIva === costosConIva) return;
+    setCostosConIva(conIva);
+    costosConIvaRef.current = conIva;
+    setLineas((prev) => prev.map((l) => (costoTexto[l.productId] !== undefined || l.costoAnterior <= 0
+      ? l
+      : { ...l, costoUnitario: conIva ? l.costoAnterior + ivaDeNeto(l.costoAnterior, ivaPct) : l.costoAnterior })));
+  }
+
   function actualizar(id: string, cambios: Partial<LineaRecepcion>) {
     setLineas((prev) => prev.map((l) => (l.productId === id ? { ...l, ...cambios } : l)));
   }
@@ -251,7 +283,21 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
     lineas.every((l) => l.cantidad > 0 && l.costoUnitario >= 0) &&
     faltanVencimientos.length === 0;
 
+  // Un segundo toque mientras se revisaba la caja o se confirmaba el total
+  // del papel lanzaba otra recepción: la mercadería entraba dos veces.
+  const confirmando = useRef(false);
+
   async function confirmar() {
+    if (confirmando.current) return;
+    confirmando.current = true;
+    try {
+      await confirmarUnaVez();
+    } finally {
+      confirmando.current = false;
+    }
+  }
+
+  async function confirmarUnaVez() {
     setError(null);
     // Antes se confirmaba y recién después decía que la factura no quedó por
     // pagar: con la mercadería ya ingresada, no había cómo corregirlo acá.
@@ -382,8 +428,8 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
                 const t = e.target.value;
                 setTipoDoc(t);
                 // La boleta trae precios con IVA; la factura, netos.
-                if (t === 'boleta') setCostosConIva(true);
-                if (t === 'factura') setCostosConIva(false);
+                if (t === 'boleta') cambiarModoCosto(true);
+                if (t === 'factura') cambiarModoCosto(false);
                 if (t !== 'factura' && pago === 'credito') setPago('transferencia');
               }}
               className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
@@ -448,7 +494,7 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
           <div className="grid grid-cols-2 gap-2" role="radiogroup">
             {([[false, 'Netos (sin IVA)', 'Como en la factura'], [true, 'Con IVA', 'Como en una boleta']] as const).map(([conIva, titulo, ayuda]) => (
               <button key={titulo} type="button" role="radio" aria-checked={costosConIva === conIva}
-                      onClick={() => setCostosConIva(conIva)}
+                      onClick={() => cambiarModoCosto(conIva)}
                       className={`tap px-3 py-2 rounded-xl border text-left ${
                         costosConIva === conIva ? 'border-marca-500 bg-marca-50' : 'border-[var(--borde)] bg-white'}`}>
                 <span className="block text-sm font-medium">{titulo}</span>

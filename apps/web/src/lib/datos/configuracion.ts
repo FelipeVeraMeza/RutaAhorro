@@ -40,16 +40,48 @@ async function leer(): Promise<ConfiguracionLocal> {
     return desdeSettings({ redondeo_efectivo: true, ...(guardada ? JSON.parse(guardada) : {}) });
   }
 
-  const { data, error } = await supabase().from('tenants').select('settings').maybeSingle();
-  // Si no se puede leer, se sigue con los valores por omisión: quedarse sin
-  // vender porque no cargó la configuración sería mucho peor que cobrar con el
-  // IVA por omisión, que además es el que corresponde en Chile.
-  if (error || !data) return CONFIGURACION_POR_OMISION;
+  let data: { settings: unknown } | null = null;
+  let error: unknown = null;
+  try {
+    ({ data, error } = await supabase().from('tenants').select('settings').maybeSingle());
+  } catch (e) {
+    error = e;
+  }
+  // Si no se puede leer, se usa la última que se leyó en este celular, y si
+  // nunca se leyó, los valores por omisión. Antes caía siempre a los de
+  // omisión y además quedaba así toda la sesión: entrar a Vender sin señal
+  // dejaba "vender sin stock" apagado hasta cerrar la pestaña, y con el stock
+  // en cero el cajero no podía cobrar nada aunque el local lo permitiera.
+  if (error || !data) {
+    cache = null;
+    return leerGuardada() ?? CONFIGURACION_POR_OMISION;
+  }
 
-  return desdeSettings(data.settings);
+  const c = desdeSettings(data.settings);
+  guardarCopia(data.settings);
+  return c;
 }
 
-/** Configuración del local. Se consulta una vez y se reutiliza. */
+/** La última configuración leída, para usar sin conexión. */
+const CLAVE_COPIA = 'ra:configuracion';
+
+function guardarCopia(settings: unknown) {
+  try { localStorage.setItem(CLAVE_COPIA, JSON.stringify(settings ?? {})); } catch { /* sin almacenamiento */ }
+}
+
+function leerGuardada(): ConfiguracionLocal | null {
+  try {
+    const crudo = localStorage.getItem(CLAVE_COPIA);
+    return crudo ? desdeSettings(JSON.parse(crudo)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Configuración del local. Se consulta una vez y se reutiliza; si la consulta
+ * falló, la próxima llamada vuelve a intentarlo.
+ */
 export function configuracionLocal(): Promise<ConfiguracionLocal> {
   cache ??= leer();
   return cache;

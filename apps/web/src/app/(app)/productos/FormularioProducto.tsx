@@ -1,7 +1,7 @@
 'use client';
 import { Icono } from '@/components/Icono';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   formatCLP, margenNeto, margenNetoPct, formatPct, textoVencimiento, diasEntre, isValidEan, normalizeBarcode, toUserMessage,
@@ -257,7 +257,24 @@ export function FormularioProducto({
     if (!esEdicion && !ficha && !nombre.trim()) void buscarFicha(code);
   }
 
+  // Un segundo toque mientras se revisaba el código pendiente creaba el
+  // producto dos veces. Y si el alta quedó guardada pero falló lo que sigue
+  // (ofertas o foto), "Guardar" otra vez creaba OTRO producto igual: el id del
+  // ya creado se recuerda y el reintento solo hace lo que faltó.
+  const guardandoRef = useRef(false);
+  const creadoRef = useRef<string | null>(null);
+
   async function guardar() {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
+    try {
+      await guardarUnaVez();
+    } finally {
+      guardandoRef.current = false;
+    }
+  }
+
+  async function guardarUnaVez() {
     setError(null);
     setConflicto(false);
 
@@ -296,8 +313,11 @@ export function FormularioProducto({
       const repo = repoProductos();
 
       let catId: string | null = categoriaId || null;
-      if (nuevaCategoria.trim()) {
+      if (nuevaCategoria.trim() && !creadoRef.current) {
         catId = (await repo.crearCategoria(nuevaCategoria.trim())).id;
+        // Ya existe: si algo de lo que sigue falla, reintentar no la crea de nuevo.
+        setCategoriaId(catId);
+        setNuevaCategoria('');
       }
 
       const base = {
@@ -324,6 +344,8 @@ export function FormularioProducto({
           esperadoEn: producto.actualizadoEn,
           ...(puedeVerCostos && costo.trim() !== '' ? { costo: costoNum } : {}),
         });
+      } else if (creadoRef.current) {
+        idGuardado = creadoRef.current;
       } else {
         idGuardado = (await repo.crear({
           ...base,
@@ -333,6 +355,7 @@ export function FormularioProducto({
           stockInicialBodega: 0,
           vencimientoInicial: perecible && vencimiento ? vencimiento : null,
         })).id;
+        creadoRef.current = idGuardado;
       }
 
       // Ofertas e impuesto: solo si cambiaron. Si fallan, el producto ya

@@ -14,11 +14,18 @@ const LIMITES = {
   tienda: crearLimitador(60, 60_000),
   ficha: crearLimitador(30, 60_000),
   foto: crearLimitador(30, 60_000),
+  // El buzón de errores no pide sesión (recibe los de /login): sin tope,
+  // cualquiera podía llenar el registro del servidor.
+  errores: crearLimitador(30, 60_000),
 };
 
 /** La IP de quien pide, detrás del proxy de Railway. */
 export function ipDe(request: Request): string {
-  return (request.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || request.headers.get('x-real-ip') || 'desconocida';
+  // x-real-ip la pone el proxy de Railway; el primer valor de x-forwarded-for
+  // lo puede escribir cualquiera y bastaba cambiarlo para saltarse el límite.
+  return request.headers.get('x-real-ip')?.trim()
+    || (request.headers.get('x-forwarded-for') ?? '').split(',').map((x) => x.trim()).filter(Boolean).pop()
+    || 'desconocida';
 }
 
 /** Null = puede seguir; si no, la respuesta 429 para devolver. */

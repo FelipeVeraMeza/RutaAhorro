@@ -6,6 +6,7 @@ import { db, normalizeSearch, getMeta, setMeta, asegurarDueno, type LocalProduct
 import { desdeSettings } from '../datos/configuracionBase';
 import { syncClientes } from '../datos/clientes';
 import { syncCombos } from '../datos/combos';
+import { todasLasFilas } from '../supabase/todas';
 
 /**
  * Replicación del catálogo al dispositivo.
@@ -16,6 +17,10 @@ import { syncCombos } from '../datos/combos';
  */
 
 const LAST_SYNC_KEY = 'catalog:lastSync';
+/** Cuándo se pidió la última del servidor, por la marca más nueva que trajo. */
+const MARCA_SERVIDOR_KEY = 'catalog:marcaServidor';
+const ULTIMA_COMPLETA_KEY = 'catalog:ultimaCompleta';
+const UN_DIA_MS = 24 * 3600 * 1000;
 
 /** Se emite en `window` cada vez que el catálogo local cambia. */
 export const EVENTO_CATALOGO = 'catalogo-actualizado';
@@ -34,18 +39,27 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
   if (ePerfil || !perfil) throw ePerfil ?? new Error('SIN_PERFIL');
   const cambioDeDueno = await asegurarDueno(`tenant:${perfil.tenant_id as string}`);
 
-  const since = force || cambioDeDueno ? null : await getMeta(LAST_SYNC_KEY);
+  // Una vez al día se baja completo: la bajada parcial no se entera de los
+  // productos eliminados, que seguían vendiéndose sin conexión y la base
+  // rechazaba después la venta entera.
+  const completaHace = Number(await getMeta(ULTIMA_COMPLETA_KEY) ?? 0);
+  const tocaCompleta = Date.now() - completaHace > UN_DIA_MS;
+  const since = force || cambioDeDueno || tocaCompleta ? null : await getMeta(LAST_SYNC_KEY);
   const startedAt = new Date().toISOString();
 
   // --- Productos ---
+  // La marca de agua es el `updated_at` más nuevo que entregó la base, no la
+  // hora del celular: con el reloj del celular adelantado, lo que cambió en
+  // esos minutos no se bajaba nunca (hasta una bajada completa).
+  const marca = since ? (await getMeta(MARCA_SERVIDOR_KEY)) ?? since : null;
   const products: LocalProduct[] = [];
   for (let from = 0; ; from += PAGE) {
     let query = client
       .from('products')
       .select('id, name, description, sku, sale_price, unit, category_id, tracks_expiry, min_stock, is_active, updated_at, impuesto_adicional_id')
-      .order('updated_at', { ascending: true })
+      .order('updated_at', { ascending: true }).order('id')
       .range(from, from + PAGE - 1);
-    if (since) query = query.gt('updated_at', since);
+    if (marca) query = query.gt('updated_at', marca);
 
     const { data, error } = await query;
     if (error) throw error;
@@ -75,24 +89,26 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
   // --- Stock actual ---
   // Siempre completo: el stock cambia con cada venta de cualquier caja, así que
   // un sincronizado incremental por updated_at del producto se lo perdería.
-  const { data: levels } = await client.from('stock_levels').select('product_id, quantity');
+  const levels = await todasLasFilas((a, b) => client.from('stock_levels')
+    .select('product_id, quantity').order('product_id').range(a, b));
   const stockByProduct = new Map<string, number>(
-    (levels ?? []).map((l) => [l.product_id as string, Number(l.quantity ?? 0)]),
+    levels.map((l) => [l.product_id as string, Number(l.quantity ?? 0)]),
   );
   // Sala y bodega por separado: el POS avisa cuando la sala no alcanza.
-  const { data: ubic } = await client.from('stock_ubicaciones').select('product_id, ubicacion, quantity');
+  const ubic = await todasLasFilas((a, b) => client.from('stock_ubicaciones')
+    .select('product_id, ubicacion, quantity').order('product_id').order('ubicacion').range(a, b));
   const porUbicacion = new Map<string, { sala: number; bodega: number }>();
-  for (const u of ubic ?? []) {
+  for (const u of ubic) {
     const r = porUbicacion.get(u.product_id as string) ?? { sala: 0, bodega: 0 };
     r[u.ubicacion as 'sala' | 'bodega'] = Number(u.quantity ?? 0);
     porUbicacion.set(u.product_id as string, r);
   }
   // Lotes con stock, para avisar en Vender lo vencido. Completo cada vez,
   // como el stock: un lote cambia sin tocar el producto.
-  const { data: lotes } = await client.from('product_lots')
-    .select('product_id, expiry_date').eq('is_active', true).gt('quantity', 0);
+  const lotes = await todasLasFilas((a, b) => client.from('product_lots')
+    .select('product_id, expiry_date').eq('is_active', true).gt('quantity', 0).order('id').range(a, b));
   const vence = new Map<string, string>();
-  for (const l of lotes ?? []) {
+  for (const l of lotes) {
     const id = l.product_id as string;
     const d = l.expiry_date as string;
     if (d && (!vence.has(id) || d < vence.get(id)!)) vence.set(id, d);
@@ -107,19 +123,19 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
   // --- Ofertas e impuestos adicionales (0018) ---
   // Completos cada vez, como el stock: cambiar la tasa de un impuesto cambia
   // lo que se cobra en muchos productos sin tocar su `updated_at`.
-  const [{ data: tiers, error: eTiers }, { data: taxes, error: eTaxes }, { data: local }] = await Promise.all([
-    client.from('product_price_tiers').select('product_id, desde, precio, descuento_pct, vigente_desde, vigente_hasta'),
+  const [tiers, { data: taxes, error: eTaxes }, { data: local }] = await Promise.all([
+    todasLasFilas((a, b) => client.from('product_price_tiers')
+      .select('product_id, desde, precio, descuento_pct, vigente_desde, vigente_hasta').order('product_id').order('desde').range(a, b)),
     client.from('impuestos_adicionales').select('id, nombre, tasa, is_active'),
     client.from('tenants').select('settings').maybeSingle(),
   ]);
-  if (eTiers) throw eTiers;
   if (eTaxes) throw eTaxes;
   // 0021 · Con las ofertas apagadas el celular no las recibe. Así el POS sin
   // conexión tampoco las cobra: si las cobrara, la base rechazaría la venta al
   // sincronizar (sería un descuento sin permiso) y quedaría trabada.
   const ofertasActivas = desdeSettings(local?.settings).ofertasActivas;
   const tramosPorProducto = new Map<string, TramoPrecio[]>();
-  for (const t of ofertasActivas ? tiers ?? [] : []) {
+  for (const t of ofertasActivas ? tiers : []) {
     const lista = tramosPorProducto.get(t.product_id as string) ?? [];
     lista.push({
       desde: Number(t.desde),
@@ -144,7 +160,8 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
   };
 
   // --- Códigos de barras ---
-  const { data: codes } = await client.from('product_barcodes').select('barcode, product_id');
+  const codes = await todasLasFilas((a, b) => client.from('product_barcodes')
+    .select('barcode, product_id').order('barcode').range(a, b));
 
   const database = db();
   await database.transaction('rw', database.products, database.barcodes, async () => {
@@ -169,7 +186,7 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
     // Se reemplazan aunque la base no tenga ninguno. Antes solo se limpiaban si
     // llegaba al menos uno: con un catálogo sin códigos, los viejos seguían
     // escaneándose.
-    if (codes) {
+    {
       await database.barcodes.clear();
       await database.barcodes.bulkPut(
         codes.map((c) => ({
@@ -187,9 +204,12 @@ export async function syncCatalog(force = false): Promise<{ products: number; ba
   await syncCombos(ofertasActivas).catch(() => {});
 
   await setMeta(LAST_SYNC_KEY, startedAt);
+  const masNueva = products.reduce((m, p) => (p.updatedAt > m ? p.updatedAt : m), marca ?? '');
+  if (masNueva) await setMeta(MARCA_SERVIDOR_KEY, masNueva);
+  if (!since) await setMeta(ULTIMA_COMPLETA_KEY, String(Date.now()));
   // Aviso para las pantallas abiertas: el POS repite la búsqueda en curso.
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(EVENTO_CATALOGO));
-  return { products: products.length, barcodes: codes?.length ?? 0 };
+  return { products: products.length, barcodes: codes.length };
 }
 
 /** Busca por código de barras. Es el camino más caliente del POS. */

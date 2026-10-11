@@ -64,7 +64,19 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isAuthRoute = path.startsWith('/login') || path.startsWith('/recuperar');
   // El buzón de errores recibe también los de la pantalla de ingreso (RNF-40).
-  if (path === '/api/errores') return response;
+  // /api/version (qué versión está publicada) y /api/logout (salir con la sesión
+  // ya vencida) no necesitan sesión: antes /api/logout sin sesión rebotaba a
+  // /login con un 307, que repite el POST.
+  if (path === '/api/errores' || path === '/api/version' || path === '/api/logout') return response;
+
+  // Una ruta /api/ sin sesión responde 401 en JSON: redirigirla a /login le
+  // entregaba la página HTML del ingreso a un fetch que esperaba JSON.
+  if (!user && path.startsWith('/api/')) {
+    return NextResponse.json(
+      { error: { code: 'NO_AUTENTICADO', message: 'Tu sesión expiró. Vuelve a ingresar' } },
+      { status: 401 },
+    );
+  }
 
   if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone();

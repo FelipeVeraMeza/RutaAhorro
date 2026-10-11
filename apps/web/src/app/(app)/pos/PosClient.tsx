@@ -122,7 +122,14 @@ export function PosClient({
       const dia = diaLocal(new Date(), zonaRef.current);
       // 0023 · El combo va después: se mide contra el precio que la línea ya
       // tiene (la oferta), así nunca se suma a otra rebaja.
-      return aplicarCombos(aplicarOfertas(lineas, dia), ofertasRef.current ? combosRef.current : [], dia);
+      const conCombos = aplicarCombos(aplicarOfertas(lineas, dia), ofertasRef.current ? combosRef.current : [], dia);
+      // Un descuento en pesos puesto con 3 unidades no puede quedar mayor que
+      // la línea al bajar a 1: el total de la pantalla y el de la base dejaban
+      // de coincidir y el cobro fallaba con "el pago no cuadra".
+      return conCombos.map((l) => {
+        const tope = Math.max(0, Math.round(l.unitPrice * l.quantity) - (l.descuentoCombo ?? 0));
+        return (l.discountAmount ?? 0) > tope ? { ...l, discountAmount: tope } : l;
+      });
     });
   }, []);
 
@@ -191,7 +198,7 @@ export function PosClient({
   const [actualizado, setActualizado] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     const leer = () => {
-      void ultimaActualizacionCatalogo().then(setActualizado);
+      void ultimaActualizacionCatalogo().then(setActualizado).catch(() => {});
       void cargarFrecuentes();
     };
     leer();
@@ -200,7 +207,11 @@ export function PosClient({
   }, [cargarFrecuentes]);
 
   useEffect(() => {
-    void configuracionLocal().then(setConfig);
+    const leer = () => void configuracionLocal().then(setConfig).catch(() => {});
+    leer();
+    // Si se entró sin señal, la del local llega cuando vuelve internet.
+    window.addEventListener('online', leer);
+    return () => window.removeEventListener('online', leer);
   }, []);
 
   // El catálogo local es lo que permite escanear sin internet.
@@ -479,6 +490,10 @@ export function PosClient({
         setErrorCobro(toUserMessage(fila.lastError ?? ''));
         return false;
       }
+      // Sigue en la cola: la señal se cortó a mitad del envío. El cliente se
+      // va con su producto, así que se trata como una venta sin conexión (la
+      // base no la puede rechazar por stock después, ADR-005).
+      if (fila) await db().saleQueue.update(clientUuid, { sinConexion: true });
       registrada = respuestaDe(clientUuid) as typeof registrada;
     }
 
@@ -565,6 +580,9 @@ export function PosClient({
 
   return (
     <div className="flex flex-col min-h-[calc(100dvh-8rem)]">
+      {/* Cada pantalla tiene su título para el lector de pantalla (RNF-61);
+          acá no se ve para no quitarle alto al mostrador. */}
+      <h1 className="sr-only">Vender</h1>
       {/* Aviso flotante */}
       {aviso && (
         <div
@@ -908,8 +926,12 @@ function CantidadDeLinea({ linea, onCambiar, onError }: {
   onError: (texto: string) => void;
 }) {
   const [texto, setTexto] = useState<string | null>(null);
+  // Escape tiene que descartar lo escrito. Sin esto, el blur que sigue leía el
+  // texto todavía escrito (el estado no alcanzaba a cambiar) y lo confirmaba.
+  const descartar = useRef(false);
   const decimales = admiteDecimales(linea.unidad);
   function confirmar() {
+    if (descartar.current) { descartar.current = false; setTexto(null); return; }
     if (texto === null) return;
     const v = validarCantidadVenta(texto, linea.unidad);
     setTexto(null);
@@ -938,7 +960,7 @@ function CantidadDeLinea({ linea, onCambiar, onError }: {
       onBlur={confirmar}
       onKeyDown={(e) => {
         if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
-        if (e.key === 'Escape') { setTexto(null); e.currentTarget.blur(); }
+        if (e.key === 'Escape') { descartar.current = true; setTexto(null); e.currentTarget.blur(); }
       }}
       className="tap w-16 h-11 rounded-lg border border-[var(--borde)] text-center num font-semibold"
     />

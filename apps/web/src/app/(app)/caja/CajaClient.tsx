@@ -27,11 +27,6 @@ interface CajaAjena {
 }
 
 
-/** AAAA-MM-DD en la zona del navegador. */
-function diaLocal(iso: string): string {
-  return new Date(iso).toLocaleDateString('sv');
-}
-
 export function CajaClient({
   session, resumen, movimientos, historial, cajasAjenas = [], usuarioId = '', nombre = '',
 }: {
@@ -64,8 +59,31 @@ export function CajaClient({
   // RF-M6-14 · el resumen del cierre que se acaba de hacer, para imprimirlo.
   // El día de hoy se calcula en el navegador (su zona horaria), después de
   // montar: en el servidor sería otra zona y no calzaría al hidratar.
-  const [hoyLocal, setHoyLocal] = useState<string | null>(null);
-  useEffect(() => setHoyLocal(diaLocal(new Date().toISOString())), []);
+  const [montado, setMontado] = useState(false);
+  useEffect(() => setMontado(true), []);
+  // Ventas cobradas sin conexión que todavía no llegan: no están en el
+  // "debería haber", y cerrar así daba un sobrante falso (o un faltante al día
+  // siguiente, cuando llegaban a una caja ya cerrada).
+  const [enCola, setEnCola] = useState(0);
+  const [enviandoCola, setEnviandoCola] = useState(false);
+  async function revisarCola() {
+    if (DEMO_ACTIVO) return;
+    try {
+      const { pendingCount } = await import('@/lib/offline/sync');
+      setEnCola(await pendingCount());
+    } catch { /* sin IndexedDB no hay cola */ }
+  }
+  async function enviarCola() {
+    setEnviandoCola(true);
+    try {
+      const { syncQueue } = await import('@/lib/offline/sync');
+      const r = await syncQueue();
+      setEnCola(r.remaining);
+      router.refresh();
+    } catch { /* se reintenta con el botón */ } finally {
+      setEnviandoCola(false);
+    }
+  }
   const [cierreHecho, setCierreHecho] = useState<{ esperado: number; contado: number; nota: string; resumen: Record<string, unknown>; abierta: string } | null>(null);
 
   const [forzando, setForzando] = useState<CajaAjena | null>(null);
@@ -272,6 +290,19 @@ export function CajaClient({
           </p>
         </div>
 
+        {enCola > 0 && (
+          <div role="alert" className="mb-4 rounded-xl bg-red-50 border border-[var(--color-alerta)]/30 px-3 py-2.5 text-sm text-red-900">
+            <p>
+              <strong>Hay {enCola} {enCola === 1 ? 'venta' : 'ventas'} de este celular sin enviar.</strong> No están
+              en el &quot;debería haber&quot;: si cierras ahora, la caja va a mostrar un sobrante que no es real.
+            </p>
+            <button type="button" onClick={() => void enviarCola()} disabled={enviandoCola}
+              className="tap mt-2 px-3 rounded-lg border border-[var(--borde)] bg-white text-sm font-medium disabled:opacity-50">
+              {enviandoCola ? 'Enviando…' : 'Enviarlas ahora'}
+            </button>
+          </div>
+        )}
+
         <div className="tarjeta p-4 space-y-4">
           <div>
             <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -401,7 +432,7 @@ export function CajaClient({
   const r = resumen ?? {};
   // El día del LOCAL (regla 17), no el del navegador: un celular con otra
   // zona marcaba "de otro día" una caja abierta hoy en la mañana.
-  const deOtroDia = hoyLocal !== null && diaDelLocal(session.opened_at, zona) !== diaDelLocal(new Date(), zona);
+  const deOtroDia = montado && diaDelLocal(session.opened_at, zona) !== diaDelLocal(new Date(), zona);
   return (
     <div className="px-4 py-5 space-y-4">
       <div className="tarjeta p-4">
@@ -565,7 +596,7 @@ export function CajaClient({
       <button
         // El "debería haber" venía de cuando se abrió la pantalla: con ventas
         // hechas después en Vender, el cierre comparaba contra un esperado viejo.
-        onClick={() => { setCerrando(true); router.refresh(); }}
+        onClick={() => { setCerrando(true); router.refresh(); void revisarCola(); }}
         className="tap w-full py-3.5 rounded-xl border-2 border-marca-500 text-marca-700 font-bold"
       >
         Cerrar caja

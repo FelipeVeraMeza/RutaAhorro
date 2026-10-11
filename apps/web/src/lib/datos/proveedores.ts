@@ -341,11 +341,10 @@ export async function productoParaRecepcion(
   productId: string,
   nombre: string,
 ): Promise<ReturnType<typeof paraRecepcion> | null> {
-  const encontrados = await repoProductos().listar(
-    { busqueda: nombre, soloActivos: true },
-    true,
-  );
-  const p = encontrados.find((x) => x.id === productId);
+  // Por id y no buscando por el nombre: la búsqueda traía todos los
+  // productos parecidos (y con un nombre con comas o paréntesis, ninguno).
+  const p = await repoProductos().obtener(productId, true).catch(() => null)
+    ?? (await repoProductos().listar({ busqueda: nombre, soloActivos: true }, true)).find((x) => x.id === productId);
   return p ? paraRecepcion(p) : null;
 }
 

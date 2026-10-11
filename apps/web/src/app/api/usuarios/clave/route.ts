@@ -41,6 +41,12 @@ export async function POST(request: Request) {
     password: clave,
     app_metadata: { debe_cambiar_clave: true },
   });
-  if (error) return respuestaError('ERROR_INTERNO', error.message, 500);
+  // El texto de Supabase viene en inglés y no le sirve a nadie en el local.
+  if (error) {
+    console.error('[restablecer clave]', error.message);
+    return /weak|at least|pwned/i.test(error.message)
+      ? respuestaError('CLAVE_DEBIL', 'Esa contraseña es muy fácil de adivinar. Usa una más larga o con números', 400)
+      : respuestaError('ERROR_INTERNO', 'No se pudo poner la contraseña temporal. Vuelve a intentarlo', 500);
+  }
   return Response.json({ ok: true });
 }
