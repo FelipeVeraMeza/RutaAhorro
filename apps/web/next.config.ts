@@ -72,6 +72,27 @@ const config: NextConfig = {
       // El service worker siempre fresco: si el navegador lo guardara, una
       // versión vieja seguiría decidiendo qué se guarda.
       { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }] },
+      // RNF-T14 · Política de contenido de la tienda, en modo INFORME: el
+      // navegador avisa en la consola lo que la rompería, sin bloquear nada.
+      // Cuando pase una semana sin avisos, se cambia a Content-Security-Policy.
+      {
+        source: '/tienda/:path*',
+        headers: [{
+          key: 'Content-Security-Policy-Report-Only',
+          value: [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline'",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: blob: https:",
+            "font-src 'self' data:",
+            "connect-src 'self'",
+            "frame-ancestors 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "object-src 'none'",
+          ].join('; '),
+        }],
+      },
       {
         source: '/:path*',
         headers: [

@@ -73,6 +73,15 @@ export async function runDailySummary() {
 
     const valueAtRisk = (expiring ?? []).reduce((s, l) => s + (l.value_at_risk ?? 0), 0);
 
+    // docs/33 · Pedidos de la tienda online: los de hoy y los que siguen sin
+    // entregar. Sin 0040 la tabla no existe y la sección no sale.
+    const { data: pedidosHoy } = await admin
+      .from('pedidos_web').select('estado, total')
+      .eq('tenant_id', tenant.id).gte('created_at', dia.desde).lt('created_at', dia.hasta);
+    const { count: pedidosAbiertos } = await admin
+      .from('pedidos_web').select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenant.id).in('estado', ['recibido', 'preparando', 'listo']);
+
     const sections = [
       {
         heading: 'Ventas de hoy',
@@ -107,6 +116,14 @@ export async function runDailySummary() {
           ]),
         ],
       },
+      ...(pedidosHoy && (pedidosHoy.length > 0 || (pedidosAbiertos ?? 0) > 0) ? [{
+        heading: 'Pedidos web',
+        rows: [
+          ['Pedidos de hoy', String(pedidosHoy.length)],
+          ['Entregados hoy', money(pedidosHoy.filter((p) => p.estado === 'entregado').reduce((s, p) => s + (p.total ?? 0), 0))],
+          ...((pedidosAbiertos ?? 0) > 0 ? [[`⚠️ Sin entregar todavía`, String(pedidosAbiertos)]] : []),
+        ],
+      }] : []),
       {
         heading: 'Stock bajo mínimo',
         rows: (lowStock ?? []).map((p) => [p.name as string, `${p.quantity} / mín. ${p.min_stock}`]),

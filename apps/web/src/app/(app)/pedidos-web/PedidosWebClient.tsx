@@ -34,6 +34,7 @@ export function PedidosWebClient({ local, direccion }: { local: string; direccio
   const [ocupado, setOcupado] = useState<string | null>(null);
   const conocidos = useRef<Set<string> | null>(null);
   const [actualizado, setActualizado] = useState<Date | null>(null);
+  const [busqueda, setBusqueda] = useState('');
 
   const cargar = useCallback(async () => {
     try {
@@ -89,7 +90,15 @@ export function PedidosWebClient({ local, direccion }: { local: string; direccio
     }
   }
 
-  const lista = porVista.get(vista) ?? [];
+  // Buscar por número, nombre o celular (el cliente llega y dice "soy Ana").
+  const q = busqueda.trim().toLowerCase();
+  const lista = (porVista.get(vista) ?? []).filter((p) => !q
+    || String(p.numero) === q.replace(/^n°?\s*/, '')
+    || p.nombre.toLowerCase().includes(q)
+    || p.celular.replace(/\D/g, '').includes(q.replace(/\D/g, '') || '§'));
+  // Lo entregado hoy, para saber cuánto vendió la tienda.
+  const hoy = new Date().toDateString();
+  const entregadosHoy = (pedidos ?? []).filter((p) => p.estado === 'entregado' && new Date(p.actualizado).toDateString() === hoy);
   const enlaceSeguimiento = (p: PedidoWeb) => (typeof window === 'undefined' ? null : `${window.location.origin}/tienda/pedido/${p.codigo}`);
 
   return (
@@ -123,6 +132,15 @@ export function PedidosWebClient({ local, direccion }: { local: string; direccio
         </div>
       </div>
 
+      <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+        <input type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} maxLength={40}
+          placeholder="Buscar por N°, nombre o celular" aria-label="Buscar un pedido"
+          className="tap flex-1 px-3 rounded-xl border border-[var(--borde)]" />
+        {entregadosHoy.length > 0 && (
+          <p className="text-sm text-[var(--texto-suave)] num">Hoy: {entregadosHoy.length} entregados · {formatCLP(entregadosHoy.reduce((s, p) => s + p.total, 0))}</p>
+        )}
+      </div>
+
       {aviso && <p role="status" className="text-sm px-3 py-2 rounded-lg bg-marca-100 text-marca-900">{aviso}</p>}
       {error && <p role="alert" className="text-sm px-3 py-2 rounded-lg bg-red-50 text-red-900">{error}</p>}
 
@@ -133,7 +151,7 @@ export function PedidosWebClient({ local, direccion }: { local: string; direccio
         </div>
       )}
 
-      <ul className="space-y-3">
+      <ul id="hoja-pedidos" className="space-y-3">
         {lista.map((p) => {
           const accion = accionPrincipal(p.estado);
           const aviso = enlaceWhatsApp(p.celular, mensajeEstadoCliente({

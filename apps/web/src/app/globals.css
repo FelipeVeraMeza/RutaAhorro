@@ -131,7 +131,12 @@ html[data-letra='grande'] { font-size: 118.75%; }
   body * { visibility: hidden; }
   #ticket, #ticket *,
   #hoja-etiquetas, #hoja-etiquetas *,
-  #hoja-conteo, #hoja-conteo * { visibility: visible; }
+  #hoja-conteo, #hoja-conteo *,
+  #hoja-pedidos, #hoja-pedidos *,
+  #hoja-pedido, #hoja-pedido * { visibility: visible; }
+  /* docs/33 · Los pedidos web para armarlos en papel, y el seguimiento del cliente. */
+  #hoja-pedidos, #hoja-pedido { position: absolute; left: 0; top: 0; width: 100%; color: #000; }
+  #hoja-pedidos .print\:hidden, #hoja-pedido .print\:hidden { display: none !important; }
   /* RF-M4-22 · la hoja para contar a mano. */
   #hoja-conteo { display: block !important; position: absolute; left: 0; top: 0; width: 100%; color: #000; }
 
@@ -220,4 +225,15 @@ html[data-letra='grande'] { font-size: 118.75%; }
   .insignia-aviso { background: #fffbeb; color: var(--color-aviso); }
   .insignia-alerta { background: #fef2f2; color: var(--color-alerta); }
   .insignia-neutra { background: var(--fondo); color: var(--texto-suave); }
+}
+
+/* RNF-T65 · Quien pidió menos movimiento en su sistema no ve transiciones ni
+   animaciones (mareo, distracción). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

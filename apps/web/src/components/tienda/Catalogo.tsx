@@ -18,6 +18,7 @@ export function Buscador({ accion, q = '', ocultos = {} }: {
       <div className="relative flex-1 min-w-0">
         <Icono nombre="buscar" tamano={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--texto-suave)] pointer-events-none" />
         <input id="buscar" name="q" type="search" defaultValue={q} placeholder="Buscar productos, marcas o categorías…"
+          maxLength={100} enterKeyHint="search" autoComplete="off"
           className="w-full h-12 md:h-13 pl-11 pr-3 rounded-xl border border-[var(--borde)] bg-[var(--superficie)] focus:outline-2 focus:outline-marca-500" />
       </div>
       <button className="btn btn-primario px-5 md:px-8 h-12 md:h-13">Buscar</button>
@@ -98,8 +99,8 @@ export function conParametros(ruta: string, params: Record<string, string | numb
 export function TiendaCerrada() {
   return (
     <div className="text-center py-16">
-      <h1 className="text-xl font-bold mb-2">La tienda todavía no está abierta</h1>
-      <p className="text-[var(--texto-suave)]">Vuelve pronto.</p>
+      <h1 className="text-xl font-bold mb-2">La tienda no está disponible en este momento</h1>
+      <p className="text-[var(--texto-suave)]">Vuelve en un rato. Mientras, puedes comprar directo en el local.</p>
     </div>
   );
 }

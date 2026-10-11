@@ -161,6 +161,20 @@ ok('U-104', productos.productos.length === 1, 'la API ignora id que no son de pr
 const estados = await (await fetch(`${BASE}/api/tienda/pedidos/estado?codigos=${codigo},XXXXXXX0`)).json();
 ok('U-105', estados.pedidos.length === 1 && !JSON.stringify(estados).includes('1234'), 'el estado por código no trae datos de contacto');
 
+const salud = await fetch(`${BASE}/api/tienda/salud`);
+const s1 = await salud.json();
+ok('U-136', salud.status === 200 && s1.ok === true && s1.productos > 0 && !('costo' in s1), 'chequeo de salud para el monitor de disponibilidad');
+const cabeceras = (await fetch(`${BASE}/tienda`)).headers;
+ok('U-143', /default-src 'self'/.test(cabeceras.get('content-security-policy-report-only') ?? ''), 'política de contenido de la tienda (modo informe)');
+await ir(c, '/tienda/p/no-existe');
+ok('U-135', /No encontramos lo que buscas/.test(await texto(c)) && (await c.locator('input[name="q"]').count()) === 1, 'el "no encontrado" ofrece buscar ahí mismo');
+await ir(c, '/tienda/cuenta');
+ok('U-147', (await c.getByRole('button', { name: 'Descargar mis datos' }).count()) === 1, 'Mi cuenta deja descargar lo guardado en el celular');
+await ir(c, `/tienda/pedido/${codigo}`);
+ok('U-149', (await c.getByRole('button', { name: 'Imprimir o guardar' }).count()) === 1, 'el seguimiento se puede imprimir o guardar en PDF');
+await ir(c, '/tienda/ofertas');
+ok('U-148', (await c.locator('select').first().inputValue().catch(() => '')) === 'mayor-descuento' || /Mayor descuento/.test(await texto(c)), 'Ofertas parte por lo que más rebaja');
+
 // ================================================================ personal
 const a = await nuevaPagina({ rol: 'admin', ancho: 1280 });
 await ir(a, '/');
@@ -187,6 +201,12 @@ await a.waitForTimeout(800);
 await a.getByRole('button', { name: /Entregados y cancelados/ }).click();
 ok('U-34', /Cancelado: Sin stock/.test(await texto(a)), 'queda cancelado con el motivo');
 ok('U-118', await sinDesborde(a), 'Pedidos web sin desborde');
+await a.getByRole('button', { name: /^Listos/ }).click();
+await a.getByLabel('Buscar un pedido').fill('ana');
+const conAna = /N° 1 · Ana Pérez/.test(await texto(a));
+await a.getByLabel('Buscar un pedido').fill('rodrigo');
+ok('U-150', conAna && !/N° 1 · Ana Pérez/.test(await texto(a)), 'Pedidos web busca por nombre');
+await a.getByLabel('Buscar un pedido').fill('');
 
 await ir(c, `/tienda/pedido/${codigo}`);
 ok('U-20', /Listo para retirar/.test(await texto(c)), 'el cliente ve en el seguimiento que está listo');

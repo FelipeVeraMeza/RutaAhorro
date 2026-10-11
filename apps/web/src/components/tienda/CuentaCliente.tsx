@@ -32,14 +32,30 @@ export function CuentaCliente() {
   useEffect(() => {
     if (!codigos) return;
     let vivo = true;
-    fetch(`/api/tienda/pedidos/estado?codigos=${codigos}`, { cache: 'no-store' })
+    const leer = () => fetch(`/api/tienda/pedidos/estado?codigos=${codigos}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : { pedidos: [] }))
       .then((d: { pedidos: Array<{ codigo: string; estado: EstadoPedidoWeb; numero: number }> }) => {
         if (vivo) setEstados(Object.fromEntries(d.pedidos.map((p) => [p.codigo, { estado: p.estado, numero: p.numero }])));
       })
       .catch(() => { /* sin red: se ven sin estado */ });
-    return () => { vivo = false; };
+    void leer();
+    // Al volver a la pestaña (el cliente fue a WhatsApp a ver si le avisaron).
+    const alVolver = () => { if (document.visibilityState === 'visible') void leer(); };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => { vivo = false; document.removeEventListener('visibilitychange', alVolver); };
   }, [codigos]);
+
+  /** RNF-T28 · Derecho de acceso: todo lo que la tienda guardó en este celular, en un archivo. */
+  function descargarMisDatos() {
+    let favoritos: unknown = [];
+    try { favoritos = JSON.parse(localStorage.getItem('tienda:favoritos') ?? '[]'); } catch { /* nada */ }
+    const archivo = new Blob([JSON.stringify({ datos, pedidos, favoritos, descargado: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(archivo);
+    a.download = 'mis-datos-tienda.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 
   function guardar(e: React.FormEvent) {
     e.preventDefault();
@@ -91,6 +107,11 @@ export function CuentaCliente() {
           <ul className="flex flex-col gap-3">
             {pedidos.map((p) => <Pedido key={p.codigo ?? p.fecha} pedido={p} estado={p.codigo ? estados[p.codigo]?.estado : undefined} />)}
           </ul>
+        )}
+        {(pedidos.length > 0 || datos.nombre) && (
+          <button type="button" className="btn btn-fantasma btn-chico self-start" onClick={descargarMisDatos}>
+            Descargar mis datos
+          </button>
         )}
         {(pedidos.length > 0 || datos.nombre) && (
           <button type="button" className="btn btn-fantasma btn-chico self-start"

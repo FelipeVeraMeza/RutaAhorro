@@ -9,6 +9,7 @@ import { seguimientoPedido } from '@/lib/tienda/seguimiento';
 import { Icono } from '@/components/Icono';
 import { RefrescarSolo } from '@/components/tienda/RefrescarSolo';
 import { RecordarPedido } from '@/components/tienda/RecordarPedido';
+import { BotonImprimir } from '@/components/tienda/BotonImprimir';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +40,7 @@ export default async function SeguimientoPage({ params, searchParams }: { params
   const whatsapp = enlaceWhatsApp(tienda?.telefono, `Hola, consulto por mi pedido N° ${pedido.numero} (código ${pedido.codigo}).`);
 
   return (
-    <div className="flex flex-col gap-5 max-w-3xl mx-auto w-full">
+    <div id="hoja-pedido" className="flex flex-col gap-5 max-w-3xl mx-auto w-full">
       <RecordarPedido codigo={pedido.codigo} numero={pedido.numero} total={pedido.total} fecha={pedido.creado} />
       {!final && <RefrescarSolo segundos={60} />}
       {nuevo && (
@@ -118,13 +119,15 @@ export default async function SeguimientoPage({ params, searchParams }: { params
           <div className="flex gap-2 flex-wrap mt-1">
             {mapa && <a href={mapa} target="_blank" rel="noopener noreferrer" className="btn btn-secundario btn-chico">Cómo llegar</a>}
             {whatsapp && <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="btn btn-secundario btn-chico">Escribir al local</a>}
+            {tienda.telefono && <a href={`tel:${tienda.telefono.replace(/[^\d+]/g, '')}`} className="btn btn-secundario btn-chico">Llamar</a>}
           </div>
         </section>
       )}
 
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap print:hidden">
         <Link href="/tienda/productos" className="btn btn-primario">Seguir comprando</Link>
         <Link href="/tienda/cuenta" className="btn btn-secundario">Mis pedidos</Link>
+        <BotonImprimir texto="Imprimir o guardar" />
       </div>
     </div>
   );
