@@ -5,6 +5,7 @@ import { DEMO_ACTIVO } from '../demo';
 import { db } from '../offline/db';
 import { syncCatalog } from '../offline/catalog';
 import { DEMO_LOTES } from '../demo/data';
+import { perfilActual } from '../supabase/perfil';
 
 /**
  * Movimientos de inventario: ajustes, mermas y kardex (módulo M4).
@@ -309,12 +310,11 @@ const repoSupabase: RepositorioInventario = {
 
   async aplicarToma(items) {
     const client = supabase();
-    const { data: { user } } = await client.auth.getUser();
-    const { data: perfil } = await client.from('profiles').select('tenant_id, store_id').eq('id', user!.id).single();
+    const perfil = await perfilActual();
 
     const { data: conteo, error: e1 } = await client
       .from('stock_counts')
-      .insert({ tenant_id: perfil!.tenant_id, store_id: perfil!.store_id })
+      .insert({ tenant_id: perfil.tenantId, store_id: perfil.storeId })
       .select('id').single();
     if (e1) throw e1;
 
@@ -322,7 +322,11 @@ const repoSupabase: RepositorioInventario = {
       p_count_id: conteo.id,
       p_items: items.map((i) => ({ product_id: i.productoId, counted_qty: i.contado })),
     });
-    if (error) throw error;
+    if (error) {
+      // La toma no se aplicó: no queda "en progreso" para siempre.
+      await client.from('stock_counts').update({ status: 'anulada' }).eq('id', conteo.id).then(() => {}, () => {});
+      throw error;
+    }
 
     const r = data as { differences: unknown[]; difference_value: number };
     return { diferencias: (r.differences ?? []).length, valorDiferencia: r.difference_value ?? 0 };

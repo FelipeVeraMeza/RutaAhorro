@@ -40,6 +40,15 @@ export function BotonSalir({ className, children, sinPreguntar = false }: {
         for (const k of await caches.keys()) if (k.startsWith('ra-paginas')) await caches.delete(k);
       }
     } catch { /* no impide salir */ }
+    // El catálogo del celular, el carrito y los borradores de la pestaña son
+    // del turno que termina: "al cerrar sesión se borra todo" decía db.ts, y
+    // nadie lo llamaba. La cola de ventas NO se toca (es plata real).
+    try {
+      const { clearLocalData } = await import('@/lib/offline/db');
+      await clearLocalData();
+      sessionStorage.removeItem('pos:carro');
+      sessionStorage.removeItem('recepcion:borrador');
+    } catch { /* no impide salir */ }
     form.current?.submit();
   }
 

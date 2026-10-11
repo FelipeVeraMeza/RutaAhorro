@@ -6,6 +6,7 @@ import { DEMO_ACTIVO } from '../demo';
 import { db } from '../offline/db';
 import { syncCatalog } from '../offline/catalog';
 import { repoProductos } from '../productos';
+import { perfilActual } from '../supabase/perfil';
 
 /**
  * Proveedores y recepción de mercadería (módulo M3).
@@ -227,13 +228,12 @@ const repoSupabase: RepositorioProveedores = {
 
   async crear(p) {
     const client = supabase();
-    const { data: { user } } = await client.auth.getUser();
-    const { data: perfil } = await client.from('profiles').select('tenant_id').eq('id', user!.id).single();
+    const { tenantId } = await perfilActual();
 
     const { data, error } = await client
       .from('suppliers')
       .insert({
-        tenant_id: perfil!.tenant_id,
+        tenant_id: tenantId,
         name: p.nombre, rut: p.rut, contact_name: p.contacto,
         phone: p.telefono, email: p.email,
       })

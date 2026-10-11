@@ -43,12 +43,14 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
   const [motivo, setMotivo] = useState('');
   const [anulacionEnCurso, setAnulacionEnCurso] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  // Se traían las últimas 30 y no había cómo ver (ni anular) las anteriores.
+  const [limiteRecepciones, setLimiteRecepciones] = useState(30);
 
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
       const repo = repoProveedores();
-      const [ps, rs] = await Promise.all([repo.listar(), repo.recepciones()]);
+      const [ps, rs] = await Promise.all([repo.listar(), repo.recepciones(limiteRecepciones)]);
       setProveedores(ps);
       setRecepciones(rs);
     } catch (e) {
@@ -56,7 +58,7 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [limiteRecepciones]);
 
   useEffect(() => { void cargar(); }, [cargar]);
 
@@ -239,6 +241,12 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
             ))}
           </ul>
         )
+      )}
+      {!cargando && pestana === 'recepciones' && recepciones.length >= limiteRecepciones && (
+        <button onClick={() => setLimiteRecepciones((n) => n + 30)}
+          className="tap w-full mt-3 py-3 rounded-xl border border-[var(--borde)] text-sm font-medium">
+          Ver 30 más antiguas
+        </button>
       )}
 
       {(creando || editando) && (

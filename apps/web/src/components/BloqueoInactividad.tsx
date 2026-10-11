@@ -7,6 +7,7 @@ import { Icono } from './Icono';
 
 const BLOQUEADO = 'ra:bloqueado';
 const HUELLA = 'ra:huella-clave';
+const FALLOS = 'ra:fallos-bloqueo';
 const EVENTOS = ['pointerdown', 'keydown', 'touchstart', 'wheel'] as const;
 
 /**
@@ -65,7 +66,11 @@ export function BloqueoInactividad({ correo, nombre, demo }: { correo: string | 
   const [verificando, setVerificando] = useState(false);
   // RF-M1-17 también acá: el ingreso pausa tras 5 fallos, el bloqueo dejaba
   // probar sin límite (y sin red, contra la huella guardada en el celular).
-  const [fallos, setFallos] = useState(0);
+  // Los fallos viven en la pestaña: recargar la página reiniciaba la cuenta y
+  // se podía probar contraseñas sin pausa.
+  const [fallos, setFallos] = useState(() => {
+    try { return Number(sessionStorage.getItem(FALLOS) ?? 0) || 0; } catch { return 0; }
+  });
   const [esperaHasta, setEsperaHasta] = useState(0);
   const [, refrescar] = useState(0);
   const ultima = useRef(Date.now());
@@ -110,7 +115,8 @@ export function BloqueoInactividad({ correo, nombre, demo }: { correo: string | 
     const r = await verificar(correo, clave, demo);
     setVerificando(false);
     if (r === 'ok') {
-      try { sessionStorage.removeItem(BLOQUEADO); } catch { /* nada */ }
+      try { sessionStorage.removeItem(BLOQUEADO); sessionStorage.removeItem(FALLOS); } catch { /* nada */ }
+      setFallos(0);
       ultima.current = Date.now();
       setClave('');
       setBloqueado(false);
@@ -118,6 +124,7 @@ export function BloqueoInactividad({ correo, nombre, demo }: { correo: string | 
       if (r === 'mal') {
         const n = fallos + 1;
         setFallos(n);
+        try { sessionStorage.setItem(FALLOS, String(n)); } catch { /* nada */ }
         if (n % 5 === 0) {
           const hasta = Date.now() + 30_000 * (n / 5);
           setEsperaHasta(hasta);

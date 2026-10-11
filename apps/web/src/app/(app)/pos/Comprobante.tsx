@@ -1,7 +1,7 @@
 'use client';
 import { useFormatoFecha } from '@/lib/formatoFecha';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   formatCLP, formatCantidad, comprobanteATexto, fechaComprobante, nombreMetodo,
   encabezadoDocumento, pieDocumento, etiquetaAdicional,
@@ -28,6 +28,18 @@ export function Comprobante({
   copia?: boolean;
 }) {
   const [copiado, setCopiado] = useState(false);
+  // Diálogo hecho a mano (el ticket se imprime tal cual): Escape lo cierra y el
+  // foco parte en "Nueva venta", como en los demás diálogos (regla 10). Antes
+  // el foco quedaba detrás, en el carrito que ya no existe.
+  const principal = useRef<HTMLButtonElement>(null);
+  const cerrarRef = useRef(onCerrar);
+  cerrarRef.current = onCerrar;
+  useEffect(() => {
+    principal.current?.focus();
+    const alTeclear = (e: KeyboardEvent) => { if (e.key === 'Escape') cerrarRef.current(); };
+    window.addEventListener('keydown', alTeclear);
+    return () => window.removeEventListener('keydown', alTeclear);
+  }, []);
   const { zona } = useFormatoFecha();
   const texto = comprobanteATexto(datos, 32, zona);
 
@@ -194,6 +206,7 @@ export function Comprobante({
             </button>
           </div>
           <button
+            ref={principal}
             onClick={onCerrar}
             className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-bold active:bg-marca-600"
           >

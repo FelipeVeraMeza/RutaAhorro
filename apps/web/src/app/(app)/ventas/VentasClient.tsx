@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatCLP, formatCantidad, diaLocal, toUserMessage, NOMBRE_DOCUMENTO, type Comprobante as DatosComprobante } from '@rutaahorro/core';
 import { Comprobante } from '../pos/Comprobante';
 import { useConfiguracion } from '@/lib/datos/configuracion';
@@ -52,7 +52,9 @@ function copiaDe(v: VentaDetallada, local: string, ivaPct: number, pie: string |
     lineas,
     subtotal: lineas.reduce((s, l) => s + Math.round(l.precioUnitario * l.cantidad), 0),
     descuento: lineas.reduce((s, l) => s + l.descuento, 0) + v.descuento,
-    total: v.total, iva: v.iva, neto: v.total - v.iva, adicionales: [], totalAdicionales: 0, ivaPct,
+    // El neto es lo que dice el documento si lo hay (con impuestos adicionales,
+    // total − IVA no es el neto); si no, total − IVA como en el comprobante.
+    total: v.total, iva: v.iva, neto: docNeto(v) ?? v.total - v.iva, adicionales: [], totalAdicionales: 0, ivaPct,
     pagos: v.pagos.map((p) => ({ metodo: p.metodo, monto: p.monto })), vuelto: 0,
     // RF-M5-28 · Lo cobrado en efectivo es lo que registró la base; la
     // diferencia con el total es el redondeo.
@@ -62,6 +64,11 @@ function copiaDe(v: VentaDetallada, local: string, ivaPct: number, pie: string |
     dte: v.documentos.find((d) => d.tipo !== 61) ?? null,
     esDocumentoTributario: false,
   };
+}
+
+function docNeto(v: VentaDetallada): number | null {
+  const d = v.documentos.find((x) => Number(x.tipo) !== 61) as { neto?: number } | undefined;
+  return typeof d?.neto === 'number' ? d.neto : null;
 }
 
 function ajusteDe(v: VentaDetallada) {
@@ -104,7 +111,11 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
   const [motivo, setMotivo] = useState('');
   const [enCurso, setEnCurso] = useState(false);
 
+  // Cambiar de fecha rápido podía dejar en pantalla la respuesta de la
+  // búsqueda anterior si llegaba después: se usa solo la última pedida.
+  const pedido = useRef(0);
   const cargar = useCallback(async () => {
+    const n = ++pedido.current;
     setCargando(true);
     setError(null);
     try {
@@ -117,12 +128,13 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
         }),
         porFolio ? Promise.resolve(null) : repoVentas().resumen(desde, hasta),
       ]);
+      if (n !== pedido.current) return;
       setVentas(lista);
       setResumen(res);
     } catch (e) {
-      setError(toUserMessage(e));
+      if (n === pedido.current) setError(toUserMessage(e));
     } finally {
-      setCargando(false);
+      if (n === pedido.current) setCargando(false);
     }
   }, [desde, hasta, folio, incluirAnuladas, limite]);
 
@@ -353,6 +365,7 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
             {detalle.anulada && (
               <p className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">
                 Anulada{detalle.anuladaEn && ` el ${fechaHora(detalle.anuladaEn)}`}
+                {detalle.anuladaPor && ` por ${detalle.anuladaPor}`}
                 {detalle.motivoAnulacion && `: ${detalle.motivoAnulacion}`}
               </p>
             )}

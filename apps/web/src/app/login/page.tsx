@@ -48,7 +48,9 @@ function LoginForm() {
       if (rutGuardado) setRut(rutGuardado);
       const guardado = localStorage.getItem(CORREO_RECORDADO);
       if (guardado) setEmail(guardado);
-      else if (localStorage.getItem(CORREO_RECORDADO + ':no')) setRecordar(false);
+      // "No recordar" vale también para el RUT: antes la casilla volvía a
+      // aparecer marcada para quien entra con RUT.
+      if (!rutGuardado && !guardado && localStorage.getItem(CORREO_RECORDADO + ':no')) setRecordar(false);
     } catch { /* sin almacenamiento */ }
   }, []);
 
