@@ -1,7 +1,12 @@
 /// <reference lib="dom" />
 // Lo que corre dentro de `page.evaluate` se ejecuta en el navegador del SII: ahí sí hay DOM.
+import fs from 'node:fs';
+import path from 'node:path';
 import puppeteer, { type Browser, type Page } from 'puppeteer-core';
 import { partirRut, type PlanPortal } from '@rutaahorro/core';
+import { entrarAlSii, hayLogin } from './login.js';
+
+export { ErrorClaveSii } from './login.js';
 
 /**
  * El robot que emite una factura (33) en el portal gratuito del SII.
@@ -32,9 +37,12 @@ export interface CredencialesSii {
 export interface FacturaParaPortal {
   receptor: { rut: string; razon_social: string; ciudad?: string | null; correo?: string | null; contacto?: string | null };
   ciudadEmisor?: string | null;
-  formaPago: 'contado' | 'credito';
+  /** El desplegable EFXP_FMA_PAGO: 1 contado, 2 crédito, 3 sin costo (como FmaPago del DTE). */
+  formaPago: 'contado' | 'credito' | 'sin_costo';
   plan: PlanPortal;
 }
+
+const FORMA_PAGO = { contado: '1', credito: '2', sin_costo: '3' } as const;
 
 export interface ResultadoPortal {
   ensayo: false;
@@ -53,7 +61,13 @@ export interface ResultadoEnsayo {
   razonSocialSii: string;
 }
 
-type Opciones = { chromePath: string; headless?: boolean; alPaso?: (texto: string) => void; portal?: UrlsPortal };
+type Opciones = {
+  chromePath: string; headless?: boolean; alPaso?: (texto: string) => void; portal?: UrlsPortal;
+  /** Solo ensayo: además, aprieta "Firmar" para ver que abre el cuadro de la clave del certificado. No la escribe. */
+  hastaFirma?: boolean;
+  /** Carpeta donde guardar capturas y los campos de cada pantalla (para reconocer el portal real). */
+  capturas?: string;
+};
 
 /**
  * Un error después de apretar "Firmar". La factura PUEDE estar emitida: quien
@@ -209,6 +223,26 @@ async function bajarPdf(page: Page, folio: number, r: Rutas): Promise<Uint8Array
   return esPdf ? bytes : null;
 }
 
+/** Captura y campos visibles de la pantalla: así se reconoce el portal real sin adivinar nombres. */
+async function volcarPantalla(page: Page, carpeta: string, nombre: string) {
+  fs.mkdirSync(carpeta, { recursive: true });
+  const base = path.join(carpeta, nombre);
+  await page.screenshot({ path: `${base}.png`, fullPage: true }).catch(() => {});
+  const campos = await page.evaluate(() => {
+    const vis = (el: Element) => Boolean((el as HTMLElement).offsetWidth || (el as HTMLElement).offsetHeight);
+    return {
+      url: location.href,
+      inputs: Array.from(document.querySelectorAll<HTMLInputElement>('input, textarea')).filter(vis).map((i) => ({
+        type: i.type, id: i.id, name: i.name, valor: i.type === 'password' ? '***' : (i.value || '').slice(0, 80) })),
+      selects: Array.from(document.querySelectorAll<HTMLSelectElement>('select')).map((s) => ({
+        name: s.name, elegido: s.value, opciones: Array.from(s.options).map((o) => `${o.value}=${o.text.trim()}`) })),
+      botones: Array.from(document.querySelectorAll<HTMLInputElement>('button, input[type=button], input[type=submit]')).filter(vis)
+        .map((b) => `${b.name || b.id}: ${(b.value || b.innerText || '').trim()}`),
+    };
+  }).catch((e: Error) => ({ error: e.message }));
+  fs.writeFileSync(`${base}.json`, JSON.stringify(campos, null, 2));
+}
+
 async function cerrar(browser: Browser | null) {
   if (!browser) return;
   try {
@@ -300,13 +334,17 @@ async function recorrer(
       }
     }
     const p = page!;
+    let n = 0;
+    const volcar = (nombre: string) => (opciones.capturas
+      ? volcarPantalla(p, opciones.capturas, `${String(++n).padStart(2, '0')}-${nombre}`) : Promise.resolve());
+    await volcar('inicio');
 
-    if (await p.$('#rutcntr')) {
+    if (await hayLogin(p)) {
       paso('Entrando al SII');
-      await p.type('#rutcntr', `${usuario.cuerpo}-${usuario.dv}`, { delay: 40 });
-      await p.type('#clave', cred.claveSii, { delay: 40 });
-      await Promise.all([p.waitForNavigation().catch(() => {}), p.click('#bt_ingresar')]);
+      // Las dos pantallas de login del SII, y ErrorClaveSii si rechaza la clave (login.ts).
+      await entrarAlSii(p, `${usuario.cuerpo}-${usuario.dv}`, cred.claveSii);
       await espera(1500);
+      await volcar('tras-login');
       await elegirEmpresa(p, cred.rutEmpresa);
     }
 
@@ -367,7 +405,8 @@ async function recorrer(
         }
       }
     }
-    await p.select('select[name="EFXP_FMA_PAGO"]', f.formaPago === 'credito' ? '2' : '1').catch(() => {});
+    await p.select('select[name="EFXP_FMA_PAGO"]', FORMA_PAGO[f.formaPago]).catch(() => {});
+    await volcar('formulario-lleno');
 
     paso('Validando los montos con el SII');
     await p.evaluate(() => document.querySelector<HTMLElement>('button[name="Button_Update"]')?.click());
@@ -379,10 +418,20 @@ async function recorrer(
     // Lo que no estaba en VSV: antes de firmar, el total del portal tiene que
     // ser el de la base. Si no se puede leer o no coincide, no se firma.
     const portal = await totalesDelPortal(p);
+    await volcar('validado');
     if (portal.total !== f.plan.total) {
       throw new Error(portal.total === null
         ? `No se pudo leer el total que calculó el portal; por seguridad no se firmó. ${await dondeQuedo(p)}`
         : `El portal calculó un total de $${portal.total} y la factura es de $${f.plan.total}. No se firmó.`);
+    }
+    if (ensayo && opciones.hastaFirma) {
+      // "Firmar" solo abre el cuadro de la clave del certificado: el documento
+      // se emite recién con #btnFirma, que el ensayo no toca. Tampoco escribe la clave.
+      paso('Abriendo el cuadro de la firma (sin escribir la clave)');
+      await p.evaluate(() => document.querySelector<HTMLInputElement>('input[name="btnSign"]')?.click());
+      const caja = await p.waitForSelector('#myPass', { visible: true, timeout: 8000 }).then(() => true, () => false);
+      await volcar('cuadro-firma');
+      if (!caja) throw new Error(`"Firmar" no abrió el cuadro de la clave del certificado. ${await dondeQuedo(p)}`);
     }
     if (ensayo) {
       paso('Ensayo terminado: todo cuadró y NO se firmó');
@@ -433,6 +482,7 @@ async function recorrer(
     const pdf = await bajarPdf(p, folio, url).catch(() => null);
     return { ensayo: false, folio, pdf, razonSocialSii };
   } catch (e) {
+    if (page && opciones.capturas) await volcarPantalla(page, opciones.capturas, 'zz-error').catch(() => {});
     if (firmado) {
       throw new ErrorDespuesDeFirmar(`${(e as Error).message} ATENCIÓN: se apretó "Firmar"; la factura puede estar `
         + 'emitida. Revisa el portal del SII antes de reintentar o descartar.');

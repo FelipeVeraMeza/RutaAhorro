@@ -2,7 +2,7 @@ import { descifrar, planFacturaPortal, type LineaParaPortal } from '@rutaahorro/
 import { admin, recordJobRun } from '../supabase.js';
 import { env } from '../env.js';
 import { log } from '../logger.js';
-import { emitirEnPortal, ErrorDespuesDeFirmar } from '../sii/portal.js';
+import { emitirEnPortal, ErrorClaveSii, ErrorDespuesDeFirmar } from '../sii/portal.js';
 
 /**
  * La cola del emisor real (0026): toma las facturas "por_emitir" y las emite
@@ -36,12 +36,21 @@ const mensaje = (e: unknown) => {
 
 let ocupado = false;
 
+/**
+ * Las claves del SII (cifradas, tal como vienen de la base) que el SII ya
+ * rechazó. Con una de estas no se vuelve a entrar: diez facturas en cola eran
+ * diez intentos fallidos por minuto, y el SII bloquea la clave. Al guardarla
+ * de nuevo en Facturación el texto cifrado cambia (IV al azar) y se vuelve a
+ * probar sola.
+ */
+const clavesRechazadas = new Set<string>();
+
 /** ¿Está el worker preparado para emitir? No dice si algún local lo encendió. */
 export function emisionRealConfigurada(): boolean {
   return Boolean(env.siiClaveCifrado && env.chromePath);
 }
 
-async function emitirUna(): Promise<'nada' | 'emitida' | 'error'> {
+async function emitirUna(): Promise<'nada' | 'emitida' | 'error' | 'clave'> {
   const { data: f, error } = await admin.rpc('fn_sii_tomar_factura');
   if (error) throw new Error(`No se pudo leer la cola de facturas: ${error.message}`);
   if (!f) return 'nada';
@@ -54,6 +63,13 @@ async function emitirUna(): Promise<'nada' | 'emitida' | 'error'> {
     credenciales: { tenant_id: string; rut_usuario: string; clave_sii: string; clave_certificado: string; rut_empresa: string | null; ciudad?: string | null };
   };
   const tenant = factura.credenciales.tenant_id;
+  const claveCifrada = factura.credenciales.clave_sii;
+
+  if (clavesRechazadas.has(claveCifrada)) {
+    await admin.rpc('fn_sii_registrar_error', { p_factura: factura.id, p_error:
+      'El SII rechazó la clave tributaria guardada. Corrígela en Facturación → Emisor SII y vuelve a intentar esta factura.' });
+    return 'clave';
+  }
 
   const resultado = await recordJobRun('facturas-sii', async () => {
     try {
@@ -87,10 +103,12 @@ async function emitirUna(): Promise<'nada' | 'emitida' | 'error'> {
       // Lo que el SII puso como receptor es lo que salió impreso: queda en job_runs.
       return { factura: factura.numero, folio: r.folio, pdf: Boolean(pdfPath), receptorSii: r.razonSocialSii };
     } catch (e) {
+      if (e instanceof ErrorClaveSii) clavesRechazadas.add(claveCifrada);
       await admin.rpc('fn_sii_registrar_error', { p_factura: factura.id, p_error: mensaje(e) });
       throw e;
     }
   });
+  if (clavesRechazadas.has(claveCifrada)) return 'clave';
   return resultado.ok ? 'emitida' : 'error';
 }
 
@@ -110,6 +128,8 @@ export async function runFacturasSii(): Promise<Record<string, unknown>> {
       const r = await emitirUna();
       if (r === 'nada') break;
       cuenta[r === 'emitida' ? 'emitidas' : 'errores']++;
+      // Clave rechazada: no se toca otra factura en esta vuelta (cada una sería otro intento).
+      if (r === 'clave') break;
     }
   } finally {
     ocupado = false;
