@@ -68,7 +68,7 @@ async function leerDeBase(soloActivos: boolean): Promise<Cliente[]> {
 }
 
 const paraVender = (c: Cliente): ClienteConPrecios => ({
-  id: c.id, nombre: c.nombre, rut: c.rut, giro: c.giro, direccion: c.direccion,
+  id: c.id, nombre: c.nombre, rut: c.rut, giro: c.giro, direccion: c.direccion, correo: c.email,
   // 0032 · El POS no aplica precio por cliente: no viaja.
   descuentoPct: 0, precios: {},
 });

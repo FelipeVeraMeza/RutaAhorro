@@ -24,12 +24,34 @@ import { isValidRut, formatRut } from './rut.js';
 
 export type TipoDocumento = 'boleta' | 'factura' | 'voucher';
 
-/** Datos del receptor. Solo la factura los exige; la boleta va sin nombre. */
+/** El desplegable "Forma de pago" del portal del SII (EFXP_FMA_PAGO 1, 2, 3). */
+export type FormaPagoFactura = 'contado' | 'credito' | 'sin_costo';
+export const FORMAS_PAGO_FACTURA: Array<{ id: FormaPagoFactura; label: string }> = [
+  { id: 'contado', label: 'Contado' },
+  { id: 'credito', label: 'Crédito' },
+  { id: 'sin_costo', label: 'Sin costo' },
+];
+
+/**
+ * Datos del receptor. Solo la factura los exige; la boleta va sin nombre.
+ *
+ * 2026-10-11 (Felipe): en la caja se pide solo RUT y correo, más la forma de
+ * pago. La razón social, el giro y la dirección los pone el SII al validar el
+ * RUT en el portal, o salen del cliente si ya está registrado. Por eso
+ * `razonSocial` puede venir vacía.
+ */
 export interface ReceptorDocumento {
   rut: string;
-  razonSocial: string;
+  razonSocial?: string;
   giro?: string;
   direccion?: string;
+  correo?: string;
+  formaPago?: FormaPagoFactura;
+}
+
+/** Un correo con forma de correo. No se verifica que exista. */
+export function esCorreoValido(correo: string | null | undefined): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(correo ?? '').trim());
 }
 
 export interface DocumentoVenta {
@@ -107,11 +129,11 @@ export function validarDocumento(
   if (documento.tipo !== 'factura') return { valido: true };
 
   const receptor = documento.receptor;
-  if (!receptor || !String(receptor.razonSocial ?? '').trim()) {
-    return { valido: false, error: 'Para hacer una factura falta el nombre o razón social del cliente.' };
-  }
-  if (!isValidRut(String(receptor.rut ?? ''))) {
+  if (!receptor || !isValidRut(String(receptor.rut ?? ''))) {
     return { valido: false, error: 'El RUT del cliente no es válido. Revísalo antes de emitir la factura.' };
+  }
+  if (!esCorreoValido(receptor.correo)) {
+    return { valido: false, error: 'Falta el correo del cliente: ahí le llega la factura.' };
   }
   return { valido: true };
 }
@@ -127,6 +149,8 @@ export function normalizarReceptor(receptor: ReceptorDocumento): ReceptorDocumen
     razonSocial: String(receptor.razonSocial ?? '').trim(),
     giro: limpiar(receptor.giro),
     direccion: limpiar(receptor.direccion),
+    correo: limpiar(receptor.correo)?.toLowerCase(),
+    formaPago: receptor.formaPago ?? 'contado',
   };
 }
 

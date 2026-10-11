@@ -140,13 +140,12 @@ test('la factura se puede hacer también con tarjeta: la máquina no emite factu
   assert.equal((await documentoDe(sale_id)).tipo, 'factura');
 });
 
-test('una factura sin razón social o con RUT inválido no se registra', async () => {
+test('una factura con RUT inválido o forma de pago desconocida no se registra', async () => {
   const { p, caj } = await mostrador();
   const malos = [
-    [{ tipo: 'factura', rut: RUT_OK }, /RAZON_SOCIAL_REQUERIDA/],
-    [{ tipo: 'factura', rut: RUT_OK, razon_social: '   ' }, /RAZON_SOCIAL_REQUERIDA/],
     [{ tipo: 'factura', razon_social: 'Los Andes' }, /RUT_INVALIDO/],
     [{ tipo: 'factura', rut: RUT_MAL, razon_social: 'Los Andes' }, /RUT_INVALIDO/],
+    [{ tipo: 'factura', rut: RUT_OK, forma_pago: 'cheque' }, /FORMA_PAGO_INVALIDA/],
   ];
   for (const [documento, esperado] of malos) {
     const r = await intentar(rpc(caj, 'fn_register_sale', venta(p, 1, 1000, { documento })));
@@ -154,6 +153,39 @@ test('una factura sin razón social o con RUT inválido no se registra', async (
   }
 });
 
+// 0039 · En la caja se pide RUT, correo y forma de pago; la razón social la pone el SII.
+test('factura con solo RUT y correo: el cliente nuevo queda registrado con su correo', async () => {
+  const { L, p, caj } = await mostrador();
+  const { sale_id } = await rpc(caj, 'fn_register_sale', venta(p, 1, 1000, {
+    documento: { tipo: 'factura', rut: '760864285', correo: ' Compras@LosAndes.CL ', forma_pago: 'credito' },
+  }));
+  const { rows: [s] } = await banco.su.query(
+    'select receptor_razon_social, receptor_correo, receptor_forma_pago from sales where id = $1', [sale_id]);
+  assert.deepEqual(s, { receptor_razon_social: null, receptor_correo: 'compras@losandes.cl', receptor_forma_pago: 'credito' });
+  const { rows: [c] } = await banco.su.query(
+    'select nombre, email from clientes where tenant_id = $1 and rut = $2', [L.tenant, RUT_OK]);
+  assert.deepEqual(c, { nombre: RUT_OK, email: 'compras@losandes.cl' }, 'nombre provisorio = RUT');
+});
+
+test('factura a un cliente registrado: toma su razón social y completa su correo', async () => {
+  const { L, p, caj } = await mostrador();
+  await rpc(caj, 'fn_register_sale', venta(p, 1, 1000, {
+    documento: { tipo: 'factura', rut: RUT_OK, razon_social: 'Comercial Los Andes SpA' } }));
+  const { sale_id } = await rpc(caj, 'fn_register_sale', venta(p, 1, 1000, {
+    documento: { tipo: 'factura', rut: RUT_OK, correo: 'pagos@losandes.cl' } }));
+  const { rows: [s] } = await banco.su.query(
+    'select receptor_razon_social, receptor_forma_pago from sales where id = $1', [sale_id]);
+  assert.deepEqual(s, { receptor_razon_social: 'Comercial Los Andes SpA', receptor_forma_pago: 'contado' });
+  const { rows: [c] } = await banco.su.query('select email from clientes where tenant_id = $1 and rut = $2', [L.tenant, RUT_OK]);
+  assert.equal(c.email, 'pagos@losandes.cl');
+});
+
+test('una venta de la cola vieja, sin correo, igual se registra', async () => {
+  const { p, caj } = await mostrador();
+  const { document_type } = await rpc(caj, 'fn_register_sale', venta(p, 1, 1000, {
+    documento: { tipo: 'factura', rut: RUT_OK, razon_social: 'Los Andes' } }));
+  assert.equal(document_type, 'factura');
+});
 test('la venta rechazada por el documento no deja stock movido ni folio usado', async () => {
   const { L, p, caj } = await mostrador();
   const antes = await L.stock(p);

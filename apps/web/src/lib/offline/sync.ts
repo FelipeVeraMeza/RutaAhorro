@@ -152,6 +152,9 @@ export async function syncQueue(): Promise<SyncResult> {
               razon_social: sale.documento?.receptor?.razonSocial ?? null,
               giro: sale.documento?.receptor?.giro ?? null,
               direccion: sale.documento?.receptor?.direccion ?? null,
+              // 0039 · en la caja se pide RUT, correo y forma de pago.
+              correo: sale.documento?.receptor?.correo ?? null,
+              forma_pago: sale.documento?.receptor?.formaPago ?? null,
               cliente_id: sale.clienteId ?? null,
               autorizacion: sale.autorizacion ?? null,
             }

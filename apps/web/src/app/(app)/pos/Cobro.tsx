@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   formatCLP, change, validarMonto, formatRut, isValidRut,
   documentosDisponibles, validarDocumento, normalizarReceptor, NOMBRE_DOCUMENTO, montoRecibidoAtipico,
-  redondeoEfectivo,
-  type TipoDocumento, type DocumentoVenta, type ClienteConPrecios,
+  redondeoEfectivo, esCorreoValido, FORMAS_PAGO_FACTURA,
+  type TipoDocumento, type DocumentoVenta, type ClienteConPrecios, type FormaPagoFactura,
 } from '@rutaahorro/core';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
@@ -87,23 +87,26 @@ export function Cobro({
   const conRed = DEMO_ACTIVO || (typeof navigator === 'undefined' || navigator.onLine);
   const metodos = cuenta && cuenta.tope > 0 ? [...METODOS, FIADO] : METODOS;
   const fiadoAlcanza = !!cuenta && cuenta.disponible >= total;
+  // 2026-10-11 (Felipe): la factura pide solo RUT, correo y forma de pago. La
+  // razón social, el giro y la dirección salen del cliente registrado o, si es
+  // nuevo, los pone el SII al validar el RUT en el portal.
   const [rut, setRut] = useState(cliente?.rut ?? '');
-  const [razonSocial, setRazonSocial] = useState(cliente?.rut ? cliente.nombre : '');
-  const [giro, setGiro] = useState(cliente?.giro ?? '');
-  const [direccion, setDireccion] = useState(cliente?.direccion ?? '');
+  const [correo, setCorreo] = useState(cliente?.correo ?? '');
+  const [formaPago, setFormaPago] = useState<FormaPagoFactura>('contado');
 
   // RQ-20 · Un RUT que ya facturó trae sus datos: antes se escribían cada vez.
   const [conocidos, setConocidos] = useState<ClienteConPrecios[]>([]);
   useEffect(() => { void clientesParaVender().then(setConocidos).catch(() => {}); }, []);
-  function completarPorRut(valor: string) {
-    if (!isValidRut(valor)) return;
+  const conocido = useMemo(() => {
+    if (!isValidRut(rut)) return null;
     const limpio = (r: string | null | undefined) => (r ?? '').replace(/[^0-9kK]/g, '').toUpperCase();
-    const c = conocidos.find((x) => limpio(x.rut) === limpio(valor));
-    if (!c) return;
-    setRazonSocial((v) => v || c.nombre);
-    setGiro((v) => v || c.giro || '');
-    setDireccion((v) => v || c.direccion || '');
-  }
+    return conocidos.find((x) => limpio(x.rut) === limpio(rut))
+      ?? (cliente && limpio(cliente.rut) === limpio(rut) ? cliente : null);
+  }, [rut, conocidos, cliente]);
+  // El correo del cliente registrado, si el cajero no escribió otro.
+  useEffect(() => {
+    if (conocido?.correo) setCorreo((v) => v || conocido.correo || '');
+  }, [conocido]);
 
   // Cambiar de medio de pago cambia qué documentos existen: quedarse en uno
   // que ya no corresponde dejaría al cajero confirmando algo imposible.
@@ -113,9 +116,11 @@ export function Cobro({
 
   const documento: DocumentoVenta = useMemo(() => (
     tipo === 'factura'
-      ? { tipo, receptor: normalizarReceptor({ rut, razonSocial, giro, direccion }) }
+      ? { tipo, receptor: normalizarReceptor({
+          rut, razonSocial: conocido?.nombre ?? '', giro: conocido?.giro ?? undefined,
+          direccion: conocido?.direccion ?? undefined, correo, formaPago }) }
       : { tipo }
-  ), [tipo, rut, razonSocial, giro, direccion]);
+  ), [tipo, rut, conocido, correo, formaPago]);
 
   const revision = validarDocumento(documento, pagos, opciones);
   // RF-M5-28 · Ley 20.956: todo en efectivo se cobra redondeado a la decena.
@@ -135,6 +140,7 @@ export function Cobro({
   // El error del RUT solo se muestra cuando hay algo escrito: marcarlo en rojo
   // antes de que el cajero alcance a teclear es ruido, no ayuda.
   const errorRut = rut.trim() !== '' && !isValidRut(rut) ? 'Revisa el RUT' : null;
+  const errorCorreo = correo.trim() !== '' && !esCorreoValido(correo) ? 'Revisa el correo' : null;
 
   const atipico = metodo === 'efectivo' && montoRecibidoAtipico(montoRecibido, aCobrar);
   useEffect(() => { setAtipicoConfirmado(false); }, [recibido, metodo]);
@@ -219,48 +225,57 @@ export function Cobro({
                   autoComplete="off"
                   value={rut}
                   onChange={(e) => setRut(e.target.value)}
-                  onBlur={() => { if (isValidRut(rut)) { setRut(formatRut(rut)); completarPorRut(rut); } }}
+                  onBlur={() => { if (isValidRut(rut)) setRut(formatRut(rut)); }}
+                  list="clientes-registrados"
                   placeholder="76.086.428-5"
                   className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] bg-white num"
                 />
               )}
             </Campo>
-            <Campo etiqueta="Nombre o razón social" obligatorio>
+            {/* Los clientes registrados aparecen al escribir el RUT o el nombre. */}
+            <datalist id="clientes-registrados">
+              {conocidos.filter((c) => c.rut).map((c) => (
+                <option key={c.id} value={formatRut(c.rut!)}>{c.nombre}</option>
+              ))}
+            </datalist>
+            {isValidRut(rut) && (
+              conocido ? (
+                <p className="text-sm px-1" data-cliente-registrado>
+                  <span aria-hidden>✓ </span><strong>{conocido.nombre}</strong>
+                  {conocido.giro ? <span className="text-[var(--texto-suave)]"> · {conocido.giro}</span> : null}
+                </p>
+              ) : (
+                <p className="text-xs text-[var(--texto-suave)] px-1" data-cliente-nuevo>
+                  Cliente nuevo: la razón social, el giro y la dirección los pone el SII al emitir, y queda registrado.
+                </p>
+              )
+            )}
+            <Campo etiqueta="Correo del cliente" obligatorio error={errorCorreo}>
               {(p) => (
                 <input
                   {...p}
-                  type="text"
-                  value={razonSocial}
-                  onChange={(e) => setRazonSocial(e.target.value)}
-                  placeholder="Comercial Los Andes SpA"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="off"
+                  value={correo}
+                  onChange={(e) => setCorreo(e.target.value)}
+                  placeholder="compras@cliente.cl"
                   className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] bg-white"
                 />
               )}
             </Campo>
-            <div className="grid grid-cols-2 gap-2">
-              <Campo etiqueta="Giro">
-                {(p) => (
-                  <input
-                    {...p}
-                    type="text"
-                    value={giro}
-                    onChange={(e) => setGiro(e.target.value)}
-                    className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] bg-white"
-                  />
-                )}
-              </Campo>
-              <Campo etiqueta="Dirección">
-                {(p) => (
-                  <input
-                    {...p}
-                    type="text"
-                    value={direccion}
-                    onChange={(e) => setDireccion(e.target.value)}
-                    className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] bg-white"
-                  />
-                )}
-              </Campo>
-            </div>
+            <Campo etiqueta="Forma de pago">
+              {(p) => (
+                <select
+                  {...p}
+                  value={formaPago}
+                  onChange={(e) => setFormaPago(e.target.value as FormaPagoFactura)}
+                  className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] bg-white"
+                >
+                  {FORMAS_PAGO_FACTURA.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+                </select>
+              )}
+            </Campo>
           </div>
         )}
 

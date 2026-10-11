@@ -12,7 +12,7 @@ const transferencia = [{ metodo: 'transferencia', monto: 1000 }];
 const debito = [{ metodo: 'debito', monto: 1000 }];
 const credito = [{ metodo: 'credito', monto: 1000 }];
 
-const receptor = { rut: '76.086.428-5', razonSocial: 'Comercial Los Andes SpA' };
+const receptor = { rut: '76.086.428-5', razonSocial: 'Comercial Los Andes SpA', correo: 'compras@losandes.cl' };
 
 describe('qué documento corresponde según el medio de pago', () => {
   it('efectivo y transferencia van con boleta', () => {
@@ -60,10 +60,14 @@ describe('validación del documento', () => {
     expect(validarDocumento({ tipo: 'boleta' }, efectivo).valido).toBe(true);
   });
 
-  it('la factura exige RUT y razón social', () => {
+  // 2026-10-11: en la caja se pide RUT y correo; la razón social la pone el SII.
+  it('la factura exige RUT y correo, no la razón social', () => {
     expect(validarDocumento({ tipo: 'factura' }, efectivo).valido).toBe(false);
-    expect(validarDocumento({ tipo: 'factura', receptor: { rut: '76.086.428-5', razonSocial: '  ' } }, efectivo).valido).toBe(false);
-    expect(validarDocumento({ tipo: 'factura', receptor: { rut: '1-9', razonSocial: 'Ana' } }, efectivo).valido).toBe(false);
+    expect(validarDocumento({ tipo: 'factura', receptor: { rut: '1-9', correo: 'a@b.cl' } }, efectivo).valido).toBe(false);
+    const sinCorreo = validarDocumento({ tipo: 'factura', receptor: { rut: '76.086.428-5' } }, efectivo);
+    expect(sinCorreo.valido === false && sinCorreo.error).toMatch(/correo/);
+    expect(validarDocumento({ tipo: 'factura', receptor: { rut: '76.086.428-5', correo: 'no-es-correo' } }, efectivo).valido).toBe(false);
+    expect(validarDocumento({ tipo: 'factura', receptor: { rut: '76.086.428-5', correo: 'compras@losandes.cl' } }, efectivo).valido).toBe(true);
     expect(validarDocumento({ tipo: 'factura', receptor }, efectivo).valido).toBe(true);
   });
 
@@ -85,6 +89,13 @@ describe('normalizar el receptor', () => {
     expect(r.razonSocial).toBe('Los Andes');
     expect(r.giro).toBeUndefined();
     expect(r.direccion).toBe('Av. Siempre Viva 742');
+  });
+
+  it('el correo va en minúsculas y la forma de pago por omisión es contado', () => {
+    const r = normalizarReceptor({ rut: '760864285', correo: '  Compras@LosAndes.CL ' });
+    expect(r.correo).toBe('compras@losandes.cl');
+    expect(r.formaPago).toBe('contado');
+    expect(normalizarReceptor({ rut: '760864285', formaPago: 'sin_costo' }).formaPago).toBe('sin_costo');
   });
 });
 
@@ -114,6 +125,13 @@ describe('el documento en el comprobante', () => {
     expect(texto).toContain('RUT: 76.086.428-5');
     expect(texto).toContain('Giro: Comercio');
     expect(texto).toContain('Dirección: Av. Siempre Viva 742');
+    expect(texto).toContain('Correo: compras@losandes.cl');
+  });
+
+  it('un cliente nuevo, sin razón social todavía, sale con su RUT', () => {
+    const documento: DocumentoVenta = { tipo: 'factura', receptor: { rut: '76.086.428-5', correo: 'a@b.cl' } };
+    const texto = comprobanteATexto(construirComprobante({ lineas, pagos: efectivo, documento }));
+    expect(texto).toContain('Factura a RUT: 76.086.428-5');
   });
 
   it('ningún papel se llama boleta ni factura mientras no haya timbre del SII', () => {

@@ -322,9 +322,11 @@ export function encabezadoDocumento(c: Comprobante): string[] {
 export function pieDocumento(c: Comprobante): string[] {
   const r = c.documento.receptor;
   if (c.documento.tipo !== 'factura' || !r) return [];
-  const lineas = ['Factura a: ' + r.razonSocial, 'RUT: ' + r.rut];
+  // Sin razón social (cliente nuevo), la pone el SII al emitir: el papel dice el RUT.
+  const lineas = r.razonSocial ? ['Factura a: ' + r.razonSocial, 'RUT: ' + r.rut] : ['Factura a RUT: ' + r.rut];
   if (r.giro) lineas.push('Giro: ' + r.giro);
   if (r.direccion) lineas.push('Dirección: ' + r.direccion);
+  if (r.correo) lineas.push('Correo: ' + r.correo);
   return lineas;
 }
 

@@ -345,7 +345,7 @@ export function VentasClient({ puedeAnular, soloPropias = false, local = '', anu
 
             {detalle.documento.receptor && (
               <p className="text-sm bg-[var(--fondo)] px-3 py-2 rounded-lg">
-                Factura a <strong>{detalle.documento.receptor.razonSocial}</strong>
+                Factura a <strong>{detalle.documento.receptor.razonSocial || 'cliente nuevo (la razón social la pone el SII)'}</strong>
                 {' · '}<span className="num">{detalle.documento.receptor.rut}</span>
               </p>
             )}
