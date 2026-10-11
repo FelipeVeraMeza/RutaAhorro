@@ -25,7 +25,7 @@ export function Sidebar({ rol, nombre, version }: { rol: Rol; nombre: string; ve
       </div>
 
       <nav className="flex-1 px-2 py-3 overflow-y-auto" aria-label="Navegación principal">
-        <ul className="space-y-0.5">
+        <ul className="space-y-px">
           {items.map((item) => {
             const activo =
               item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
@@ -35,7 +35,7 @@ export function Sidebar({ rol, nombre, version }: { rol: Rol; nombre: string; ve
                   href={item.href}
                   prefetch={false}
                   aria-current={activo ? 'page' : undefined}
-                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  className={`flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-sm transition-colors ${
                     activo
                       ? 'bg-white/10 text-white font-semibold'
                       : 'text-[#c9d6e3] hover:bg-white/5 hover:text-white'

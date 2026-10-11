@@ -67,7 +67,8 @@ export interface PedidoWebNuevo {
   nota?: string | null;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Un id de producto: letras, números y guiones (la base exige además que sea uuid). */
+const ID_PRODUCTO = /^[A-Za-z0-9-]{1,64}$/;
 
 /**
  * Qué está mal en el pedido antes de mandarlo, en palabras. Vacío = se puede
@@ -83,7 +84,7 @@ export function validarPedidoWeb(p: PedidoWebNuevo): string[] {
   if (correo && (correo.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo))) errores.push('Revisa el correo');
   if (!Array.isArray(p.lineas) || p.lineas.length === 0) errores.push('El carrito está vacío');
   else if (p.lineas.length > LIMITES_PEDIDO_WEB.lineas) errores.push(`Un pedido lleva hasta ${LIMITES_PEDIDO_WEB.lineas} productos distintos`);
-  else if (p.lineas.some((l) => !UUID.test(String(l.id)) || !Number.isInteger(l.cantidad) || l.cantidad < 1 || l.cantidad > LIMITES_PEDIDO_WEB.cantidad)) {
+  else if (p.lineas.some((l) => !ID_PRODUCTO.test(String(l.id)) || !Number.isInteger(l.cantidad) || l.cantidad < 1 || l.cantidad > LIMITES_PEDIDO_WEB.cantidad)) {
     errores.push(`Cada producto va de 1 a ${LIMITES_PEDIDO_WEB.cantidad} unidades`);
   }
   if ((p.nota ?? '').length > LIMITES_PEDIDO_WEB.nota) errores.push(`La nota tiene hasta ${LIMITES_PEDIDO_WEB.nota} letras`);
