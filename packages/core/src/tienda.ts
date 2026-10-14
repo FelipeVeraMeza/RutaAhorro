@@ -55,15 +55,19 @@ export interface FiltroTienda {
   precioMax?: number | null;
   /** Cualquiera de estas marcas. Vacío = todas. */
   marcas?: readonly string[] | null;
+  /** Deja fuera lo agotado (RF-T61). */
+  soloDisponibles?: boolean;
   pagina?: number | null;
 }
 
-export type OrdenTienda = 'relevantes' | 'nombre' | 'menor-precio' | 'mayor-precio';
+export type OrdenTienda = 'relevantes' | 'nombre' | 'menor-precio' | 'mayor-precio' | 'mayor-descuento';
 export const ORDENES_TIENDA: Array<{ valor: OrdenTienda; texto: string }> = [
   { valor: 'relevantes', texto: 'Más relevantes' },
   { valor: 'nombre', texto: 'Nombre (A–Z)' },
   { valor: 'menor-precio', texto: 'Menor precio' },
   { valor: 'mayor-precio', texto: 'Mayor precio' },
+  // RF-T62 · lo que más rebaja primero.
+  { valor: 'mayor-descuento', texto: 'Mayor descuento' },
 ];
 
 export interface PaginaTienda {
@@ -99,6 +103,22 @@ export function normalizarBusqueda(texto: string): string {
  * Lo que no hay va al final: el cliente vino a comprar, y una primera página
  * llena de "Agotado" parece una tienda vacía.
  */
+/**
+ * ¿Está la palabra en el texto? También en singular: quien busca "tomates"
+ * encuentra "Tomate", y "panes" encuentra "Pan" (RF-T63). Ambos ya vienen
+ * normalizados (sin tildes, en minúsculas).
+ */
+export function contienePalabra(texto: string, palabra: string): boolean {
+  if (texto.includes(palabra)) return true;
+  if (palabra.length > 3 && palabra.endsWith('es') && texto.includes(palabra.slice(0, -2))) return true;
+  return palabra.length > 3 && palabra.endsWith('s') && texto.includes(palabra.slice(0, -1));
+}
+
+/** El texto en que se busca: nombre, descripción, grupo, marca y formato. */
+function textoBuscable(p: ProductoTienda): string {
+  return normalizarBusqueda(`${p.nombre} ${p.descripcion ?? ''} ${p.grupo ?? ''} ${p.marca ?? ''} ${p.formato ?? ''}`);
+}
+
 export function filtrarCatalogo(catalogo: readonly ProductoTienda[], filtro: FiltroTienda): PaginaTienda {
   const palabras = normalizarBusqueda(filtro.busqueda ?? '').split(/\s+/).filter(Boolean);
   const categoria = filtro.categoria?.trim() || null;
@@ -106,6 +126,7 @@ export function filtrarCatalogo(catalogo: readonly ProductoTienda[], filtro: Fil
   const encontrados = catalogo.filter((p) => {
     if (categoria && p.grupo !== categoria) return false;
     if (filtro.soloOfertas && !p.ofertas.length) return false;
+    if (filtro.soloDisponibles && !p.disponible) return false;
     if (filtro.precioMin != null || filtro.precioMax != null) {
       if (p.precio == null) return false;
       if (filtro.precioMin != null && p.precio < filtro.precioMin) return false;
@@ -113,8 +134,8 @@ export function filtrarCatalogo(catalogo: readonly ProductoTienda[], filtro: Fil
     }
     if (filtro.marcas?.length && (!p.marca || !filtro.marcas.includes(p.marca))) return false;
     if (!palabras.length) return true;
-    const texto = normalizarBusqueda(`${p.nombre} ${p.descripcion ?? ''} ${p.grupo ?? ''}`);
-    return palabras.every((w) => texto.includes(w));
+    const texto = textoBuscable(p);
+    return palabras.every((w) => contienePalabra(texto, w));
   });
 
   // Por precio, los que no tienen van al final en los dos sentidos: "sin
@@ -124,8 +145,15 @@ export function filtrarCatalogo(catalogo: readonly ProductoTienda[], filtro: Fil
   // "Más relevantes" (el orden por omisión): lo que se puede comprar ya
   // primero, y entre eso, lo que está en oferta.
   const relevantes = !filtro.orden || filtro.orden === 'relevantes';
+  // Con búsqueda, lo que EMPIEZA con lo buscado va antes: "pan" muestra el
+  // pan antes que la "Empanada" (RF-T64).
+  const primera = palabras[0] ?? '';
+  const empieza = (p: ProductoTienda) => (primera && normalizarBusqueda(p.nombre).startsWith(primera) ? 1 : 0);
+  const porDescuento = filtro.orden === 'mayor-descuento';
   encontrados.sort((a, b) =>
     Number(b.disponible) - Number(a.disponible)
+    || (porDescuento ? rebajaMaximaPct(b.precio, b.tramos) - rebajaMaximaPct(a.precio, a.tramos) : 0)
+    || (relevantes && primera ? empieza(b) - empieza(a) : 0)
     || (relevantes ? Number(b.precio != null) - Number(a.precio != null) || Number(b.ofertas.length > 0) - Number(a.ofertas.length > 0) : 0)
     || (porPrecio ? Number(a.precio == null) - Number(b.precio == null) || signo * ((a.precio ?? 0) - (b.precio ?? 0)) : 0)
     || COMPARAR(a.nombre, b.nombre));
@@ -276,6 +304,97 @@ export function ofertasVisibles(
   return textos;
 }
 
+/** Distancia de edición entre dos palabras (cuántas letras cambiar, poner o quitar). */
+function distancia(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 2) return 3;
+  let previa = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const fila = [i];
+    for (let j = 1; j <= b.length; j++) {
+      fila[j] = Math.min(previa[j] + 1, fila[j - 1] + 1, previa[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    previa = fila;
+  }
+  return previa[b.length];
+}
+
+/**
+ * "¿Quisiste decir…?" (RF-T65): si una palabra buscada no está en ningún
+ * producto, la palabra del catálogo más parecida (una letra de diferencia, o
+ * dos en palabras largas). Null si todo calza o no hay nada parecido.
+ * "lehe" → "leche", "galeta" → "galleta".
+ */
+export function sugerenciaBusqueda(catalogo: readonly ProductoTienda[], busqueda: string): string | null {
+  const palabras = normalizarBusqueda(busqueda).split(/\s+/).filter(Boolean);
+  if (!palabras.length) return null;
+  const vocabulario = new Map<string, number>();
+  for (const p of catalogo) {
+    for (const w of textoBuscable(p).split(/[^a-z0-9]+/)) if (w.length >= 3) vocabulario.set(w, (vocabulario.get(w) ?? 0) + 1);
+  }
+  let cambio = false;
+  const corregidas = palabras.map((w) => {
+    if ([...vocabulario.keys()].some((v) => contienePalabra(v, w))) return w;
+    const tope = w.length >= 7 ? 2 : 1;
+    let mejor: { w: string; d: number; n: number } | null = null;
+    for (const [v, n] of vocabulario) {
+      const d = distancia(w, v);
+      if (d <= tope && (!mejor || d < mejor.d || (d === mejor.d && n > mejor.n))) mejor = { w: v, d, n };
+    }
+    if (!mejor) return w;
+    cambio = true;
+    return mejor.w;
+  });
+  return cambio ? corregidas.join(' ') : null;
+}
+
+/**
+ * El precio por unidad de medida (RF-T66), para comparar tamaños: "500 g" a
+ * $1.290 → "$2.580 el kg"; "6 unidades" a $1.290 → "$215 c/u". Null si el
+ * formato no se reconoce o ya es 1 kg / 1 L / 1 unidad (no agrega nada).
+ */
+export function precioPorMedida(precio: number | null, formato: string | null): string | null {
+  if (precio == null || precio <= 0 || !formato) return null;
+  const m = formato.match(/^(\d+(?:,\d+)?) (kg|g|ml|L|unidades|unidad)$/);
+  if (!m) return null;
+  const n = Number(m[1].replace(',', '.'));
+  if (!(n > 0)) return null;
+  const [base, por] = m[2] === 'g' ? [n / 1000, 'el kg'] : m[2] === 'ml' ? [n / 1000, 'el litro']
+    : m[2] === 'kg' ? [n, 'el kg'] : m[2] === 'L' ? [n, 'el litro'] : [n, 'c/u'];
+  if (base === 1) return null;
+  return `${formatCLP(Math.round(precio / base))} ${por}`;
+}
+
+/**
+ * Qué números de página mostrar (RF-T67): siempre la primera y la última, y
+ * las vecinas de la actual. Null marca un salto ("…").
+ * (5, 20) → [1, null, 4, 5, 6, null, 20].
+ */
+export function paginasVisibles(actual: number, total: number): Array<number | null> {
+  const salida: Array<number | null> = [];
+  for (let n = 1; n <= total; n++) {
+    if (n === 1 || n === total || Math.abs(n - actual) <= 1) salida.push(n);
+    else if (salida[salida.length - 1] !== null) salida.push(null);
+  }
+  return salida;
+}
+
+/**
+ * Las mejores ofertas para la portada (RF-T68): con precio, disponibles y con
+ * rebaja, las que más rebajan primero.
+ */
+export function ofertasDestacadas(catalogo: readonly ProductoTienda[], cuantos: number): ProductoTienda[] {
+  return catalogo
+    .filter((p) => p.precio != null && p.disponible && rebajaMaximaPct(p.precio, p.tramos) > 0)
+    .sort((a, b) => rebajaMaximaPct(b.precio, b.tramos) - rebajaMaximaPct(a.precio, a.tramos) || COMPARAR(a.nombre, b.nombre))
+    .slice(0, cuantos);
+}
+
+/** Enlace a Google Maps con la dirección del local (RF-T69). Null sin dirección. */
+export function enlaceMapa(direccion: string | null | undefined): string | null {
+  const d = (direccion ?? '').trim();
+  return d ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(d)}` : null;
+}
+
 // ---------------------------------------------------------------------------
 // Carrito (etapa 2, RT-20 y RT-21)
 // ---------------------------------------------------------------------------
@@ -325,12 +444,21 @@ export interface DatosCliente {
 }
 
 /** El pedido como mensaje de WhatsApp, mientras no haya pago en línea. */
-export function mensajePedido(carrito: CarritoCalculado, cliente?: DatosCliente | null): string {
+export function mensajePedido(carrito: CarritoCalculado, cliente?: DatosCliente | null, nota?: string | null): string {
   const filas = carrito.lineas.map((l) => `• ${l.cantidad} × ${l.nombre} = ${formatCLP(l.subtotal)}`);
   const quien = cliente?.nombre.trim()
     ? `Hola, soy ${cliente.nombre.trim()}${cliente.celular.trim() ? ` (${cliente.celular.trim()})` : ''}. Quiero hacer este pedido:`
     : 'Hola, quiero hacer este pedido:';
-  return [quien, ...filas, `Total: ${formatCLP(carrito.total)}`].join('\n');
+  const extra = nota?.trim() ? [`Nota: ${nota.trim()}`] : [];
+  return [quien, ...filas, `Total: ${formatCLP(carrito.total)}`, ...extra].join('\n');
+}
+
+/**
+ * La lista del carrito como texto, para copiarla o mandarla a alguien de la
+ * casa (RF-T70): sin datos personales.
+ */
+export function listaDeCompras(carrito: CarritoCalculado): string {
+  return [...carrito.lineas.map((l) => `${l.cantidad} × ${l.nombre}`), `Total estimado: ${formatCLP(carrito.total)}`].join('\n');
 }
 
 /**

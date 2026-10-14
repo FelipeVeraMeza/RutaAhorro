@@ -24,6 +24,9 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+  // Si no se puede copiar se dice al lado del botón: antes el error reemplazaba
+  // la lista entera y había que volver a entrar para verla.
+  const [errorCopia, setErrorCopia] = useState<string | null>(null);
   // RF-M3-12 · el proveedor de la última recepción de cada producto.
   const [proveedorDe, setProveedorDe] = useState<Map<string, { id: string; nombre: string }>>(new Map());
   const [proveedorElegido, setProveedorElegido] = useState('');
@@ -73,7 +76,7 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
   const texto = textoPedido(pedido, local);
   async function copiar() {
     try { await navigator.clipboard.writeText(texto); setCopiado(true); setTimeout(() => setCopiado(false), 2500); }
-    catch { setError('No se pudo copiar. Mantén presionado el texto para copiarlo.'); }
+    catch { setErrorCopia('No se pudo copiar. Mantén presionado el texto para copiarlo.'); }
   }
   function exportar() {
     const csv = aCSV(pedido, [
@@ -154,6 +157,7 @@ export function QueComprar({ local, verCostos }: { local: string; verCostos: boo
         <button onClick={exportar} disabled={!pedido.length} className="btn btn-secundario">
           <Icono nombre="descargar" tamano={18} /> Exportar a Excel
         </button>
+        {errorCopia && <p role="alert" className="w-full text-xs text-[var(--color-alerta)]">{errorCopia}</p>}
       </div>
     </div>
   );

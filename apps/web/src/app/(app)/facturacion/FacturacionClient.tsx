@@ -157,7 +157,15 @@ function Emitidas({ mes, onUsarComoBase }: { mes: string; onUsarComoBase: (b: Ba
     try { await repoFacturacion().reintentar(f.id); await cargar(); } catch (e) { setError(toUserMessage(e)); }
   }
 
-  if (error) return <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>;
+  // Un error (un reintento rechazado, una consulta cortada) ya no reemplaza
+  // la lista entera: sin cola por revisar, la pantalla quedaba solo con el
+  // error y sin cómo volver a ver las facturas.
+  const banner = error && (
+    <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg mb-3">
+      {error} <button type="button" className="underline" onClick={() => { setError(null); void cargar(); }}>Volver a cargar</button>
+    </p>
+  );
+  if (error && !facturas) return banner;
   if (!facturas) return <p className="text-sm text-[var(--texto-suave)] py-8 text-center" aria-busy="true">Cargando…</p>;
   if (facturas.length === 0) {
     return <p className="text-sm text-[var(--texto-suave)] py-10 text-center">No hay facturas emitidas en este mes.</p>;
@@ -168,6 +176,7 @@ function Emitidas({ mes, onUsarComoBase }: { mes: string; onUsarComoBase: (b: Ba
 
   return (
     <>
+      {banner}
       <p className="text-xs text-[var(--texto-suave)] mb-2">
         {facturas.length} {facturas.length === 1 ? 'factura' : 'facturas'} · facturado neto de notas de crédito:{' '}
         <strong className="num text-[var(--texto)]">{formatCLP(totalMes)}</strong>

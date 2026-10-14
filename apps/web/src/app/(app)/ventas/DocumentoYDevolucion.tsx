@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import {
   formatCLP, formatCantidad, toUserMessage, NOMBRE_DTE, construirXmlDte, desdeRegistro, montosDevolucion,
-  validarCantidad, type RegistroDte, type TipoDte, redondeoEfectivo
+  validarCantidadStock, type RegistroDte, type TipoDte, redondeoEfectivo
 } from '@rutaahorro/core';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
@@ -167,7 +167,7 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
     return l.cantidad - (l.devuelto ?? 0);
   };
   const pedido = useMemo(() => lineas
-    .map((l) => ({ id: l.id!, v: validarCantidad(cantidades[l.id!] ?? '', { permiteVacio: true, maximo: 1_000_000 }) }))
+    .map((l) => ({ id: l.id!, v: validarCantidadStock(cantidades[l.id!] ?? '', 'unidad', { permiteVacio: true, maximo: 1_000_000 }) }))
     .filter((x) => x.v.valido && x.v.valor > 0)
     .map((x) => ({ id: x.id, cantidad: x.v.valor })), [cantidades, lineas]);
 
@@ -175,7 +175,7 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
   // devolvía solo lo demás.
   const malEscrita = lineas.find((l) => {
     const t = cantidades[l.id!] ?? '';
-    return t.trim() !== '' && !validarCantidad(t, { permiteVacio: true, maximo: 1_000_000 }).valido;
+    return t.trim() !== '' && !validarCantidadStock(t, 'unidad', { permiteVacio: true, maximo: 1_000_000 }).valido;
   });
 
   const devueltoAntes = venta.devoluciones.reduce((s, d) => s + d.monto, 0);
@@ -235,7 +235,7 @@ export function DevolverVenta({ venta, onCerrar, onHecho }: {
                   </span>
                 </span>
                 <input
-                  inputMode="decimal" disabled={q <= 0}
+                  inputMode="numeric" disabled={q <= 0}
                   value={cantidades[l.id!] ?? ''}
                   onChange={(e) => setCantidades((c) => ({ ...c, [l.id!]: e.target.value }))}
                   aria-label={`Unidades de ${l.productoNombre} que vuelven`}

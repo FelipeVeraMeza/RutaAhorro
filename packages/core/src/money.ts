@@ -209,16 +209,22 @@ export function validarMonto(entrada: string, opciones: OpcionesMonto = {}): Mon
     return { valido: false, valor: 0, error: `El ${etiqueta} tiene que ser mayor que cero` };
   }
 
-  if (typeof maximo === 'number' && valor > maximo) {
+  // Sin tope propio, el de la base: los montos son `integer` en PostgreSQL y
+  // más de $2.147.483.647 se rechazaba allá con un error que nadie entendía.
+  const tope = Math.min(maximo ?? MAXIMO_EN_LA_BASE, MAXIMO_EN_LA_BASE);
+  if (valor > tope) {
     return {
       valido: false,
       valor: 0,
-      error: `El ${etiqueta} supera el máximo permitido de ${formatCLP(maximo)}`,
+      error: `El ${etiqueta} supera el máximo permitido de ${formatCLP(tope)}`,
     };
   }
 
   return { valido: true, valor, error: null };
 }
+
+/** El mayor `integer` de PostgreSQL: el tope de todo monto que se guarda. */
+export const MAXIMO_EN_LA_BASE = 2_147_483_647;
 
 /**
  * Valida una cantidad de producto: unidades, no pesos.
@@ -240,6 +246,12 @@ export function validarCantidad(
       : { valido: false, valor: 0, error: 'Escribe la cantidad' };
   }
 
+  // Solo dígitos con una coma o un punto decimal (o puntos de miles, que
+  // resuelven las versiones enteras de abajo). `Number` aceptaba "1e2" como
+  // 100 y "0x10" como 16: un dedo de más en el teclado cambiaba el conteo.
+  if (!/^-?\d+([.,]\d+)?$/.test(texto) && !MILES.test(texto)) {
+    return { valido: false, valor: 0, error: 'La cantidad tiene que ser un número' };
+  }
   const valor = Number(texto.replace(',', '.'));
   if (!Number.isFinite(valor)) {
     return { valido: false, valor: 0, error: 'La cantidad tiene que ser un número' };
@@ -255,6 +267,18 @@ export function validarCantidad(
   }
 
   return { valido: true, valor, error: null };
+}
+
+/** "1.000", "12.500.000": puntos que separan miles, como se escribe en Chile. */
+const MILES = /^\d{1,3}(\.\d{3})+$/;
+
+/**
+ * En lo que se cuenta entero, "1.000" son mil: el punto separa miles en Chile.
+ * Se leía como 1 (punto decimal) y recibir "1.000 bolsas" dejaba una.
+ */
+function conMilesSiEsEntero(entrada: string): string {
+  const t = String(entrada ?? '').trim();
+  return MILES.test(t) ? t.replace(/\./g, '') : entrada;
 }
 
 /**
@@ -285,7 +309,7 @@ export function validarCantidadVenta(
   unidad: string | null | undefined,
   maximo = 100_000,
 ): MontoValidado {
-  const v = validarCantidad(entrada, { permiteCero: false, maximo });
+  const v = validarCantidad(admiteDecimales(unidad) ? entrada : conMilesSiEsEntero(entrada), { permiteCero: false, maximo });
   if (!v.valido) return v;
   if (!admiteDecimales(unidad)) {
     if (!Number.isInteger(v.valor)) {
@@ -335,7 +359,7 @@ export function validarCantidadStock(
   unidad: string | null | undefined,
   opciones: { permiteVacio?: boolean; permiteCero?: boolean; maximo?: number } = {},
 ): MontoValidado {
-  const v = validarCantidad(entrada, opciones);
+  const v = validarCantidad(admiteDecimales(unidad) ? entrada : conMilesSiEsEntero(entrada), opciones);
   if (!v.valido || admiteDecimales(unidad) || Number.isInteger(v.valor)) return v;
   return { valido: false, valor: 0, error: 'Este producto se cuenta entero: escribe 1, 2, 3…' };
 }

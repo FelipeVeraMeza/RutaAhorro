@@ -2,6 +2,7 @@ import { runBackup, cleanupOldBackups } from './backup.js';
 import { runDailySummary } from './daily-summary.js';
 import { runLowStockCheck, runExpiryCheck, runOpenCashCheck, runIntegrityCheck } from './checks.js';
 import { runFacturasSii } from './facturas-sii.js';
+import { runAnonimizarPedidosWeb } from './pedidos-web.js';
 
 /**
  * Catálogo de trabajos programados.
@@ -43,6 +44,11 @@ export const JOBS = {
     schedule: '0 4 * * 0',
     description: 'Reconstruye el stock desde el kardex y verifica lotes',
     run: runIntegrityCheck,
+  },
+  'pedidos-web-privacidad': {
+    schedule: '20 4 1 * *',
+    description: 'Borra los datos de contacto de pedidos web cerrados hace más de 12 meses',
+    run: runAnonimizarPedidosWeb,
   },
   'facturas-sii': {
     schedule: '* * * * *',

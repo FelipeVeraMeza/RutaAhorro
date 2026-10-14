@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatCLP, formatCantidad, toUserMessage, validarCantidadStock, textoVencimiento } from '@rutaahorro/core';
 import { Encabezado, EstadoVacio } from '@/components/Encabezado';
 import { Icono } from '@/components/Icono';
-import { repoProveedores, buscarParaRecepcion, type Proveedor } from '@/lib/datos/proveedores';
+import { repoProveedores, buscarParaRecepcion, productoParaRecepcion, type Proveedor } from '@/lib/datos/proveedores';
 import { repoInventario, type Lote } from '@/lib/datos/inventario';
 import { repoDevoluciones, type DevolucionProveedor } from '@/lib/datos/devoluciones';
 import { findByBarcode } from '@/lib/offline/catalog';
@@ -43,6 +43,9 @@ export function DevolucionClient({ verCostos = false }: { verCostos?: boolean })
   const [historial, setHistorial] = useState<DevolucionProveedor[]>([]);
   const [aviso, setAviso] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
   const [guardando, setGuardando] = useState(false);
+  // El estado llega tarde para un segundo toque rápido: la mercadería salía
+  // dos veces de la bodega.
+  const enviando = useRef(false);
 
   const cargar = useCallback(async () => {
     const [ps, ls, hs] = await Promise.all([
@@ -74,8 +77,11 @@ export function DevolucionClient({ verCostos = false }: { verCostos?: boolean })
     onScan: async (code) => {
       const prod = await findByBarcode(code);
       if (!prod) { setAviso({ tipo: 'error', texto: `El código ${code} no está en el catálogo` }); return; }
-      const [r] = (await buscarParaRecepcion(prod.name)).filter((x) => x.productId === prod.id);
+      // Por id, como en Recibir: buscando por el nombre, uno con comas o
+      // paréntesis no aparecía y el escaneo no agregaba nada.
+      const r = await productoParaRecepcion(prod.id, prod.name);
       if (r) agregar(r);
+      else setAviso({ tipo: 'error', texto: `No se pudo leer ${prod.name}. Búscalo por nombre` });
       setEscaneando(false);
     },
   });
@@ -87,7 +93,8 @@ export function DevolucionClient({ verCostos = false }: { verCostos?: boolean })
   const puede = proveedorId && motivo.trim() && lineas.length > 0 && malas.length === 0 && !guardando;
 
   async function confirmar() {
-    if (!puede) return;
+    if (!puede || enviando.current) return;
+    enviando.current = true;
     setGuardando(true); setAviso(null);
     try {
       const r = await repoDevoluciones().devolver({
@@ -102,6 +109,7 @@ export function DevolucionClient({ verCostos = false }: { verCostos?: boolean })
     } catch (e) {
       setAviso({ tipo: 'error', texto: toUserMessage(e) });
     } finally {
+      enviando.current = false;
       setGuardando(false);
     }
   }

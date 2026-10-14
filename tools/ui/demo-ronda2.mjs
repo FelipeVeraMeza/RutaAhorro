@@ -66,7 +66,8 @@ const alta = await p.getByRole('dialog').innerText().catch(() => '');
 ok('RF-M2-04', alta.includes('7809999999999'), 'el alta se abre con el código ya puesto');
 await p.keyboard.press('Escape');
 
-await ir(p, '/configuracion');
+// Desde el 2026-10-07 la descarga vive en la pestaña Respaldo.
+await ir(p, '/configuracion#respaldo');
 const [descarga] = await Promise.all([
   p.waitForEvent('download', { timeout: 15000 }).catch(() => null),
   p.getByRole('button', { name: 'Descargar mis datos' }).click(),

@@ -23,13 +23,18 @@ export interface PedidoEnviado {
   fecha: string;
   lineas: LineaCarritoTienda[];
   total: number;
+  /** 0041 · Pedido hecho en la tienda (no por WhatsApp): su número y código de seguimiento. */
+  numero?: number;
+  codigo?: string;
 }
 
 const TOPE_PEDIDOS = 20;
 const SIN_PEDIDOS: PedidoEnviado[] = [];
 
 const pedidos = crearAlmacen<PedidoEnviado[]>('tienda:pedidos', SIN_PEDIDOS, (x) =>
-  Array.isArray(x) ? x.filter((p) => p && typeof p.fecha === 'string' && Array.isArray(p.lineas)) : null);
+  Array.isArray(x)
+    ? x.filter((p) => p && typeof p.fecha === 'string' && Array.isArray(p.lineas) && typeof p.total === 'number').slice(0, TOPE_PEDIDOS)
+    : null);
 
 export const useDatosCliente = datos.usar;
 export const usePedidos = pedidos.usar;
@@ -38,9 +43,16 @@ export function guardarDatosCliente(d: DatosCliente) {
   datos.guardar({ nombre: d.nombre.trim(), celular: d.celular.trim(), correo: d.correo.trim() });
 }
 
-/** Anota el pedido enviado por WhatsApp, el más nuevo primero. */
+/** Anota el pedido enviado, el más nuevo primero. Un pedido con código no se anota dos veces. */
 export function anotarPedido(p: PedidoEnviado) {
-  pedidos.guardar([p, ...pedidos.leer()].slice(0, TOPE_PEDIDOS));
+  const otros = p.codigo ? pedidos.leer().filter((x) => x.codigo !== p.codigo) : pedidos.leer();
+  pedidos.guardar([p, ...otros].slice(0, TOPE_PEDIDOS));
+}
+
+/** Al abrir un seguimiento: si el pedido no estaba en "Mis pedidos", se agrega (sin sus líneas). */
+export function recordarPedidoWeb(p: { codigo: string; numero: number; total: number; fecha: string }) {
+  if (pedidos.leer().some((x) => x.codigo === p.codigo)) return;
+  anotarPedido({ fecha: p.fecha, lineas: [], total: p.total, numero: p.numero, codigo: p.codigo });
 }
 
 /** Todo lo que la tienda guarda en este navegador (RNF-T24): datos, pedidos y carrito. */

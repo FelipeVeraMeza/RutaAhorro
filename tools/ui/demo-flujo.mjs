@@ -7,6 +7,7 @@
 // Después: admin crea una cuenta nueva de vendedor con clave temporal y se entra con ella.
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
+import { DOMINIO_RUT } from '../../packages/core/dist/index.js';
 const BASE = process.env.RA_BASE ?? 'http://localhost:3000';
 // En Windows, pathname trae "/C:/...": sin la barra inicial, mkdir arma "C:C:...".
 const SP = new URL('./.capturas/demo', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
@@ -19,6 +20,8 @@ p.on('pageerror', (e) => errores.push(e.message.slice(0, 150)));
 let ok = 0, mal = 0;
 const check = (cond, t) => { cond ? ok++ : mal++; console.log(cond ? '✔' : '✖', t); };
 const h1 = async () => (await p.locator('main h1').first().innerText().catch(() => '')).trim();
+
+const CORREO_RUT = (cuerpo) => `${cuerpo}@${DOMINIO_RUT}`;
 
 async function entrar(correo, clave) {
   await p.goto(BASE + '/login', { waitUntil: 'networkidle' });
@@ -112,17 +115,19 @@ await salir();
 await entrar('admin@demo.cl', 'demo1234');
 check(new URL(p.url()).pathname === '/', 'admin entra al Inicio');
 await p.goto(BASE + '/usuarios', { waitUntil: 'networkidle' });
+// Desde el 2026-10-07 las cuentas nuevas entran con RUT (antes: correo).
 await p.getByRole('button', { name: 'Crear cuenta' }).click();
 await p.getByLabel(/^Nombre/).fill('Ana Cajera');
-await p.getByLabel(/^Correo/).fill('ana@demo.cl');
+await p.getByLabel(/^RUT/).fill('11.111.111-1');
 await p.getByLabel(/Contraseña temporal/).fill('ana12345');
 await p.getByRole('button', { name: 'Crear cuenta' }).last().click();
 await p.waitForTimeout(1200);
 const tu = await p.locator('main').innerText();
-check(/Cuenta de Ana Cajera creada/.test(tu) && tu.includes('ana12345'), 'admin ve las credenciales de la cuenta nueva');
+check(/Cuenta de Ana Cajera creada/.test(tu) && tu.includes('ana12345') && tu.includes('11111111'), 'admin ve las credenciales de la cuenta nueva (RUT y clave)');
 await p.screenshot({ path: SP + '/a-usuarios.png', fullPage: true });
 await salir();
-await entrar('ana@demo.cl', 'ana12345');
+// La maqueta entra por correo: el de la cuenta es el técnico de su RUT.
+await entrar(CORREO_RUT('11111111'), 'ana12345');
 check(new URL(p.url()).pathname === '/pos', 'la cuenta nueva entra al POS');
 check((await p.locator('body').innerText()).includes('Ana Cajera'), 'con su nombre');
 

@@ -1,3 +1,4 @@
+import { diaLocal, rangoDeDias } from '@rutaahorro/core';
 import { admin, activeTenants } from '../supabase.js';
 import { sendEmail, renderEmail, money } from '../mailer.js';
 import { log } from '../logger.js';
@@ -12,29 +13,44 @@ import { log } from '../logger.js';
  */
 export async function runDailySummary() {
   const tenants = await activeTenants();
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
   const results: Array<{ tenant: string; sent: boolean }> = [];
 
   for (const tenant of tenants) {
-    // Ventas del día
-    const { data: sales } = await admin
-      .from('sales')
-      .select('total, status')
-      .eq('tenant_id', tenant.id)
-      .gte('sold_at', `${today}T00:00:00-03:00`)
-      .lte('sold_at', `${today}T23:59:59-03:00`);
+    // El día del local (regla 17). Antes iba fijo "-03:00": con el horario de
+    // invierno (-04:00) el resumen sumaba la última hora del día anterior.
+    const zona = String((tenant.settings as { timezone?: string })?.timezone || 'America/Santiago');
+    const today = diaLocal(new Date(), zona);
+    const dia = rangoDeDias(today, today, zona);
 
-    const completed = (sales ?? []).filter((s) => s.status === 'completada');
-    const voided = (sales ?? []).filter((s) => s.status === 'anulada');
+    // Ventas del día, de a 1.000: la API no entrega más por consulta y un día
+    // con más ventas salía con el total corto, sin avisar.
+    const sales: Array<{ total: number | null; status: string }> = [];
+    for (let desde = 0; ; desde += 1000) {
+      const { data, error } = await admin
+        .from('sales')
+        .select('total, status')
+        .eq('tenant_id', tenant.id)
+        .gte('sold_at', dia.desde)
+        .lt('sold_at', dia.hasta)
+        .order('id')
+        .range(desde, desde + 999);
+      if (error) throw new Error(`No se pudieron leer las ventas: ${error.message}`);
+      sales.push(...(data ?? []));
+      if ((data ?? []).length < 1000) break;
+    }
+
+    const completed = sales.filter((s) => s.status === 'completada');
+    const voided = sales.filter((s) => s.status === 'anulada');
     const total = completed.reduce((sum, s) => sum + (s.total ?? 0), 0);
     const avgTicket = completed.length > 0 ? Math.round(total / completed.length) : 0;
 
-    // Cajas del día
+    // Cajas del día, y las que siguen abiertas aunque sean de antes: una caja
+    // olvidada desde ayer no salía como "SIN CERRAR".
     const { data: sessions } = await admin
       .from('v_cash_sessions_summary')
       .select('full_name, status, difference, sales_total')
       .eq('tenant_id', tenant.id)
-      .gte('opened_at', `${today}T00:00:00-03:00`);
+      .or(`status.eq.abierta,opened_at.gte."${dia.desde}"`);
 
     const open = (sessions ?? []).filter((s) => s.status === 'abierta');
     const withDiff = (sessions ?? []).filter((s) => s.status === 'cerrada' && (s.difference ?? 0) !== 0);
@@ -56,6 +72,15 @@ export async function runDailySummary() {
       .limit(15);
 
     const valueAtRisk = (expiring ?? []).reduce((s, l) => s + (l.value_at_risk ?? 0), 0);
+
+    // docs/33 · Pedidos de la tienda online: los de hoy y los que siguen sin
+    // entregar. Sin 0041 la tabla no existe y la sección no sale.
+    const { data: pedidosHoy } = await admin
+      .from('pedidos_web').select('estado, total')
+      .eq('tenant_id', tenant.id).gte('created_at', dia.desde).lt('created_at', dia.hasta);
+    const { count: pedidosAbiertos } = await admin
+      .from('pedidos_web').select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenant.id).in('estado', ['recibido', 'preparando', 'listo']);
 
     const sections = [
       {
@@ -91,6 +116,14 @@ export async function runDailySummary() {
           ]),
         ],
       },
+      ...(pedidosHoy && (pedidosHoy.length > 0 || (pedidosAbiertos ?? 0) > 0) ? [{
+        heading: 'Pedidos web',
+        rows: [
+          ['Pedidos de hoy', String(pedidosHoy.length)],
+          ['Entregados hoy', money(pedidosHoy.filter((p) => p.estado === 'entregado').reduce((s, p) => s + (p.total ?? 0), 0))],
+          ...((pedidosAbiertos ?? 0) > 0 ? [[`⚠️ Sin entregar todavía`, String(pedidosAbiertos)]] : []),
+        ],
+      }] : []),
       {
         heading: 'Stock bajo mínimo',
         rows: (lowStock ?? []).map((p) => [p.name as string, `${p.quantity} / mín. ${p.min_stock}`]),

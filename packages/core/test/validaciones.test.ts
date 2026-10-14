@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { isValidRut, formatRut, cleanRut, computeDv } from '../src/rut.js';
 import { isValidEan, detectFormat, normalizeBarcode, generateInternalBarcode } from '../src/barcode.js';
-import { toUserMessage, errorCode, ERROR_MESSAGES } from '../src/errors.js';
+import { toUserMessage, errorCode, ERROR_MESSAGES, esErrorDeRed } from '../src/errors.js';
 
 // Evidencia de RF-M3-02: formato y dígito verificador del RUT.
 describe('RUT chileno', () => {
@@ -157,5 +157,28 @@ describe('errores del alta de producto (fn_create_product)', () => {
     expect(errorCode({ message: 'OFERTA_SIN_FECHAS_DESDE_1' })).toBe('OFERTA_SIN_FECHAS_DESDE_1');
     expect(toUserMessage('FACTURA_NO_EN_EMISION')).not.toContain('FACTURA_NO_EN_EMISION');
     expect(ERROR_MESSAGES.FACTURA_NO_EN_EMISION).toBeTruthy();
+  });
+});
+
+describe('esErrorDeRed (revisión 2026-10-11)', () => {
+  it('un corte de red no es un rechazo de la base', () => {
+    expect(esErrorDeRed({ message: 'TypeError: Failed to fetch' })).toBe(true);
+    expect(esErrorDeRed({ message: 'Load failed' })).toBe(true);
+    expect(esErrorDeRed({ message: 'NetworkError when attempting to fetch resource.' })).toBe(true);
+    expect(esErrorDeRed({ message: 'The operation was aborted.' })).toBe(true);
+  });
+  it('una respuesta de la base con su código no es de red', () => {
+    expect(esErrorDeRed({ message: 'STOCK_INSUFICIENTE: Pan', code: 'P0001' })).toBe(false);
+    expect(esErrorDeRed({ message: 'fetch failed', code: '42501' })).toBe(false);
+    expect(esErrorDeRed({ message: 'CAJA_NO_ABIERTA' })).toBe(false);
+    expect(esErrorDeRed(null)).toBe(false);
+  });
+});
+
+describe('RUT con ceros (revisión 2026-10-11)', () => {
+  it('"00.000.000-0" no es un RUT aunque el dígito cuadre', () => {
+    expect(isValidRut('00.000.000-0')).toBe(false);
+    expect(isValidRut('0.000.000-0')).toBe(false);
+    expect(isValidRut('11.111.111-1')).toBe(true);
   });
 });

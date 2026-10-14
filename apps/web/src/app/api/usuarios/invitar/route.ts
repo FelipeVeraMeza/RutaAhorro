@@ -24,7 +24,8 @@ export async function POST(request: Request) {
 
   const { nombre, email, rol } = await request.json().catch(() => ({}));
 
-  if (!nombre || !email || !['admin', 'supervisor', 'vendedor', 'bodega'].includes(rol)) {
+  if (!nombre || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())
+      || !['admin', 'supervisor', 'vendedor', 'bodega'].includes(rol)) {
     return NextResponse.json(
       { error: { code: 'DATOS_INVALIDOS', message: 'Faltan datos o el rol no es válido' } },
       { status: 400 },
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
       {
         error: {
           code: yaExiste ? 'CORREO_YA_REGISTRADO' : 'ERROR_INTERNO',
-          message: yaExiste ? 'Ese correo ya tiene un usuario' : error.message,
+          message: yaExiste ? 'Ese correo ya tiene un usuario' : 'No se pudo enviar la invitación. Vuelve a intentarlo',
         },
       },
       { status: yaExiste ? 409 : 500 },

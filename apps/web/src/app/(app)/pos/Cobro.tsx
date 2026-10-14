@@ -23,6 +23,8 @@ const METODOS: Array<{ id: Metodo; label: string; icon: string }> = [
 ];
 /** RF-M5-30 · solo aparece con un cliente que tiene crédito en el local. */
 const FIADO = { id: 'fiado' as const, label: 'Fiado', icon: '📒' };
+/** Fiado está apagado en este local (ver `metodos`). Volver a true lo reactiva. */
+const FIADO_ACTIVO = false;
 
 /** Qué se le entrega al cliente con cada documento, en sus palabras. */
 const QUE_SE_ENTREGA: Record<TipoDocumento, string> = {
@@ -86,13 +88,16 @@ export function Cobro({
   // hasta lo que le queda. Se lee al abrir el cobro (necesita conexión).
   const [cuenta, setCuenta] = useState<CuentaCliente | null>(null);
   useEffect(() => {
-    if (!cliente) return;
+    if (!cliente || !FIADO_ACTIVO) return;
     let vivo = true;
     void cuentaDe(cliente.id).then((c) => { if (vivo) setCuenta(c); }).catch(() => {});
     return () => { vivo = false; };
   }, [cliente]);
   const conRed = DEMO_ACTIVO || (typeof navigator === 'undefined' || navigator.onLine);
-  const metodos = cuenta && cuenta.tope > 0 ? [...METODOS, FIADO] : METODOS;
+  // El local no fía (Felipe, 2026-10-07: Fiado salió del menú). Un cliente
+  // que quedó con tope de antes seguía mostrando "Fiado" al cobrar, y esa
+  // deuda no tenía después ninguna pantalla donde cobrarse.
+  const metodos = FIADO_ACTIVO && cuenta && cuenta.tope > 0 ? [...METODOS, FIADO] : METODOS;
   const fiadoAlcanza = !!cuenta && cuenta.disponible >= total;
   // 2026-10-11 (Felipe): la factura pide solo RUT, correo y forma de pago. La
   // razón social, el giro y la dirección salen del cliente registrado o, si es
@@ -301,6 +306,10 @@ export function Cobro({
               inputMode="numeric"
               value={recibido}
               onChange={(e) => setRecibido(e.target.value)}
+              // Enter confirma: con el teclado numérico del celular o el del
+              // computador no había que buscar el botón.
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void confirmar(); } }}
+              enterKeyHint="done"
               placeholder="0"
               className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] text-xl num text-right"
             />

@@ -74,10 +74,19 @@ export function Modal({
   }, [bloqueado, onCerrar]);
 
   // Foco: recordar de dónde vino, llevarlo adentro, devolverlo al salir.
+  // De dónde vino se anota al dibujar, antes que un `autoFocus` de adentro lo
+  // mueva: si no, "volver" apuntaba a un campo del diálogo que ya no existe y
+  // el foco se perdía al cerrar. Y un campo con `autoFocus` se respeta: antes
+  // el diálogo lo pisaba llevando el foco al primer botón (el monto del cobro,
+  // el motivo, el descuento quedaban sin el cursor que pedían).
+  const previoRef = useRef<HTMLElement | null>(
+    typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null);
   useEffect(() => {
-    const previo = document.activeElement as HTMLElement | null;
-    const primero = enfocables(panel.current)[0] ?? panel.current;
-    primero?.focus();
+    const previo = previoRef.current;
+    if (!panel.current?.contains(document.activeElement)) {
+      const primero = enfocables(panel.current)[0] ?? panel.current;
+      primero?.focus();
+    }
     return () => previo?.focus?.();
   }, []);
 

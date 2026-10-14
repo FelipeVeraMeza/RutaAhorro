@@ -3,7 +3,10 @@ import { destacadosDelDia, diaLocal, filtrarCatalogo, ORDENES_TIENDA, type Orden
 import { datosTienda } from '@/lib/tienda/catalogo';
 import { Buscador, Resultados, TiendaCerrada, conParametros } from '@/components/tienda/Catalogo';
 
-export const metadata: Metadata = { title: 'Ofertas' };
+export async function generateMetadata(): Promise<Metadata> {
+  const { base } = await import('@/lib/tienda/sitio').then((m) => m.sitioTienda());
+  return { title: 'Ofertas', description: 'Precios por cantidad y promociones de hoy.', alternates: { canonical: `${base}/ofertas` } };
+}
 export const dynamic = 'force-dynamic';
 
 type Params = Promise<{ q?: string; orden?: string; pagina?: string }>;
@@ -14,7 +17,8 @@ export default async function OfertasPage({ searchParams }: { searchParams: Para
   if (!tienda) return <TiendaCerrada />;
 
   const { q = '', orden: ordenPedido, pagina } = await searchParams;
-  const orden = ORDENES_TIENDA.some((o) => o.valor === ordenPedido) ? (ordenPedido as OrdenTienda) : undefined;
+  // RF-T82 · En Ofertas, por omisión lo que más rebaja va primero.
+  const orden = ORDENES_TIENDA.some((o) => o.valor === ordenPedido) ? (ordenPedido as OrdenTienda) : 'mayor-descuento';
   const r = filtrarCatalogo(tienda.catalogo, { busqueda: q, soloOfertas: true, orden, pagina: Number(pagina) });
   const sugeridos = r.total === 0 ? destacadosDelDia(tienda.catalogo, diaLocal(new Date(), 'America/Santiago'), 4) : [];
 
@@ -28,7 +32,7 @@ export default async function OfertasPage({ searchParams }: { searchParams: Para
       </div>
       <Buscador accion="/tienda/ofertas" q={q} ocultos={{ orden }} />
       <Resultados r={r} q={q} vacio="No hay ofertas por ahora." sugeridos={sugeridos}
-        orden={{ ruta: '/tienda/ofertas', actual: orden ?? 'relevantes', ocultos: q ? [['q', q]] : [] }}
+        orden={{ ruta: '/tienda/ofertas', actual: orden, ocultos: q ? [['q', q]] : [] }}
         enlace={(n) => conParametros('/tienda/ofertas', { q, orden, pagina: n })} />
     </div>
   );

@@ -2,7 +2,7 @@
 import { Icono } from '@/components/Icono';
 import { Encabezado } from '@/components/Encabezado';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   formatCLP, weightedAverageCost, costVariationPct, netAmount, ivaDeNeto,
@@ -92,6 +92,9 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
   const [documento, setDocumento] = useState('');
   // RF-M3-13 · con factura a crédito, cuándo vence.
   const [vence, setVence] = useState('');
+  // La fecha que dice la factura: el libro de compras la ordena por mes, y una
+  // factura del 30 recibida el 1 quedaba en el mes que no era.
+  const [emitida, setEmitida] = useState('');
   const [pago, setPago] = useState<Pago>('transferencia');
   /**
    * Los costos se guardan NETOS (docs/26 N° 13, decidido el 2026-10-01). La
@@ -149,12 +152,30 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
     if (restaurado) guardarBorrador({ usuario: usuarioId, proveedorId, tipoDoc, documento, vence, pago, costosConIva, totalDoc, lineas });
   }, [restaurado, usuarioId, proveedorId, tipoDoc, documento, vence, pago, costosConIva, totalDoc, lineas]);
 
+  // El costo anterior está guardado NETO. Con "costos con IVA" (la boleta, que
+  // viene marcada así por omisión) la línea partía con el neto en un campo que
+  // se lee como con IVA: quien no lo reescribía bajaba el costo un 16 %.
+  const costosConIvaRef = useRef(costosConIva);
+  costosConIvaRef.current = costosConIva;
+  const comoSeEscribe = useCallback(
+    (neto: number) => (costosConIvaRef.current && neto > 0 ? neto + ivaDeNeto(neto, ivaPct) : neto),
+    [ivaPct],
+  );
+
   const agregar = useCallback((p: {
     productId: string; nombre: string; perecible: boolean;
     costoAnterior: number; stock: number; unidad?: string;
-  }) => {
+  }, sumarSiEsta = false) => {
     setLineas((prev) => {
-      if (prev.some((l) => l.productId === p.productId)) {
+      const ya = prev.find((l) => l.productId === p.productId);
+      if (ya) {
+        // Escanear dos veces el mismo producto es contar dos: con el lector
+        // se cuenta así, y antes solo avisaba "ya está en la lista".
+        if (sumarSiEsta) {
+          setAviso(`${p.nombre}: ${formatCantidad(ya.cantidad + 1)}`);
+          setCantidadTexto((t) => ({ ...t, [p.productId]: String(ya.cantidad + 1) }));
+          return prev.map((l) => (l.productId === p.productId ? { ...l, cantidad: l.cantidad + 1 } : l));
+        }
         setAviso(`${p.nombre} ya está en la lista`);
         return prev;
       }
@@ -162,7 +183,7 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
         productId: p.productId,
         nombre: p.nombre,
         cantidad: 1,
-        costoUnitario: p.costoAnterior,
+        costoUnitario: comoSeEscribe(p.costoAnterior),
         costoAnterior: p.costoAnterior,
         stock: p.stock,
         perecible: p.perecible,
@@ -172,7 +193,7 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
       }];
     });
     setBusqueda(''); setResultados([]);
-  }, []);
+  }, [comoSeEscribe]);
 
   const { videoRef, start, stop, error: errorCamara } = useScanner({
     enabled: escaneando,
@@ -191,7 +212,7 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
       agregar(datos ?? {
         productId: prod.id, nombre: prod.name,
         perecible: prod.tracksExpiry, costoAnterior: 0, stock: 0,
-      });
+      }, true);
     },
   });
 
@@ -224,6 +245,20 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
     return () => clearTimeout(t);
   }, [aviso]);
 
+  /**
+   * Cambiar entre neto y con IVA rehace el costo de las líneas que nadie tocó
+   * (las que siguen con el costo anterior): si no, el mismo número pasaba de
+   * neto a "con IVA" y el costo guardado cambiaba un 16 % sin que nadie lo viera.
+   */
+  function cambiarModoCosto(conIva: boolean) {
+    if (conIva === costosConIva) return;
+    setCostosConIva(conIva);
+    costosConIvaRef.current = conIva;
+    setLineas((prev) => prev.map((l) => (costoTexto[l.productId] !== undefined || l.costoAnterior <= 0
+      ? l
+      : { ...l, costoUnitario: conIva ? l.costoAnterior + ivaDeNeto(l.costoAnterior, ivaPct) : l.costoAnterior })));
+  }
+
   function actualizar(id: string, cambios: Partial<LineaRecepcion>) {
     setLineas((prev) => prev.map((l) => (l.productId === id ? { ...l, ...cambios } : l)));
   }
@@ -251,7 +286,21 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
     lineas.every((l) => l.cantidad > 0 && l.costoUnitario >= 0) &&
     faltanVencimientos.length === 0;
 
+  // Un segundo toque mientras se revisaba la caja o se confirmaba el total
+  // del papel lanzaba otra recepción: la mercadería entraba dos veces.
+  const confirmando = useRef(false);
+
   async function confirmar() {
+    if (confirmando.current) return;
+    confirmando.current = true;
+    try {
+      await confirmarUnaVez();
+    } finally {
+      confirmando.current = false;
+    }
+  }
+
+  async function confirmarUnaVez() {
     setError(null);
     // Antes se confirmaba y recién después decía que la factura no quedó por
     // pagar: con la mercadería ya ingresada, no había cómo corregirlo acá.
@@ -326,7 +375,7 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
           try {
             await repoFacturacion().registrarRecibida({
               supplierId: prov.id, rutEmisor: prov.rut, razonSocial: prov.nombre, tipo: 33, folio,
-              fechaEmision: hoy(), neto: totalNeto, exento: 0, iva: totalIva, otrosImpuestos: 0,
+              fechaEmision: emitida && emitida <= hoy() ? emitida : hoy(), neto: totalNeto, exento: 0, iva: totalIva, otrosImpuestos: 0,
               notas: 'Desde Recibir mercadería', receiptId: r.id,
             });
             hecho.push('Quedó en el libro de compras.');
@@ -339,8 +388,13 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
       }
 
       const texto = [...hecho, ...pendiente].join(' ');
-      router.push(`/proveedores?recibido=${r.id}&aviso=${pendiente.length ? 'recibida_pendiente' : 'recibida'}`
-        + `&detalle=${encodeURIComponent(texto)}`);
+      // El resultado viaja en la pestaña y no en la dirección: con
+      // "&detalle=…" cualquiera podía armar un enlace que mostraba un mensaje
+      // verde inventado dentro del sistema, y recargar lo repetía.
+      try {
+        sessionStorage.setItem('compras:aviso', JSON.stringify({ tipo: pendiente.length ? 'error' : 'ok', texto }));
+      } catch { /* sin almacenamiento, se ve la lista sin el aviso */ }
+      router.push('/proveedores?vista=recepciones');
       router.refresh();
     } catch (e) {
       setError(toUserMessage(e));
@@ -382,8 +436,8 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
                 const t = e.target.value;
                 setTipoDoc(t);
                 // La boleta trae precios con IVA; la factura, netos.
-                if (t === 'boleta') setCostosConIva(true);
-                if (t === 'factura') setCostosConIva(false);
+                if (t === 'boleta') cambiarModoCosto(true);
+                if (t === 'factura') cambiarModoCosto(false);
                 if (t !== 'factura' && pago === 'credito') setPago('transferencia');
               }}
               className="tap w-full px-3 py-2.5 rounded-xl border border-[var(--borde)] bg-white"
@@ -400,6 +454,15 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
             />
           </div>
         </div>
+
+        {tipoDoc === 'factura' && puedePagar && (
+          <div>
+            <label htmlFor="emitida" className="block text-sm font-medium mb-1.5">Fecha de la factura</label>
+            <input id="emitida" type="date" value={emitida || hoy()} max={hoy()} onChange={(e) => setEmitida(e.target.value)}
+                   className="tap px-3 py-2 rounded-xl border border-[var(--borde)]" />
+            <p className="text-xs text-[var(--texto-suave)] mt-1">Va al libro de compras del mes que dice la factura.</p>
+          </div>
+        )}
 
         {/* Cómo se paga. "Efectivo de la caja" deja el egreso en la caja abierta
             (antes el arqueo salía con faltante); "A crédito" queda en Por pagar. */}
@@ -448,7 +511,7 @@ export function RecepcionClient({ usuarioId = '', puedePagar = false }: {
           <div className="grid grid-cols-2 gap-2" role="radiogroup">
             {([[false, 'Netos (sin IVA)', 'Como en la factura'], [true, 'Con IVA', 'Como en una boleta']] as const).map(([conIva, titulo, ayuda]) => (
               <button key={titulo} type="button" role="radio" aria-checked={costosConIva === conIva}
-                      onClick={() => setCostosConIva(conIva)}
+                      onClick={() => cambiarModoCosto(conIva)}
                       className={`tap px-3 py-2 rounded-xl border text-left ${
                         costosConIva === conIva ? 'border-marca-500 bg-marca-50' : 'border-[var(--borde)] bg-white'}`}>
                 <span className="block text-sm font-medium">{titulo}</span>

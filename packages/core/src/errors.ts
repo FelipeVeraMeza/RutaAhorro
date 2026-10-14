@@ -13,6 +13,11 @@ export const ERROR_MESSAGES: Record<string, string> = {
   SIN_PERMISO_AJUSTAR: 'No tienes permiso para ajustar el stock',
   SIN_PERMISO_CREAR_PRODUCTO: 'No tienes permiso para crear productos',
   SIN_PERMISO_PRECIO: 'Bodega no cambia precios: pídeselo al administrador o al supervisor',
+  // 0041 · Pedidos web
+  PEDIDO_NO_ENCONTRADO: 'No se encontró ese pedido',
+  CAMBIO_DE_ESTADO_INVALIDO: 'El pedido ya cambió de estado: actualiza la lista',
+  ESTADO_INVALIDO: 'Ese estado no existe',
+  MOTIVO_LARGO: 'El motivo tiene hasta 300 letras',
   // 0026 · Facturación
   SIN_PERMISO_FACTURAR: 'Solo el administrador o un supervisor pueden facturar',
   FALTA_IDENTIFICADOR: 'No se pudo identificar la factura. Vuelve a intentarlo',
@@ -224,6 +229,21 @@ export function toUserMessage(error: unknown): string {
   }
 
   return ERROR_MESSAGES.ERROR_INTERNO;
+}
+
+/**
+ * ¿El error es de la red y no un rechazo de la base? Un corte llega sin
+ * código de PostgreSQL y con el texto del navegador ("Failed to fetch",
+ * "Load failed", "NetworkError…") o de un tiempo agotado. La cola de ventas lo
+ * usa para no marcar como rechazada una venta que solo esperaba señal.
+ */
+export function esErrorDeRed(error: unknown): boolean {
+  if (!error) return false;
+  const e = error as { message?: string; code?: string };
+  // Un código de PostgreSQL (P0001, 23505, 42501…) es una respuesta de la base.
+  if (typeof e.code === 'string' && /^[0-9A-Z]{5}$/.test(e.code)) return false;
+  const raw = typeof error === 'string' ? error : (e.message ?? '');
+  return /failed to fetch|load failed|networkerror|network request failed|fetch failed|timed? ?out|aborted/i.test(raw);
 }
 
 export function errorCode(error: unknown): string | null {

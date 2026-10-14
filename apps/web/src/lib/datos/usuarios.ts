@@ -26,6 +26,8 @@ export interface Usuario {
   descuentoMax: number;
   /** RF-M1-20 · entró (o todavía no) con la contraseña temporal y no la ha cambiado. */
   claveTemporal?: boolean;
+  /** Los roles que puede elegir al iniciar el turno (/turno). Vacío = entra con el suyo. */
+  rolesTurno?: string[];
 }
 
 export interface RepositorioUsuarios {
@@ -44,6 +46,8 @@ export interface RepositorioUsuarios {
   /** Contraseña temporal para quien olvidó la suya. */
   restablecerClave(id: string, clave: string): Promise<void>;
   cambiarRol(id: string, rol: Rol): Promise<void>;
+  /** Los roles que puede elegir al entrar (dos o más; con uno no se pregunta). */
+  guardarTurnos(id: string, roles: string[]): Promise<void>;
   desactivar(id: string): Promise<void>;
   reactivar(id: string): Promise<void>;
 }
@@ -138,6 +142,14 @@ const repoLocal: RepositorioUsuarios = {
     await guardarLocal(us);
   },
 
+  async guardarTurnos(id, roles) {
+    const us = await leerLocal();
+    const u = us.find((x) => x.id === id);
+    if (!u) throw new Error('NO_ENCONTRADO');
+    u.rolesTurno = roles.length > 1 ? roles : [];
+    await guardarLocal(us);
+  },
+
   async desactivar(id) {
     const us = await leerLocal();
     const u = us.find((x) => x.id === id);
@@ -163,10 +175,10 @@ const repoSupabase: RepositorioUsuarios = {
       .order('full_name');
     if (error) throw error;
     // Si la ruta falla (sin llave de servicio, sin permiso) la lista sale igual, sin la marca.
-    const temporales = new Set<string>(await fetch('/api/usuarios/estado')
-      .then((r) => (r.ok ? r.json() : { claveTemporal: [] }))
-      .then((j: { claveTemporal?: string[] }) => j.claveTemporal ?? [])
-      .catch(() => []));
+    const estado = await fetch('/api/usuarios/estado')
+      .then((r) => (r.ok ? r.json() : {}))
+      .catch(() => ({})) as { claveTemporal?: string[]; roles?: Record<string, string[]> };
+    const temporales = new Set<string>(estado.claveTemporal ?? []);
     return (data ?? []).map((p) => ({
       id: p.id as string,
       nombre: (p.full_name as string) || 'Sin nombre',
@@ -176,6 +188,7 @@ const repoSupabase: RepositorioUsuarios = {
       ultimaActividad: p.last_seen_at as string | null,
       descuentoMax: Number(p.max_discount_pct ?? 0),
       claveTemporal: temporales.has(p.id as string),
+      rolesTurno: estado.roles?.[p.id as string] ?? [],
     }));
   },
 
@@ -211,6 +224,10 @@ const repoSupabase: RepositorioUsuarios = {
       .update({ role: rol, max_discount_pct: await topeDescuentoDe(rol) })
       .eq('id', id);
     if (error) throw error;
+  },
+
+  async guardarTurnos(id, roles) {
+    await llamar('/api/usuarios/roles', { id, roles });
   },
 
   async desactivar(id) {

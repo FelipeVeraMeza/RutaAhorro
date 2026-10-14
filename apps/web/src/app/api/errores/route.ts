@@ -1,4 +1,5 @@
 import { getCurrentUser } from '@/lib/supabase/server';
+import { ipDe, limitar } from '@/lib/limites';
 
 /**
  * Recibe los errores del navegador (RNF-40) y los deja en el registro del
@@ -6,6 +7,7 @@ import { getCurrentUser } from '@/lib/supabase/server';
  * Nunca responde con detalles: es un buzón.
  */
 export async function POST(request: Request) {
+  if (limitar('errores', ipDe(request))) return new Response(null, { status: 429 });
   const texto = (await request.text().catch(() => '')).slice(0, 5000);
   let datos: Record<string, unknown> = {};
   try { datos = JSON.parse(texto); } catch { datos = { crudo: texto.slice(0, 500) }; }

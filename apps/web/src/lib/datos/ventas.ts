@@ -332,7 +332,9 @@ const repoLocal: RepositorioVentas = {
 const SELECT_VENTA =
   'id, folio, sold_at, total, subtotal, discount_total, tax_amount, status, ' +
   'voided_at, void_reason, document_type, receptor_rut, receptor_razon_social, ' +
-  'receptor_giro, receptor_direccion, profiles!sales_sold_by_fkey(full_name)';
+  'receptor_giro, receptor_direccion, profiles!sales_sold_by_fkey(full_name), ' +
+  // Quién anuló: la pantalla lo decía en la maqueta y en producción salía vacío.
+  'anulo:profiles!sales_voided_by_fkey(full_name)';
 
 interface FilaVenta {
   id: string;
@@ -351,6 +353,7 @@ interface FilaVenta {
   receptor_giro?: string | null;
   receptor_direccion?: string | null;
   profiles?: { full_name: string } | null;
+  anulo?: { full_name: string } | null;
 }
 
 function aVentaBD(f: FilaVenta): Venta {
@@ -364,7 +367,7 @@ function aVentaBD(f: FilaVenta): Venta {
     iva: Number(f.tax_amount ?? 0),
     vendedor: f.profiles?.full_name ?? null,
     anulada: f.status === 'anulada',
-    anuladaPor: null,
+    anuladaPor: f.anulo?.full_name ?? null,
     anuladaEn: f.voided_at,
     motivoAnulacion: f.void_reason,
     // Las ventas anteriores a 0015 no traen columna: eran todas boleta.
@@ -459,7 +462,7 @@ const repoSupabase: RepositorioVentas = {
     if (error) throw error;
     if (!data) return null;
 
-    const [{ data: items }, { data: pagos }, { data: docs }, { data: devs }] = await Promise.all([
+    const [{ data: items, error: eItems }, { data: pagos, error: ePagos }, { data: docs }, { data: devs }] = await Promise.all([
       client.from('sale_items')
         .select('id, product_name, quantity, unit_price, discount_amount, subtotal, sale_return_items(cantidad)')
         .eq('sale_id', id).order('id'),
@@ -471,6 +474,10 @@ const repoSupabase: RepositorioVentas = {
         .select('numero, monto, created_at, motivo, reembolso, es_total')
         .eq('sale_id', id).order('numero'),
     ]);
+    // Sin las líneas o los pagos, el detalle salía vacío como si la venta no
+    // tuviera productos: mejor decir que no se pudo leer.
+    if (eItems) throw eItems;
+    if (ePagos) throw ePagos;
 
     return {
       ...aVentaBD(data as unknown as FilaVenta),

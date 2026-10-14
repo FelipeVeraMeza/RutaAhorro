@@ -30,7 +30,10 @@ function json(res: import('node:http').ServerResponse, status: number, body: unk
  * por el tiempo de respuesta.
  */
 function secretMatches(provided: string | undefined): boolean {
-  if (!env.sharedSecret) return true; // sin secreto configurado (solo desarrollo)
+  // Sin secreto configurado solo se abre en desarrollo. En Railway el dominio
+  // es público: si faltaba la variable, cualquiera podía disparar respaldos,
+  // correos o la emisión de facturas con POST /jobs/<nombre>.
+  if (!env.sharedSecret) return process.env.NODE_ENV !== 'production';
   if (!provided || provided.length !== env.sharedSecret.length) return false;
   let diff = 0;
   for (let i = 0; i < provided.length; i++) {

@@ -1,6 +1,6 @@
 # 31 — Tienda online: 120 requerimientos y su estado
 
-> **Corte: 2026-10-09.** Amplía [30 — Tienda online](30-tienda-online.md). La lista
+> **Corte: 2026-10-11** ([33](33-tienda-150-actualizaciones.md) suma 30 funcionales y 9 no funcionales, RF-T61 a T90 y RNF-T61 a T69, y cambia el estado de 15). Amplía [30 — Tienda online](30-tienda-online.md). La lista
 > viene de una propuesta de 60 funcionales y 60 no funcionales; cada uno se
 > revisó **contra el código**, no se supuso.
 >
@@ -19,14 +19,14 @@
 
 | | ✅ | ◐ | ⏳ | 🔍 / — | Total |
 |---|---:|---:|---:|---:|---:|
-| Funcionales | 47 | 6 | 7 | 0 | 60 |
-| No funcionales | 37 | 16 | 3 | 4 | 60 |
+| Funcionales | 55 | 4 | 1 | 0 | 60 |
+| No funcionales | 41 | 15 | 3 | 1 | 60 |
 
 Lo que falta se concentra en cuatro bloques, cada uno con lo que necesita:
 
 | Bloque | Requerimientos | Qué se necesita |
 |---|---|---|
-| Pedido guardado en el sistema (etapa 2) | RF-T45, T47 a T50, T57; RNF-T22, T48, T49 | Una migración en la base de producción, coordinada antes del push |
+| ~~Pedido guardado en el sistema (etapa 2)~~ | Hecho el 2026-10-11 ([33](33-tienda-150-actualizaciones.md)); quedan el despacho (RF-T47) y el correo automático (RF-T50) | Aplicar 0041 en Supabase antes del push |
 | Pago y documentos (etapa 3) | RF-T60 | Cuenta de pasarela a nombre del local (Flow recomendado) y la boleta del pedido |
 | Respaldo y continuidad | RNF-T41, T43 a T46 | Desplegar el worker de respaldo o pasar a Supabase Pro; un monitor de disponibilidad |
 | Ambientes | RNF-T55 | Un proyecto Supabase aparte para desarrollo (pregunta P-14 de [15](15-preguntas-abiertas.md)) |
@@ -47,7 +47,7 @@ Lo que falta se concentra en cuatro bloques, cada uno con lo que necesita:
 | RF-T06 | Ficha con URL propia | Must | ✅ | `/tienda/p/<id>` |
 | RF-T07 | Productos relacionados | Should | ✅ | `relacionados` (mismo grupo) |
 | RF-T08 | Compartir el enlace | Should | ✅ | `Compartir`: menú del celular o copiar |
-| RF-T09 | Excluir desactivados o no autorizados | Must | ◐ | Desactivados sí. "No autorizados" requiere RF-T57 |
+| RF-T09 | Excluir desactivados o no autorizados | Must | ✅ | Desactivados sí. "No autorizados" requiere RF-T57 **2026-10-11:** Lo "no autorizado" es lo que el local oculta de la tienda (RF-T57). ([33](33-tienda-150-actualizaciones.md)) |
 | RF-T10 | Imagen o presentación alternativa | Must | ✅ | Foto, o ícono del rubro (`iconoProducto`); si la foto no carga, se dice |
 
 ### B. Búsqueda, categorías y navegación
@@ -101,14 +101,14 @@ Lo que falta se concentra en cuatro bloques, cada uno con lo que necesita:
 |---|---|---|---|---|
 | RF-T41 | Consultar sus datos sin exponerlos | Must | ✅ | "Mi cuenta": solo en el navegador del cliente |
 | RF-T42 | Editar datos de contacto | Should | ✅ | Con validación (`validarDatosCliente`) |
-| RF-T43 | Historial de pedidos | Should | ◐ | "Mis pedidos" de ese dispositivo (los enviados por WhatsApp). Historial real con la etapa 2 |
+| RF-T43 | Historial de pedidos | Should | ✅ | "Mis pedidos" de ese dispositivo (los enviados por WhatsApp). Historial real con la etapa 2 **2026-10-11:** Mis pedidos con número, estado al día y seguimiento (en el celular del cliente, sin cuenta). ([33](33-tienda-150-actualizaciones.md)) |
 | RF-T44 | Volver a pedir | Should | ✅ | "Volver a pedir" |
-| RF-T45 | Checkout para confirmar productos y cantidades | Must | ⏳ | Hoy el carrito se envía por WhatsApp. Etapa 2 |
-| RF-T46 | Pedir datos de contacto para el pedido | Must | ◐ | El carrito los pide y los pone en el mensaje; no son obligatorios para enviar |
-| RF-T47 | Elegir modalidad de entrega | Should | ⏳ | Etapa 2 (retiro) y 4 (despacho) |
-| RF-T48 | Registrar el pedido con identificador único | Must | ⏳ | Etapa 2 (migración) |
-| RF-T49 | El personal gestiona los pedidos web | Must | ⏳ | Pantalla "Pedidos web", etapa 2 |
-| RF-T50 | Estados del pedido y aviso al cliente | Must | ⏳ | Etapa 2; correo necesita cuenta de Resend |
+| RF-T45 | Checkout para confirmar productos y cantidades | Must | ✅ | Hoy el carrito se envía por WhatsApp. Etapa 2 **2026-10-11:** Confirmar pedido en el carrito; queda en el sistema. ([33](33-tienda-150-actualizaciones.md)) |
+| RF-T46 | Pedir datos de contacto para el pedido | Must | ✅ | El carrito los pide y los pone en el mensaje; no son obligatorios para enviar **2026-10-11:** Nombre y celular obligatorios para pedir en la tienda. ([33](33-tienda-150-actualizaciones.md)) |
+| RF-T47 | Elegir modalidad de entrega | Should | ◐ | Etapa 2 (retiro) y 4 (despacho) **2026-10-11:** Retiro en el local, sí. Despacho a domicilio: etapa 4. ([33](33-tienda-150-actualizaciones.md)) |
+| RF-T48 | Registrar el pedido con identificador único | Must | ✅ | Etapa 2 (migración) **2026-10-11:** Número correlativo por local y código de seguimiento. ([33](33-tienda-150-actualizaciones.md)) |
+| RF-T49 | El personal gestiona los pedidos web | Must | ✅ | Pantalla "Pedidos web", etapa 2 **2026-10-11:** Pantalla "Pedidos web". ([33](33-tienda-150-actualizaciones.md)) |
+| RF-T50 | Estados del pedido y aviso al cliente | Must | ◐ | Etapa 2; correo necesita cuenta de Resend **2026-10-11:** Estados con historial y aviso por WhatsApp con un toque. Falta el aviso automático por correo (cuenta de Resend). ([33](33-tienda-150-actualizaciones.md)) |
 
 ### F. Administración, fotos e integraciones
 
@@ -119,8 +119,8 @@ Lo que falta se concentra en cuatro bloques, cada uno con lo que necesita:
 | RF-T53 | Buscar el producto por código de barras | Should | ✅ | `/api/productos/codigo` (Open Food Facts) |
 | RF-T54 | Completar datos desde fuentes externas | Should | ✅ | Alta escaneada: nombre, descripción y foto, con "Deshacer". Lote: `npm run db:fotos` |
 | RF-T55 | Conservar la atribución de fotos externas | Must | ✅ | Pie de la tienda y nota en el formulario (CC BY-SA) |
-| RF-T56 | Consultar o enviar el pedido por WhatsApp | Should | ◐ | Listo; aparece cuando la sucursal tenga celular anotado (hoy no) |
-| RF-T57 | Elegir qué productos se publican | Should | ⏳ | Necesita una columna nueva (migración) |
+| RF-T56 | Consultar o enviar el pedido por WhatsApp | Should | ✅ | Listo; aparece cuando la sucursal tenga celular anotado (hoy no) **2026-10-11:** El WhatsApp de la tienda se configura en Configuración → Tienda online. ([33](33-tienda-150-actualizaciones.md)) |
+| RF-T57 | Elegir qué productos se publican | Should | ✅ | Necesita una columna nueva (migración) **2026-10-11:** "Se muestra en la tienda online" en la ficha de cada producto (0041). ([33](33-tienda-150-actualizaciones.md)) |
 | RF-T58 | Sitemap | Should | ✅ | `/sitemap.xml` con todas las fichas |
 | RF-T59 | Metadatos y vista previa al compartir | Should | ✅ | Título, descripción, Open Graph, datos schema.org |
 | RF-T60 | Integrar pago, documentos y correo | Could | ⏳ | Etapa 3; cuentas externas |
@@ -179,11 +179,11 @@ entre clics. Scripts en el historial de la sesión; resultados aquí.
 | ID | Requerimiento | Criterio | Estado | Evidencia / nota |
 |---|---|---|---|---|
 | RNF-T21 | Solo los datos necesarios | finalidad por campo | ✅ | Inventario de arriba; no se pide RUT, dirección ni pago |
-| RNF-T22 | Aislamiento entre cuentas | — | — | No hay cuentas de clientes todavía. Aplica con la etapa 2 |
+| RNF-T22 | Aislamiento entre cuentas | — | ✅ | No hay cuentas de clientes todavía. Aplica con la etapa 2 **2026-10-11:** Los pedidos son de cada local (RLS), probado en pedidos-web.test.mjs. ([33](33-tienda-150-actualizaciones.md)) |
 | RNF-T23 | Datos locales seguros | documentados, sin secretos | ✅ | Inventario; no se guarda nada secreto |
 | RNF-T24 | Borrar los datos locales | borra todo lo del alcance | ✅ | "Borrar mis datos" borra datos, pedidos **y carrito** |
 | RNF-T25 | Registros sin datos personales | sin tokens ni datos | ✅ | Los registros de la tienda anotan códigos de barras y estados HTTP, nada personal |
-| RNF-T26 | Política de conservación | plazos documentados | ◐ | Los de la tienda están en la página de privacidad; falta que el local fije el de los pedidos por WhatsApp |
+| RNF-T26 | Política de conservación | plazos documentados | ✅ | Los de la tienda están en la página de privacidad; falta que el local fije el de los pedidos por WhatsApp **2026-10-11:** Los datos de contacto de pedidos cerrados se borran a los 12 meses (worker mensual). ([33](33-tienda-150-actualizaciones.md)) |
 | RNF-T27 | WhatsApp con lo mínimo | solo lo necesario | ✅ | El mensaje lleva el pedido, el nombre y el celular, y solo si el cliente los guardó |
 | RNF-T28 | Procedimientos de derechos | acceso, rectificación, eliminación | ◐ | La página dice cómo pedirlo; falta el procedimiento interno del local |
 | RNF-T29 | Política de privacidad pública | enlazada desde la tienda | ✅ | `/tienda/privacidad`, en el pie y en "Mi cuenta". **Borrador:** el local debe revisarlo y completar RUT y correo |
@@ -208,15 +208,15 @@ entre clics. Scripts en el historial de la sesión; resultados aquí.
 
 | ID | Requerimiento | Criterio | Estado | Evidencia / nota |
 |---|---|---|---|---|
-| RNF-T41 | Disponibilidad ≥ 99,5 % | mensual | 🔍 | Sin monitor. Propuesta: un monitor gratuito (UptimeRobot) contra `/manifest.webmanifest` |
+| RNF-T41 | Disponibilidad ≥ 99,5 % | mensual | ◐ | Sin monitor. Propuesta: un monitor gratuito (UptimeRobot) contra `/manifest.webmanifest` **2026-10-11:** `/api/tienda/salud` listo. Falta crear el monitor (UptimeRobot) en una cuenta del local. ([33](33-tienda-150-actualizaciones.md)) |
 | RNF-T42 | Errores controlados | página propia sin trazas | ✅ | `tienda/error.tsx`, `tienda/not-found.tsx` |
 | RNF-T43 | Recuperar el catálogo | restauración probada | ⏳ | El respaldo diario del worker no está desplegado ([09 §3.4](09-despliegue.md)); Supabase Free no respalda. Las fotos (bucket `productos`) tampoco |
 | RNF-T44 | Política de respaldos | frecuencia, retención, responsable | ⏳ | Depende de T43 |
 | RNF-T45 | RPO y RTO | acordados y probados | 🔍 | Por acordar con el cliente |
 | RNF-T46 | Errores registrados | registros y alertas | ◐ | Errores del navegador al buzón `/api/errores`; del servidor, en el registro de Railway. Sin alertas |
 | RNF-T47 | Tolerar fallas externas | mensajes y reintentos | ✅ | Open Food Facts: tiempo límite, reintentos ante 429, y si no responde el alta sigue a mano |
-| RNF-T48 | Pedidos sin duplicar | idempotencia | — | No hay pedidos guardados todavía (etapa 2) |
-| RNF-T49 | Coherencia de precios | el servidor revalida | ◐ | El carrito se revalida al abrirlo y al volver a la pestaña. La validación al confirmar llega con el pedido |
+| RNF-T48 | Pedidos sin duplicar | idempotencia | ✅ | No hay pedidos guardados todavía (etapa 2) **2026-10-11:** El mismo `client_uuid` no crea dos pedidos. ([33](33-tienda-150-actualizaciones.md)) |
+| RNF-T49 | Coherencia de precios | el servidor revalida | ✅ | El carrito se revalida al abrirlo y al volver a la pestaña. La validación al confirmar llega con el pedido **2026-10-11:** La base calcula los precios del pedido al confirmarlo y la tienda avisa si cambió. ([33](33-tienda-150-actualizaciones.md)) |
 | RNF-T50 | Volver a la versión estable | documentado y probado | ◐ | Ver §3. Documentado; falta probarlo |
 
 ### F. Mantenibilidad y calidad

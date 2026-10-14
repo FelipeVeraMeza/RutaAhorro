@@ -77,12 +77,19 @@ function Recuperar() {
     e.preventDefault();
     setTrabajando(true);
     setError(null);
-    await supabase().auth.resetPasswordForEmail(email.trim(), {
+    const { error: e1 } = await supabase().auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/recuperar`,
-    });
-    // La respuesta es la misma exista o no el correo: decir "no existe"
-    // permite averiguar quién trabaja en el local.
+    }).catch(() => ({ error: { status: 0 } }));
     setTrabajando(false);
+    // Sin red o con el servicio caído decía "te enviamos el enlace" igual, y la
+    // persona esperaba un correo que nunca iba a llegar.
+    const estado = (e1 as { status?: number } | null)?.status ?? 200;
+    if (e1 && (estado === 0 || estado >= 500)) {
+      setError('No hay conexión con el servidor. Revisa internet y vuelve a intentar.');
+      return;
+    }
+    // Por lo demás la respuesta es la misma exista o no el correo: decir "no
+    // existe" permite averiguar quién trabaja en el local.
     setModo('enviado');
   }
 
@@ -132,6 +139,7 @@ function Recuperar() {
                 required autoFocus value={email} onChange={(e) => setEmail(e.target.value)}
                 className={campo} placeholder="tu@correo.cl" />
             </div>
+            {error && <p role="alert" className="text-sm text-[var(--color-alerta)] bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
             <button type="submit" disabled={trabajando}
               className="tap w-full py-3.5 rounded-xl bg-marca-500 text-white font-semibold disabled:opacity-50">
               {trabajando ? 'Enviando…' : 'Enviar enlace'}

@@ -32,9 +32,15 @@ export async function POST(request: Request) {
   if (rut && !isValidRut(rut)) {
     return respuestaError('RUT_INVALIDO', 'El RUT no es válido: revisa el dígito verificador', 400);
   }
+  // Se entra escribiendo 7 u 8 dígitos (core: rutParaEntrar). Un dígito de
+  // más que por azar cuadraba el verificador dejaba una cuenta que no podía
+  // entrar nunca.
+  if (rut && cleanRut(rut).length > 9) {
+    return respuestaError('RUT_INVALIDO', 'El RUT tiene un dígito de más', 400);
+  }
   const email = rut ? correoDeRut(cleanRut(rut).slice(0, -1)) : String(cuerpo.email ?? '').trim().toLowerCase();
 
-  if (!nombre || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !ROLES.includes(rol as typeof ROLES[number])) {
+  if (!nombre || nombre.length > 80 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !ROLES.includes(rol as typeof ROLES[number])) {
     return respuestaError('DATOS_INVALIDOS', 'Faltan datos o el rol no es válido', 400);
   }
   if (clave.length < MINIMO_CLAVE) {
@@ -62,9 +68,12 @@ export async function POST(request: Request) {
 
   if (error || !creado?.user) {
     const yaExiste = /already|registered|exists/i.test(error?.message ?? '');
-    return yaExiste
-      ? respuestaError('CORREO_YA_REGISTRADO', rut ? 'Ese RUT ya tiene un usuario' : 'Ese correo ya tiene un usuario', 409)
-      : respuestaError('ERROR_INTERNO', error?.message ?? 'No se pudo crear la cuenta', 500);
+    if (yaExiste) {
+      return respuestaError('CORREO_YA_REGISTRADO', rut ? 'Ese RUT ya tiene un usuario' : 'Ese correo ya tiene un usuario', 409);
+    }
+    // El mensaje de Supabase viene en inglés: va al registro, no a la pantalla.
+    console.error('[crear cuenta]', error?.message);
+    return respuestaError('ERROR_INTERNO', 'No se pudo crear la cuenta. Vuelve a intentarlo', 500);
   }
 
   // El perfil lo crea el disparador handle_new_user. Si no apareció, la cuenta

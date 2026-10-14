@@ -32,7 +32,7 @@ export function DemoBanner({ rolActual }: { rolActual: DemoRole }) {
     <div className="bg-amber-400 text-amber-950">
       <button
         onClick={() => setAbierto((v) => !v)}
-        className="w-full px-3 py-1.5 flex items-center justify-between gap-2 text-left"
+        className="w-full px-3 py-1.5 min-h-11 flex items-center justify-between gap-2 text-left"
         aria-expanded={abierto}
       >
         <span className="text-[11px] font-bold tracking-wide flex items-center gap-1.5 min-w-0">

@@ -16,6 +16,38 @@ export interface Novedad {
 
 export const NOVEDADES: Novedad[] = [
   {
+    version: '0.7.0',
+    fecha: '2026-10-11',
+    titulo: 'Pedidos en la tienda online',
+    cambios: [
+      { para: 'admin', texto: 'Configuración → Tienda online: enciende los pedidos en la tienda, anota el WhatsApp, el horario de atención, un aviso para los clientes y el pedido mínimo.' },
+      { para: 'vendedor', texto: 'Nueva pantalla "Pedidos web": los pedidos de la tienda llegan solos, con sonido. Prepáralos, avisa al cliente por WhatsApp con un toque y márcalos entregados al retirar.' },
+      { para: 'supervisor', texto: 'Los pedidos web se cancelan con un motivo, y el Inicio avisa cuando hay pedidos nuevos.' },
+      { para: 'bodega', texto: 'En la ficha de cada producto: "Se muestra en la tienda online", para ocultar lo que no quieres que se pida.' },
+      { para: 'todos', texto: 'La tienda busca en plural, sugiere "¿Quisiste decir…?", tiene favoritos, precio por kilo o litro, horario del local y una página de seguimiento para cada pedido.' },
+    ],
+  },
+  {
+    version: '0.6.4',
+    fecha: '2026-10-11',
+    titulo: 'Revisión antes del primer día: ventas sin conexión, caja y recepción',
+    cambios: [
+      { para: 'vendedor', texto: 'Una venta que se cortó a mitad de envío ya no se pierde: vuelve sola a la cola y se envía cuando hay señal. Sin señal ya no aparece como "rechazada".' },
+      { para: 'vendedor', texto: 'Al cerrar la caja avisa si quedan ventas de este celular sin enviar, con un botón para enviarlas antes de contar.' },
+      { para: 'vendedor', texto: 'Cobrar: Enter confirma el pago. Escape en una cantidad deja la que estaba. Un descuento nunca queda mayor que la línea.' },
+      { para: 'vendedor', texto: 'Si una venta sin conexión fue rechazada y ya la resolviste, "Ya la resolví: quitarla" la saca de la barra roja.' },
+      { para: 'bodega', texto: 'Recibir mercadería: "1.000" son mil (antes se leía 1). Escanear dos veces el mismo producto suma uno. Con costos "con IVA" el costo anterior aparece con IVA.' },
+      { para: 'bodega', texto: 'Ajustes y toma de inventario descuentan los lotes del que vence antes: Vencimientos ya no muestra lo que se botó.' },
+      { para: 'admin', texto: 'Usuarios: "Turnos" decide qué roles puede elegir cada persona al entrar (por ejemplo, vender o bodega).' },
+      { para: 'admin', texto: 'Reportes e impuestos ya no se cortan en 1.000 filas, y el celular baja todos los códigos de barra aunque sean más de 1.000.' },
+      { para: 'todos', texto: 'Al salir se borra del celular el catálogo y la venta a medio armar (las ventas por enviar se quedan hasta enviarse).' },
+      { para: 'bodega', texto: 'Recibir con factura pide la fecha de la factura: va al libro de compras del mes que dice el papel, no del día en que llegó.' },
+      { para: 'admin', texto: 'Productos: el catálogo exportado se puede cambiar en Excel y volver a importar tal cual; actualiza los productos en vez de duplicarlos.' },
+      { para: 'admin', texto: 'Ofertas y stock mínimo van por unidad: "1.000" son mil y no se aceptan medias unidades.' },
+      { para: 'todos', texto: 'Ingreso: la espera después de 5 intentos fallidos ya no se salta recargando la página. Si el servidor no responde lo dice, en vez de culpar a la contraseña.' },
+    ],
+  },
+  {
     version: '0.6.3',
     fecha: '2026-10-07',
     titulo: 'Colores nuevos, formularios más claros y escáner más seguro',

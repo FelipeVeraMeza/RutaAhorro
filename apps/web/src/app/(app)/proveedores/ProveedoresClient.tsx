@@ -43,12 +43,14 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
   const [motivo, setMotivo] = useState('');
   const [anulacionEnCurso, setAnulacionEnCurso] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  // Se traían las últimas 30 y no había cómo ver (ni anular) las anteriores.
+  const [limiteRecepciones, setLimiteRecepciones] = useState(30);
 
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
       const repo = repoProveedores();
-      const [ps, rs] = await Promise.all([repo.listar(), repo.recepciones()]);
+      const [ps, rs] = await Promise.all([repo.listar(), repo.recepciones(limiteRecepciones)]);
       setProveedores(ps);
       setRecepciones(rs);
     } catch (e) {
@@ -56,9 +58,23 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [limiteRecepciones]);
 
   useEffect(() => { void cargar(); }, [cargar]);
+
+  // El resultado de la recepción recién confirmada, una sola vez.
+  const [avisoRecepcion, setAvisoRecepcion] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
+  useEffect(() => {
+    try {
+      const crudo = sessionStorage.getItem('compras:aviso');
+      if (crudo) {
+        sessionStorage.removeItem('compras:aviso');
+        const a = JSON.parse(crudo) as { tipo?: string; texto?: string };
+        if (typeof a.texto === 'string') setAvisoRecepcion({ tipo: a.tipo === 'error' ? 'error' : 'ok', texto: a.texto.slice(0, 600) });
+      }
+    } catch { /* nada que mostrar */ }
+  }, []);
+  const avisoArriba = avisoRecepcion ?? avisoInicial;
 
   async function anular() {
     if (!anulando || motivo.trim() === '' || anulacionEnCurso) return;
@@ -123,10 +139,10 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
         ))}
       </div>
 
-      {avisoInicial && (
-        <p role={avisoInicial.tipo === 'error' ? 'alert' : 'status'}
-           className={`text-sm px-3 py-2 rounded-lg mb-3 ${avisoInicial.tipo === 'error' ? 'bg-red-50 text-red-900' : 'bg-marca-100 text-marca-900'}`}>
-          {avisoInicial.texto}
+      {avisoArriba && (
+        <p role={avisoArriba.tipo === 'error' ? 'alert' : 'status'}
+           className={`text-sm px-3 py-2 rounded-lg mb-3 ${avisoArriba.tipo === 'error' ? 'bg-red-50 text-red-900' : 'bg-marca-100 text-marca-900'}`}>
+          {avisoArriba.texto}
         </p>
       )}
 
@@ -239,6 +255,12 @@ export function ProveedoresClient({ puedeAnular, local = '', verCostos = false, 
             ))}
           </ul>
         )
+      )}
+      {!cargando && pestana === 'recepciones' && recepciones.length >= limiteRecepciones && (
+        <button onClick={() => setLimiteRecepciones((n) => n + 30)}
+          className="tap w-full mt-3 py-3 rounded-xl border border-[var(--borde)] text-sm font-medium">
+          Ver 30 más antiguas
+        </button>
       )}
 
       {(creando || editando) && (

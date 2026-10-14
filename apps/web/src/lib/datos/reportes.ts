@@ -393,12 +393,14 @@ const repoSupabase: RepositorioReportes = {
     // La vista trae una fila por producto y día. Se suma acá porque PostgREST
     // no agrupa: es el único caso del módulo donde el navegador hace cuentas,
     // y sobre un conjunto ya acotado por fecha.
-    const { data, error } = await supabase()
+    // Una fila por producto y día: 30 días de 200 productos son 6.000 filas, y
+    // la API corta en 1.000 sin avisar. El reporte quedaba corto.
+    const data = await todas((a, b) => supabase()
       .from('v_sales_by_product')
       .select('product_id, product_name, category_id, units_sold, revenue, cost, gross_profit')
       .gte('sale_date', desde)
-      .lte('sale_date', hasta);
-    if (error) throw error;
+      .lte('sale_date', hasta)
+      .order('sale_date').order('product_id').range(a, b));
 
     const porProducto = new Map<string, VentaPorProducto>();
     for (const f of data ?? []) {
@@ -422,12 +424,12 @@ const repoSupabase: RepositorioReportes = {
   },
 
   async ventasPorUsuario({ desde, hasta }) {
-    const { data, error } = await supabase()
+    const data = await todas((a, b) => supabase()
       .from('v_sales_by_user')
       .select('user_id, full_name, sales_count, total_amount')
       .gte('sale_date', desde)
-      .lte('sale_date', hasta);
-    if (error) throw error;
+      .lte('sale_date', hasta)
+      .order('sale_date').order('user_id').range(a, b));
 
     const porUsuario = new Map<string, VentaPorUsuario>();
     for (const f of data ?? []) {
@@ -442,12 +444,11 @@ const repoSupabase: RepositorioReportes = {
   },
 
   async inventarioValorizado() {
-    const { data, error } = await supabase()
+    const data = await todas((a, b) => supabase()
       .from('v_inventory_valued')
       .select('product_id, name, category_name, quantity, avg_cost, cost_value, sale_value')
       .gt('quantity', 0)
-      .order('cost_value', { ascending: false });
-    if (error) throw error;
+      .order('cost_value', { ascending: false }).order('product_id').range(a, b));
     return (data ?? []).map((p) => ({
       productoId: p.product_id as string,
       nombre: (p.name as string) ?? 'Producto',
@@ -460,13 +461,12 @@ const repoSupabase: RepositorioReportes = {
   },
 
   async sinMovimiento(diasMinimos) {
-    const { data, error } = await supabase()
+    const data = await todas((a, b) => supabase()
       .from('v_stale_products')
       .select('product_id, name, quantity, cost_value, days_idle')
       .gte('days_idle', diasMinimos)
       .gt('quantity', 0)
-      .order('cost_value', { ascending: false });
-    if (error) throw error;
+      .order('cost_value', { ascending: false }).order('product_id').range(a, b));
     return (data ?? []).map((p) => ({
       productoId: p.product_id as string,
       nombre: (p.name as string) ?? 'Producto',
@@ -477,13 +477,13 @@ const repoSupabase: RepositorioReportes = {
   },
 
   async ajustes({ desde, hasta }) {
-    const { data, error } = await supabase()
+    // La toma inicial del catálogo completo son cientos de filas en un día.
+    const data = await todas((a, b) => supabase()
       .from('v_adjustments')
       .select('adj_date, movement_type, product_name, quantity, reason, value_impact, created_by_name')
       .gte('adj_date', desde)
       .lte('adj_date', hasta)
-      .order('adj_date', { ascending: false });
-    if (error) throw error;
+      .order('adj_date', { ascending: false }).order('product_name').range(a, b));
     return (data ?? []).map((a) => ({
       fecha: a.adj_date as string,
       tipo: a.movement_type as string,

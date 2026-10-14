@@ -33,7 +33,7 @@ export function AgregarAlCarrito({ producto, grande = false }: { producto: Produ
           {enCarrito}<span className={grande ? '' : 'sr-only sm:not-sr-only'}> en el carrito</span>
         </span>
         <button type="button" className={`btn btn-primario ${alto} px-0 w-11`} aria-label="Agregar uno"
-          onClick={() => cambiarCantidad(producto.id, enCarrito + 1)}>+</button>
+          disabled={enCarrito >= 99} onClick={() => cambiarCantidad(producto.id, enCarrito + 1)}>+</button>
       </div>
     );
   }

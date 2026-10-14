@@ -4,6 +4,7 @@ import type { ClienteConPrecios } from '@rutaahorro/core';
 import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import { getMeta, setMeta } from '../offline/db';
+import { todasLasFilas } from '../supabase/todas';
 
 /**
  * Clientes (0022, RQ-20, RQ-21): para la factura y el fiado.
@@ -46,13 +47,16 @@ const aDatos = (d: DatosCliente) => ({
 });
 
 async function leerDeBase(soloActivos: boolean): Promise<Cliente[]> {
-  let q = supabase().from('clientes')
-    .select('id, rut, nombre, giro, direccion, comuna, telefono, email, descuento_pct, notas, is_active')
-    .order('nombre');
-  if (soloActivos) q = q.eq('is_active', true);
-  const { data, error } = await q;
-  if (error) throw error;
-  return (data ?? []).map((r) => ({
+  // Cada factura deja a su receptor como cliente: pasar de 1.000 es cosa de
+  // meses, y la API corta ahí sin avisar.
+  const data = await todasLasFilas((a, b) => {
+    let q = supabase().from('clientes')
+      .select('id, rut, nombre, giro, direccion, comuna, telefono, email, descuento_pct, notas, is_active')
+      .order('nombre').order('id');
+    if (soloActivos) q = q.eq('is_active', true);
+    return q.range(a, b);
+  });
+  return data.map((r) => ({
     id: r.id as string,
     rut: (r.rut as string) ?? null,
     nombre: r.nombre as string,

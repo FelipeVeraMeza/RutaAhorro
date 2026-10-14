@@ -159,6 +159,10 @@ function RegistrarRecibida({ onCerrar, onHecho }: { onCerrar: () => void; onHech
     if (!(vFolio > 0)) { setError('Escribe el folio del documento'); return; }
     for (const v of [vNeto, vExento, vIva, vOtros]) if (!v.valido) { setError(v.error); return; }
     if (total <= 0) { setError('El documento no puede sumar $0'); return; }
+    // `max` y `min` del calendario no frenan lo escrito a mano.
+    if (!fecha || fecha > hoy) { setError('Revisa la fecha de emisión: no puede quedar vacía ni ser futura'); return; }
+    // Como en Por pagar: un vencimiento antes de la emisión es un error de tipeo.
+    if (vence && tipo !== 61 && vence < fecha) { setError('El vencimiento no puede ser antes de la fecha de emisión'); return; }
     setGuardando(true);
     try {
       const r = await repoFacturacion().registrarRecibida({

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { exigirRol } from '@/lib/permisos';
-import { formatCLP, textoVencimiento, cantidadConUnidad } from '@rutaahorro/core';
+import { formatCLP, formatCantidad, textoVencimiento, cantidadConUnidad } from '@rutaahorro/core';
 import { DEMO_ACTIVO } from '@/lib/demo';
 import { DEMO_BAJO_STOCK, DEMO_LOTES } from '@/lib/demo/data';
 import { diaLocal } from '@rutaahorro/core';
@@ -223,7 +223,7 @@ export default async function DashboardPage() {
                 <span className="truncate">{p.name}</span>
                 <span className="num whitespace-nowrap text-[var(--color-aviso)]">
                   {cantidadConUnidad(Number(p.quantity), p.unit)}
-                  {' / '}{p.min_stock}
+                  {' / mín. '}{formatCantidad(Number(p.min_stock))}
                 </span>
               </li>
             ))}

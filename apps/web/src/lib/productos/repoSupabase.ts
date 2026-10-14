@@ -7,6 +7,7 @@ import type {
   FiltroProductos, Producto, ProductoEditable, ProductoNuevo,
   RepositorioProductos, ResultadoLote,
 } from './tipos';
+import { perfilActual } from '../supabase/perfil';
 
 /**
  * Repositorio respaldado por Supabase. Es el que corre en producción.
@@ -72,14 +73,8 @@ function aProducto(f: FilaBD): Producto {
 }
 
 async function tenantYTienda() {
-  const client = supabase();
-  const { data: { user } } = await client.auth.getUser();
-  const { data } = await client
-    .from('profiles')
-    .select('tenant_id, store_id')
-    .eq('id', user!.id)
-    .single();
-  return { tenantId: data!.tenant_id as string, storeId: data!.store_id as string | null };
+  const { tenantId, storeId } = await perfilActual();
+  return { tenantId, storeId };
 }
 
 export const repoSupabase: RepositorioProductos = {

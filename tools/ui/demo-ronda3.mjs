@@ -257,7 +257,8 @@ await p.getByRole('button', { name: /Nueva cuenta|Crear cuenta/ }).first().click
 await p.waitForTimeout(300);
 const dlg = p.getByRole('dialog');
 await dlg.getByLabel(/Nombre/).first().fill('Ana QA');
-await dlg.getByLabel(/Correo/).first().fill(`ana${Date.now()}@demo.cl`);
+// Desde el 2026-10-07 las cuentas nuevas entran con RUT.
+await dlg.getByLabel(/^RUT/).first().fill('22.222.222-2');
 await dlg.getByRole('button', { name: /Crear/ }).last().click();
 await p.waitForTimeout(800);
 await p.keyboard.press('Escape');

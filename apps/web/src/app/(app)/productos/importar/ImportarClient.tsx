@@ -76,7 +76,7 @@ export function ImportarClient() {
         }
         setAnalisis(parsearFilas(filas));
       } else {
-        setAnalisis(parsearProductos(new TextDecoder('utf-8').decode(datos)));
+        setAnalisis(parsearProductos(textoDeCsv(datos)));
       }
       setPaso('revisar');
     } catch (e) {
@@ -417,3 +417,16 @@ const DESCRIPCIONES: Record<string, string> = {
   perecible: 'si o no; si es sí, se controla por lote y vencimiento',
   dias_alerta: 'opcional: cuántos días antes avisar (30 si va vacío)',
 };
+
+/**
+ * El texto de un CSV. Excel en Windows lo guarda en Windows-1252 si no se
+ * elige "CSV UTF-8": leído como UTF-8, "Categoría" salía "Categor�a", la
+ * columna no se reconocía y los nombres con ñ quedaban rotos en el catálogo.
+ */
+function textoDeCsv(datos: Uint8Array): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(datos);
+  } catch {
+    return new TextDecoder('windows-1252').decode(datos);
+  }
+}

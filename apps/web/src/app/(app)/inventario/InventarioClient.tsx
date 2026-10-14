@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   formatCLP, formatCantidad, diaLocal, validarCantidadStock, toUserMessage, textoVencimiento, cantidadConUnidad,
 } from '@rutaahorro/core';
@@ -44,35 +44,64 @@ export function InventarioClient({
   const [exito, setExito] = useState<string | null>(null);
 
   const [lotes, setLotes] = useState<Lote[]>([]);
+  // El historial traía los últimos 80 y no había cómo ver más atrás.
+  const [limiteKardex, setLimiteKardex] = useState(80);
+  const [cargandoKardex, setCargandoKardex] = useState(false);
+  async function verMasKardex() {
+    const n = limiteKardex + 80;
+    setCargandoKardex(true);
+    try {
+      setMovimientos(await repoInventario().kardex(null, n));
+      setLimiteKardex(n);
+    } catch (e) {
+      setError(toUserMessage(e));
+    } finally {
+      setCargandoKardex(false);
+    }
+  }
   const [dandoDeBaja, setDandoDeBaja] = useState<Lote | null>(null);
   const [motivoBaja, setMotivoBaja] = useState('');
   const [bajaEnCurso, setBajaEnCurso] = useState(false);
 
   const [ajustando, setAjustando] = useState<Producto | null>(null);
   const [conteo, setConteo] = useState<Record<string, string>>({});
+  // El producto de cada conteo, guardado al anotarlo: con el buscador filtrando
+  // otra cosa, la revisión mostraba "Producto 0 → 12" (sin nombre ni stock).
+  const [contados, setContados] = useState<Record<string, Producto>>({});
   const [aplicandoToma, setAplicandoToma] = useState(false);
   const [revisandoToma, setRevisandoToma] = useState(false);
 
-  const cargar = useCallback(async () => {
+  // Lo que se pidió último: una respuesta lenta de una búsqueda anterior no
+  // pisa la lista de la búsqueda nueva.
+  const pedido = useRef(0);
+  const cargar = useCallback(async (soloProductos = false) => {
+    const n = ++pedido.current;
     setCargando(true);
     try {
+      // Escribir en el buscador recargaba también el kardex y los lotes: tres
+      // consultas por cada letra.
       const [ps, ms, ls] = await Promise.all([
         repoProductos().listar({ busqueda }, verCostos),
-        repoInventario().kardex(null, 80),
-        repoInventario().lotes(),
+        soloProductos ? null : repoInventario().kardex(null, limiteKardex),
+        soloProductos ? null : repoInventario().lotes(),
       ]);
+      if (n !== pedido.current) return;
       setProductos(ps);
-      setMovimientos(ms);
-      setLotes(ls);
+      if (ms) setMovimientos(ms);
+      if (ls) setLotes(ls);
     } catch (e) {
-      setError(toUserMessage(e));
+      if (n === pedido.current) setError(toUserMessage(e));
     } finally {
-      setCargando(false);
+      if (n === pedido.current) setCargando(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- el límite lo maneja "Ver más"
   }, [busqueda, verCostos]);
 
+  const primeraCarga = useRef(true);
   useEffect(() => {
-    const t = setTimeout(() => void cargar(), 200);
+    const soloProductos = !primeraCarga.current;
+    primeraCarga.current = false;
+    const t = setTimeout(() => void cargar(soloProductos), 200);
     return () => clearTimeout(t);
   }, [cargar]);
 
@@ -103,7 +132,7 @@ export function InventarioClient({
    */
   const aplicables = Object.entries(conteo)
     .map(([productoId, texto]) => {
-      const producto = productos.find((p) => p.id === productoId);
+      const producto = productos.find((p) => p.id === productoId) ?? contados[productoId];
       const v = validarCantidadStock(texto, producto?.unidad, { permiteVacio: true });
       return { productoId, texto, v, producto };
     })
@@ -127,6 +156,7 @@ export function InventarioClient({
           : `${r.diferencias} ${r.diferencias === 1 ? 'producto ajustado' : 'productos ajustados'} · ${formatCLP(Math.abs(r.valorDiferencia))} de diferencia`,
       );
       setConteo({});
+      setContados({});
       setVista('stock');
       await cargar();
       setTimeout(() => setExito(null), 8000);
@@ -183,11 +213,11 @@ export function InventarioClient({
           {verCostos && (
             <div className="grid grid-cols-2 gap-2 mb-3">
               <div className="tarjeta p-3">
-                <p className="text-[11px] text-[var(--texto-suave)]">Valor al costo</p>
+                <p className="text-[11px] text-[var(--texto-suave)]">Valor al costo{busqueda.trim() ? ' (de la búsqueda)' : ''}</p>
                 <p className="num text-lg font-bold">{formatCLP(valorTotal)}</p>
               </div>
               <div className="tarjeta p-3">
-                <p className="text-[11px] text-[var(--texto-suave)]">Bajo mínimo</p>
+                <p className="text-[11px] text-[var(--texto-suave)]">Bajo mínimo{busqueda.trim() ? ' (de la búsqueda)' : ''}</p>
                 <p className={`num text-lg font-bold ${bajoMinimo > 0 ? 'text-[var(--color-aviso)]' : ''}`}>
                   {bajoMinimo}
                 </p>
@@ -221,7 +251,9 @@ export function InventarioClient({
                         : 'text-[var(--texto-suave)]'
                       }`}>
                         {agotado ? '🔴 Agotado' : bajo ? '🟠 Bajo' : '🟢 Normal'}
-                        {' · '}En bodega {formatCantidad(p.stock)}
+                        {' · '}{p.stock < 0
+                          ? `${formatCantidad(-p.stock)} vendidas sin stock registrado`
+                          : `En bodega ${formatCantidad(p.stock)}`}
                         {p.stockMinimo > 0 && ` (mín. ${formatCantidad(p.stockMinimo)})`}
                         {verCostos && typeof p.costoPromedio === 'number' &&
                           ` · ${formatCLP(Math.round(p.stock * p.costoPromedio))}`}
@@ -363,12 +395,18 @@ export function InventarioClient({
                       }`}>
                         {m.cantidad > 0 ? '+' : ''}{formatCantidad(m.cantidad)}
                       </p>
-                      <p className="text-[11px] text-[var(--texto-suave)] num">saldo {m.saldo}</p>
+                      <p className="text-[11px] text-[var(--texto-suave)] num">saldo {formatCantidad(m.saldo)}</p>
                     </div>
                   </div>
                 </li>
               ))}
             </ul>
+          )}
+          {movimientos.length >= limiteKardex && (
+            <button onClick={() => void verMasKardex()} disabled={cargandoKardex}
+              className="tap w-full mt-3 py-3 rounded-xl border border-[var(--borde)] text-sm font-medium disabled:opacity-50">
+              {cargandoKardex ? 'Cargando…' : 'Ver 80 movimientos más antiguos'}
+            </button>
           )}
         </>
       )}
@@ -408,6 +446,7 @@ export function InventarioClient({
           <input
             type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Filtrar productos a contar…"
+            aria-label="Filtrar productos a contar"
             className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] bg-white mb-3"
           />
 
@@ -425,7 +464,7 @@ export function InventarioClient({
                       Sistema: {formatCantidad(sistema)}
                       {dif !== null && dif !== 0 && (
                         <span className={dif < 0 ? 'text-[var(--color-alerta)]' : 'text-[var(--color-aviso)]'}>
-                          {' · '}{dif > 0 ? '+' : ''}{dif}
+                          {' · '}{dif > 0 ? '+' : ''}{formatCantidad(dif)}
                         </span>
                       )}
                       {dif === 0 && <span className="text-marca-700"> · cuadra</span>}
@@ -436,7 +475,10 @@ export function InventarioClient({
                   </div>
                   <input
                     inputMode="numeric" value={valor}
-                    onChange={(e) => setConteo((c) => ({ ...c, [p.id]: e.target.value }))}
+                    onChange={(e) => {
+                      setConteo((c) => ({ ...c, [p.id]: e.target.value }));
+                      setContados((c) => ({ ...c, [p.id]: p }));
+                    }}
                     placeholder="—"
                     className="tap w-20 px-2 py-2 rounded-lg border border-[var(--borde)] num text-right shrink-0"
                     aria-label={`Conteo de ${p.nombre}`}
@@ -738,13 +780,13 @@ function RevisionToma({
               <li key={i} className="px-5 py-2.5 flex items-center justify-between gap-3">
                 <span className="text-sm min-w-0 truncate">{f.nombre}</span>
                 <span className="num text-xs whitespace-nowrap shrink-0">
-                  <span className="text-[var(--texto-suave)]">{f.sistema}</span>
+                  <span className="text-[var(--texto-suave)]">{formatCantidad(f.sistema)}</span>
                   {' → '}
-                  <span className="font-semibold">{f.contado}</span>
+                  <span className="font-semibold">{formatCantidad(f.contado)}</span>
                   {' '}{f.unidad}
                   {dif !== 0 && (
                     <span className={dif < 0 ? 'text-[var(--color-alerta)]' : 'text-[var(--color-aviso)]'}>
-                      {' '}({dif > 0 ? '+' : ''}{dif})
+                      {' '}({dif > 0 ? '+' : ''}{formatCantidad(dif)})
                     </span>
                   )}
                 </span>

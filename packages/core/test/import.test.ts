@@ -396,3 +396,19 @@ describe('celdas con solo espacios', () => {
     expect(r.filas[0].sku).toBeNull();
   });
 });
+
+describe('parsearFilas: el catálogo exportado se puede volver a importar (revisión 2026-10-11)', () => {
+  it('reconoce las columnas de la exportación de Productos', () => {
+    // Exportar, cambiar precios en Excel e importar: con otros nombres de
+    // columna no se reconocían el SKU ni los códigos, y cada fila creaba un
+    // producto nuevo (duplicado) en vez de actualizar el que ya estaba.
+    const r = parsearFilas([
+      ['nombre', 'codigo_interno', 'codigos_de_barra', 'categoria', 'precio_venta', 'costo_promedio', 'stock_total', 'stock_minimo', 'perecible', 'activo'],
+      ['Arroz 1 kg', 'ARR-1', '7801234567894 7801111111116', 'Abarrotes', '1290', '900', '12', '3', 'no', 'si'],
+    ]);
+    expect(r.errores).toEqual([]);
+    expect(r.filas[0].sku).toBe('ARR-1');
+    expect(r.filas[0].codigo_barras).toBe('7801234567894');
+    expect(r.filas[0].costo).toBe(900);
+  });
+});

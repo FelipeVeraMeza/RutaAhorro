@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatCLP, formatPct, toUserMessage, validarMonto, validarCantidad, type CartLine } from '@rutaahorro/core';
+import { formatCLP, formatCantidad, formatPct, toUserMessage, validarMonto, validarCantidad, type CartLine } from '@rutaahorro/core';
 import { Modal } from '@/components/Modal';
 import { Campo } from '@/components/Campo';
 import { repoAutorizaciones, type Autorizador } from '@/lib/datos/autorizaciones';
@@ -37,7 +37,7 @@ export function DescuentoLinea({ linea, onAplicar, onCerrar }: {
     <Modal titulo={`Descuento · ${linea.name}`} encabezado="visible" onCerrar={onCerrar}>
       <div className="p-5 space-y-3">
         <p className="text-sm text-[var(--texto-suave)] num">
-          {linea.quantity} × {formatCLP(linea.unitPrice)} = {formatCLP(bruto)}
+          {formatCantidad(linea.quantity)} × {formatCLP(linea.unitPrice)} = {formatCLP(bruto)}
         </p>
         <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Descuento en">
           {([['pesos', 'En pesos ($)'], ['pct', 'En porcentaje (%)']] as const).map(([id, t]) => (

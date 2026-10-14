@@ -182,7 +182,9 @@ export async function clearLocalData(): Promise<void> {
   await Promise.all([
     database.products.clear(),
     database.barcodes.clear(),
-    database.meta.clear(),
+    // Lo de la maqueta (demo:*) no: son sus cuentas, ventas y caja de ejemplo,
+    // y salir para entrar con otra cuenta de prueba las borraba.
+    database.meta.filter((m) => !m.key.startsWith('demo:')).delete(),
   ]);
   // La cola de ventas NO se borra: son ventas reales que aún no llegan al
   // servidor. Perderlas sería perder plata del local.

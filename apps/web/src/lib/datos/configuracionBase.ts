@@ -1,3 +1,4 @@
+import type { HorarioSemana } from '@rutaahorro/core';
 import type { Rol } from '../navegacion';
 
 /**
@@ -43,6 +44,14 @@ export interface ConfiguracionLocal {
    * migración 0029: antes de aplicarla, cobrar redondeado sería rechazado.
    */
   redondeoEfectivo: boolean;
+  /** docs/33 · La tienda online (0041): pedidos, WhatsApp, horario, aviso y pedido mínimo. */
+  tienda: {
+    pedidos: boolean;
+    whatsapp: string;
+    horario: HorarioSemana;
+    mensaje: string;
+    pedidoMinimo: number;
+  };
 }
 
 /**
@@ -66,6 +75,7 @@ export const CONFIGURACION_POR_OMISION: ConfiguracionLocal = {
   ofertasActivas: true,
   comprobantePie: '',
   redondeoEfectivo: false,
+  tienda: { pedidos: false, whatsapp: '', horario: {}, mensaje: '', pedidoMinimo: 0 },
 };
 
 interface SettingsBD {
@@ -81,6 +91,11 @@ interface SettingsBD {
   ofertas_activas?: boolean;
   comprobante_pie?: string;
   redondeo_efectivo?: boolean;
+  tienda_pedidos?: boolean;
+  tienda_whatsapp?: string;
+  tienda_horario?: HorarioSemana;
+  tienda_mensaje?: string;
+  tienda_pedido_minimo?: number | string;
 }
 
 function numero(valor: unknown, porOmision: number): number {
@@ -120,5 +135,12 @@ export function desdeSettings(settings: unknown): ConfiguracionLocal {
     ofertasActivas: s.ofertas_activas !== false,
     comprobantePie: typeof s.comprobante_pie === 'string' ? s.comprobante_pie.slice(0, 160) : '',
     redondeoEfectivo: s.redondeo_efectivo === true,
+    tienda: {
+      pedidos: s.tienda_pedidos === true,
+      whatsapp: typeof s.tienda_whatsapp === 'string' ? s.tienda_whatsapp : '',
+      horario: s.tienda_horario && typeof s.tienda_horario === 'object' ? s.tienda_horario : {},
+      mensaje: typeof s.tienda_mensaje === 'string' ? s.tienda_mensaje : '',
+      pedidoMinimo: numero(s.tienda_pedido_minimo, 0),
+    },
   };
 }

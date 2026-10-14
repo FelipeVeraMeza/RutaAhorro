@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   formatCLP, toUserMessage, validarMonto, validarCantidad, etiquetaAdicional,
-  IMPUESTOS_ADICIONALES_CHILE, coincide, diaLocal
+  IMPUESTOS_ADICIONALES_CHILE, coincide, diaLocal, isValidRut, formatRut,
 } from '@rutaahorro/core';
 import { repoPrecios, type ImpuestoAdicional } from '@/lib/datos/precios';
 import {
@@ -17,6 +17,7 @@ import { leerEmisor, guardarEmisor, type Emisor } from '@/lib/datos/emisor';
 import { Encabezado } from '@/components/Encabezado';
 import { Icono, type NombreIcono } from '@/components/Icono';
 import { armarRespaldo, descargarJson } from '@/lib/datos/respaldo';
+import { TiendaOnline } from './TiendaOnline';
 
 /**
  * Configuración del local (T-18) e impuestos adicionales (0018).
@@ -26,9 +27,10 @@ import { armarRespaldo, descargarJson } from '@/lib/datos/respaldo';
  * tasa se cambia en un solo lugar y vale para todos los productos que tienen
  * ese impuesto, y se asigna de a muchos productos a la vez.
  */
-type IdPestana = 'caja' | 'impuestos' | 'documentos' | 'respaldo';
+type IdPestana = 'caja' | 'tienda' | 'impuestos' | 'documentos' | 'respaldo';
 const PESTANAS: Array<{ id: IdPestana; titulo: string; icono: NombreIcono; ayuda: string }> = [
   { id: 'caja', titulo: 'Caja y ventas', icono: 'caja', ayuda: 'Efectivo inicial, avisos, ofertas y el texto del comprobante.' },
+  { id: 'tienda', titulo: 'Tienda online', icono: 'compra', ayuda: 'Pedidos en la tienda, WhatsApp, horario de atención y aviso.' },
   { id: 'impuestos', titulo: 'Impuestos', icono: 'productos', ayuda: 'Impuestos de bebidas y alcoholes (IABA, ILA), además del IVA.' },
   { id: 'documentos', titulo: 'Boletas y facturas', icono: 'facturacion', ayuda: 'Los datos del local que salen en cada documento.' },
   { id: 'respaldo', titulo: 'Respaldo', icono: 'configuracion', ayuda: 'Descarga una copia de todo lo del local.' },
@@ -63,7 +65,8 @@ export function ConfiguracionClient() {
   function elegir(id: IdPestana) {
     setPestana(id);
     setAviso(null);
-    history.replaceState(null, '', `#${{id}}`.replace('{{id}}', id));
+    // Antes quedaba "#[object Object]": el enlace directo a una pestaña no servía.
+    history.replaceState(null, '', `#${id}`);
   }
 
   const faltantes = IMPUESTOS_ADICIONALES_CHILE.filter(
@@ -107,6 +110,14 @@ export function ConfiguracionClient() {
 
       {pestana === 'caja' && config && (
         <OperacionDelLocal
+          config={config}
+          onGuardado={(c, texto) => { setConfig(c); setAviso({ tipo: 'ok', texto }); }}
+          onError={(texto) => setAviso({ tipo: 'error', texto })}
+        />
+      )}
+
+      {pestana === 'tienda' && config && (
+        <TiendaOnline
           config={config}
           onGuardado={(c, texto) => { setConfig(c); setAviso({ tipo: 'ok', texto }); }}
           onError={(texto) => setAviso({ tipo: 'error', texto })}
@@ -224,6 +235,8 @@ function EditarImpuesto({ inicial, onCerrar, onGuardado }: {
     if (!nombre.trim()) { setError('El impuesto necesita un nombre'); return; }
     if (!vTasa.valido || vTasa.valor <= 0) { setError('La tasa tiene que ser un porcentaje mayor que 0'); return; }
     if (!vCodigo.valido) { setError(vCodigo.error); return; }
+    // "27,1" se redondeaba a 27 sin avisar: el código que va en la boleta es entero.
+    if (codigo.trim() && !Number.isInteger(vCodigo.valor)) { setError('El código SII es un número entero (ej.: 27 o 271)'); return; }
     setGuardando(true);
     try {
       await repoPrecios().guardarImpuesto({
@@ -536,9 +549,11 @@ function DatosEmisor({ onGuardado, onError }: {
   );
 
   async function guardar() {
+    // Un RUT mal escrito iba a cada boleta y factura sin aviso.
+    if (e.rut.trim() && !isValidRut(e.rut)) { onError('El RUT del emisor no es válido: revisa el dígito verificador'); return; }
     setGuardando(true);
     try {
-      await guardarEmisor(e);
+      await guardarEmisor({ ...e, rut: e.rut.trim() ? formatRut(e.rut) : e.rut });
       onGuardado('Datos del emisor guardados: van en las boletas y facturas desde ahora');
     } catch (err) {
       onError(toUserMessage(err));
@@ -610,8 +625,8 @@ function MisDatos() {
       <h2 id="t-mis-datos" className="font-semibold">Mis datos</h2>
       <p className="text-sm text-[var(--texto-suave)]">
         Descarga todo lo del local (productos, ventas, caja, inventario, clientes y proveedores) en un
-        archivo JSON. Guárdalo como respaldo propio: se abre sin este sistema. Los respaldos diarios
-        de la base siguen corriendo aparte.
+        archivo JSON. Guárdalo como respaldo propio: se abre sin este sistema. Mientras el respaldo
+        automático diario no esté activado en el servidor, descárgalo al cerrar cada día.
       </p>
       <button onClick={() => void descargar()} disabled={progreso !== null} className="btn btn-secundario w-full sm:w-auto">
         <Icono nombre="descargar" tamano={18} /> {progreso ?? 'Descargar mis datos'}

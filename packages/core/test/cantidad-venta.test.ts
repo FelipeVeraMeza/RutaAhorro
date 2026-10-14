@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validarCantidadVenta, admiteDecimales, formatCantidad } from '../src/money.js';
+import { validarCantidadVenta, admiteDecimales, formatCantidad, validarCantidadStock, validarCantidad } from '../src/money.js';
 
 // Hallazgo 4 del flujo completo (2026-09-28): para 20 panes había que tocar
 // "+" 19 veces, y un producto por kilo no admitía 0,35.
@@ -62,5 +62,26 @@ describe('formatCantidad', () => {
     expect(formatCantidad(1.5)).toBe('1,5');
     expect(formatCantidad(1234.125)).toBe('1234,125');
     expect(formatCantidad(Number.NaN)).toBe('0');
+  });
+});
+
+describe('cantidades como se escriben en Chile (revisión 2026-10-11)', () => {
+  it('"1.000" de algo que se cuenta entero son mil, no uno', () => {
+    expect(validarCantidadVenta('1.000', 'unidad').valor).toBe(1000);
+    expect(validarCantidadStock('1.000', 'unidad').valor).toBe(1000);
+    expect(validarCantidadStock('12.500', 'unidad').valor).toBe(12500);
+  });
+  it('lo que se pesa sigue con punto o coma decimal', () => {
+    expect(validarCantidadVenta('1.5', 'litro').valor).toBe(1.5);
+    expect(validarCantidadVenta('0,350', 'kg').valor).toBe(0.35);
+  });
+  it('"1e2" o "0x10" no son cantidades', () => {
+    expect(validarCantidadStock('1e2', 'unidad').valido).toBe(false);
+    expect(validarCantidadVenta('0x10', 'unidad').valido).toBe(false);
+    expect(validarCantidad('1e3').valido).toBe(false);
+  });
+  it('"2.0" sigue siendo 2 y "1.5" de algo entero sigue rechazado', () => {
+    expect(validarCantidadStock('2.0', 'unidad').valor).toBe(2);
+    expect(validarCantidadVenta('1.5', 'unidad').valido).toBe(false);
   });
 });

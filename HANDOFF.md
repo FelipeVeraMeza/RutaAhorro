@@ -4,9 +4,78 @@
 > Está escrito para que alguien que no vio nada del proyecto pueda continuarlo
 > sin volver a preguntar lo básico.
 >
-> **Corte: 2026-10-01.**
+> **Corte: 2026-10-11.**
 
 ---
+
+## CÓMO SEGUIR — corte 2026-10-11 (tienda: 150 actualizaciones, pedidos web), léelo antes que todo
+
+**Rama `ccr-2f68b3d1-6i818v`, no `main`.** Detalle en
+[docs/33](docs/33-tienda-150-actualizaciones.md): 150 actualizaciones de la
+tienda (81 RF, 69 RNF), 30 RF y 9 RNF nuevos (RF-T61 a T90, RNF-T61 a T69) y
+docs/31 al día (funcionales 55 ✅ / 4 ◐ / 1 ⏳).
+
+**Lo grande: pedidos en la tienda (0041).** El cliente confirma el pedido en
+el carrito (retiro en el local, paga al retirar), queda en `pedidos_web` con
+número y código, lo sigue en `/tienda/pedido/<código>`, y el personal lo
+mueve en `/pedidos-web` (admin, supervisor, vendedor). Precios los pone la
+base (`fn_crear_pedido_web`, solo llave de servicio). Apagado por omisión:
+se enciende en Configuración → Tienda online (también WhatsApp, horario,
+aviso, mínimo). `products.publicado_tienda` + `fn_publicar_en_tienda` para
+ocultar productos. Worker: `pedidos-web-privacidad` (mensual) anonimiza a
+los 12 meses; el resumen diario trae los pedidos.
+
+**Antes de mezclar a `main`:** aplicar 0039 (factura en la caja, de `main`, si no está), 0040 y 0041, en ese orden, con
+`npm run db:instalar` y `npm run db:aplicar -- --aplicar`; después deben
+salir 2 funciones expuestas más (`fn_cambiar_estado_pedido_web`,
+`fn_publicar_en_tienda`, ya en `tools/rpc-permitidas.mjs`). El código
+funciona sin 0041 (sin "Hacer pedido"). Ver la lista completa en docs/33.
+
+**Pruebas nuevas:** `tools/pg-test/pedidos-web.test.mjs` (9),
+`packages/core/test/tienda-150.test.ts` (21), `tools/ui/tienda-150.mjs`
+(65 comprobaciones; necesita la maqueta recién levantada: los pedidos de la
+maqueta viven en la memoria del servidor).
+
+## CÓMO SEGUIR — corte 2026-10-11 (revisión de 150 errores y 150 mejoras), léelo antes que todo
+
+**Todo está en la rama `ccr-2f68b3d1-6i818v`, no en `main`** (Railway publica
+`main`). El detalle está en [docs/32](docs/32-revision-150-errores-150-mejoras.md):
+150 errores (147 corregidos, 3 pendientes) y 150 mejoras (25 hechas, 125
+propuestas con prioridad).
+
+**Antes de mezclar a `main`:**
+1. **Aplicar 0040** en Supabase: `npm run db:instalar` y
+   `npm run db:aplicar -- --aplicar` (diagnostica primero y aplica lo que
+   falte). 0040 no crea funciones expuestas nuevas: todas son
+   `create or replace` con la misma firma, más `fn_venta_sin_futuro` (disparador,
+   sin permiso para nadie). Puede ir antes que el código.
+2. **`WORKER_SHARED_SECRET` en el worker de Railway.** Sin ella, desde ahora el
+   worker rechaza `POST /jobs/...` en producción (antes los aceptaba de
+   cualquiera). El cron no depende de esto.
+
+**Qué cambió en la base (0040):** caja con cuenta activa, montos en rango y
+bodega sin caja; ajuste y toma enteros, no negativos, solo productos del local
+y descontando lotes (FEFO); venta con hora futura queda con la del servidor;
+vencimientos con el día del local (`v_expiring_lots`, `fn_confirm_receipt`);
+`fn_void_sale`, `fn_void_receipt` y `fn_update_product` exigen cuenta activa.
+Pruebas: `tools/pg-test/revision-150.test.mjs` (7, vistas fallar antes).
+
+**Pendiente (con motivo en docs/32):** T-45 (vendedor lee costos: rehacer RLS
+con calma), ajuste o toma HACIA ARRIBA de un perecible queda sin lote (falta
+pedir la fecha), y el error #418 intermitente del Inicio del supervisor
+(1 de 184 pantallas en `demo-roles`, no se pudo repetir a voluntad).
+
+**Cómo correr todo:**
+- `npm run typecheck` y `npm test` (core 545; worker 6 con `CHROME_PATH=/opt/pw-browsers/chromium`, sin él se omiten).
+- `npm run db:check` y `npm run db:test` — el Postgres embebido **no corre como
+  root**: `su probador -c "cd $PWD && npm run db:test"`.
+- Recorridos: compilar la maqueta (`NEXT_PUBLIC_DEMO=true
+  NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=demo npx next build` en `apps/web`), levantarla
+  con `next start -p 3005` y correr
+  `RA_BASE=http://localhost:3005 CHROME_PATH=/opt/pw-browsers/chromium node tools/ui/demo-flujo.mjs`
+  (y ronda2 a ronda6, devolucion, roles, descuento, bodega-unidad, datos, sin-red).
+- `next dev` con `NEXT_DIST_DIR` reescribe `apps/web/tsconfig.json`: no lo subas.
 
 ## CÓMO SEGUIR — corte 2026-10-01 (noche, sesión local: 0032 a 0036), léelo antes que todo
 

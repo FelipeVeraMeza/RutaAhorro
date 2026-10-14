@@ -44,6 +44,9 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
   const [generando, setGenerando] = useState<string | null>(null);
 
   const [cantidades, setCantidades] = useState<Record<string, number>>({});
+  // Los productos elegidos, guardados al elegirlos: buscar otro y elegirlo
+  // sacaba de la impresión los de la búsqueda anterior.
+  const [elegidos, setElegidos] = useState<Record<string, Producto>>({});
   const [tamanio, setTamanio] = useState<TamanioId>('normal');
   const [conPrecio, setConPrecio] = useState(true);
   // RF-M2-22 · además del código de barras, el cartel de precio de la repisa.
@@ -73,6 +76,12 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
 
   // En la góndola va el precio: sirve también para lo que no tiene código.
   const conCodigo = tipo === 'gondola' ? productos : productos.filter((p) => p.codigos.length > 0);
+  // Lo que se imprime: lo elegido, esté o no en la búsqueda de ahora.
+  const paraImprimir = useMemo(() => {
+    const vistos = new Map(Object.values(elegidos).map((p) => [p.id, p]));
+    for (const p of conCodigo) vistos.set(p.id, p);
+    return [...vistos.values()].filter((p) => tipo === 'gondola' || p.codigos.length > 0);
+  }, [elegidos, conCodigo, tipo]);
   const sinCodigo = productos.filter((p) => p.codigos.length === 0);
 
   /**
@@ -116,6 +125,10 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
         perecible: p.perecible,
         diasAlerta: p.diasAlerta,
         codigos: [...p.codigos, codigo],
+        // Sin esto se escribían todos los datos de la lista cargada antes: si
+        // alguien cambió el precio entremedio, generar el código lo devolvía
+        // al precio viejo sin avisar (0020).
+        esperadoEn: p.actualizadoEn,
       });
       setAviso(`${p.nombre} quedó con el código ${codigo}`);
       setCantidades((c) => ({ ...c, [p.id]: c[p.id] ?? 1 }));
@@ -132,7 +145,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
   /** Una entrada por etiqueta a imprimir: un producto repetido N veces. */
   const aImprimir = useMemo(() => {
     const salida: Array<{ clave: string; svg?: string; gondola?: Producto }> = [];
-    for (const p of conCodigo) {
+    for (const p of paraImprimir) {
       const n = cantidades[p.id] ?? 0;
       if (n <= 0) continue;
       if (tipo === 'gondola') {
@@ -149,14 +162,16 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
       for (let i = 0; i < n; i++) salida.push({ clave: `${p.id}-${i}`, svg });
     }
     return salida;
-  }, [conCodigo, cantidades, opciones, conPrecio, tipo]);
+  }, [paraImprimir, cantidades, opciones, conPrecio, tipo]);
 
-  const noImprimibles = tipo === 'gondola' ? [] : conCodigo.filter(
+  const noImprimibles = tipo === 'gondola' ? [] : paraImprimir.filter(
     (p) => (cantidades[p.id] ?? 0) > 0 && !etiquetaSvg(p.codigos[0]),
   );
 
   function cambiarCantidad(id: string, delta: number) {
     setCantidades((c) => ({ ...c, [id]: Math.max((c[id] ?? 0) + delta, 0) }));
+    const p = productos.find((x) => x.id === id);
+    if (p) setElegidos((e) => ({ ...e, [id]: p }));
   }
 
   return (
@@ -187,7 +202,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
         <div className="grid grid-cols-2 gap-2 mb-3" role="radiogroup" aria-label="Qué imprimir">
           {([['codigo', 'Código de barras', 'Para pegar en el producto y escanearlo'],
              ['gondola', 'Precio de góndola', 'Cartel con el precio grande para la repisa']] as const).map(([id, t, d]) => (
-            <button key={id} role="radio" aria-checked={tipo === id} onClick={() => { setTipo(id); setCantidades({}); }}
+            <button key={id} role="radio" aria-checked={tipo === id} onClick={() => { setTipo(id); setCantidades({}); setElegidos({}); }}
               className={`tap text-left px-3 py-2 rounded-lg border ${tipo === id ? 'border-marca-500 bg-marca-50 text-marca-900' : 'border-[var(--borde)]'}`}>
               <span className="block text-sm font-medium">{t}</span>
               <span className="block text-xs text-[var(--texto-suave)]">{d}</span>
@@ -323,7 +338,7 @@ export function EtiquetasClient({ puedeVerCostos }: { puedeVerCostos: boolean })
               {aImprimir.length === 1 ? 'etiqueta' : 'etiquetas'}
             </p>
             <button
-              onClick={() => setCantidades({})}
+              onClick={() => { setCantidades({}); setElegidos({}); }}
               className="tap px-3 py-1.5 text-xs rounded-lg border border-[var(--borde)]"
             >
               Vaciar

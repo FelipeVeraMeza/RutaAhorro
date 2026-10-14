@@ -60,11 +60,28 @@ export function EstadoConexion() {
 
   async function forceSync() {
     setSyncing(true);
-    const { syncQueue, pendingCount, ventasConError } = await cola();
-    await syncQueue();
-    setPending(await pendingCount());
-    setConError(await ventasConError());
-    setSyncing(false);
+    // Con un error a mitad (IndexedDB, red) el botón quedaba en "enviando…"
+    // para siempre y no se podía volver a tocar.
+    try {
+      const { syncQueue, pendingCount, ventasConError } = await cola();
+      await syncQueue();
+      setPending(await pendingCount());
+      setConError(await ventasConError());
+    } catch { /* se reintenta sola cada minuto, o con otro toque */ } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function descartar(clientUuid: string) {
+    try {
+      const { db } = await import('@/lib/offline/db');
+      await db().saleQueue.delete(clientUuid);
+      const { pendingCount, ventasConError } = await cola();
+      setPending(await pendingCount());
+      const quedan = await ventasConError();
+      setConError(quedan);
+      if (quedan.length === 0) setViendoErrores(false);
+    } catch { /* se puede intentar de nuevo */ }
   }
 
   // Todo en orden y conectado: no se muestra nada. Un cartel verde permanente
@@ -76,14 +93,15 @@ export function EstadoConexion() {
     return (
       <>
         <button type="button" onClick={() => setViendoErrores(true)}
-          className="w-full px-4 py-2 text-xs font-medium flex items-center justify-center gap-2 bg-red-50 text-red-900">
+          className="w-full px-4 py-2 min-h-11 text-xs font-medium flex items-center justify-center gap-2 bg-red-50 text-red-900">
           <span aria-hidden>⚠️</span>
           <span className="num">{conError.length} {conError.length === 1 ? 'venta no se pudo registrar' : 'ventas no se pudieron registrar'}</span>
           <span className="underline">ver por qué</span>
         </button>
         {viendoErrores && (
           <VentasConError ventas={conError} reintentando={syncing}
-                          onReintentar={() => void forceSync()} onCerrar={() => setViendoErrores(false)} />
+                          onReintentar={() => void forceSync()} onCerrar={() => setViendoErrores(false)}
+                          onDescartar={(id) => void descartar(id)} />
         )}
       </>
     );
@@ -96,7 +114,7 @@ export function EstadoConexion() {
       type="button"
       onClick={forceSync}
       disabled={!online || syncing}
-      className={`w-full px-4 py-2 text-xs font-medium flex items-center justify-center gap-2 ${
+      className={`w-full px-4 py-2 min-h-11 text-xs font-medium flex items-center justify-center gap-2 ${
         offlineStyle ? 'bg-amber-100 text-amber-900' : 'bg-blue-50 text-blue-900'
       }`}
     >

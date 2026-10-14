@@ -1,13 +1,16 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { enlaceWhatsApp, formatCLP, precioDelTramo, precioTienda, relacionados } from '@rutaahorro/core';
+import { enlaceWhatsApp, formatCLP, precioDelTramo, precioPorMedida, precioTienda, rebajaMaximaPct, relacionados } from '@rutaahorro/core';
 import { datosTienda } from '@/lib/tienda/catalogo';
 import { sitioTienda } from '@/lib/tienda/sitio';
 import { FotoProducto } from '@/components/tienda/TarjetaProducto';
 import { AgregarAlCarrito } from '@/components/tienda/AgregarAlCarrito';
 import { Compartir } from '@/components/tienda/Compartir';
-import { Grilla } from '@/components/tienda/Catalogo';
+import { Grilla } from '@/components/tienda/Grilla';
+import { BotonFavorito } from '@/components/tienda/BotonFavorito';
+import { RegistrarVisto } from '@/components/tienda/RegistrarVisto';
+import { ProductosGuardados } from '@/components/tienda/ProductosGuardados';
 
 type Params = Promise<{ id: string }>;
 
@@ -21,12 +24,16 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const r = await buscar((await params).id).catch(() => null);
   if (!r) return { title: 'Producto no encontrado' };
   const { producto } = r;
+  const { base } = await sitioTienda();
   const descripcion = `${producto.nombre}${producto.precio != null ? ` a ${precioTienda(producto.precio)}` : ''}${producto.descripcion ? `. ${producto.descripcion}` : ''}`;
   return {
     title: producto.nombre,
     description: descripcion,
+    // RNF-T62 · Una sola dirección por producto para los buscadores.
+    alternates: { canonical: `${base}/p/${producto.id}` },
     // Lo que muestra WhatsApp o Facebook al compartir el enlace.
-    openGraph: { title: producto.nombre, description: descripcion, ...(producto.imagen ? { images: [producto.imagen] } : {}) },
+    openGraph: { type: 'website', title: producto.nombre, description: descripcion, url: `${base}/p/${producto.id}`, ...(producto.imagen ? { images: [producto.imagen] } : {}) },
+    twitter: { card: producto.imagen ? 'summary_large_image' : 'summary', title: producto.nombre, description: descripcion },
   };
 }
 
@@ -41,6 +48,18 @@ export default async function ProductoPage({ params }: { params: Params }) {
     ? `Hola, quiero consultar por: ${producto.nombre} (${precioTienda(producto.precio)})`
     : `Hola, ¿qué precio tiene: ${producto.nombre}?`);
   const parecidos = relacionados(tienda.catalogo, producto, 4);
+  const porMedida = precioPorMedida(producto.precio, producto.formato);
+  const rebaja = producto.disponible ? rebajaMaximaPct(producto.precio, producto.tramos) : 0;
+  const ruta = [
+    { nombre: 'Productos', url: `${base}/productos` },
+    ...(producto.grupo ? [{ nombre: producto.grupo, url: `${base}/productos?categoria=${encodeURIComponent(producto.grupo)}` }] : []),
+    { nombre: producto.nombre, url: `${base}/p/${producto.id}` },
+  ];
+  // RNF-T63 · La ruta para Google ("Tienda › Lácteos › Leche").
+  const migas = {
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: ruta.map((r, i) => ({ '@type': 'ListItem', position: i + 1, name: r.nombre, item: r.url })),
+  };
 
   // RT-53 · Datos del producto para Google (precio y disponibilidad en el resultado).
   const datosGoogle = producto.precio != null ? {
@@ -49,17 +68,22 @@ export default async function ProductoPage({ params }: { params: Params }) {
     name: producto.nombre,
     ...(producto.descripcion ? { description: producto.descripcion } : {}),
     ...(producto.imagen ? { image: producto.imagen } : {}),
+    ...(producto.marca ? { brand: { '@type': 'Brand', name: producto.marca } } : {}),
+    ...(producto.grupo ? { category: producto.grupo } : {}),
     offers: {
       '@type': 'Offer',
       url: `${base}/p/${producto.id}`,
       priceCurrency: 'CLP',
       price: producto.precio,
       availability: producto.disponible ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      itemCondition: 'https://schema.org/NewCondition',
+      seller: { '@type': 'Organization', name: tienda.nombre },
     },
   } : null;
 
   return (
     <div className="flex flex-col gap-6">
+      <RegistrarVisto id={producto.id} />
       <nav aria-label="Ruta" className="text-sm flex items-center gap-1.5 flex-wrap text-[var(--texto-suave)]">
         <Link href="/tienda/productos" className="font-semibold text-marca-700 hover:underline tap inline-flex items-center">Productos</Link>
         {producto.grupo && (
@@ -73,23 +97,36 @@ export default async function ProductoPage({ params }: { params: Params }) {
 
       <article className="tarjeta overflow-hidden md:grid md:grid-cols-[minmax(0,400px)_1fr] md:gap-2">
         <div className={`p-4 md:p-5 ${producto.disponible ? '' : 'opacity-50'}`}>
-          <div className="rounded-xl overflow-hidden max-w-[200px] md:max-w-none mx-auto"><FotoProducto producto={producto} grande /></div>
+          <div className="rounded-xl overflow-hidden max-w-[200px] md:max-w-none mx-auto"><FotoProducto producto={producto} grande prioridad /></div>
         </div>
         <div className="p-4 pt-0 md:p-6 md:pl-2 flex flex-col gap-3">
           <div className="flex items-start justify-between gap-3">
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight leading-tight">{producto.nombre}</h1>
-            <Compartir titulo={producto.nombre} />
+            <div className="flex gap-2 shrink-0">
+              <BotonFavorito id={producto.id} nombre={producto.nombre} grande />
+              <Compartir titulo={producto.nombre} />
+            </div>
           </div>
           {producto.descripcion && <p className="text-[var(--texto-suave)]">{producto.descripcion}</p>}
           {(producto.marca || producto.formato) && (
             <dl className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
-              {producto.marca && <div className="flex gap-1.5"><dt className="text-[var(--texto-suave)]">Marca</dt><dd className="font-semibold">{producto.marca}</dd></div>}
+              {producto.marca && (
+                <div className="flex gap-1.5"><dt className="text-[var(--texto-suave)]">Marca</dt>
+                  <dd className="font-semibold"><Link href={`/tienda/productos?marca=${encodeURIComponent(producto.marca)}`} className="hover:underline text-marca-700">{producto.marca}</Link></dd>
+                </div>
+              )}
               {producto.formato && <div className="flex gap-1.5"><dt className="text-[var(--texto-suave)]">Formato</dt><dd className="font-semibold">{producto.formato}</dd></div>}
             </dl>
           )}
 
           {producto.precio != null
-            ? <p className="text-4xl font-extrabold num">{precioTienda(producto.precio)}</p>
+            ? (
+              <div>
+                <p className="text-4xl font-extrabold num">{precioTienda(producto.precio)}</p>
+                {porMedida && <p className="text-sm text-[var(--texto-suave)] num">{porMedida}</p>}
+                {rebaja > 0 && <p className="text-sm font-semibold text-acento-700">Hasta {rebaja}% menos con la oferta</p>}
+              </div>
+            )
             : <p className="text-2xl font-bold text-marca-700">{precioTienda(null)}</p>}
 
           {producto.precio != null && producto.tramos.length > 0 && (
@@ -147,9 +184,12 @@ export default async function ProductoPage({ params }: { params: Params }) {
         </section>
       )}
 
+      <ProductosGuardados cual="vistos" titulo="Vistos hace poco" excluir={producto.id} />
+
       {datosGoogle && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(datosGoogle).replace(/</g, '\\u003c') }} />
       )}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(migas).replace(/</g, '\\u003c') }} />
     </div>
   );
 }
