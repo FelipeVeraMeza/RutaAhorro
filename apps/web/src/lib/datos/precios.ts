@@ -5,6 +5,7 @@ import { supabase } from '../supabase/client';
 import { DEMO_ACTIVO } from '../demo';
 import { db, getMeta, setMeta } from '../offline/db';
 import { syncCatalog } from '../offline/catalog';
+import { avisarTienda } from '../tienda/avisar';
 
 /**
  * Ofertas por cantidad e impuestos adicionales (0018).
@@ -111,6 +112,7 @@ const supabaseRepo: RepositorioPrecios = {
     });
     if (error) throw error;
     void syncCatalog().catch(() => {});
+    avisarTienda();
     return data as string;
   },
 
@@ -120,6 +122,7 @@ const supabaseRepo: RepositorioPrecios = {
     });
     if (error) throw error;
     void syncCatalog().catch(() => {});
+    avisarTienda();
     return Number(data ?? 0);
   },
 
@@ -143,6 +146,7 @@ const supabaseRepo: RepositorioPrecios = {
     });
     if (error) throw error;
     void syncCatalog().catch(() => {});
+    avisarTienda();
   },
 
   async impuestoPorProducto() {
@@ -157,6 +161,7 @@ const supabaseRepo: RepositorioPrecios = {
     });
     if (error) throw error;
     void syncCatalog().catch(() => {});
+    avisarTienda();
     const r = data as { aplicados: number; omitidos: ResultadoMasivo['omitidos'] };
     return { aplicados: Number(r?.aplicados ?? 0), omitidos: r?.omitidos ?? [] };
   },
@@ -165,6 +170,7 @@ const supabaseRepo: RepositorioPrecios = {
     const { data, error } = await supabase().rpc('fn_quitar_ofertas', { p_productos: productoIds });
     if (error) throw error;
     void syncCatalog().catch(() => {});
+    avisarTienda();
     return Number(data ?? 0);
   },
 

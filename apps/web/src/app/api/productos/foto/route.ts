@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/supabase/server';
 import { clienteAdmin, respuestaError } from '@/lib/supabase/admin';
 import { MAX_BYTES_FOTO, guardarFotoProducto, quitarFotoProducto } from '@/lib/productos/fotos';
 import { limitar } from '@/lib/limites';
+import { refrescarTienda } from '@/lib/tienda/catalogo';
 
 /**
  * Foto de un producto (RT-50, docs/30).
@@ -48,7 +49,9 @@ export async function POST(request: Request) {
       if (!ID.test(productoId) || !(archivo instanceof File)) return respuestaError('DATOS_INVALIDOS', 'Falta la foto o el producto', 400);
       if (archivo.size > MAX_BYTES_FOTO) return respuestaError('FOTO_PESADA', 'La foto pesa más de 5 MB', 400);
       const url = await guardarFotoProducto(db, user.tenantId, productoId, await archivo.arrayBuffer(), 'foto');
-      return Response.json({ url });
+      refrescarTienda();
+      refrescarTienda();
+    return Response.json({ url });
     }
 
     const { productoId, url: origen } = await request.json().catch(() => ({})) as { productoId?: string; url?: string };
@@ -60,6 +63,7 @@ export async function POST(request: Request) {
     const largo = Number(r.headers.get('content-length') ?? 0);
     if (largo > MAX_BYTES_FOTO) return respuestaError('FOTO_PESADA', 'La foto pesa más de 5 MB', 400);
     const url = await guardarFotoProducto(db, user.tenantId, productoId, await r.arrayBuffer(), 'off');
+    refrescarTienda();
     return Response.json({ url });
   } catch (e) {
     return falla(e);

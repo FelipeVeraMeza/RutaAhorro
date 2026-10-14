@@ -1,4 +1,4 @@
-import { unstable_cache } from 'next/cache';
+import { revalidateTag, unstable_cache } from 'next/cache';
 import { descripcionPublica, diaLocal, formatoPorNombre, marcaPorNombre, ofertasVisibles, rubroPorNombre, tramosVigentes, type ProductoTienda, type TramoPrecio } from '@rutaahorro/core';
 import { clienteAdmin } from '@/lib/supabase/admin';
 import { DEMO_ACTIVO } from '@/lib/demo';
@@ -112,7 +112,19 @@ async function leerTienda(tenantId: string): Promise<DatosTienda | null> {
   };
 }
 
-const leerTiendaGuardada = unstable_cache(leerTienda, ['tienda-catalogo'], { revalidate: REFRESCO_S });
+const ETIQUETA = 'tienda-catalogo';
+const leerTiendaGuardada = unstable_cache(leerTienda, ['tienda-catalogo'], { revalidate: REFRESCO_S, tags: [ETIQUETA] });
+
+/**
+ * Bota la copia del catálogo: la próxima visita lee la base. La llama
+ * /api/tienda/refrescar cuando alguien cambia un producto en la app. Antes un
+ * precio nuevo tardaba uno o dos minutos en verse en la tienda (Felipe,
+ * 2026-10-13: "cambié el precio del Bon o Bon blanco a 700 y no cambió").
+ */
+export function refrescarTienda() {
+  enMemoria = null;
+  revalidateTag(ETIQUETA);
+}
 
 const DEMO_OFERTAS: Record<string, TramoPrecio[]> = {
   p01: [{ desde: 3, precio: 1390 }],

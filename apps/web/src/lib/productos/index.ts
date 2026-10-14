@@ -5,6 +5,7 @@ import { repoLocal } from './repoLocal';
 import { repoSupabase } from './repoSupabase';
 import type { RepositorioProductos } from './tipos';
 import { syncCatalog } from '../offline/catalog';
+import { avisarTienda } from '../tienda/avisar';
 
 /**
  * Selector de implementación.
@@ -28,6 +29,8 @@ const repoSupabaseSincronizado = new Proxy(repoSupabase, {
     return async (...args: unknown[]) => {
       const resultado = await (valor as (...a: unknown[]) => Promise<unknown>).apply(objetivo, args);
       void syncCatalog().catch(() => {});
+      // Y la tienda online deja su copia del catálogo: el precio nuevo se ve al tiro.
+      avisarTienda();
       return resultado;
     };
   },
