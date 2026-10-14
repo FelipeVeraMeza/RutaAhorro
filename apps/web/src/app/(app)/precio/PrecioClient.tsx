@@ -5,7 +5,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   formatCLP, cantidadConUnidad, tramosVigentes, diaLocal, precioDelTramo, validarCantidadVenta, admiteDecimales,
+  validarMonto, toUserMessage,
 } from '@rutaahorro/core';
+import { repoProductos } from '@/lib/productos';
 import { useConfiguracion } from '@/lib/datos/configuracion';
 import {
   findByBarcode, searchProducts, localProductCount, syncCatalog, EVENTO_CATALOGO,
@@ -52,6 +54,7 @@ export function PrecioClient({ usuarioId = '', puedeVender = false, puedeCrearPr
   const { zonaHoraria, ofertasActivas } = useConfiguracion();
   const [aviso, setAviso] = useState<string | null>(null);
   const [catalogoListo, setCatalogoListo] = useState<boolean | null>(null);
+  const [buscandoEnBase, setBuscandoEnBase] = useState(false);
   const avisoTimer = useRef<number | null>(null);
 
   const notificar = useCallback((texto: string) => {
@@ -62,18 +65,23 @@ export function PrecioClient({ usuarioId = '', puedeVender = false, puedeCrearPr
 
   useEffect(() => {
     void (async () => {
+      // 2026-10-13: lo que se buscó mientras el catálogo bajaba se busca otra
+      // vez al terminar. Antes quedaba "No hay ningún producto que se llame
+      // así" hasta que se escribía otra letra: el "a veces dice que no está".
       if (DEMO_ACTIVO) {
         if ((await localProductCount()) === 0) await sembrarCatalogoDemo();
         setCatalogoListo(true);
+        setVersionCatalogo((v) => v + 1);
         return;
       }
       const n = await localProductCount();
       if (n === 0 && navigator.onLine) {
         try { await syncCatalog(true); } catch { /* se resuelve con el contador */ }
       } else if (navigator.onLine) {
-        void syncCatalog().catch(() => {});
+        void syncCatalog().then(() => setVersionCatalogo((v) => v + 1)).catch(() => {});
       }
       setCatalogoListo((await localProductCount()) > 0);
+      setVersionCatalogo((v) => v + 1);
     })();
   }, []);
 
@@ -114,8 +122,26 @@ export function PrecioClient({ usuarioId = '', puedeVender = false, puedeCrearPr
     router.push('/pos');
   }
 
+  /**
+   * El código, primero en el catálogo del equipo y, si no está y hay red, en
+   * la base. Antes solo se miraba el equipo: un producto recién creado o
+   * importado en otro equipo salía "no está en el catálogo", y al crearlo la
+   * base decía que el código ya existía (Felipe, 2026-10-13).
+   */
+  const buscarCodigo = useCallback(async (code: string) => {
+    const local = await findByBarcode(code);
+    if (local || DEMO_ACTIVO || !navigator.onLine) return local;
+    setBuscandoEnBase(true);
+    try {
+      await syncCatalog().catch(() => {});
+      return await findByBarcode(code);
+    } finally {
+      setBuscandoEnBase(false);
+    }
+  }, []);
+
   const onScan = useCallback(async (code: string) => {
-    const p = await findByBarcode(code);
+    const p = await buscarCodigo(code);
     if (p) {
       elegir(p);
       setQuery('');
@@ -126,7 +152,59 @@ export function PrecioClient({ usuarioId = '', puedeVender = false, puedeCrearPr
     }
     notificar(`El código ${code} no está en el catálogo`);
     setQuery(code);
-  }, [notificar, elegir]);
+  }, [notificar, elegir, buscarCodigo]);
+
+  // Un código escrito a mano que no aparece: se pregunta a la base una vez
+  // antes de decir que no existe (ver buscarCodigo).
+  const [codigoRevisado, setCodigoRevisado] = useState<string | null>(null);
+  useEffect(() => {
+    const texto = query.trim();
+    if (elegido || resultados.length > 0 || !/^\d{6,}$/.test(texto) || codigoRevisado === texto) return;
+    const t = window.setTimeout(() => {
+      setCodigoRevisado(texto);
+      void buscarCodigo(texto).then((p) => { if (p) { elegir(p); setQuery(''); } });
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [query, resultados, elegido, codigoRevisado, buscarCodigo, elegir]);
+
+  // ------------------------------------------------------------ editar precio
+  // Felipe, 2026-10-13: "si no me sale el valor, poder editarlo de ahí mismo".
+  // Cambia solo el precio: nombre, costo y códigos quedan como estaban.
+  const [editandoPrecio, setEditandoPrecio] = useState(false);
+  const [precioNuevo, setPrecioNuevo] = useState('');
+  const [errorPrecio, setErrorPrecio] = useState<string | null>(null);
+  const [guardandoPrecio, setGuardandoPrecio] = useState(false);
+  useEffect(() => {
+    setEditandoPrecio(false);
+    setErrorPrecio(null);
+  }, [elegido?.id]);
+
+  async function guardarPrecio() {
+    if (!elegido || guardandoPrecio) return;
+    const v = validarMonto(precioNuevo, { etiqueta: 'precio', maximo: 100_000_000 });
+    if (!v.valido) { setErrorPrecio(v.error); return; }
+    if (v.valor <= 0) { setErrorPrecio('El precio tiene que ser mayor que $0'); return; }
+    setGuardandoPrecio(true);
+    setErrorPrecio(null);
+    try {
+      const repo = repoProductos();
+      const p = await repo.obtener(elegido.id, false);
+      if (!p) throw new Error('NO_ENCONTRADO');
+      await repo.actualizar(p.id, {
+        nombre: p.nombre, descripcion: p.descripcion, sku: p.sku, categoriaId: p.categoriaId,
+        unidad: p.unidad, precioVenta: v.valor, stockMinimo: p.stockMinimo,
+        perecible: p.perecible, diasAlerta: p.diasAlerta, esperadoEn: p.actualizadoEn,
+      });
+      const actualizado = await db().products.get(elegido.id);
+      setElegido(actualizado ? { ...actualizado, salePrice: v.valor } : { ...elegido, salePrice: v.valor });
+      setEditandoPrecio(false);
+      notificar(`Precio de ${p.nombre} actualizado a ${formatCLP(v.valor)}`);
+    } catch (e) {
+      setErrorPrecio(toUserMessage(e));
+    } finally {
+      setGuardandoPrecio(false);
+    }
+  }
 
   return (
     <div className="px-4 py-4">
@@ -175,13 +253,59 @@ export function PrecioClient({ usuarioId = '', puedeVender = false, puedeCrearPr
           {elegido.description && (
             <p className="text-xs text-[var(--texto-suave)] mt-0.5">{elegido.description}</p>
           )}
-          <p className="num text-4xl font-bold text-marca-700 my-3">
-            {formatCLP(elegido.salePrice)}
-          </p>
-          <p className="text-xs text-[var(--texto-suave)]">
-            Precio por {elegido.unit} · IVA incluido
-            {elegido.impuestoNombre && ` · incluye ${elegido.impuestoNombre}`}
-          </p>
+          {editandoPrecio ? (
+            <div className="my-3 text-left">
+              <Campo etiqueta={`Precio por ${elegido.unit}, con IVA`} error={errorPrecio}>
+                {(p) => (
+                  <input
+                    {...p}
+                    type="text"
+                    inputMode="numeric"
+                    autoFocus
+                    value={precioNuevo}
+                    onChange={(e) => { setPrecioNuevo(e.target.value); setErrorPrecio(null); }}
+                    onFocus={(e) => e.currentTarget.select()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); void guardarPrecio(); }
+                      if (e.key === 'Escape') setEditandoPrecio(false);
+                    }}
+                    placeholder="0"
+                    className="tap w-full px-4 py-3 rounded-xl border border-[var(--borde)] bg-white text-2xl num text-right font-bold"
+                  />
+                )}
+              </Campo>
+              <div className="flex gap-2 mt-2">
+                <button type="button" onClick={() => setEditandoPrecio(false)} disabled={guardandoPrecio}
+                  className="tap flex-1 rounded-xl border border-[var(--borde)] text-sm font-medium">
+                  Cancelar
+                </button>
+                <button type="button" onClick={() => void guardarPrecio()} disabled={guardandoPrecio}
+                  className="tap flex-1 rounded-xl bg-marca-500 text-white text-sm font-semibold disabled:opacity-50">
+                  {guardandoPrecio ? 'Guardando…' : 'Guardar precio'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {elegido.salePrice > 0 ? (
+                <p className="num text-4xl font-bold text-marca-700 my-3">{formatCLP(elegido.salePrice)}</p>
+              ) : (
+                <p className="text-2xl font-bold text-[var(--color-aviso)] my-3" data-sin-precio>Sin precio</p>
+              )}
+              <p className="text-xs text-[var(--texto-suave)]">
+                Precio por {elegido.unit} · IVA incluido
+                {elegido.impuestoNombre && ` · incluye ${elegido.impuestoNombre}`}
+              </p>
+              {puedeCrearProductos && (
+                <button type="button"
+                  onClick={() => { setPrecioNuevo(elegido.salePrice > 0 ? String(elegido.salePrice) : ''); setEditandoPrecio(true); }}
+                  className={`tap mt-3 px-4 rounded-xl text-sm font-semibold ${elegido.salePrice > 0
+                    ? 'border border-[var(--borde)]' : 'bg-marca-500 text-white'}`}>
+                  {elegido.salePrice > 0 ? '✏️ Editar precio' : 'Poner precio'}
+                </button>
+              )}
+            </>
+          )}
           {/* Ofertas vigentes (0018): lo segundo que pregunta el cliente es
               "¿y si llevo más?". */}
           {tramosVigentes(ofertasActivas ? elegido.tramos : [], diaLocal(new Date(), zonaHoraria))
@@ -257,7 +381,9 @@ export function PrecioClient({ usuarioId = '', puedeVender = false, puedeCrearPr
                     {p.stock <= 0 ? 'Sin stock' : `Quedan ${cantidadConUnidad(p.stock, p.unit)}`}
                   </span>
                 </span>
-                <span className="num font-semibold shrink-0">{formatCLP(p.salePrice)}</span>
+                {p.salePrice > 0
+                  ? <span className="num font-semibold shrink-0">{formatCLP(p.salePrice)}</span>
+                  : <span className="text-sm font-semibold shrink-0 text-[var(--color-aviso)]">Sin precio</span>}
               </button>
             </li>
           ))}
@@ -265,7 +391,11 @@ export function PrecioClient({ usuarioId = '', puedeVender = false, puedeCrearPr
       )}
 
       {!elegido && query.trim().length >= 2 && resultados.length === 0 && (
-        /\d{4,}/.test(query.trim()) && /^[0-9A-Za-z-]{4,40}$/.test(query.trim()) ? (
+        catalogoListo === null ? (
+          <p role="status" className="text-center text-sm text-[var(--texto-suave)] py-8">Cargando el catálogo…</p>
+        ) : buscandoEnBase || (/^\d{6,}$/.test(query.trim()) && codigoRevisado !== query.trim() && !DEMO_ACTIVO) ? (
+          <p role="status" className="text-center text-sm text-[var(--texto-suave)] py-8">Buscando el código en la base…</p>
+        ) : /\d{4,}/.test(query.trim()) && /^[0-9A-Za-z-]{4,40}$/.test(query.trim()) ? (
           <div className="tarjeta p-4 text-sm text-center mt-2">
             <p className="font-medium">El código <span className="num">{query.trim()}</span> no está en el catálogo.</p>
             {puedeCrearProductos && (
