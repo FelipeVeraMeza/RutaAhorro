@@ -8,6 +8,7 @@ import {
   type Comprobante as DatosComprobante,
 } from '@rutaahorro/core';
 import { Timbre } from '@/components/Timbre';
+import { imprimirTicket } from '@/lib/imprimir';
 
 /**
  * Comprobante que se le muestra y entrega al cliente (RF-M5-14).
@@ -199,7 +200,7 @@ export function Comprobante({
               Compartir
             </button>
             <button
-              onClick={() => window.print()}
+              onClick={() => imprimirTicket(document.getElementById('ticket'))}
               className="tap flex-1 py-3 rounded-xl border border-[var(--borde)] font-semibold text-sm"
             >
               Imprimir
