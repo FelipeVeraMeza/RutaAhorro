@@ -1,5 +1,6 @@
 /**
  * Combos entre productos distintos (0023): «2 bebidas + 1 pan por $3.000».
+ * Y packs de un solo producto (0042): «2 por $500».
  *
  * Decisión de Felipe, 2026-09-27: el combo se aplica solo. Cuando el carrito
  * tiene sus productos, el POS lo aplica las veces que quepa y muestra el
@@ -134,7 +135,13 @@ export function validarCombo(
 ): string | null {
   if (!c.nombre.trim()) return 'El combo necesita un nombre.';
   const distintos = new Set(c.items.map((i) => i.productId));
-  if (distintos.size < 2) return 'Un combo lleva al menos dos productos distintos. Para uno solo, usa una oferta por cantidad.';
+  // 0042 · Un solo producto es un pack ("2 por $500"): se aplica las veces que
+  // quepa y lo que sobra va a precio normal. Necesita 2 o más unidades; con una
+  // sola es un cambio de precio, no una promoción.
+  if (distintos.size === 0) return 'El combo necesita al menos un producto.';
+  if (distintos.size === 1 && c.items.length === 1 && !(c.items[0].cantidad >= 2)) {
+    return 'Un pack de un solo producto lleva 2 o más unidades (por ejemplo, 2 por $500).';
+  }
   if (distintos.size !== c.items.length) return 'Hay un producto repetido: súmale la cantidad.';
   if (c.items.some((i) => !(i.cantidad > 0))) return 'Cada producto necesita una cantidad mayor que cero.';
   if (!Number.isInteger(c.precio) || c.precio <= 0) return 'El precio del combo tiene que ser un monto mayor que cero.';

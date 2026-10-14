@@ -70,13 +70,33 @@ describe('el carrito con combos', () => {
   });
 });
 
+// 0042 · Felipe, 2026-10-13: "le coloco 2 por 500, pero si agrego uno más se
+// debería cobrar la promo y uno a precio normal".
+describe('pack de un solo producto: 2 por $500', () => {
+  const PACK: Combo = { id: 'p', nombre: 'Pack 2 × Bon o Bon', precio: 500, items: [{ productId: 'bon', cantidad: 2 }] };
+  const total = (n: number) => cartTotals(aplicarCombos(aplicarOfertas([linea('bon', n, 300)]), [PACK])).total;
+  it('con 1 no hay pack; con 2, $500; con 3, un pack + uno a precio normal; con 4, dos packs', () => {
+    expect(total(1)).toBe(300);
+    expect(total(2)).toBe(500);
+    expect(total(3)).toBe(800);
+    expect(total(4)).toBe(1000);
+    expect(total(5)).toBe(1300);
+  });
+  it('se valida como combo: 2 o más unidades y más barato que suelto', () => {
+    const precio = (id: string) => ({ bon: 300 } as Record<string, number>)[id];
+    expect(validarCombo(PACK, precio)).toBeNull();
+    expect(validarCombo({ ...PACK, precio: 600 }, precio)).toMatch(/menos que sus productos/);
+  });
+});
+
 describe('validarCombo', () => {
   const precio = (id: string) => ({ beb: 1200, pan: 1000 } as Record<string, number>)[id];
   it('acepta el combo del ejemplo', () => {
     expect(validarCombo(COMBO, precio)).toBeNull();
   });
   it('rechaza lo que no es un combo', () => {
-    expect(validarCombo({ ...COMBO, items: [{ productId: 'beb', cantidad: 3 }] }, precio)).toMatch(/dos productos/);
+    expect(validarCombo({ ...COMBO, items: [{ productId: 'beb', cantidad: 1 }] }, precio)).toMatch(/2 o más unidades/);
+    expect(validarCombo({ ...COMBO, items: [] }, precio)).toMatch(/al menos un producto/);
     expect(validarCombo({ ...COMBO, precio: 3400 }, precio)).toMatch(/menos que sus productos/);
     expect(validarCombo({ ...COMBO, nombre: ' ' }, precio)).toMatch(/nombre/);
     expect(validarCombo({ ...COMBO, items: [...COMBO.items, { productId: 'pan', cantidad: 1 }] }, precio)).toMatch(/repetido/);

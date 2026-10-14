@@ -70,6 +70,10 @@ const supabaseRepo: RepositorioCombos = {
       },
     });
     if (error) throw error;
+    // La caja recibe los combos con el catálogo: sin esto, un pack recién
+    // guardado se aplicaba recién en la sincronización siguiente (10 min).
+    // Import dinámico: catalog.ts ya importa este archivo.
+    void import('../offline/catalog').then((m) => m.syncCatalog()).catch(() => {});
     return data as string;
   },
 };

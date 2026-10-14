@@ -21,6 +21,8 @@ import {
   achicarFoto, buscarFichaPorCodigo, copiarFotoProducto, quitarFotoProducto, subirFotoProducto,
 } from '@/lib/productos/fotosCliente';
 import { CamaraFoto } from '@/components/CamaraFoto';
+import { PacksProducto, filasDesdeCombos, packsDesdeFilas, type FilaPack } from './PacksProducto';
+import { repoCombos } from '@/lib/datos/combos';
 
 
 
@@ -161,6 +163,9 @@ export function FormularioProducto({
   const [impuestoId, setImpuestoId] = useState<string | null>(null);
   const [preciosIniciales, setPreciosIniciales] = useState<string>('');
   const [impuestos, setImpuestos] = useState<ImpuestoAdicional[]>([]);
+  // 0042 · Packs "N por $X": combos de este único producto.
+  const [filasPack, setFilasPack] = useState<FilaPack[]>([]);
+  const [packsIniciales, setPacksIniciales] = useState<FilaPack[]>([]);
 
   useEffect(() => {
     if (!puedeEditarPrecios) return;
@@ -175,6 +180,10 @@ export function FormularioProducto({
           setFilasOferta(filasDesdeTramos(p.tramos));
           setImpuestoId(p.impuestoId);
           setPreciosIniciales(JSON.stringify(p));
+          const packs = filasDesdeCombos(await repoCombos().listar(), producto.id);
+          if (!vivo) return;
+          setFilasPack(packs);
+          setPacksIniciales(packs);
         }
       } catch (e) {
         if (vivo) setError(toUserMessage(e));
@@ -296,6 +305,8 @@ export function FormularioProducto({
     // guardado a medias y con un error sobre algo que ya no se ve.
     const ofertas = puedeEditarPrecios ? tramosDesdeFilas(filasOferta, precioNum) : { tramos: [], error: null };
     if (ofertas.error) { setError(ofertas.error); return; }
+    const packs = puedeEditarPrecios ? packsDesdeFilas(filasPack, precioNum) : { packs: [], error: null };
+    if (packs.error) { setError(packs.error); return; }
 
     // Un código escrito y sin tocar "Agregar" se perdía en silencio al guardar:
     // el producto quedaba sin código y el lector no lo encontraba en la caja.
@@ -374,8 +385,27 @@ export function FormularioProducto({
           if ((antes.impuestoId ?? null) !== impuestoId) {
             await repoPrecios().asignarImpuesto([idGuardado], impuestoId);
           }
+          // Packs: los nuevos o cambiados se guardan; los quitados se apagan
+          // (un combo no se borra: las ventas viejas lo nombran).
+          const nombrePack = (n: number) => `Pack ${n} × ${base.nombre}`.slice(0, 120);
+          const guardarPack = (id: string | null, cantidad: number, precio: number, activo: boolean) =>
+            repoCombos().guardar({
+              id, nombre: nombrePack(cantidad), precio, activo, vigenteDesde: null, vigenteHasta: null,
+              items: [{ productId: idGuardado!, cantidad }],
+            });
+          for (const p of packs.packs) {
+            const previo = packsIniciales.find((x) => x.id && x.id === p.id);
+            if (!previo || Number(previo.cantidad) !== p.cantidad || Number(previo.precio) !== p.precio) {
+              await guardarPack(p.id, p.cantidad, p.precio, true);
+            }
+          }
+          for (const previo of packsIniciales) {
+            if (previo.id && !packs.packs.some((p) => p.id === previo.id)) {
+              await guardarPack(previo.id, Number(previo.cantidad), Number(previo.precio), false);
+            }
+          }
         } catch (e) {
-          setError(`El producto quedó guardado, pero no las ofertas o el impuesto: ${toUserMessage(e)}`);
+          setError(`El producto quedó guardado, pero no las ofertas, los packs o el impuesto: ${toUserMessage(e)}`);
           return;
         }
       }
@@ -675,6 +705,9 @@ export function FormularioProducto({
                 </p>
               )}
 
+              {puedeEditarPrecios && (
+                <PacksProducto filas={filasPack} onFilas={setFilasPack} precioLista={precioNum} />
+              )}
               {puedeEditarPrecios && (
                 <OfertasEImpuesto
                   filas={filasOferta}

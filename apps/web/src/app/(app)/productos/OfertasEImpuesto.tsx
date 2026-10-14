@@ -106,6 +106,11 @@ export function OfertasEImpuesto({
           llegar a esa cantidad, <strong>todas</strong> las unidades pasan a ese precio. Vale para cualquier cliente;
           si le pones fechas, es una promoción.
         </p>
+        {/* 2026-10-13: "productos donde el precio disminuye si llevo más". */}
+        <p className="text-xs text-[var(--texto-suave)] -mt-2 mb-3">
+          <strong>Escalonado:</strong> agrega varios para que baje más mientras más lleva, por ejemplo desde 3 a
+          $550 y desde 6 a $500. Para &quot;2 por $500&quot; usa un <strong>pack</strong> (arriba).
+        </p>
 
         <ul className="space-y-3">
           {filas.map((f, i) => {

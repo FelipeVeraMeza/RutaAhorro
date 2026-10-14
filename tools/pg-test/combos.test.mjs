@@ -97,7 +97,8 @@ test('solo admin y supervisor arman combos, y un combo tiene que ser un combo', 
   assert.equal(v.ok, false);
   assert.match(v.error, /SIN_PERMISO/);
   const casos = [
-    [{ nombre: 'X', precio: 1000, items: [{ product_id: beb, cantidad: 3 }] }, /COMBO_UN_SOLO_PRODUCTO/],
+    // 0042 · Un solo producto vale como pack con 2 o más unidades; con 1, no.
+    [{ nombre: 'X', precio: 1000, items: [{ product_id: beb, cantidad: 1 }] }, /COMBO_UN_SOLO_PRODUCTO/],
     [{ nombre: 'X', precio: 3400, items }, /COMBO_NO_ES_MAS_BARATO/],
     [{ nombre: 'X', precio: 0, items }, /COMBO_INVALIDO/],
     [{ nombre: '', precio: 3000, items }, /NOMBRE_COMBO_REQUERIDO/],
@@ -139,4 +140,21 @@ test('la base y core aplican los mismos combos, con carritos y combos al azar', 
     assert.equal(r.total, core.reduce((s, a) => s + a.ahorro, 0), `carrito ${v}`);
     assert.deepEqual(r.aplicados.map((a) => [a.combo_id, a.veces]), core.map((a) => [a.comboId, a.veces]));
   }
+});
+
+// 0042 · Felipe, 2026-10-13: "2 por $500, y si agrego uno más se cobra la promo y uno a precio normal".
+test('pack de un solo producto: 3 bebidas son 1 pack + 1 a precio normal, y no más', async () => {
+  const { beb, adm, caj } = await mostrador();
+  await rpc(adm, 'fn_guardar_combo', {
+    p_id: null, p_datos: { nombre: 'Pack 2 × Bebida', precio: 2000, items: [{ product_id: beb, cantidad: 2 }] },
+  });
+  // 3 × $1.200 = $3.600; con el pack, $2.000 + $1.200 = $3.200 (ahorra $400).
+  const r = await rpc(caj, 'fn_register_sale', venta([[beb, 3, 1200, 400]]));
+  assert.equal(r.total, 3200);
+  const { rows: [s] } = await banco.su.query(`select descuento_combos, combos_aplicados from sales where id = $1`, [r.sale_id]);
+  assert.equal(s.descuento_combos, 400);
+  assert.equal(s.combos_aplicados[0].nombre, 'Pack 2 × Bebida');
+  // Con 3 bebidas cabe un solo pack: el descuento de dos no pasa.
+  const dos = await intentar(rpc(caj, 'fn_register_sale', venta([[beb, 3, 1200, 800]])));
+  assert.equal(dos.ok, false, 'cobró dos packs con 3 bebidas');
 });
