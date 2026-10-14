@@ -39,11 +39,11 @@ const FILAS = [
   ['76.086.428-4', 'RUT MALO SPA', '', '', '', '', '', '', '', '', 'S', 'N', 'N', '', ''],
 ];
 
-function generarSql() {
+function generarSql(...extra) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'contactos-'));
   const archivo = path.join(dir, 'contactos.txt');
   fs.writeFileSync(archivo, [TITULOS, ...FILAS].map((f) => f.join('\t')).join('\r\n'));
-  const salida = execFileSync(process.execPath, ['tools/importar-contactos.mjs', archivo], { encoding: 'utf8' });
+  const salida = execFileSync(process.execPath, ['tools/importar-contactos.mjs', archivo, ...extra], { encoding: 'utf8' });
   return { sql: fs.readFileSync(path.join(dir, 'contactos-importar.sql'), 'utf8'), salida };
 }
 
@@ -93,4 +93,15 @@ test('importa clientes y proveedores, omite empleados, genéricos y RUT malos, y
   assert.equal(santander.phone, '600 320 3000', 'no pisó el teléfono');
   assert.match(santander.notes, /Concepto: Gastos Bancarios/);
   assert.ok(pro.some((p) => p.rut === '96.792.430-K'), 'Sodimac entró como proveedor por su concepto de compra');
+});
+
+// Producción tenía varios locales activos (2026-10-13): con --local se carga en el elegido.
+test('con --local carga solo en ese local aunque haya otros activos', async () => {
+  const A = await nuevoLocal(banco, 'Real');
+  const B = await nuevoLocal(banco, 'Pruebas');
+  await banco.su.query(`update tenants set status = 'activo' where id in ($1, $2)`, [A.tenant, B.tenant]);
+  const { sql } = generarSql(`--local=${A.tenant}`);
+  await banco.su.query(sql);
+  assert.equal(await cuenta('clientes', A.tenant), 3);
+  assert.equal(await cuenta('clientes', B.tenant), 0, 'no tocó el otro local');
 });

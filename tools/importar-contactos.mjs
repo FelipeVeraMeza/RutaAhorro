@@ -27,6 +27,10 @@ import path from 'node:path';
 
 const archivo = process.argv[2];
 if (!archivo) { console.error('Uso: node tools/importar-contactos.mjs <archivo.txt> [--excluir=RUT,RUT]'); process.exit(1); }
+// --local=<uuid>: con más de un local activo en la base (producción tenía varios
+// el 2026-10-13), se dice en cuál cargar. Sin él, se exige que haya uno solo.
+const local = process.argv.find((a) => a.startsWith('--local='))?.slice(8).trim() ?? null;
+if (local && !/^[0-9a-f-]{36}$/i.test(local)) { console.error(`--local no es un id válido: ${local}`); process.exit(1); }
 const excluir = new Set((process.argv.find((a) => a.startsWith('--excluir='))?.slice(10) ?? '')
   .split(',').map((r) => r.replace(/[^0-9kK]/g, '').toUpperCase()).filter(Boolean));
 
@@ -115,8 +119,11 @@ declare
   v_pro_nuevos integer;
   v_invalidos integer;
 begin
-  -- Exactamente un local activo; si hay más o ninguno, se detiene sin tocar nada.
-  select id into strict v_tenant from tenants where status = 'activo';
+${local
+    ? `  -- El local elegido (--local), y tiene que estar activo; si no, se detiene sin tocar nada.
+  select id into strict v_tenant from tenants where status = 'activo' and id = '${local}';`
+    : `  -- Exactamente un local activo; si hay más o ninguno, se detiene sin tocar nada.
+  select id into strict v_tenant from tenants where status = 'activo';`}
 
   create temp table _contactos (
     rut text, nombre text, giro text, direccion text, comuna text, email text, telefono text,
