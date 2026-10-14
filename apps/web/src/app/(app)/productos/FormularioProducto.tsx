@@ -19,6 +19,7 @@ import { OfertasEImpuesto, filasDesdeTramos, tramosDesdeFilas, type FilaOferta }
 import {
   achicarFoto, buscarFichaPorCodigo, copiarFotoProducto, quitarFotoProducto, subirFotoProducto,
 } from '@/lib/productos/fotosCliente';
+import { CamaraFoto } from '@/components/CamaraFoto';
 
 
 
@@ -105,6 +106,7 @@ export function FormularioProducto({
   const [fotoNueva, setFotoNueva] = useState<{ blob: Blob; vista: string } | null>(null);
   const [fotoDeCodigo, setFotoDeCodigo] = useState<string | null>(null);
   const [quitarFoto, setQuitarFoto] = useState(false);
+  const [camaraAbierta, setCamaraAbierta] = useState(false);
   const [ficha, setFicha] = useState<{ datos: FichaPorCodigo; antes: { nombre: string; descripcion: string } } | null>(null);
   const [buscandoFicha, setBuscandoFicha] = useState(false);
   const [sinFicha, setSinFicha] = useState(false);
@@ -540,11 +542,22 @@ export function FormularioProducto({
                       : <span className="text-xs text-[var(--texto-suave)] text-center px-2">{vistaFoto ? 'No se pudo cargar la foto' : 'Sin foto'}</span>}
                   </div>
                   <div className="flex flex-col gap-2 flex-1 min-w-0">
+                    {/* 2026-10-13: la cámara se abre en el momento, también en el computador. */}
+                    <button type="button" onClick={() => setCamaraAbierta(true)}
+                      className="tap px-3 rounded-xl bg-marca-500 text-white text-sm font-semibold">
+                      {vistaFoto ? 'Sacar otra foto' : 'Sacar foto'}
+                    </button>
                     <label className="tap inline-flex items-center justify-center gap-2 px-3 rounded-xl border border-[var(--borde)] text-sm font-medium cursor-pointer focus-within:outline-2 focus-within:outline-marca-500">
-                      {vistaFoto ? 'Cambiar foto' : 'Sacar o elegir foto'}
+                      Elegir archivo
                       <input type="file" accept="image/*" className="sr-only"
                         onChange={(e) => { void elegirFoto(e.target.files?.[0]); e.target.value = ''; }} />
                     </label>
+                    {camaraAbierta && (
+                      <CamaraFoto
+                        onCerrar={() => setCamaraAbierta(false)}
+                        onFoto={(archivo) => { setCamaraAbierta(false); void elegirFoto(archivo); }}
+                      />
+                    )}
                     {!vistaFoto && codigosEan.length > 0 && (
                       <button type="button" disabled={buscandoFicha} onClick={() => void buscarFicha(codigosEan[0], true)}
                         className="tap px-3 rounded-xl border border-[var(--borde)] text-sm font-medium disabled:opacity-50">
